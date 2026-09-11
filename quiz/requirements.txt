@@ -1,0 +1,12 @@
+# Core render/audio
+numpy>=1.26
+Pillow>=10.3          # Raqm shaping ke liye — Devanagari matra sahi banti hai
+requests>=2.31        # ElevenLabs REST
+
+# YouTube upload
+google-api-python-client>=2.130
+google-auth>=2.29
+google-auth-oauthlib>=1.2
+
+# Optional fallback voice (ElevenLabs down ho to)
+edge-tts>=6.1

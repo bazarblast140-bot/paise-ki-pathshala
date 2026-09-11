@@ -15,3 +15,11 @@ assets/sfx/
 assets/fonts/*
 !assets/fonts/.gitkeep
 assets.zip
+
+# trader quiz (quiz/) — generated
+quiz/out/
+quiz/cache/
+quiz/build_out.txt
+quiz/upload_out.txt
+quiz/telegram_out.txt
+**/__pycache__/

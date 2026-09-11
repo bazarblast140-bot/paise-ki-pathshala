@@ -1,0 +1,202 @@
+name: Trader Quiz Shorts
+
+# PAISE KI PATHSHALA — traders ke liye quiz Shorts (Quiz Pathshala wala format:
+# hook, sawaal, 4 option, 8s timer, jawab). Female voice = Edge Swara (free).
+# IST = UTC + 5:30 — roz 3 video:
+#   premarket  08:30 IST -> 03:00 UTC  (market khulne se pehle)
+#   postmarket 16:00 IST -> 10:30 UTC  (market band hone ke baad)
+#   night      21:00 IST -> 15:30 UTC  (din ka review)
+#
+# GitHub cron late chalta hai (quiz channel par 10-20 ghante tak), isliye build
+# target se ~20h PEHLE hota hai aur upload private + publishAt se — YouTube exact
+# IST time par public karta hai.
+#
+# REVIEW PHASE: schedule band hai. Rajesh test videos dekh le, tabhi niche wali
+# cron lines uncomment karna.
+on:
+  # schedule:
+  #   - cron: "0 7 * * *"      # -> premarket  (target 03:00 UTC, fire prev day 07:00)
+  #   - cron: "30 14 * * *"    # -> postmarket (target 10:30 UTC, fire prev day 14:30)
+  #   - cron: "30 19 * * *"    # -> night      (target 15:30 UTC, fire prev day 19:30)
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "kaunsa slot"
+        type: choice
+        options: [premarket, postmarket, night]
+        default: premarket
+      privacy:
+        description: "unlisted / public / private"
+        type: choice
+        options: [unlisted, public, private]
+        default: unlisted
+
+permissions:
+  contents: write
+
+# Har slot alag group — ek late night run morning ko block na kare
+concurrency:
+  group: trader-quiz-${{ github.event.schedule || inputs.slot || github.run_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: quiz
+
+jobs:
+  make-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Slot decide karo
+        id: slot
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "slot=${{ inputs.slot }}"       >> $GITHUB_OUTPUT
+            echo "privacy=${{ inputs.privacy }}" >> $GITHUB_OUTPUT
+          else
+            # cron -> slot mapping. Naya slot jodo to yahan aur config.py
+            # ke SLOT_ORDER, dono jagah add karna.
+            case "${{ github.event.schedule }}" in
+              "0 7 * * *")   SLOT=premarket ;;
+              "30 14 * * *") SLOT=postmarket ;;
+              "30 19 * * *") SLOT=night ;;
+              *)             SLOT=premarket ;;
+            esac
+            echo "slot=$SLOT"     >> $GITHUB_OUTPUT
+            echo "privacy=public" >> $GITHUB_OUTPUT
+          fi
+          echo "decided slot=$(cat $GITHUB_OUTPUT | grep slot=) privacy=$(cat $GITHUB_OUTPUT | grep privacy=)"
+
+      - name: System deps (ffmpeg + Devanagari + emoji fonts)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-noto-core fonts-indic libraqm0 \
+            fonts-noto-color-emoji
+          fc-cache -f
+          # Emoji font chup-chaap gayab ho jaaye to option icons bina bataye
+          # hat jaate hain — isliye yahin check kar lete hain.
+          fc-list | grep -qi emoji && echo "emoji font OK" || echo "::warning::emoji font missing - option icons nahi dikhenge"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Video banao
+        env:
+          # ElevenLabs secrets is repo me nahi — Edge Swara (female) chalti hai.
+          # Premium voice chahiye to ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID secrets daal do.
+          ELEVENLABS_API_KEY:  ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+          ELEVENLABS_MODEL:    ${{ vars.ELEVENLABS_MODEL || 'eleven_multilingual_v2' }}
+        run: |
+          # pipefail zaroori hai — warna 'python ... | tee' me python crash ho
+          # jaaye to bhi tee ka exit 0 aata hai aur step GREEN dikhta hai.
+          # Isi wajah se ek crash chup-chaap nikal gaya tha.
+          set -o pipefail
+          python src/build.py --slot ${{ steps.slot.outputs.slot }} | tee build_out.txt
+          # ElevenLabs chup-chaap fail hoke free voice pe chala jaaye to pata
+          # chalna chahiye — warna mahino tak galat voice publish hoti rahegi.
+          grep -E "voice:" build_out.txt | tail -1 || true
+
+      - name: Voice check — silent video upload mat hone do
+        run: |
+          DIR=$(ls -td out/*/ | head -1)
+          MEAN=$(ffmpeg -i "$DIR"/*.mp4 -af volumedetect -f null - 2>&1 \
+                 | grep mean_volume | awk '{print $5}')
+          echo "mean_volume = $MEAN dB"
+          python -c "import sys; m=float('$MEAN'); sys.exit('VOICE MISSING - TTS fail hua, upload rok diya.') if m < -34 else None"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trader-quiz-${{ steps.slot.outputs.slot }}-${{ github.run_number }}
+          path: quiz/out/*/
+          retention-days: 14
+
+      - name: YouTube pe upload
+        id: up
+        continue-on-error: true
+        env:
+          # Paise Ki Pathshala ke secrets; upload.py EXPECTED_CHANNEL_ID se check karta hai
+          YT_CLIENT_ID:     ${{ secrets.YT_FIN_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
+          EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
+        run: |
+          DIR=$(ls -td out/*/ | head -1)
+          set -o pipefail
+          python src/upload.py --dir "${DIR%/}" \
+            --privacy ${{ steps.slot.outputs.privacy }} \
+            --publish-slot "${{ steps.slot.outputs.slot }}" 2>&1 | tee upload_out.txt
+
+      - name: Telegram pe batao
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          DIR=$(ls -td out/*/ | head -1)
+          python src/notify.py --dir "${DIR%/}" \
+            --slot "${{ steps.slot.outputs.slot }}" \
+            --privacy "${{ steps.slot.outputs.privacy }}" \
+            --upload "${{ steps.up.outcome }}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      # CI logs Azure blob pe hote hain jo har network se readable nahi. Isliye
+      # last run ka nateeja repo me hi likh dete hain — mobile se bhi dikh jaaye.
+      - name: Last run ka status repo me likho
+        if: always()
+        run: |
+          DIR=$(ls -td out/*/ | head -1)
+          {
+            echo "# Last run"
+            echo "- when   : $(date -u +'%F %H:%M UTC')"
+            echo "- slot   : ${{ steps.slot.outputs.slot }}"
+            echo "- privacy: ${{ steps.slot.outputs.privacy }}"
+            echo "- upload : ${{ steps.up.outcome }}"
+            echo
+            echo '## metadata'
+            python -c "import json;m=json.load(open('$DIR/metadata.json'));print(chr(10).join(f'- {k}: {m[k]}' for k in ('title','duration_sec','voice_engines','youtube_url','scheduled_for') if k in m))" || true
+            echo
+            echo '## upload output (tail)'
+            echo '```'
+            tail -n 40 upload_out.txt 2>/dev/null || echo "(upload step chala hi nahi)"
+            echo '```'
+            echo
+            echo '## voice'
+            echo '```'
+            grep -E '^\[tts\]|voice:' build_out.txt 2>/dev/null | head -12 || echo '(none)'
+            echo '```'
+            echo
+            echo '## telegram'
+            echo '```'
+            cat telegram_out.txt 2>/dev/null || echo "(telegram step chala hi nahi)"
+            echo '```'
+          } > LAST_RUN.md
+
+      - name: used.json + LAST_RUN.md commit karo
+        if: always()
+        run: |
+          git config user.name  "trader-quiz-bot"
+          git config user.email "trader-quiz-bot@users.noreply.github.com"
+          # Sawaal tabhi "use ho gaya" mana jaaye jab upload sach me hua ho —
+          # warna fail hue run ke sawaal hamesha ke liye bank se gayab ho jaate.
+          if [ "${{ steps.up.outcome }}" = "success" ]; then
+            git add data/used.json
+          else
+            git checkout -- data/used.json || true
+          fi
+          git add LAST_RUN.md
+          git diff --staged --quiet || git commit -m "chore(trader-quiz): ${{ steps.slot.outputs.slot }} run — upload ${{ steps.up.outcome }} [skip ci]"
+          git pull --rebase --autostash || true
+          git push
+
+      - name: Upload fail hua to job fail karo
+        if: steps.up.outcome != 'success'
+        run: |
+          echo "Upload fail hua. Detail: quiz/LAST_RUN.md"
+          exit 1
