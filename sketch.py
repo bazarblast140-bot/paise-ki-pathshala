@@ -91,7 +91,7 @@ def rough_arrow(d, p1, p2, color, width=6, seed=0, head=26):
         rough_line(d, p2, tip, color, width, seed + 7, 1, 1.5)
 
 
-def chart_png(chart, path, size=(1920, 1080)):
+def chart_png(chart, path, size=(1920, 1080), margins=None):
     """Hand-drawn chart via matplotlib xkcd — light board, multi-bar preferred."""
     import matplotlib
     matplotlib.use("Agg")
@@ -149,7 +149,10 @@ def chart_png(chart, path, size=(1920, 1080)):
             ax.spines[spine].set_color(ink)
             ax.spines[spine].set_linewidth(2.0)
         ax.set_ylim(0, max(values) * 1.32 if max(values) > 0 else 1)
-        fig.subplots_adjust(left=0.10, right=0.95, top=0.70, bottom=0.32)
+        # margins = (left, right, top, bottom). Landscape default upar 30% chhodta hai
+        # headline ke liye; vertical Short me headline chart ke bahar hoti hai.
+        l_, r_, t_, b_ = margins or (0.10, 0.95, 0.70, 0.32)
+        fig.subplots_adjust(left=l_, right=r_, top=t_, bottom=b_)
         fig.savefig(path, facecolor=paper)
         plt.close(fig)
     return True

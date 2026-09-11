@@ -2,7 +2,7 @@
 Gate 1 is now a fast local Python check (no LLM call) — saves credits.
 Max 2 attempts: generate → local check → (if fail) regenerate with fix notes → done."""
 import re
-from common import cfg, claude, read, save, ok, die
+from common import cfg, claude, read, save, ok, die, video_format
 
 SCRIPT_SYSTEM = """You are the Script Agent for "Paise Ki Pathshala" — a HINDI personal-finance
 education channel for Indian viewers (18-40, salaried, students, small business owners).
@@ -76,6 +76,50 @@ HARD RULES:
 
 Output plain text only — no markdown fences."""
 
+SCRIPT_SYSTEM_SHORT = """You are the Script Agent for "Paise Ki Pathshala" SHORTS — vertical, about 45-55 seconds,
+HINDI personal finance for Indian viewers. One Short = one money rule or trap, nothing else.
+
+LANGUAGE: same as the long format — simple spoken HINDI (Devanagari); SIP, EMI, FD, UPI, CIBIL,
+credit card, loan stay in Roman. Money as ₹ with लाख / करोड़. Keep the headings/tags below in English.
+
+STRUCTURE (follow exactly):
+TITLE:
+<max 70 characters, Hindi + key English words, the hook itself. No "#shorts".>
+
+HOOK (0-3 sec):
+<ONE line that stops the swipe: a surprising number or a sharp question. No greeting.>
+
+BODY:
+[SEGMENT 1: THE NUMBER]
+<One concrete Indian number with [SOURCE: ...].>
+
+[SEGMENT 2: THE TRAP]
+<How it works, 2-3 very short sentences.>
+
+[SEGMENT 3: THE ACTION]
+<Exactly one thing to do this week.>
+
+CTA:
+<One short line, e.g. "पूरा हिसाब चैनल के लंबे वीडियो में है।">
+
+DISCLAIMER LINE:
+<"यह सिर्फ़ जानकारी है, निवेश सलाह नहीं।">
+
+FACT LEDGER:
+<- each figure → source>
+
+HARD RULES:
+1. Spoken length 95-135 words total. Every sentence under 12 words. No filler at all.
+2. At least ONE [SOURCE: ...] in the BODY; FACT LEDGER lists every figure.
+3. SEBI finfluencer rules: never recommend buying/selling/holding any specific stock, fund
+   scheme, bank product, insurance plan, app or crypto; never promise or imply guaranteed
+   returns; illustrative rates say "मान लीजिए". Tax figures name the financial year; unsure
+   numbers get [UNVERIFIED].
+4. Forbidden: "दोस्तों", "आज के इस वीडियो में", "वीडियो को अंत तक देखें", "like share subscribe".
+5. The last BODY line should make the viewer want to watch again or visit the channel.
+
+Output plain text only — no markdown fences."""
+
 
 def gate1_local(script, c):
     """Local Gate 1: checks script structure without any LLM call.
@@ -95,8 +139,9 @@ def gate1_local(script, c):
         fails.append(f"Only {len(segments)} [SEGMENT] tags found (need at least 3)")
 
     sources = re.findall(r"\[SOURCE:", script, re.IGNORECASE)
-    if len(sources) < 3:
-        fails.append(f"Only {len(sources)} [SOURCE:] tags found (need at least 3)")
+    need_src = 1 if video_format() == "short" else 3   # 50s me 3 source thoonsna bekaar hai
+    if len(sources) < need_src:
+        fails.append(f"Only {len(sources)} [SOURCE:] tags found (need at least {need_src})")
 
     if "CTA" not in upper:
         fails.append("Missing CTA section")
@@ -133,16 +178,18 @@ def main():
     wc = c["video"]["target_word_count"]
     mins = c["video"]["target_minutes"]
 
-    prompt = f"""<task>Write a One Rule Board script in HINDI: one rule, clear mechanism, one action. Explain — do not pad.</task>
+    short = video_format() == "short"
+    system = SCRIPT_SYSTEM_SHORT if short else SCRIPT_SYSTEM
+    prompt = f"""<task>Write a {'45-55 second vertical SHORT' if short else 'One Rule Board'} script in HINDI: one rule, clear mechanism, one action. Explain — do not pad.</task>
 <context>Channel: Paise Ki Pathshala. Audience: Indian beginners, Hindi. Target ~{mins} min ({wc} spoken words ±25%). Calm teacher voice. No filler phrases. SEBI-safe: education only, no product recommendations, no guaranteed returns.</context>
 <topic>{topic}</topic>
 <must_include>
-- At least 3 separate [SOURCE: ...] tags inside the spoken BODY
+- At least {1 if short else 3} separate [SOURCE: ...] tag(s) inside the spoken BODY
 - Sections: CTA: / DISCLAIMER LINE: / FACT LEDGER:
 - At least 3 [SEGMENT n: ...] blocks
 - Spoken body at least {int(wc*0.75)} words before FACT LEDGER
 </must_include>
-<output_format>TITLE / HOOK (0-12 sec) / BODY with [SEGMENT 1-5] as defined in system / CTA / DISCLAIMER LINE / FACT LEDGER</output_format>"""
+<output_format>TITLE / HOOK / BODY with the [SEGMENT n] blocks defined in the system prompt / CTA / DISCLAIMER LINE / FACT LEDGER</output_format>"""
 
     last_fails = []
     model = c["models"]["script_model"]
@@ -155,7 +202,7 @@ def main():
             user += f"\n\n<previous_attempt_issues>\nThe previous script was rejected by automated checks due to these structural issues:\n- " + "\n- ".join(last_fails) + "\n\nYou MUST fix every listed issue in this rewrite.\n</previous_attempt_issues>"
 
         print(f"[info] Attempt {attempt+1}/3: calling LLM...")
-        script = claude(SCRIPT_SYSTEM, user, model=model, max_tokens=max_tok)
+        script = claude(system, user, model=model, max_tokens=max_tok)
         save("script.txt", script)
         print(f"[info] Script generated: {len(script)} chars, ~{len(script.split())} words")
 

@@ -26,8 +26,29 @@ def load_env():
                 os.environ.setdefault(k.strip(), v.strip())
 load_env()
 
+def video_format():
+    """'long' (16:9, ~5 min) ya 'short' (9:16, ~50s). run_pipeline.py --format se set."""
+    f = os.environ.get("VIDEO_FORMAT", "long").strip().lower()
+    return f if f in ("long", "short") else "long"
+
+
+def _merge(base, over):
+    for k, v in over.items():
+        if k.startswith("_"):
+            continue
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            _merge(base[k], v)
+        else:
+            base[k] = v
+
+
 def cfg():
-    return json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
+    """config.json + (short format par) config["formats"]["short"] ke overrides."""
+    c = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
+    over = (c.get("formats") or {}).get(video_format())
+    if isinstance(over, dict):
+        _merge(c, over)
+    return c
 
 def need(key):
     v = os.environ.get(key)

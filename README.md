@@ -4,6 +4,12 @@ Hindi personal-finance YouTube channel (India) ka pipeline: topic → Hindi scri
 visuals → video → verify → upload. Sirf isi channel ke liye — quiz channel ka code
 `finance-english-youtube-auto` repo me hai, dono ko kabhi mat milana.
 
+- **Do format:** long (16:9, ~5 min) aur **short** (9:16, ~50s). Har topic ka ek short aur ek
+  long banta hai; short description me long video ki taraf bhejta hai.
+  `python run_pipeline.py --format short` / `--format long`. Short ke overrides
+  `config.json -> formats.short` me.
+- Short ka layout YouTube Shorts ke UI se bahar rehta hai: upar 190px, right rail x > 890
+  (beech se neeche), neeche 1400px ke baad kuch zaroori nahi (`run_assembly.py`, `V_*`).
 - **Intro/outro nahi.** Video pehle frame se hi hook se shuru hota hai.
 - Script / voice / visual prompts Hindi ke liye (`run_script.py`, `run_voice.py`, `run_visuals.py`).
 - Captions Devanagari me; cards, charts aur thumbnail ka text Roman (Hinglish) me — PIL aur

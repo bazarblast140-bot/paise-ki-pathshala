@@ -7,7 +7,7 @@ and YOUTUBE_* env vars for the FINANCE channel (separate OAuth from your Hindi c
 import os
 import re
 import sys
-from common import cfg, read, die, ok, RUN, need
+from common import cfg, read, die, ok, RUN, need, video_format
 
 # The script is written with bare headings on their own line ("TITLE", then the
 # title underneath). Older drafts used "TITLE: ...". Both must parse, because
@@ -66,6 +66,9 @@ def build_description(sec, c):
     title = title[0].strip() if title else ""
     if title:
         parts.append(f"इस वीडियो में: {title}")
+    if video_format() == "short":
+        # Short -> long funnel: Shorts ki kamaai kam hai, asli watch time long video deta hai.
+        parts.append("पूरा हिसाब चैनल के लंबे वीडियो में है — चैनल पर देखें।")
 
     disclaimer = sec.get("DISCLAIMER LINE", "").strip()
     parts.append(disclaimer or "यह वीडियो सिर्फ़ जानकारी के लिए है, निवेश सलाह नहीं।")
@@ -261,7 +264,10 @@ def main():
 
     video_id = resp["id"]
     ok(f"Uploaded as {visibility}: https://youtu.be/{video_id}")
-    set_thumbnail(yt, video_id)
+    if video_format() == "short":
+        print("[skip] Short — custom thumbnail nahi lagate")
+    else:
+        set_thumbnail(yt, video_id)
     print(f"\nEdit before going public: https://studio.youtube.com/video/{video_id}/edit")
 
 if __name__ == "__main__":

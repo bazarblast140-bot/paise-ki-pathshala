@@ -4,9 +4,16 @@ Stops on the first gate failure. Always notifies at the end.
 Usage:
   python run_pipeline.py            # generate + verify + notify (no publish)
   python run_pipeline.py --publish  # also publish IF verdict READY (opt-in)
+  python run_pipeline.py --format short --publish   # 9:16 Short (~50s)
 """
-import subprocess, sys
-from common import ROOT, cfg
+import os, subprocess, sys
+
+# Format env me daalo, cfg() import se PEHLE — har stage subprocess isi env ko
+# inherit karta hai aur apna config (resolution, word count) isi se leta hai.
+if "--format" in sys.argv:
+    os.environ["VIDEO_FORMAT"] = sys.argv[sys.argv.index("--format") + 1]
+
+from common import ROOT, cfg, video_format
 
 STAGES = [
     ("Preflight",       "check_setup.py"),
@@ -22,6 +29,7 @@ def run(script, *args):
     return subprocess.run([sys.executable, str(ROOT / script), *args], cwd=ROOT).returncode
 
 def main():
+    print(f"[info] format: {video_format()}")
     status = "success"
     for label, script in STAGES:
         print(f"\n=== {label} ===")

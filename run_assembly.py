@@ -33,12 +33,14 @@ import sfx
 import sketch
 from common import cfg, read, ok, die, RUN, ROOT
 
-W, H = 1920, 1080
+# Resolution config se: long = 1920x1080, short = 1080x1920 (formats.short).
+W, H = (int(v) for v in str(cfg()["video"].get("resolution", "1920x1080")).lower().split("x"))
+VERTICAL = H > W
 ASSETS = ROOT / "assets"
 ICONS_DIR = ROOT / "assets" / "icons"
 CAPTION_TOP = 0.72
 SIDE = 150
-CAPTION_WORDS = 6
+CAPTION_WORDS = 4 if VERTICAL else 6   # phone par patli line
 POP_IN = 0.32          # seconds of headline zoom-in
 FADE_IN = 0.35
 FADE_OUT = 0.30
@@ -121,6 +123,39 @@ def _scrim(layer):
         d.line([(0, y), (W, y)], fill=(8, 10, 14, int(225 * t ** 1.4)))
 
 
+def _pose_for(shot):
+    """Map emphasis/section -> host pose; the visual plan can override."""
+    emp = str(shot.get("emphasis", "neutral")).lower()
+    section = str(shot.get("section") or "").lower()
+    if emp in ("warning",) or "trap" in section:
+        pose = "warn"
+    elif emp in ("positive",):
+        pose = "ok"
+    elif "action" in section:
+        pose = "point"
+    elif "math" in section or "rule" in section:
+        pose = "point"
+    else:
+        pose = "think" if "myth" in section else "neutral"
+    if shot.get("pose"):
+        pose = str(shot.get("pose")).lower().strip()
+    return pose
+
+
+def _icon_img(icon_name, size):
+    if not icon_name:
+        return None
+    try:
+        icon_path = ICONS_DIR / f"{icon_name}.png"
+        if icon_path.exists():
+            img = Image.open(icon_path).convert("RGBA")
+        else:
+            img = sketch.draw_icon(icon_name, 200)
+        return img.resize((size, size), Image.Resampling.LANCZOS)
+    except Exception:
+        return None
+
+
 def build_overlay(shot, idx, total, path, mode):
     """mode: 'chart' | 'footage' | 'card'.
 
@@ -128,6 +163,8 @@ def build_overlay(shot, idx, total, path, mode):
     band at the top — a 300px headline over a chart hides the very numbers the
     shot exists to show.
     """
+    if VERTICAL:
+        return build_overlay_vertical(shot, idx, total, path, mode)
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
 
     # Footage varies wildly in brightness (one clip here is a green-screen
@@ -145,22 +182,7 @@ def build_overlay(shot, idx, total, path, mode):
     host_w = 0
     if mode == "card":
         try:
-            # Map emphasis → character pose
-            emp = str(shot.get("emphasis", "neutral")).lower()
-            section = str(shot.get("section") or "").lower()
-            if emp in ("warning",) or "trap" in section:
-                pose = "warn"
-            elif emp in ("positive",):
-                pose = "ok"
-            elif "action" in section:
-                pose = "point"
-            elif "math" in section or "rule" in section:
-                pose = "point"
-            else:
-                pose = "think" if "myth" in section else "neutral"
-            # Allow explicit override from visual plan
-            if shot.get("pose"):
-                pose = str(shot.get("pose")).lower().strip()
+            pose = _pose_for(shot)
             # Full head always visible — stay well inside frame
             host_h = int(H * 0.52)  # ~560px on 1080p
             host = sketch.load_host_pose(pose, height=host_h)
@@ -178,15 +200,10 @@ def build_overlay(shot, idx, total, path, mode):
 
     icon_name = shot.get("icon")
     icon_y_offset = 0
-    if icon_name and mode != "chart":
+    icon_img = _icon_img(icon_name, 280) if mode != "chart" else None
+    if icon_img is not None:
         try:
-            icon_path = ICONS_DIR / f"{icon_name}.png"
-            if icon_path.exists():
-                icon_img = Image.open(icon_path).convert("RGBA")
-            else:
-                icon_img = sketch.draw_icon(icon_name, 200)
             icon_size = 280
-            icon_img = icon_img.resize((icon_size, icon_size), Image.Resampling.LANCZOS)
             # place upper-right of content area
             icon_x = host_w + int((W - host_w - icon_size) / 2) if host_w else (W - icon_size) // 2
             icon_y = int(H * 0.18)
@@ -212,13 +229,18 @@ def build_overlay(shot, idx, total, path, mode):
 
         # locate the highlighted span with real glyph metrics — line_h fractions
         # drift away from the actual ink at different sizes
+        # Text host ke right wale content zone me likha jaata hai — marker bhi
+        # usi x se naapo. Pehle marker poori width par centre hota tha aur host
+        # wale shot par shabd se khisak kar left me bah jaata tha.
+        content_left = host_w + 20 if host_w else 0
+        content_w = W - content_left - SIDE
         hl = str(shot.get("highlight") or "").strip()
         hl_i, hl_pos, hl_box = -1, -1, None
         if hl and hl.lower() != "null":
             for i, line in enumerate(lines):
                 pos = line.lower().find(hl.lower())
                 if pos >= 0:
-                    lx = (W - d.textlength(line, font=f)) / 2
+                    lx = content_left + max(0, (content_w - d.textlength(line, font=f)) / 2)
                     x = lx + d.textlength(line[:pos], font=f)
                     ly = y0 + i * line_h
                     b = d.textbbox((x, ly), line[pos:pos + len(hl)], font=f)
@@ -231,8 +253,6 @@ def build_overlay(shot, idx, total, path, mode):
             d = ImageDraw.Draw(layer)
 
         # Keep text in the right content zone when host stands on the left
-        content_left = host_w + 20 if host_w else 0
-        content_w = W - content_left - SIDE
         for i, line in enumerate(lines):
             tw = d.textlength(line, font=f)
             lx = content_left + max(0, (content_w - tw) / 2)
@@ -281,6 +301,8 @@ def build_chrome(shot, idx, total, path, channel):
     Watermark is top-right, static, high-legibility but not loud — reads as a
     real channel mark on every frame without competing with the headline.
     """
+    if VERTICAL:
+        return build_chrome_vertical(path, channel)
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
 
@@ -305,6 +327,148 @@ def build_chrome(shot, idx, total, path, channel):
     d.rectangle([0, H - 8, int(W * frac), H], fill=sketch.HIGHLIGHT + (255,))
     layer.save(path)
     return path
+
+
+# ---------------------------------------------------------------- vertical (Shorts)
+# YouTube Shorts ka apna UI 1080x1920 frame ke upar baithta hai: upar ~170px
+# (search / menu), right kinare par rail (like, dislike, comment, share) x ~900
+# ke baad lagbhag beech se neeche tak, aur neeche ~500px (channel naam, title,
+# sound). Quiz channel par options like-button ke peeche chale gaye the aur
+# viewers ko like button dikhta hi nahi tha — isliye yahan har cheez in zones
+# ke andar rehti hai.
+V_LEFT, V_TOP = 70, 200
+V_RAIL_X = 890             # V_RAIL_Y ke neeche content is x se aage nahi jaata
+V_RAIL_Y = 820
+V_BOTTOM = 1400            # captions ka neecha kinara; iske neeche kuch zaroori nahi
+V_HEAD = (840, 1130)       # card headline zone (rail band ke andar)
+V_CHART = (V_LEFT, 350, V_RAIL_X, 1170)   # chart box (left, top, right, bottom)
+V_CAP_TOP = 1180
+
+
+def _scrim_vertical(layer):
+    """Captions safed hain aur board halka — neeche ka hissa dheere-dheere gehra.
+    Ye YouTube ke apne neeche wale text ko bhi padhne layak banata hai."""
+    d = ImageDraw.Draw(layer)
+    top, full = 1060, 1460
+    for y in range(top, H):
+        t = min(1.0, (y - top) / (full - top))
+        d.line([(0, y), (W, y)], fill=(8, 10, 14, int(215 * t ** 1.2)))
+
+
+def _draw_headline(layer, d, shot, idx, text, box, hi, lo, ink):
+    """Headline + marker highlight inside box = (left, top, right, bottom).
+    Returns (draw, bottom_y_of_text)."""
+    left, top, right, bottom = box
+    f, lines, line_h = _fit(d, text, right - left, bottom - top, hi, lo)
+    y0 = top + ((bottom - top) - len(lines) * line_h) / 2
+    hl = str(shot.get("highlight") or "").strip()
+    hl_i, hl_pos, hl_box = -1, -1, None
+    if hl and hl.lower() != "null":
+        for i, line in enumerate(lines):
+            pos = line.lower().find(hl.lower())
+            if pos >= 0:
+                lx = left + (right - left - d.textlength(line, font=f)) / 2
+                x = lx + d.textlength(line[:pos], font=f)
+                b = d.textbbox((x, y0 + i * line_h), line[pos:pos + len(hl)], font=f)
+                hl_box = (b[0] - 8, b[1] - 8, b[2] + 8, b[3] + 8)
+                hl_i, hl_pos = i, pos
+                break
+    if hl_box:
+        layer.alpha_composite(sketch.marker_highlight((W, H), hl_box, sketch.HIGHLIGHT,
+                                                      seed=idx * 13 + 5))
+        d = ImageDraw.Draw(layer)
+    for i, line in enumerate(lines):
+        lx = left + (right - left - d.textlength(line, font=f)) / 2
+        y = y0 + i * line_h
+        d.text((lx, y), line, font=f, fill=ink)
+        if i == hl_i:
+            d.text((lx + d.textlength(line[:hl_pos], font=f), y),
+                   line[hl_pos:hl_pos + len(hl)], font=f, fill=sketch.PAPER)
+    return d, y0 + len(lines) * line_h
+
+
+def build_overlay_vertical(shot, idx, total, path, mode):
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    if mode == "footage":
+        layer.alpha_composite(Image.new("RGBA", (W, H), (8, 10, 14, 110)))
+    _scrim_vertical(layer)
+    d = ImageDraw.Draw(layer)
+    ink = sketch.PAPER if mode == "footage" else sketch.INK
+
+    # upar ka visual zone (rail band se upar, poori chaudai): host + icon
+    if mode == "card":
+        x = V_LEFT
+        try:
+            host = sketch.load_host_pose(_pose_for(shot), height=460)
+            layer.alpha_composite(host, (V_LEFT, 300))
+            x = V_LEFT + host.width + 40
+        except Exception as e:
+            print(f"[warn] host pose failed: {e}")
+        icon = _icon_img(shot.get("icon"), 300)
+        if icon is not None:
+            ix = min(x + max(0, (W - V_LEFT - x - 300) // 2), W - V_LEFT - 300)
+            layer.alpha_composite(icon, (ix, 390))
+
+    headline = str(shot.get("on_screen_text") or "").strip()
+    if headline.lower() == "null":
+        headline = ""
+    if headline:
+        if mode == "chart":
+            # chart ke upar title band — rail band se upar hai, poori chaudai le sakta hai
+            d, _ = _draw_headline(layer, d, shot, idx, headline,
+                                  (V_LEFT, V_TOP + 50, W - V_LEFT, V_CHART[1] - 10), 84, 40, ink)
+        else:
+            d, y_end = _draw_headline(layer, d, shot, idx, headline,
+                                      (V_LEFT, V_HEAD[0], V_RAIL_X, V_HEAD[1]), 150, 48, ink)
+            sub = str(shot.get("sub_text") or "").strip()
+            if sub and sub.lower() != "null" and mode == "card":
+                sf = _font(44)
+                sy = y_end + 16
+                for sl in _wrap(d, sub, sf, V_RAIL_X - V_LEFT)[:2]:
+                    if sy + 50 > V_CAP_TOP:       # captions ki jagah mat khao
+                        break
+                    sx = V_LEFT + (V_RAIL_X - V_LEFT - d.textlength(sl, font=sf)) / 2
+                    cool = getattr(sketch, "COOL", (80, 90, 110))
+                    d.text((sx, sy), sl, font=sf,
+                           fill=cool if isinstance(cool, tuple) else (80, 90, 110))
+                    sy += 50
+
+    layer.save(path)
+    return path
+
+
+def build_chrome_vertical(path, channel):
+    """Chhota watermark upar-left. Progress bar nahi — Shorts ka apna hota hai
+    aur hamara YouTube ke neeche wale UI ke peeche chhup jaata."""
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    if channel:
+        d = ImageDraw.Draw(layer)
+        label = channel.upper().strip()
+        f = _font(30)
+        tw = d.textlength(label, font=f)
+        x, y = V_LEFT + 24, V_TOP - 20
+        d.rounded_rectangle([x - 32, y - 8, x + tw + 14, y + 38], radius=6,
+                            fill=(255, 255, 255, 205))
+        d.ellipse([x - 22, y + 8, x - 8, y + 22], fill=sketch.HIGHLIGHT + (230,))
+        d.text((x, y), label, font=f, fill=(*sketch.INK, 240))
+    layer.save(path)
+    return path
+
+
+def chart_backdrop_vertical(chart, path):
+    """Chart ko V_CHART box me fit karke poore 1080x1920 board par rakho.
+    Full-frame 16:9 chart ko 9:16 me 'fill' karte to dono side kat jaate."""
+    left, top, right, bottom = V_CHART
+    tmp = pathlib.Path(str(path) + ".raw.png")
+    if not sketch.chart_png(chart, str(tmp), size=(right - left, bottom - top),
+                           margins=(0.13, 0.96, 0.90, 0.16)):
+        return False
+    board = Image.new("RGB", (W, H), sketch.PAPER)
+    with Image.open(tmp) as im:
+        board.paste(im.convert("RGB"), (left, top))
+    board.save(path)
+    tmp.unlink(missing_ok=True)
+    return True
 
 
 def _ass_colour(rgb):
@@ -341,6 +505,12 @@ CAP_FONT = ("Noto Sans Devanagari"
             if str(cfg()["channel"].get("default_language", "")).lower().startswith("hi")
             else "Arial")
 
+# Vertical: captions ka neecha kinara V_BOTTOM (1400) par, right margin rail (x 890) se bahar.
+if VERTICAL:
+    CAP_SIZE, CAP_OUTLINE, CAP_ML, CAP_MR, CAP_MV = 66, 5, 70, W - 890, H - 1400
+else:
+    CAP_SIZE, CAP_OUTLINE, CAP_ML, CAP_MR, CAP_MV = 58, 4, 160, 160, 90
+
 ASS_HEADER = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {W}
@@ -350,7 +520,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,{CAP_FONT},58,&H00FFFFFF,&H00FFFFFF,&H00101010,&H80000000,-1,0,0,0,100,100,0,0,1,4,1,2,160,160,90,1
+Style: Cap,{CAP_FONT},{CAP_SIZE},&H00FFFFFF,&H00FFFFFF,&H00101010,&H80000000,-1,0,0,0,100,100,0,0,1,{CAP_OUTLINE},1,2,{CAP_ML},{CAP_MR},{CAP_MV},1
 Style: Kick,Arial,38,&H00FFFFFF,&H00FFFFFF,&H00101010,&H80000000,-1,0,0,0,100,100,2,0,1,3,0,7,{SIDE},160,{KICK_Y},1
 
 [Events]
@@ -513,7 +683,9 @@ def main():
         chart = shot.get("chart_data")
         if isinstance(chart, dict):
             cp = RUN / f"chart_{i:03d}.png"
-            if sketch.chart_png(chart, str(cp)):
+            made = (chart_backdrop_vertical(chart, cp) if VERTICAL
+                    else sketch.chart_png(chart, str(cp)))
+            if made:
                 backdrop, still, mode = cp, True, "chart"
         if backdrop is None and shot.get("_backdrop"):
             backdrop = pathlib.Path(shot["_backdrop"])

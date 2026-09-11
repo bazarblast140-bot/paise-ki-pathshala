@@ -2,7 +2,7 @@
 Exits non-zero on Gate 3 fail."""
 import json
 import re
-from common import cfg, claude_json, read, save, ok, die, RUN
+from common import cfg, claude_json, read, save, ok, die, RUN, video_format
 
 # PIL overlays aur matplotlib charts Devanagari ki matra theek nahi jodte —
 # screen par toote hue akshar dikhte hain. Isliye visual fields sirf Roman me.
@@ -49,6 +49,9 @@ HARD RULES:
 7. Shot length 5–8 seconds. animation_in: "fade_in_up".
 8. First shot = TITLE CARD card when the script names a trap/rule.
 9. source_asset_query only if stock_footage; under 5 words.
+10. spoken_line: the EXACT narration words this shot covers, copied verbatim from the script
+    (Hindi, Devanagari). Every narration sentence belongs to exactly one shot, in order — these
+    become the burned-in captions. Never leave it empty.
 
 chart_data when visual_type is chart:
   {"type": "bar" or "line", "labels": ["FD","SIP"], "values": [7, 12]}
@@ -70,7 +73,8 @@ JSON ONLY:
       "emphasis": "neutral",
       "animation_in": "fade_in_up",
       "chart_data": null,
-      "source_asset_query": null
+      "source_asset_query": null,
+      "spoken_line": "<is shot ki narration, script se hubahu>"
     }
   ]
 }
@@ -94,18 +98,25 @@ def generate_plan(spoken, c):
     if curr:
         chunks.append("\n\n".join(curr))
 
+    # Short: vertical 9:16, tez rhythm. Phone par upar icon/chart, beech me
+    # headline, neeche captions — isliye headline chhoti.
+    fmt_note = ("" if video_format() != "short" else
+                "\n\nFORMAT OVERRIDE — VERTICAL SHORT (9:16, ~50s): shot length 3-5 seconds "
+                "(not 5-8), 8-14 shots total, on_screen_text max 4 words, sub_text max 5 words, "
+                "exactly ONE chart, zero stock footage.")
+
     all_shots = []
     cur_sec = 0.0
     shot_id = 1
 
     for i, chk in enumerate(chunks):
-        res = claude_json(VISUAL_SYSTEM, f"<script>{chk}</script>",
+        res = claude_json(VISUAL_SYSTEM + fmt_note, f"<script>{chk}</script>",
                           model=c["models"]["visual_model"],
                           max_tokens=c["models"].get("visual_max_tokens", 16000))
         shots = res.get("shots", [])
         if devanagari_fields(shots):
             print(f"[retry] chunk {i+1}: Devanagari in on-screen text — asking again in Roman")
-            res = claude_json(VISUAL_SYSTEM,
+            res = claude_json(VISUAL_SYSTEM + fmt_note,
                               f"<script>{chk}</script>\n<fix>Your last plan put Devanagari in "
                               f"on_screen_text/sub_text/highlight/chart labels. Rewrite ALL of "
                               f"them in Roman script (Hinglish/English).</fix>",
@@ -160,6 +171,11 @@ def main():
         )
     if missing_chart_data:
         fails.append(f"chart shots missing chart_data: {missing_chart_data}")
+    # Captions spoken_line se bante hain. Pehle plan me ye field maanga hi nahi jaata
+    # tha, isliye har video bina captions ke nikalta tha (subs.ass sirf header).
+    no_caption = [s.get("shot_id") for s in shots if not str(s.get("spoken_line") or "").strip()]
+    if len(no_caption) > len(shots) // 4:
+        fails.append(f"spoken_line missing on shots {no_caption} — video bina captions ke banega")
     bad_script = devanagari_fields(shots)
     if bad_script:
         fails.append(f"Devanagari in on-screen text (renders as broken boxes): shots {bad_script}")
