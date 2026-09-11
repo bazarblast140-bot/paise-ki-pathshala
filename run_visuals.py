@@ -52,6 +52,8 @@ HARD RULES:
 10. spoken_line: the EXACT narration words this shot covers, copied verbatim from the script
     (Hindi, Devanagari). Every narration sentence belongs to exactly one shot, in order — these
     become the burned-in captions. Never leave it empty.
+11. When the narration uses an assumed / illustrative rate or amount ("मान लीजिए"), that shot's
+    sub_text MUST be "SIRF UDAHARAN" — on screen too it must never read like a return promise.
 
 chart_data when visual_type is chart:
   {"type": "bar" or "line", "labels": ["FD","SIP"], "values": [7, 12]}

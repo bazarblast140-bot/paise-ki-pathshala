@@ -109,7 +109,8 @@ FACT LEDGER:
 <- each figure → source>
 
 HARD RULES:
-1. Spoken length 95-135 words total. Every sentence under 12 words. No filler at all.
+1. Spoken length 85-115 words total — HARD CAP 120, count the words before you answer
+   (the first test run came out 167 and 161 words). Every sentence under 12 words. No filler.
 2. At least ONE [SOURCE: ...] in the BODY; FACT LEDGER lists every figure.
 3. SEBI finfluencer rules: never recommend buying/selling/holding any specific stock, fund
    scheme, bank product, insurance plan, app or crypto; never promise or imply guaranteed

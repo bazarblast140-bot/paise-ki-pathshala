@@ -78,7 +78,7 @@
         "resolution": "1080x1920",
         "target_minutes": 0.85,
         "words_per_minute": 135,
-        "target_word_count": 115
+        "target_word_count": 105
       },
       "voice": {
         "edge_rate": "+8%"
