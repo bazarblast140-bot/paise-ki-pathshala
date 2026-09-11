@@ -759,9 +759,14 @@ def main():
 
     # 9) thumbnail — generated from the punchiest shot, not the first frame
     if brand.get("thumbnail", True):
-        thumb = branding.thumbnail(c, shots, RUN / "thumbnail.jpg")
-        if thumb:
-            ok("wrote run/thumbnail.jpg (1280x720)")
+        if VERTICAL:
+            thumb = branding.thumbnail_vertical(c, shots, RUN / "thumbnail.jpg")
+            if thumb:
+                ok("wrote run/thumbnail.jpg (1080x1920 hook)")
+        else:
+            thumb = branding.thumbnail(c, shots, RUN / "thumbnail.jpg")
+            if thumb:
+                ok("wrote run/thumbnail.jpg (1280x720)")
 
 
 if __name__ == "__main__":

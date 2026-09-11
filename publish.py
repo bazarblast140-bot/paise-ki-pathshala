@@ -264,10 +264,9 @@ def main():
 
     video_id = resp["id"]
     ok(f"Uploaded as {visibility}: https://youtu.be/{video_id}")
-    if video_format() == "short":
-        print("[skip] Short — custom thumbnail nahi lagate")
-    else:
-        set_thumbnail(yt, video_id)
+    # Short par bhi hook thumbnail try karo. Channel phone-verified na ho to
+    # YouTube 403 deta hai — set_thumbnail use skip karke upload ko safal rakhta hai.
+    set_thumbnail(yt, video_id)
     print(f"\nEdit before going public: https://studio.youtube.com/video/{video_id}/edit")
 
 if __name__ == "__main__":

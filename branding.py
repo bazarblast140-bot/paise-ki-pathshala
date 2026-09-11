@@ -399,3 +399,75 @@ def thumbnail(cfg_dict, shots, path, tw=1280, th=720):
 
     img.save(path, quality=92)
     return path
+
+
+def thumbnail_vertical(cfg_dict, shots, path, tw=1080, th=1920):
+    """9:16 hook thumbnail for Shorts: the hook (shot 1 headline) huge in the
+    middle, highlight on the key word, host small at the bottom, channel name
+    on top. Everything important stays in the centre — Shorts shelves crop the
+    edges and lay the title over the bottom."""
+    shot = next((s for s in shots if str(s.get("on_screen_text") or "").strip()), None)
+    if shot is None:
+        return None
+    img = Image.new("RGB", (tw, th))
+    d = ImageDraw.Draw(img)
+    top, bot = (11, 20, 38), (6, 58, 44)            # trading navy -> green
+    for y in range(th):
+        t = y / th
+        d.line([(0, y), (tw, y)], fill=tuple(int(top[k] + (bot[k] - top[k]) * t) for k in range(3)))
+
+    head = str(shot.get("on_screen_text")).strip()
+    hl = str(shot.get("highlight") or "").strip()
+    max_w, box_top, box_h = tw - 140, 430, 700
+    size, f, lines = 90, font(90), [head]
+    for probe in range(260, 70, -6):
+        pf = font(probe)
+        ls, cur = [], ""
+        for w in head.split():
+            trial = f"{cur} {w}".strip()
+            if d.textlength(trial, font=pf) <= max_w or not cur:
+                cur = trial
+            else:
+                ls.append(cur)
+                cur = w
+        if cur:
+            ls.append(cur)
+        if len(ls) <= 4 and len(ls) * probe * 1.12 <= box_h \
+                and all(d.textlength(l, font=pf) <= max_w for l in ls):
+            size, f, lines = probe, pf, ls
+            break
+    line_h = size * 1.12
+    y0 = box_top + (box_h - len(lines) * line_h) / 2
+
+    layer = img.convert("RGBA")
+    for i, line in enumerate(lines):
+        pos = line.lower().find(hl.lower()) if hl and hl.lower() != "null" else -1
+        if pos >= 0:
+            lx = (tw - d.textlength(line, font=f)) / 2
+            x = lx + d.textlength(line[:pos], font=f)
+            b = ImageDraw.Draw(layer).textbbox((x, y0 + i * line_h), line[pos:pos + len(hl)], font=f)
+            layer.alpha_composite(sketch.marker_highlight(
+                (tw, th), (b[0] - 12, b[1] - 12, b[2] + 12, b[3] + 12), sketch.HIGHLIGHT, seed=3))
+    img = layer.convert("RGB")
+    d = ImageDraw.Draw(img)
+    for i, line in enumerate(lines):
+        lx = (tw - d.textlength(line, font=f)) / 2
+        ly = y0 + i * line_h
+        d.text((lx, ly), line, font=f, fill=(255, 255, 255), stroke_width=8, stroke_fill=(0, 0, 0))
+        pos = line.lower().find(hl.lower()) if hl and hl.lower() != "null" else -1
+        if pos >= 0:
+            d.text((lx + d.textlength(line[:pos], font=f), ly), line[pos:pos + len(hl)],
+                   font=f, fill=sketch.INK)
+
+    try:
+        host = sketch.load_host_pose("point", height=430)
+        img.paste(host, ((tw - host.width) // 2, 1180), host)
+    except Exception:
+        pass
+    name = str(cfg_dict["channel"].get("name", "")).strip()
+    if name and not name.startswith("TODO"):
+        fn = font(44)
+        nw = d.textlength(name.upper(), font=fn)
+        d.text(((tw - nw) / 2, 250), name.upper(), font=fn, fill=sketch.HIGHLIGHT)
+    img.save(path, quality=92)
+    return path

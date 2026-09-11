@@ -2,21 +2,21 @@
   "channel": {
     "name": "Paise Ki Pathshala",
     "tagline": "Ek video. Paise ka ek niyam.",
-    "format": "One Rule Board — Hindi personal finance explainer",
+    "format": "Trader Shorts — ek fact ya ek concept, seedha samjhao",
     "niche": "personal finance (India)",
-    "audience": "India, Hindi-speaking beginners 18-40 (salaried, students, small business)",
+    "audience": "Indian traders — retail se pro tak (Hindi)",
     "language": "Hindi",
     "tags": [
-      "personal finance hindi",
-      "paisa kaise bachaye",
-      "sip kya hai",
-      "mutual fund hindi",
-      "tax saving hindi",
-      "credit card hindi",
-      "emi kya hai",
-      "financial literacy hindi",
+      "stock market hindi",
+      "trading hindi",
+      "candlestick patterns hindi",
+      "option trading hindi",
+      "technical analysis hindi",
+      "share market facts",
+      "risk management trading",
       "paise ki pathshala",
-      "investment basics hindi"
+      "nifty",
+      "intraday trading hindi"
     ],
     "banner_line": "SIP · FD · Tax · EMI · Credit Card · Insurance",
     "country": "IN",
@@ -81,13 +81,14 @@
         "target_word_count": 105
       },
       "voice": {
-        "edge_rate": "+8%"
+        "edge_voice": "hi-IN-SwaraNeural",
+        "edge_rate": "+10%"
       },
       "pipeline": {
         "word_count_tolerance": 0.3
       },
       "branding": {
-        "thumbnail": false
+        "thumbnail": true
       }
     }
   }

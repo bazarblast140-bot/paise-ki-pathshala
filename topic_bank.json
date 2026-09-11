@@ -1,296 +1,220 @@
 {
-  "_comment": "Paise Ki Pathshala — Hindi personal finance topics. Pehle evergreen, low-risk topics; tax/regulation wale topics neeche hain kyunki unke niyam har saal badalte hain — unka script dhyan se check karna.",
+  "_comment": "Paise Ki Pathshala — trader Shorts topics (fact / explainer). 'अगर लगाते' numbers Yahoo closes se verified (end 04-06-2026, dividend chhodkar) — script inhi numbers ko use kare.",
   "topics": [
     {
       "id": 1,
       "used": false,
-      "topic": "72 का नियम — आपका पैसा कितने साल में दोगुना होगा",
-      "used_short": true
+      "topic": "Hammer कैंडल — डाउनट्रेंड के बाद लंबी निचली wick क्या बताती है"
     },
     {
       "id": 2,
       "used": false,
-      "topic": "Credit card का Minimum Due जाल — ₹50,000 का बिल सालों तक कैसे चलता है"
+      "topic": "Shooting Star — अपट्रेंड के ऊपर लंबी ऊपरी wick की चेतावनी"
     },
     {
       "id": 3,
       "used": false,
-      "topic": "No Cost EMI सच में फ्री है? छुपा हुआ खर्च"
+      "topic": "Doji — open और close बराबर, बाज़ार की indecision"
     },
     {
       "id": 4,
       "used": false,
-      "topic": "Lifestyle inflation — सैलरी बढ़ी पर बचत क्यों नहीं बढ़ी"
+      "topic": "Bullish Engulfing — दूसरी हरी कैंडल पिछली लाल को पूरा ढक ले"
     },
     {
       "id": 5,
       "used": false,
-      "topic": "Emergency fund — कितने महीने का खर्च अलग रखें और कहाँ रखें"
+      "topic": "Morning Star और Evening Star — तीन कैंडल का reversal"
     },
     {
       "id": 6,
       "used": false,
-      "topic": "FD बनाम महंगाई — FD पर असली रिटर्न कितना बचता है"
+      "topic": "Hanging Man — Hammer जैसी शक्ल, पर अपट्रेंड के ऊपर bearish चेतावनी"
     },
     {
       "id": 7,
       "used": false,
-      "topic": "SIP क्या है — ₹1,000 महीने से compounding कैसे काम करती है"
+      "topic": "कैंडल पैटर्न अकेले क्यों फेल होते हैं — confirmation और stop loss"
     },
     {
       "id": 8,
       "used": false,
-      "topic": "Term insurance बनाम endowment पॉलिसी — बीमा को निवेश मत बनाइए"
+      "topic": "RSI 70 और 30 — overbought/oversold का सही मतलब (ये अपने आप sell/buy सिग्नल नहीं)"
     },
     {
       "id": 9,
       "used": false,
-      "topic": "CIBIL score — ये कैसे बनता है और क्या इसे गिराता है"
+      "topic": "Bullish divergence — price नया low, RSI ऊँचा low"
     },
     {
       "id": 10,
       "used": false,
-      "topic": "Personal loan का जाल — flat rate बनाम reducing rate"
+      "topic": "Golden Cross और Death Cross — 50 DMA और 200 DMA"
     },
     {
       "id": 11,
       "used": false,
-      "topic": "50-30-20 budget नियम — भारतीय सैलरी पर कैसे लगाएँ"
+      "topic": "MACD 12, 26, 9 — लाइन, signal और histogram"
     },
     {
       "id": 12,
       "used": false,
-      "topic": "Buy Now Pay Later — छोटी किस्तों का बड़ा जाल"
+      "topic": "VWAP — intraday traders इसे क्यों देखते हैं"
     },
     {
       "id": 13,
       "used": false,
-      "topic": "Step-up SIP — हर साल SIP 10% बढ़ाने का असर"
+      "topic": "Volume के बिना breakout — fake breakout कैसे पहचानें"
     },
     {
       "id": 14,
       "used": false,
-      "topic": "Direct बनाम Regular mutual fund — commission का असली खर्च"
+      "topic": "ATR से stop loss — भाव रोज़ कितना हिलता है"
     },
     {
       "id": 15,
       "used": false,
-      "topic": "Expense ratio — 1% का फ़र्क 20 साल में कितना बड़ा होता है"
+      "topic": "Limit order बनाम Market order — slippage का ख़तरा"
     },
     {
       "id": 16,
       "used": false,
-      "topic": "Index fund क्या है — सबसे आसान निवेश क्यों माना जाता है"
+      "topic": "SL बनाम SL-M — तेज़ गिरावट में क्या होता है"
     },
     {
       "id": 17,
       "used": false,
-      "topic": "Compound interest बनाम simple interest — असली फ़र्क"
+      "topic": "MIS, CNC, NRML — कौन सा product कब"
     },
     {
       "id": 18,
       "used": false,
-      "topic": "Inflation — 20 साल बाद ₹1 लाख की असली क़ीमत"
+      "topic": "GTT और AMO — बाज़ार बंद होने पर भी ऑर्डर"
     },
     {
       "id": 19,
       "used": false,
-      "topic": "Health insurance — सिर्फ़ कंपनी वाला बीमा काफ़ी क्यों नहीं"
+      "topic": "T+1 settlement — ख़रीदे शेयर demat में कब आते हैं"
     },
     {
       "id": 20,
       "used": false,
-      "topic": "Home loan prepayment — EMI घटाएँ या tenure?"
+      "topic": "Option ख़रीदार का max loss सिर्फ़ premium — पर theta रोज़ खाता है"
     },
     {
       "id": 21,
       "used": false,
-      "topic": "UPI fraud — collect request और screen-share का जाल"
+      "topic": "Naked call selling का असीमित risk"
     },
     {
       "id": 22,
       "used": false,
-      "topic": "'Guaranteed return' वाली स्कीम — Ponzi को कैसे पहचानें"
+      "topic": "ATM option का delta करीब 0.5 — इसका मतलब"
     },
     {
       "id": 23,
       "used": false,
-      "topic": "Credit card rewards का जाल — points के लिए ज़्यादा खर्च"
+      "topic": "Open Interest — क्या बताता है, क्या नहीं"
     },
     {
       "id": 24,
       "used": false,
-      "topic": "Car loan — 5 साल की EMI और गाड़ी की घटती क़ीमत"
+      "topic": "IV बढ़े तो premium क्यों महँगा होता है"
     },
     {
       "id": 25,
       "used": false,
-      "topic": "Rent बनाम घर खरीदना — खरीदना हमेशा बेहतर क्यों नहीं"
+      "topic": "SEBI स्टडी: FY22 में 89% individual F&O traders घाटे में (जनवरी 2023 रिपोर्ट)"
     },
     {
       "id": 26,
       "used": false,
-      "topic": "Gold loan बनाम personal loan — कब कौन सस्ता पड़ता है"
+      "topic": "1% risk rule — ₹1 लाख पूँजी, entry ₹500, SL ₹490 = 100 शेयर"
     },
     {
       "id": 27,
       "used": false,
-      "topic": "Savings account बनाम liquid fund — खाली पड़ा पैसा कहाँ रखें"
+      "topic": "Risk-reward 1:2 — सिर्फ़ 33% ट्रेड जीतकर भी breakeven"
     },
     {
       "id": 28,
       "used": false,
-      "topic": "Dividend का मिथक — dividend 'फ्री पैसा' नहीं है"
+      "topic": "50% नुकसान की भरपाई के लिए 100% मुनाफ़ा चाहिए"
     },
     {
       "id": 29,
       "used": false,
-      "topic": "NAV का मिथक — कम NAV वाला fund सस्ता नहीं होता"
+      "topic": "5x leverage पर 20% उल्टा move = पूरी पूँजी साफ़"
     },
     {
       "id": 30,
       "used": false,
-      "topic": "Market गिरने पर SIP बंद करना — सबसे महंगी गलती क्यों"
+      "topic": "Revenge trading — नुकसान के बाद का सबसे महँगा ट्रेड"
     },
     {
       "id": 31,
       "used": false,
-      "topic": "Diversification — सारे अंडे एक टोकरी में क्यों नहीं"
+      "topic": "Averaging down का जाल — घाटे वाले ट्रेड में और ख़रीदना"
     },
     {
       "id": 32,
       "used": false,
-      "topic": "EMI का हिसाब — शुरू में ब्याज ज़्यादा क्यों कटता है"
+      "topic": "Trading journal — अपनी गलतियाँ पकड़ने का तरीका"
     },
     {
       "id": 33,
       "used": false,
-      "topic": "सैलरी स्लिप समझिए — CTC बनाम in-hand"
+      "topic": "जनवरी 2010 में Nifty 50 में ₹1 लाख = जून 2026 तक करीब ₹4.5 लाख (5,232 से 23,417; dividend छोड़कर)"
     },
     {
       "id": 34,
       "used": false,
-      "topic": "EPF — PF का पैसा कैसे बढ़ता है"
+      "topic": "जनवरी 2015 में Nifty 50 में ₹1 लाख = जून 2026 तक करीब ₹2.8 लाख (8,395 से 23,417; dividend छोड़कर)"
     },
     {
       "id": 35,
       "used": false,
-      "topic": "ULIP — बीमा और निवेश मिलाने का असली खर्च"
+      "topic": "जनवरी 2008 के शिखर पर Sensex में ₹1 लाख = जून 2026 तक करीब ₹3.6 लाख (20,465 से 74,360; dividend छोड़कर)"
     },
     {
       "id": 36,
       "used": false,
-      "topic": "Credit utilization — card limit का 30% नियम"
+      "topic": "जनवरी 2010 में Nifty Bank में ₹1 लाख = जून 2026 तक करीब ₹6 लाख (9,112 से 54,308; dividend छोड़कर)"
     },
     {
       "id": 37,
       "used": false,
-      "topic": "Loan guarantor बनना — दूसरे का लोन आपकी ज़िम्मेदारी कैसे"
+      "topic": "2010 से जून 2026: Nifty का सालाना औसत (CAGR) करीब 9.6% (dividend छोड़कर)"
     },
     {
       "id": 38,
       "used": false,
-      "topic": "Digital gold बनाम physical gold — खर्च और risk"
+      "topic": "Market-wide circuit breaker — 10%, 15%, 20% पर पूरा बाज़ार रुकता है"
     },
     {
       "id": 39,
       "used": false,
-      "topic": "Sinking fund — त्योहार और शादी के खर्च की पहले से तैयारी"
+      "topic": "BSE 1875 — एशिया के सबसे पुराने एक्सचेंजों में"
     },
     {
       "id": 40,
       "used": false,
-      "topic": "Opportunity cost — महंगी चीज़ की असली क़ीमत"
+      "topic": "Nifty 50 की base value 1000, base date 3 नवंबर 1995"
     },
     {
       "id": 41,
       "used": false,
-      "topic": "Credit card का ब्याज — सालाना 40% तक कैसे पहुँचता है"
+      "topic": "Pre-open session 9:00 से 9:15 — भाव कैसे तय होता है"
     },
     {
       "id": 42,
       "used": false,
-      "topic": "Mutual fund exit load — जल्दी निकालने का खर्च"
+      "topic": "Muhurat trading — दिवाली का एक घंटे का सेशन"
     },
     {
       "id": 43,
       "used": false,
-      "topic": "Nominee — हर खाते और पॉलिसी में क्यों ज़रूरी"
-    },
-    {
-      "id": 44,
-      "used": false,
-      "topic": "Instant loan apps का जाल — छुपे चार्ज और risk"
-    },
-    {
-      "id": 45,
-      "used": false,
-      "topic": "114 और 144 का नियम — पैसा तीन गुना और चार गुना कब होगा"
-    },
-    {
-      "id": 46,
-      "used": false,
-      "topic": "Pay yourself first — सैलरी आते ही बचत का नियम"
-    },
-    {
-      "id": 47,
-      "used": false,
-      "topic": "Cashback और discount का मनोविज्ञान — बचत या खर्च?"
-    },
-    {
-      "id": 48,
-      "used": false,
-      "topic": "Insurance claim reject क्यों होते हैं — सही जानकारी का महत्व"
-    },
-    {
-      "id": 49,
-      "used": false,
-      "topic": "Retirement corpus — ₹50,000 महीने के खर्च के लिए कितना चाहिए"
-    },
-    {
-      "id": 50,
-      "used": false,
-      "topic": "बच्चों की पढ़ाई की महंगाई — education inflation का हिसाब"
-    },
-    {
-      "id": 51,
-      "used": false,
-      "topic": "PPF — 15 साल का नियम और टैक्स फ़ायदा"
-    },
-    {
-      "id": 52,
-      "used": false,
-      "topic": "NPS — retirement के लिए ये कैसे काम करता है"
-    },
-    {
-      "id": 53,
-      "used": false,
-      "topic": "FD के ब्याज पर टैक्स — TDS और Form 15G/15H"
-    },
-    {
-      "id": 54,
-      "used": false,
-      "topic": "Old बनाम New tax regime — फ़ैसला कैसे करें"
-    },
-    {
-      "id": 55,
-      "used": false,
-      "topic": "Loan की processing fee और hidden charges"
-    },
-    {
-      "id": 56,
-      "used": false,
-      "topic": "Chit fund और committee — risk क्या है"
-    },
-    {
-      "id": 57,
-      "used": false,
-      "topic": "Health insurance में waiting period और co-payment"
-    },
-    {
-      "id": 58,
-      "used": false,
-      "topic": "Will (वसीयत) — छोटी बचत वालों को भी क्यों चाहिए"
+      "topic": "NSDL और CDSL — आपके शेयर असल में कहाँ रखे हैं"
     }
   ]
 }

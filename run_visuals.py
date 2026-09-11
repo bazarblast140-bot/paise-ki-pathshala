@@ -105,7 +105,7 @@ def generate_plan(spoken, c):
     fmt_note = ("" if video_format() != "short" else
                 "\n\nFORMAT OVERRIDE — VERTICAL SHORT (9:16, ~50s): shot length 3-5 seconds "
                 "(not 5-8), 8-14 shots total, on_screen_text max 4 words, sub_text max 5 words, "
-                "exactly ONE chart, zero stock footage.")
+                "exactly ONE chart, zero stock footage. SHOT 1 IS THE HOOK: its on_screen_text is the hook in max 5 Roman words (it is also the thumbnail) with a highlight word and emphasis warning or positive.")
 
     all_shots = []
     cur_sec = 0.0
