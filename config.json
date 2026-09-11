@@ -1,0 +1,74 @@
+{
+  "channel": {
+    "name": "Paise Ki Pathshala",
+    "tagline": "Ek video. Paise ka ek niyam.",
+    "format": "One Rule Board — Hindi personal finance explainer",
+    "niche": "personal finance (India)",
+    "audience": "India, Hindi-speaking beginners 18-40 (salaried, students, small business)",
+    "language": "Hindi",
+    "tags": [
+      "personal finance hindi",
+      "paisa kaise bachaye",
+      "sip kya hai",
+      "mutual fund hindi",
+      "tax saving hindi",
+      "credit card hindi",
+      "emi kya hai",
+      "financial literacy hindi",
+      "paise ki pathshala",
+      "investment basics hindi"
+    ],
+    "banner_line": "SIP · FD · Tax · EMI · Credit Card · Insurance",
+    "country": "IN",
+    "default_language": "hi",
+    "description": [
+      "पैसे की वो बातें जो स्कूल में नहीं सिखाई जातीं।",
+      "हर वीडियो में एक नियम — SIP, FD, टैक्स, EMI, क्रेडिट कार्ड, बीमा, लोन — आसान हिंदी में, असली नंबरों के साथ।",
+      "रोज़ नया वीडियो।",
+      "यह चैनल सिर्फ़ शिक्षा के लिए है। हम किसी शेयर, म्यूचुअल फंड या प्रोडक्ट को खरीदने-बेचने की सलाह नहीं देते। निवेश से पहले SEBI-रजिस्टर्ड सलाहकार से सलाह लें।"
+    ]
+  },
+  "branding": {
+    "intro_seconds": 0,
+    "watermark": true,
+    "typewriter": true,
+    "thumbnail": true,
+    "background_music": true,
+    "visual_style": "cartoon lab-coat host, white board, big numbers, icons, charts",
+    "show_section_labels": false,
+    "outro": false
+  },
+  "video": {
+    "target_minutes": 5,
+    "words_per_minute": 130,
+    "target_word_count": 650,
+    "resolution": "1920x1080",
+    "fps": 30
+  },
+  "models": {
+    "_note": "DeepSeek V4 Flash — low cost. Use deepseek-v4-pro if script quality drops.",
+    "llm_provider": "deepseek",
+    "script_model": "deepseek-v4-flash",
+    "verify_model": "deepseek-v4-flash",
+    "visual_model": "deepseek-v4-flash",
+    "max_tokens": 16000,
+    "script_max_tokens": 12000,
+    "visual_max_tokens": 16000
+  },
+  "voice": {
+    "engine": "edge",
+    "edge_voice": "hi-IN-MadhurNeural",
+    "edge_rate": "+0%",
+    "edge_pitch": "+0Hz"
+  },
+  "pipeline": {
+    "auto_publish": true,
+    "publish_visibility": "unlisted",
+    "stop_on_gate_fail": true,
+    "max_stock_ratio": 0.08,
+    "word_count_tolerance": 0.25
+  },
+  "notify": {
+    "channel": "telegram"
+  }
+}
