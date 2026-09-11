@@ -439,25 +439,35 @@ def thumbnail_vertical(cfg_dict, shots, path, tw=1080, th=1920):
     line_h = size * 1.12
     y0 = box_top + (box_h - len(lines) * line_h) / 2
 
+    # Highlight shabd-shabd par: hook do line me toote to poora phrase kisi ek
+    # line me nahi milta aur marker gayab ho jaata tha ("THAK" / "GAYI?").
+    hl_words = [w.lower() for w in hl.split()] if hl and hl.lower() != "null" else []
+
+    def spans(line):
+        out, x = [], 0
+        for w in line.split(" "):
+            core = w.strip("?!.,:").lower()
+            if core and core in hl_words:
+                out.append((x, w))
+            x += len(w) + 1
+        return out
+
     layer = img.convert("RGBA")
     for i, line in enumerate(lines):
-        pos = line.lower().find(hl.lower()) if hl and hl.lower() != "null" else -1
-        if pos >= 0:
-            lx = (tw - d.textlength(line, font=f)) / 2
+        lx = (tw - d.textlength(line, font=f)) / 2
+        for pos, w in spans(line):
             x = lx + d.textlength(line[:pos], font=f)
-            b = ImageDraw.Draw(layer).textbbox((x, y0 + i * line_h), line[pos:pos + len(hl)], font=f)
+            b = ImageDraw.Draw(layer).textbbox((x, y0 + i * line_h), w, font=f)
             layer.alpha_composite(sketch.marker_highlight(
-                (tw, th), (b[0] - 12, b[1] - 12, b[2] + 12, b[3] + 12), sketch.HIGHLIGHT, seed=3))
+                (tw, th), (b[0] - 12, b[1] - 12, b[2] + 12, b[3] + 12), sketch.HIGHLIGHT, seed=3 + i))
     img = layer.convert("RGB")
     d = ImageDraw.Draw(img)
     for i, line in enumerate(lines):
         lx = (tw - d.textlength(line, font=f)) / 2
         ly = y0 + i * line_h
         d.text((lx, ly), line, font=f, fill=(255, 255, 255), stroke_width=8, stroke_fill=(0, 0, 0))
-        pos = line.lower().find(hl.lower()) if hl and hl.lower() != "null" else -1
-        if pos >= 0:
-            d.text((lx + d.textlength(line[:pos], font=f), ly), line[pos:pos + len(hl)],
-                   font=f, fill=sketch.INK)
+        for pos, w in spans(line):
+            d.text((lx + d.textlength(line[:pos], font=f), ly), w, font=f, fill=sketch.INK)
 
     try:
         host = sketch.load_host_pose("point", height=430)
