@@ -16,11 +16,13 @@ import os
 import sys
 from pathlib import Path
 
+import config as C
+
 
 def build_message(meta_path: Path, slot: str, privacy: str, upload: str,
                   run_url: str = "") -> str:
     ok = upload == "success"
-    lines = ["✅ QUIZ PATHSHALA short live" if ok else "❌ Short bana par upload FAIL",
+    lines = [f"✅ {C.BRAND} short live" if ok else "❌ Short bana par upload FAIL",
              f"slot: {slot} | {privacy}"]
     try:
         m = json.loads(meta_path.read_text(encoding="utf-8"))
