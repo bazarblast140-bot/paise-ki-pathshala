@@ -1,0 +1,112 @@
+name: Paise Ki Pathshala
+
+# Hindi personal-finance channel. Secrets: DEEPSEEK_API_KEY, PEXELS_API_KEY,
+# TELEGRAM_*, YT_FIN_* (yt_token_to_github.py --prefix YT_FIN), variable
+# YT_FIN_CHANNEL_ID — publish.py isse check karta hai ki token sahi channel ka hai.
+#
+# Do format: long (16:9, ~5 min) aur short (9:16, ~50s, bina intro). Har topic
+# ka ek short aur ek long banta hai (topic_bank: used / used_short).
+#
+# REVIEW PHASE: schedule band hai, videos unlisted jaate hain. 3-5 video dekh
+# kar retention theek lage tabhi neeche wali lines uncomment karna.
+#   short 12:00 IST = 06:30 UTC,  long 20:00 IST = 14:30 UTC
+# GitHub ka cron late chal sakta hai.
+on:
+  # schedule:
+  #   - cron: "30 6 * * *"     # short
+  #   - cron: "30 14 * * *"    # long
+  workflow_dispatch:
+    inputs:
+      format:
+        description: "long (16:9, ~5 min) ya short (9:16, ~50s)"
+        type: choice
+        options: [short, long]
+        default: short
+
+# Short aur long alag group — ek dusre ko block na karein.
+concurrency:
+  group: paise-ki-pathshala-${{ inputs.format || github.event.schedule }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # fonts-noto-core = Devanagari captions (libass); libraqm0 = PIL me sahi matra
+      - name: Install FFmpeg & fonts
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Format decide karo
+        id: fmt
+        run: |
+          F="${{ inputs.format }}"
+          if [ -z "$F" ]; then
+            case "${{ github.event.schedule }}" in
+              "30 6 * * *") F=short ;;
+              *)            F=long ;;
+            esac
+          fi
+          echo "format=$F" >> "$GITHUB_OUTPUT"
+          echo "format: $F"
+
+      - name: Run Pipeline (+ publish if READY)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          KIMI_BASE_URL: ${{ secrets.KIMI_BASE_URL }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YT_FIN_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
+          EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
+        run: python run_pipeline.py --format ${{ steps.fmt.outputs.format }} --publish
+
+      - name: Commit topic_bank (prevent topic repeats)
+        if: success()
+        run: |
+          if git diff --quiet topic_bank.json; then
+            echo "No topic_bank changes"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add topic_bank.json
+            git commit -m "chore: mark topic used [skip ci]"
+            git pull --rebase --autostash || true
+            git push
+          fi
+
+      - name: Upload video + report as artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.fmt.outputs.format }}-${{ github.run_number }}
+          path: |
+            run/final.mp4
+            run/thumbnail.jpg
+            run/report.md
+            run/script.txt
+            run/spoken.txt
+            run/gate1_report.txt
+            run/gate2_report.txt
+            run/gate3_report.txt
+          retention-days: 14
