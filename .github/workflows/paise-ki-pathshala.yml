@@ -142,6 +142,7 @@ jobs:
             run/report.md
             run/script.txt
             run/spoken.txt
+            run/tts_text.txt
             run/gate1_report.txt
             run/gate2_report.txt
             run/gate3_report.txt
