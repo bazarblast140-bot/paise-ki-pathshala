@@ -28,8 +28,21 @@ STAGES = [
 def run(script, *args):
     return subprocess.run([sys.executable, str(ROOT / script), *args], cwd=ROOT).returncode
 
+# Short = Chart Board template (board_short.py): tasveer code se, on-screen Hindi
+# topic_bank se, LLM sirf narration. Long wala raasta pehle jaisa.
+SHORT_STAGES = [
+    ("Preflight",       "check_setup.py"),
+    ("Pick topic",      "pick_topic.py"),
+    ("Chart Board",     "board_short.py"),
+    ("Final verify",    "run_verify.py"),
+]
+
+
 def main():
+    global STAGES
     print(f"[info] format: {video_format()}")
+    if video_format() == "short":
+        STAGES = SHORT_STAGES
     status = "success"
     for label, script in STAGES:
         print(f"\n=== {label} ===")

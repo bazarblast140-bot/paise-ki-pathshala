@@ -12,10 +12,17 @@ def main():
     flag = "used_short" if video_format() == "short" else "used"
     nxt = next((t for t in bank["topics"] if not t.get(flag)), None)
     if not nxt:
-        die(f"No unused topics left for '{flag}'. Add more to topic_bank.json.")
+        # Sab topics ho gaye to pipeline rukni nahi chahiye (pehle yahan die tha —
+        # roz 3 Shorts par ~18 din me upload band ho jaata). Cycle dobara shuru karo;
+        # log me warning rahegi taaki naye topics jodne ki yaad rahe.
+        print(f"[warn] saare topics '{flag}' ho gaye — cycle dobara shuru. Naye topics jodo.")
+        for t in bank["topics"]:
+            t[flag] = False
+        nxt = bank["topics"][0]
     nxt[flag] = True
-    bank_path.write_text(json.dumps(bank, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    bank_path.write_text(json.dumps(bank, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     save("topic.txt", nxt["topic"])
+    save("topic.json", json.dumps(nxt, ensure_ascii=False, indent=1))
     ok(f"Today's topic (#{nxt['id']}): {nxt['topic']}")
 
 if __name__ == "__main__":
