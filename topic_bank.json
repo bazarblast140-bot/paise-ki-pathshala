@@ -10,7 +10,8 @@
     {
       "id": 2,
       "used": false,
-      "topic": "Shooting Star — अपट्रेंड के ऊपर लंबी ऊपरी wick की चेतावनी"
+      "topic": "Shooting Star — अपट्रेंड के ऊपर लंबी ऊपरी wick की चेतावनी",
+      "used_short": true
     },
     {
       "id": 3,
