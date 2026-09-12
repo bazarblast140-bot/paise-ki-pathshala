@@ -29,9 +29,9 @@ on:
         options: [short, long]
         default: short
       privacy:
-        description: "test = unlisted turant; public = agle slot par"
+        description: "unlisted = test; public = agle slot par; now = abhi turant public"
         type: choice
-        options: [unlisted, public]
+        options: [unlisted, public, now]
         default: unlisted
 
 # Short aur long alag group — ek dusre ko block na karein.
@@ -76,6 +76,8 @@ jobs:
               "30 14 * * *") SLOT="16:00" ;;
               "30 19 * * *") SLOT="21:00" ;;
             esac
+          elif [ "$VIS" = "now" ]; then
+            VIS=public; SLOT=""          # turant public, koi publishAt nahi
           elif [ "$VIS" = "public" ]; then
             # manual public: next of the three slots
             H=$(TZ=Asia/Kolkata date +%H%M)
