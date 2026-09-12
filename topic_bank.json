@@ -159,7 +159,7 @@
   {
    "id": 5,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "shooting_star",
    "cat": "CANDLESTICK",
    "topic": "Shooting Star — अपट्रेंड के ऊपर लंबी ऊपरी wick",
