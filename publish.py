@@ -63,6 +63,7 @@ def load_topic():
 def build_title(sec):
     title = sec.get("TITLE", "").strip().splitlines()
     title = title[0].strip() if title else ""
+    title = title.replace("->", "→").replace("<", "").replace(">", "")   # YouTube "<>" reject karta hai
     if not title:
         die("No TITLE found in run/script.txt. Refusing to upload an unnamed video.")
     kw = (load_topic().get("seo") or "").strip()
@@ -129,6 +130,9 @@ def build_description(sec, c):
     parts.append(" ".join(dict.fromkeys(h for h in hash_tags if len(h) > 2)))
 
     desc = "\n\n".join(parts)
+    # YouTube "<" / ">" wali description 400 invalidDescription se reject karta hai
+    # (ledger ki "155 -> 23" line par upload fail hua tha)
+    desc = desc.replace("->", "→").replace("<", "").replace(">", "").replace("SOURCE", "स्रोत")
     return desc[:MAX_DESC]
 
 
