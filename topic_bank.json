@@ -84,7 +84,7 @@
   {
    "id": 3,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "rsi_levels",
    "cat": "INDICATOR",
    "topic": "RSI 70 और 30 — overbought और oversold का सही मतलब",
