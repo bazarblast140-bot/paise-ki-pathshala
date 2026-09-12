@@ -121,7 +121,7 @@
   {
    "id": 4,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "one_percent",
    "cat": "RISK",
    "topic": "1% risk rule — पूँजी 1 लाख, entry 500, SL 490",
