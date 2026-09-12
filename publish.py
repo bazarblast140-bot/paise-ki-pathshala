@@ -4,6 +4,7 @@ Always uploads as PRIVATE (or scheduled), never instant-public, on a finance cha
 Needs: pip install google-api-python-client google-auth-oauthlib
 and YOUTUBE_* env vars for the FINANCE channel (separate OAuth from your Hindi channel!).
 """
+import json
 import os
 import re
 import sys
@@ -38,11 +39,36 @@ def sections(text):
     return out
 
 
+CAT_HASH = {"CANDLESTICK": "#CandlestickPatterns", "INDICATOR": "#TechnicalAnalysis",
+            "ORDERS": "#StockMarketBasics", "OPTIONS": "#OptionTrading", "RISK": "#RiskManagement",
+            "REAL DATA": "#StockMarketIndia", "MARKET FACT": "#StockMarketFacts"}
+CAT_TAGS = {"CANDLESTICK": ["candlestick patterns hindi", "candlestick pattern kaise padhe"],
+            "INDICATOR": ["technical analysis hindi", "indicator trading hindi"],
+            "ORDERS": ["order types hindi", "share kaise kharide bechen"],
+            "OPTIONS": ["option trading hindi", "options for beginners hindi"],
+            "RISK": ["risk management trading hindi", "position sizing hindi"],
+            "REAL DATA": ["share market return hindi", "long term investing hindi"],
+            "MARKET FACT": ["stock market facts hindi", "share market gyan"]}
+
+
+def load_topic():
+    """Short pipeline writes run/topic.json (key, cat, seo keyword)."""
+    p = RUN / "topic.json"
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def build_title(sec):
     title = sec.get("TITLE", "").strip().splitlines()
     title = title[0].strip() if title else ""
     if not title:
         die("No TITLE found in run/script.txt. Refusing to upload an unnamed video.")
+    kw = (load_topic().get("seo") or "").strip()
+    if kw and kw.split()[0].lower() not in title.lower() and len(title) + len(kw) + 9 <= MAX_TITLE:
+        # search me log English naam likhte hain ("hammer candlestick pattern hindi")
+        title = f"{title} | {kw} Hindi"
     if len(title) > MAX_TITLE:
         # cut on a word boundary rather than mid-word
         title = title[:MAX_TITLE].rsplit(" ", 1)[0]
@@ -62,13 +88,15 @@ def build_description(sec, c):
         hook_one = re.sub(r"\s+", " ", hook).strip()
         parts.append(hook_one)
 
-    title = (sec.get("TITLE") or "").strip().splitlines()
-    title = title[0].strip() if title else ""
-    if title:
-        parts.append(f"इस वीडियो में: {title}")
-    if video_format() == "short":
-        # Short -> long funnel: Shorts ki kamaai kam hai, asli watch time long video deta hai.
-        parts.append("पूरा हिसाब चैनल के लंबे वीडियो में है — चैनल पर देखें।")
+    # title dobara nahi — search snippet ki jagah kaam ki line ko do
+    topic = load_topic()
+    kw, cat = topic.get("seo"), topic.get("cat")
+    if kw and cat == "REAL DATA":
+        parts.append(f"{kw} — असली डेटा (जून 2026 तक), dividend शामिल नहीं। पिछला रिटर्न आगे की गारंटी नहीं।")
+    elif kw and cat == "MARKET FACT":
+        parts.append(f"{kw} — शेयर बाज़ार का फैक्ट, आसान हिंदी में।")
+    elif kw:
+        parts.append(f"{kw} — आसान हिंदी में: पहचान, मतलब और traders इसे आमतौर पर कैसे इस्तेमाल करते हैं।")
 
     disclaimer = sec.get("DISCLAIMER LINE", "").strip()
     parts.append(disclaimer or "यह वीडियो सिर्फ़ जानकारी के लिए है, निवेश सलाह नहीं।")
@@ -89,17 +117,16 @@ def build_description(sec, c):
     name = c["channel"].get("name", "Paise Ki Pathshala").strip()
     tagline = c["channel"].get("tagline", "").strip()
     parts.append(f"{name} — {tagline}" if tagline else name)
-    parts.append("रोज़ नया वीडियो — एक नियम, साफ़ नंबर, कोई हाइप नहीं।")
+    parts.append("रोज़ 3 ट्रेडिंग Shorts — कैंडलस्टिक, इंडिकेटर, ऑर्डर, F&O, रिस्क और असली डेटा।")
 
-    # SEO hashtags (YouTube indexes the first few)
-    tags = c["channel"].get("tags") or []
-    hash_tags = []
-    for t in tags[:8]:
-        h = "#" + re.sub(r"[^A-Za-z0-9]", "", t.title().replace(" ", ""))
-        if len(h) > 2 and h not in hash_tags:
-            hash_tags.append(h)
-    if hash_tags:
-        parts.append(" ".join(hash_tags))
+    # 4-5 hashtags, topic ke hisaab se (15+ par YouTube saare ignore karta hai;
+    # pehle 3 title ke upar dikhte hain). Share ke naam ka hashtag nahi — promotion jaisa lagta.
+    hash_tags = ["#StockMarketHindi", CAT_HASH.get(topic.get("cat"), "#TradingHindi")]
+    kw = topic.get("seo", "")
+    if kw and topic.get("cat") in ("CANDLESTICK", "INDICATOR", "OPTIONS", "RISK", "ORDERS"):
+        hash_tags.append("#" + re.sub(r"[^A-Za-z0-9]", "", kw.title()))
+    hash_tags += ["#TradingHindi", "#PaiseKiPathshala"]
+    parts.append(" ".join(dict.fromkeys(h for h in hash_tags if len(h) > 2)))
 
     desc = "\n\n".join(parts)
     return desc[:MAX_DESC]
@@ -130,19 +157,24 @@ def build_tags(title, c):
         seen.add(key)
         tags.append(t)
 
-    for t in c["channel"].get("tags", []):
+    # sirf relevant tags: topic -> category -> channel core. Doosre topic ke tags
+    # (candle video par "option trading") YouTube ko galat audience batate hain.
+    topic = load_topic()
+    if topic.get("seo"):
+        add(f"{topic['seo']} hindi")
+        add(topic["seo"])
+    for t in CAT_TAGS.get(topic.get("cat"), []):
+        add(t)
+    core = ["stock market hindi", "trading hindi", "paise ki pathshala"] if topic else c["channel"].get("tags", [])
+    for t in core:
         add(t)
 
-    words = re.findall(r"[A-Za-z0-9]{3,}", title or "")
-    for i in range(len(words) - 1):
-        add(f"{words[i]} {words[i+1]}")
-    for w in words:
-        if not w.isdigit():
-            add(w)
-
+    if not topic:
+        # topic ke bina (long video) purana tareeka: title ke English shabd
+        words = re.findall(r"[A-Za-z]{3,}", title or "")
+        for i in range(len(words) - 1):
+            add(f"{words[i]} {words[i+1]}")
     add(c["channel"].get("name", "Paise Ki Pathshala").lower())
-    add("personal finance hindi")
-    add("paise ki baat")
 
     kept, total = [], 0
     for t in tags:
@@ -152,7 +184,7 @@ def build_tags(title, c):
             break
         kept.append(t)
         total += len(t) + 1
-    return kept or ["personal finance hindi", "paisa kaise bachaye", "paise ki pathshala"]
+    return kept or ["stock market hindi", "trading hindi", "paise ki pathshala"]
 
 
 def set_thumbnail(yt, video_id):
@@ -194,11 +226,26 @@ def main():
     title = build_title(sec)
     description = build_description(sec, c)
     tags = build_tags(title, c)
-    visibility = c["pipeline"]["publish_visibility"]
+    # Workflow override: scheduled runs = public at the slot's IST time (publishAt),
+    # manual test runs = unlisted. GitHub cron late chal sakta hai — publishAt se
+    # video phir bhi theek slot par public hota hai.
+    visibility = os.environ.get("PUBLISH_VISIBILITY") or c["pipeline"]["publish_visibility"]
+    publish_at = None
+    slot = os.environ.get("PUBLISH_SLOT_IST", "").strip()          # e.g. "08:30"
+    if visibility == "public" and slot:
+        from datetime import datetime, timedelta, timezone
+        ist = timezone(timedelta(hours=5, minutes=30))
+        now = datetime.now(ist)
+        hh, mm = (int(x) for x in slot.split(":"))
+        when = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if when < now + timedelta(minutes=20):
+            when += timedelta(days=1)
+        publish_at = when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        visibility = "private"        # YouTube: private + publishAt = publicly at that time
 
     print(f"\n  Title      : {title}")
     print(f"  Tags       : {', '.join(tags) or '(none)'}")
-    print(f"  Visibility : {visibility}")
+    print(f"  Visibility : {visibility}" + (f"  (public at {publish_at} UTC)" if publish_at else ""))
     print(f"  Thumbnail  : {'yes' if (RUN / 'thumbnail.jpg').exists() else 'no'}\n")
 
     # ---- YouTube upload ----
@@ -238,6 +285,8 @@ def main():
         "status": {"privacyStatus": visibility,  # 'private' by default
                    "selfDeclaredMadeForKids": False},
     }
+    if publish_at:
+        body["status"]["publishAt"] = publish_at
     from googleapiclient.errors import HttpError, ResumableUploadError
 
     def _do_upload(tag_list):
@@ -257,7 +306,7 @@ def main():
         msg = str(e)
         if "invalidTags" in msg or "invalid video keywords" in msg:
             print("[warn] YouTube rejected tags; retrying with safe minimal tags")
-            safe = ["personal finance hindi", "paisa kaise bachaye", "paise ki pathshala"]
+            safe = ["stock market hindi", "trading hindi", "paise ki pathshala"]
             resp = _do_upload(safe)
         else:
             raise

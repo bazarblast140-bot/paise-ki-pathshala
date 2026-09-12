@@ -902,8 +902,10 @@ def data_line(series, year, cagr=False):
         last = s["last"]
         pts = [v for m, v in s["monthly"] if m >= f"{year}-01"]
         mult = last["close"] / start["close"]
+        loser = mult < 1
         panel(img)
-        ax = series_panel(img, (X0, Y0, X1, Y1 - 150), [(pts, GREEN, 6)], lo=0, hi=max(pts), pad=(60, 70, 60, 50))
+        ax = series_panel(img, (X0, Y0, X1, Y1 - 150), [(pts, RED if loser else GREEN, 6)], lo=0, hi=max(pts),
+                          pad=(60, 70, 60, 50))
         A = img.copy()
         ring(img, ax.x(0), ax.y(pts[0]), 34, 34, YELLOW)
         ring(img, ax.x(len(pts) - 1), ax.y(pts[-1]), 34, 34, YELLOW)
@@ -917,12 +919,44 @@ def data_line(series, year, cagr=False):
             lines = [(f"CAGR ~ {c:.1f}% / SAAL", 54, YELLOW)] if b in ("matlab", "karein") else \
                     [(f"{year} -> {last['date'][:7]}", 50, INK)]
         else:
+            end_txt = (f"Rs {round(mult * 100000, -3):,.0f} (JUN 2026)" if loser
+                       else f"Rs {mult:.1f} LAKH (JUN 2026)")
             lines = {"hook": [(f"Rs 1 LAKH  ({year})", 52, INK)],
                      "pehchan": [(f"{start['close']:,.0f} -> {last['close']:,.0f}", 52, INK)],
-                     "matlab": [(f"= {mult:.2f}x", 70, YELLOW)],
-                     "karein": [(f"Rs {mult:.1f} LAKH (JUN 2026)", 54, GREEN)]}[b]
+                     "matlab": [(f"= {mult:.2f}x", 70, RED if loser else YELLOW)],
+                     "karein": [(end_txt, 54, RED if loser else GREEN)]}[b]
         big_text(img, (X0, Y1 - 150, X1, Y1), lines)
         label(img, X1 - 50, Y1 - 190, "PRICE INDEX, DIVIDEND ALAG", MUTED, 24, anchor="ra")
+        return A, img
+    return beat
+
+
+def compare_lines(a_name, b_name, year):
+    """Same year, same Rs 1 lakh, two shares: one multiplies, one sinks."""
+    def norm(name):
+        s = _data()["series"][name]
+        st = s["first_of_year"][str(year)]["close"]
+        return [100000 * v / st for m, v in s["monthly"] if m >= f"{year}-01"], s["last"]["close"] / st
+
+    def beat(b, img):
+        (pa, ma), (pb, mb) = norm(a_name), norm(b_name)
+        panel(img)
+        ax = series_panel(img, (X0, Y0, X1, Y1 - 170), [(pa, GREEN, 7), (pb, RED, 7)], lo=0,
+                          hi=max(pa + pb), pad=(60, 70, 60, 50))
+        A = img.copy()
+        label(img, X0 + 60, Y0 + 30, f"Rs 1 LAKH ({year})", INK, 36)
+        n = len(pa) - 1
+        if b in ("pehchan", "matlab", "karein"):
+            label(img, ax.x(n) - 20, ax.y(pa[-1]) + 30, a_name, GREEN, 36, anchor="ra")
+            label(img, ax.x(n) - 20, ax.y(pb[-1]) - 70, b_name, RED, 36, anchor="ra")
+        if b in ("hook", "matlab"):
+            ring(img, ax.x(n), ax.y(pa[-1]), 34, 34, GREEN)
+            ring(img, ax.x(n), ax.y(pb[-1]), 34, 34, RED)
+        lines = {"hook": [(f"{a_name}  vs  {b_name}", 46, INK)],
+                 "pehchan": [("GREEN vs RED", 50, INK)],
+                 "matlab": [(f"Rs {ma:.1f} LAKH  vs  Rs {round(mb * 100000, -3):,.0f}", 44, YELLOW)],
+                 "karein": [("EK SHARE = BADA RISK", 50, RED)]}[b]
+        big_text(img, (X0, Y1 - 170, X1, Y1), lines)
         return A, img
     return beat
 
@@ -1035,6 +1069,11 @@ SCENES = {
     "nifty_2010": lambda: data_line("NIFTY 50", 2010), "nifty_2015": lambda: data_line("NIFTY 50", 2015),
     "sensex_2008": lambda: data_line("SENSEX", 2008), "niftybank_2010": lambda: data_line("NIFTY BANK", 2010),
     "nifty_cagr": lambda: data_line("NIFTY 50", 2010, cagr=True),
+    "hdfcbank_2010": lambda: data_line("HDFC BANK", 2010), "titan_2010": lambda: data_line("TITAN", 2010),
+    "asianpaints_2010": lambda: data_line("ASIAN PAINTS", 2010), "infosys_2015": lambda: data_line("INFOSYS", 2015),
+    "sbi_2015": lambda: data_line("SBI", 2015), "tcs_2020": lambda: data_line("TCS", 2020),
+    "dmart_2020": lambda: data_line("DMART", 2020), "yesbank_2015": lambda: data_line("YES BANK", 2015),
+    "titan_vs_yes_2015": lambda: compare_lines("TITAN", "YES BANK", 2015),
     "circuit": circuit, "bse_1875": bse_timeline, "nifty_base": nifty_base, "preopen": preopen,
     "muhurat": muhurat, "depository": depository,
 }

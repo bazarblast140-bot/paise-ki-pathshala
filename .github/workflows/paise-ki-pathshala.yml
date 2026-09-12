@@ -11,10 +11,16 @@ name: Paise Ki Pathshala
 # kar retention theek lage tabhi neeche wali lines uncomment karna.
 #   short 12:00 IST = 06:30 UTC,  long 20:00 IST = 14:30 UTC
 # GitHub ka cron late chal sakta hai.
+# 12-Sep-2026: Rajesh ne roz publish OK kiya. Roz 3 Shorts, public at:
+#   premarket 08:30 IST, postmarket 16:00 IST, night 21:00 IST
+# GitHub ka cron late chalta hai (quiz channel par 10-20 ghante tak), isliye
+# build target se ~20h pehle fire hota hai aur upload private + publishAt
+# se hota hai — YouTube theek slot ke time public karta hai.
 on:
-  # schedule:
-  #   - cron: "30 6 * * *"     # short
-  #   - cron: "30 14 * * *"    # long
+  schedule:
+    - cron: "0 7 * * *"      # -> premarket  08:30 IST (target 03:00 UTC)
+    - cron: "30 14 * * *"    # -> postmarket 16:00 IST (target 10:30 UTC)
+    - cron: "30 19 * * *"    # -> night      21:00 IST (target 15:30 UTC)
   workflow_dispatch:
     inputs:
       format:
@@ -22,10 +28,15 @@ on:
         type: choice
         options: [short, long]
         default: short
+      privacy:
+        description: "test = unlisted turant; public = agle slot par"
+        type: choice
+        options: [unlisted, public]
+        default: unlisted
 
 # Short aur long alag group — ek dusre ko block na karein.
 concurrency:
-  group: paise-ki-pathshala-${{ inputs.format || github.event.schedule }}
+  group: paise-ki-pathshala-${{ github.event.schedule || inputs.format }}
   cancel-in-progress: false
 
 permissions:
@@ -56,14 +67,27 @@ jobs:
         id: fmt
         run: |
           F="${{ inputs.format }}"
+          VIS="${{ inputs.privacy }}"
+          SLOT=""
           if [ -z "$F" ]; then
+            F=short; VIS=public
             case "${{ github.event.schedule }}" in
-              "30 6 * * *") F=short ;;
-              *)            F=long ;;
+              "0 7 * * *")   SLOT="08:30" ;;
+              "30 14 * * *") SLOT="16:00" ;;
+              "30 19 * * *") SLOT="21:00" ;;
             esac
+          elif [ "$VIS" = "public" ]; then
+            # manual public: next of the three slots
+            H=$(TZ=Asia/Kolkata date +%H%M)
+            if   [ "$H" -lt 0810 ]; then SLOT="08:30"
+            elif [ "$H" -lt 1540 ]; then SLOT="16:00"
+            elif [ "$H" -lt 2040 ]; then SLOT="21:00"
+            else SLOT="08:30"; fi
           fi
           echo "format=$F" >> "$GITHUB_OUTPUT"
-          echo "format: $F"
+          echo "visibility=$VIS" >> "$GITHUB_OUTPUT"
+          echo "slot=$SLOT" >> "$GITHUB_OUTPUT"
+          echo "format: $F  visibility: $VIS  slot: $SLOT"
 
       - name: Run Pipeline (+ publish if READY)
         env:
@@ -79,6 +103,8 @@ jobs:
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
           EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
+          PUBLISH_VISIBILITY: ${{ steps.fmt.outputs.visibility }}
+          PUBLISH_SLOT_IST: ${{ steps.fmt.outputs.slot }}
         run: python run_pipeline.py --format ${{ steps.fmt.outputs.format }} --publish
 
       - name: Commit topic_bank (prevent topic repeats)
