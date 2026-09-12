@@ -160,6 +160,8 @@ Rules:
 - Not a quiz. Do not ask the viewer to pick options.
 - SEBI rules: never tell anyone to buy/sell/hold a specific stock, fund or product; no targets,
   no tips; never promise returns. Patterns/indicators are probabilities, not sure signals.
+- Describe, don't command: for SL / entry / confirmation say how traders usually do it
+  ("आमतौर पर traders SL ... रखते हैं", "कई traders ... का इंतज़ार करते हैं"), never "ऐसा करो" as an order.
 - Do not add a CTA or disclaimer — the template adds them."""
 
 
