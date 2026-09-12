@@ -895,39 +895,103 @@ def _data():
     return _DATA
 
 
-def data_line(series, year, cagr=False):
+def data_line(series, year, cagr=False, balance=None):
+    """Real data, a different picture on every beat (v1 showed one chart for
+    40 seconds and said the answer in the hook):
+      hook    Rs 1,00,000 ... = ?          (question only)
+      pehchan the line draws itself, start/end prices
+      matlab  end / start = Nx             (the maths)
+      karein  Rs 1 lakh -> result + balance card
+    balance = (line1, line2) shown on the last beat (e.g. Yes Bank for winners)."""
+    from datetime import date
+    from PIL import ImageDraw
+
     def beat(b, img):
         s = _data()["series"][series]
-        start = s["first_of_year"][str(year)]
-        last = s["last"]
+        start, last = s["first_of_year"][str(year)], s["last"]
         pts = [v for m, v in s["monthly"] if m >= f"{year}-01"]
         mult = last["close"] / start["close"]
         loser = mult < 1
+        col = RED if loser else GREEN
+        yrs = (date.fromisoformat(last["date"]) - date.fromisoformat(start["date"])).days / 365.25
         panel(img)
-        ax = series_panel(img, (X0, Y0, X1, Y1 - 150), [(pts, RED if loser else GREEN, 6)], lo=0, hi=max(pts),
-                          pad=(60, 70, 60, 50))
-        A = img.copy()
-        ring(img, ax.x(0), ax.y(pts[0]), 34, 34, YELLOW)
-        ring(img, ax.x(len(pts) - 1), ax.y(pts[-1]), 34, 34, YELLOW)
-        label(img, X0 + 60, Y0 + 30, series, INK, 36)
-        label(img, ax.x(0) + 10, ax.y(pts[0]) - 90, f"{start['close']:,.0f}", YELLOW, 34)
-        label(img, ax.x(len(pts) - 1) - 10, ax.y(pts[-1]) + 40, f"{last['close']:,.0f}", YELLOW, 34, anchor="ra")
+        d = ImageDraw.Draw(img, "RGBA")
+        label(img, X0 + 50, Y0 + 30, series, INK, 36)
+        chart_box = (X0, Y0 + 40, X1, Y1 - 60)
+
+        def chart(frac=1.0, fade=False):
+            ax = Axes(chart_box, len(pts), 0, max(pts), pad=(60, 60, 60, 60), ypad=0.06)
+            ax.grid(img, rows=4)
+            upto = max(2, int(len(pts) * frac))
+            polyline(img, [(ax.x(i), ax.y(v)) for i, v in enumerate(pts[:upto])], col, 6)
+            if fade:
+                d.rectangle(chart_box, fill=(6, 10, 20, 170))
+            return ax
+
+        if b == "hook":
+            cx, cy = (X0 + X1) / 2 - 70, Y0 + 250
+            d.rounded_rectangle([cx - 250, cy - 110, cx + 250, cy + 110], 26, fill=(21, 128, 61), outline=(187, 247, 208), width=6)
+            d.ellipse([cx - 60, cy - 60, cx + 60, cy + 60], outline=(187, 247, 208), width=6)
+            label(img, cx, cy - 28, "Rs", (187, 247, 208), 50, anchor="ma")
+            big_text(img, (X0, Y0 + 400, X1, Y0 + 560), [("Rs 1,00,000", 84, INK)])
+            big_text(img, (X0, Y0 + 560, X1, Y1 - 20), [(f"{year}  ->  JUN 2026", 50, MUTED)])
+            A = img.copy()
+            label(img, X1 - 45, Y0 + 110, "?", YELLOW, 230, anchor="ra")
+            return A, img
+        if b == "pehchan":
+            chart(0.35)
+            A = img.copy()
+            ax = chart(1.0)
+            n = len(pts) - 1
+            ring(img, ax.x(0), ax.y(pts[0]), 30, 30, YELLOW)
+            ring(img, ax.x(n), ax.y(pts[-1]), 30, 30, YELLOW)
+            label(img, ax.x(0) + 20, ax.y(pts[0]) - 110, f"{start['close']:,.0f}  ({year})", YELLOW, 36, bg=(6, 10, 20))
+            label(img, ax.x(n) - 20, ax.y(pts[-1]) + 50, f"{last['close']:,.0f}  (JUN 2026)", YELLOW, 36,
+                  bg=(6, 10, 20), anchor="ra")
+            label(img, X1 - 50, Y1 - 50, "PRICE, DIVIDEND ALAG", MUTED, 24, anchor="ra")
+            return A, img
+        if b == "matlab":
+            chart(1.0, fade=True)
+            A = img.copy()
+            if cagr:
+                c = (mult ** (1 / yrs) - 1) * 100
+                big_text(img, (X0, Y0 + 60, X1, Y1 - 60),
+                         [(f"{mult:.2f}x  IN  {yrs:.0f} SAAL", 60, INK), (f"~ {c:.1f}% / SAAL", 96, YELLOW)])
+            else:
+                big_text(img, (X0, Y0 + 60, X1, Y1 - 60),
+                         [(f"{last['close']:,.0f}  /  {start['close']:,.0f}", 60, INK),
+                          (f"= {mult:.2f}x", 120, RED if loser else YELLOW)])
+            return A, img
+        # karein / nateeja
         if cagr:
-            from datetime import date
-            yrs = (date.fromisoformat(last["date"]) - date.fromisoformat(start["date"])).days / 365.25
             c = (mult ** (1 / yrs) - 1) * 100
-            lines = [(f"CAGR ~ {c:.1f}% / SAAL", 54, YELLOW)] if b in ("matlab", "karein") else \
-                    [(f"{year} -> {last['date'][:7]}", 50, INK)]
+            big_text(img, (X0, Y0 + 60, X1, Y0 + 420), [("NIFTY 50", 56, INK), (f"~ {c:.1f}% / SAAL", 96, GREEN)])
         else:
-            end_txt = (f"Rs {round(mult * 100000, -3):,.0f} (JUN 2026)" if loser
-                       else f"Rs {mult:.1f} LAKH (JUN 2026)")
-            lines = {"hook": [(f"Rs 1 LAKH  ({year})", 52, INK)],
-                     "pehchan": [(f"{start['close']:,.0f} -> {last['close']:,.0f}", 52, INK)],
-                     "matlab": [(f"= {mult:.2f}x", 70, RED if loser else YELLOW)],
-                     "karein": [(end_txt, 54, RED if loser else GREEN)]}[b]
-        big_text(img, (X0, Y1 - 150, X1, Y1), lines)
-        label(img, X1 - 50, Y1 - 190, "PRICE INDEX, DIVIDEND ALAG", MUTED, 24, anchor="ra")
+            end_txt = (f"Rs {round(mult * 100000, -3):,.0f}" if loser else f"Rs {mult:.1f} LAKH")
+            big_text(img, (X0, Y0 + 60, X1, Y0 + 420),
+                     [("Rs 1 LAKH  ->", 56, INK), (end_txt, 100, col), ("(JUN 2026)", 40, MUTED)])
+        A = img.copy()
+        if balance:
+            by = Y0 + 470
+            bcol = GREEN if balance[0].startswith("INDEX") else RED
+            d.rounded_rectangle([X0 + 60, by, X1 - 60, by + 170], 24, fill=(20, 12, 16, 235), outline=bcol, width=5)
+            big_text(img, (X0 + 60, by, X1 - 60, by + 170), [(balance[0], 40, INK), (balance[1], 56, bcol)])
         return A, img
+    return beat
+
+
+def _yes_bank_loss():
+    s = _data()["series"]["YES BANK"]
+    return round((1 - s["last"]["close"] / s["first_of_year"]["2015"]["close"]) * 100)
+
+
+def stock_line(series, year):
+    """Winners get the Yes Bank reminder, losers the concentration-risk card."""
+    def beat(b, img):
+        s = _data()["series"][series]
+        mult = s["last"]["close"] / s["first_of_year"][str(year)]["close"]
+        bal = ("EK SHARE =", "BADA RISK") if mult < 1 else ("BUT: YES BANK (2015)", f"-{_yes_bank_loss()}%")
+        return data_line(series, year, balance=bal)(b, img)
     return beat
 
 
@@ -1066,13 +1130,15 @@ SCENES = {
     "open_interest": open_interest, "iv_premium": iv_premium, "sebi_study": sebi_study,
     "one_percent": one_percent, "rr_breakeven": rr_breakeven, "loss_recovery": loss_recovery,
     "leverage": leverage, "revenge": revenge, "averaging": averaging, "journal": journal,
-    "nifty_2010": lambda: data_line("NIFTY 50", 2010), "nifty_2015": lambda: data_line("NIFTY 50", 2015),
-    "sensex_2008": lambda: data_line("SENSEX", 2008), "niftybank_2010": lambda: data_line("NIFTY BANK", 2010),
-    "nifty_cagr": lambda: data_line("NIFTY 50", 2010, cagr=True),
-    "hdfcbank_2010": lambda: data_line("HDFC BANK", 2010), "titan_2010": lambda: data_line("TITAN", 2010),
-    "asianpaints_2010": lambda: data_line("ASIAN PAINTS", 2010), "infosys_2015": lambda: data_line("INFOSYS", 2015),
-    "sbi_2015": lambda: data_line("SBI", 2015), "tcs_2020": lambda: data_line("TCS", 2020),
-    "dmart_2020": lambda: data_line("DMART", 2020), "yesbank_2015": lambda: data_line("YES BANK", 2015),
+    "nifty_2010": lambda: data_line("NIFTY 50", 2010, balance=("INDEX =", "50 COMPANIES")),
+    "nifty_2015": lambda: data_line("NIFTY 50", 2015, balance=("INDEX =", "50 COMPANIES")),
+    "sensex_2008": lambda: data_line("SENSEX", 2008, balance=("INDEX =", "30 COMPANIES")),
+    "niftybank_2010": lambda: data_line("NIFTY BANK", 2010, balance=("INDEX =", "BANK SHARES")),
+    "nifty_cagr": lambda: data_line("NIFTY 50", 2010, cagr=True, balance=("DIVIDEND", "ALAG SE")),
+    "hdfcbank_2010": lambda: stock_line("HDFC BANK", 2010), "titan_2010": lambda: stock_line("TITAN", 2010),
+    "asianpaints_2010": lambda: stock_line("ASIAN PAINTS", 2010), "infosys_2015": lambda: stock_line("INFOSYS", 2015),
+    "sbi_2015": lambda: stock_line("SBI", 2015), "tcs_2020": lambda: stock_line("TCS", 2020),
+    "dmart_2020": lambda: stock_line("DMART", 2020), "yesbank_2015": lambda: stock_line("YES BANK", 2015),
     "titan_vs_yes_2015": lambda: compare_lines("TITAN", "YES BANK", 2015),
     "circuit": circuit, "bse_1875": bse_timeline, "nifty_base": nifty_base, "preopen": preopen,
     "muhurat": muhurat, "depository": depository,

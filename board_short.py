@@ -61,9 +61,15 @@ def fit_size(text, max_w, max_size, min_size=40):
 
 
 # ---------------------------------------------------------------- pictures
+CAT_CHIPS = {
+    "REAL DATA": {"hook": "HOOK", "pehchan": "1  DATA", "matlab": "2  HISAAB", "karein": "3  NATEEJA"},
+    "MARKET FACT": {"hook": "HOOK", "pehchan": "1  FACT", "matlab": "2  MATLAB", "karein": "3  YAAD RAKHO"},
+}
+
+
 def beat_images(topic, beat):
     img = K.background()
-    K.chips(img, topic["cat"], STEP_CHIP[beat])
+    K.chips(img, topic["cat"], CAT_CHIPS.get(topic["cat"], STEP_CHIP)[beat])
     return S.render_beat(topic["key"], beat, img)
 
 
@@ -76,7 +82,9 @@ def thumbnail(topic, out_path, hook_img=None):
     for y in range(H):
         t = y / H
         d.line([(0, y), (W, y)], fill=(int(120 - 70 * t), int(10 + 4 * t), int(16 + 6 * t)))
-    if hook_img is None:
+    if topic.get("cat") == "REAL DATA":
+        _, hook_img = beat_images(topic, "pehchan")      # data: chart khinchta hai, note nahi
+    elif hook_img is None:
         _, hook_img = beat_images(topic, "hook")
     x0, y0, x1, y1 = K.BOARD
     board = hook_img.crop((x0, y0, x1, y1))
@@ -139,6 +147,21 @@ def check_narration(n, topic):
     title = str(n.get("title") or "")
     if not 8 <= len(title) <= 90:
         fails.append("title 8-90 characters")
+    if topic.get("cat") == "REAL DATA":
+        hook = str(beats.get("hook") or "")
+        year = re.findall(r"(?:19|20)\d\d", topic["topic"])[:1]
+        hook_nums = {x.replace(",", "") for x in re.findall(r"\d[\d,]*(?:\.\d+)?", hook)} - set(year) - {"1"}
+        if hook_nums:
+            fails.append(f"hook me jawab/number mat batao ({sorted(hook_nums)}) — sirf sawal")
+        if len(hook.split()) > 12:
+            fails.append("hook 10 words se chhota rakho")
+        final = re.findall(r"₹[\d,.]+", topic["beats"]["karein"][1])
+        for f in final:
+            early = " ".join(str(beats.get(b) or "") for b in ("hook", "pehchan", "matlab"))
+            if f in early:
+                fails.append(f"final value {f} sirf 'karein' me bolo")
+        if "लगते" in text:
+            fails.append("'लगते' galat hai — 'लगाते' likho")
     return fails
 
 
@@ -162,7 +185,11 @@ Rules:
   no tips; never promise returns. Patterns/indicators are probabilities, not sure signals.
 - Describe, don't command: for SL / entry / confirmation say how traders usually do it
   ("आमतौर पर traders SL ... रखते हैं", "कई traders ... का इंतज़ार करते हैं"), never "ऐसा करो" as an order.
-- Do not add a CTA or disclaimer — the template adds them."""
+- Do not add a CTA or disclaimer — the template adds them.
+- If category is "REAL DATA": hook = ONLY the question (year, ₹1 लाख, name), max 10 words —
+  NEVER the answer. pehchan = the two prices with years. matlab = the multiple (गुना) once.
+  karein = the final value once, then the balance line from facts. Say the final value only in
+  karein, never earlier. Total 45-80 words. Write "लगाते" (not "लगते")."""
 
 
 def narration(topic, c):
@@ -209,7 +236,7 @@ def _eleven(text, path):
         r = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
                           headers={"xi-api-key": key, "accept": "audio/mpeg"},
                           json={"text": text, "model_id": os.environ.get("ELEVENLABS_MODEL") or "eleven_multilingual_v2",
-                                "voice_settings": {"stability": 0.45, "similarity_boost": 0.8}},
+                                "voice_settings": {"stability": 0.45, "similarity_boost": 0.8, "speed": 1.08}},
                           timeout=90)
         if r.status_code != 200 or len(r.content) < 2000:
             print(f"[warn] ElevenLabs {r.status_code}: {r.text[:160]}")
@@ -249,8 +276,12 @@ def duration(path):
 
 # ---------------------------------------------------------------- captions
 def chunks(text, n=4):
-    words = text.split()
-    return [" ".join(words[i:i + n]) for i in range(0, len(words), n)]
+    """Caption pieces of <= n words that never cross a sentence end."""
+    out = []
+    for sent in re.split(r"(?<=[।.?!])\s+", text.strip()):
+        words = sent.split()
+        out += [" ".join(words[i:i + n]) for i in range(0, len(words), n)]
+    return [c for c in out if c]
 
 
 def build_ass(topic, beat_times, spoken):

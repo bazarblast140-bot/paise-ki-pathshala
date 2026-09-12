@@ -33,6 +33,10 @@ on:
         type: choice
         options: [unlisted, public, now]
         default: unlisted
+      topic_key:
+        description: "TEST: sirf ye topic (jaise titan_2010); rotation me used mark nahi hota"
+        required: false
+        default: ""
 
 # Short aur long alag group — ek dusre ko block na karein.
 concurrency:
@@ -109,6 +113,7 @@ jobs:
           ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
           ELEVENLABS_MODEL: ${{ vars.ELEVENLABS_MODEL }}
           PUBLISH_VISIBILITY: ${{ steps.fmt.outputs.visibility }}
+          TOPIC_KEY: ${{ inputs.topic_key }}
           PUBLISH_SLOT_IST: ${{ steps.fmt.outputs.slot }}
         run: python run_pipeline.py --format ${{ steps.fmt.outputs.format }} --publish
 

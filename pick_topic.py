@@ -10,6 +10,17 @@ def main():
     bank_path = ROOT / "topic_bank.json"
     bank = json.loads(bank_path.read_text(encoding="utf-8"))
     flag = "used_short" if video_format() == "short" else "used"
+    # TEST: TOPIC_KEY=<key> -> wahi topic, aur 'used' mark NAHI (asli rotation bigadta nahi)
+    import os
+    test_key = os.environ.get("TOPIC_KEY", "").strip()
+    if test_key:
+        nxt = next((t for t in bank["topics"] if t.get("key") == test_key), None)
+        if not nxt:
+            die(f"TOPIC_KEY '{test_key}' topic_bank me nahi hai")
+        save("topic.txt", nxt["topic"])
+        save("topic.json", json.dumps(nxt, ensure_ascii=False, indent=1))
+        ok(f"TEST topic (used mark nahi): {nxt['key']}")
+        return
     nxt = next((t for t in bank["topics"] if not t.get(flag)), None)
     if not nxt:
         # Sab topics ho gaye to pipeline rukni nahi chahiye (pehle yahan die tha —
