@@ -198,8 +198,39 @@ async def _edge(text, voice, rate, path):
     await edge_tts.Communicate(text, voice, rate=rate).save(str(path))
 
 
+def _eleven(text, path):
+    """ElevenLabs TTS -> mp3. False on any failure (quota, bad key, network)."""
+    import os
+    import requests
+    key, voice = os.environ.get("ELEVENLABS_API_KEY", ""), os.environ.get("ELEVENLABS_VOICE_ID", "")
+    if not (key and voice):
+        return False
+    try:
+        r = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
+                          headers={"xi-api-key": key, "accept": "audio/mpeg"},
+                          json={"text": text, "model_id": os.environ.get("ELEVENLABS_MODEL") or "eleven_multilingual_v2",
+                                "voice_settings": {"stability": 0.45, "similarity_boost": 0.8}},
+                          timeout=90)
+        if r.status_code != 200 or len(r.content) < 2000:
+            print(f"[warn] ElevenLabs {r.status_code}: {r.text[:160]}")
+            return False
+        path.write_bytes(r.content)
+        return True
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] ElevenLabs error: {e}")
+        return False
+
+
+ENGINES = []
+
+
 def tts(text, path, c):
+    """ElevenLabs agar secrets hain, warna / fail hone par Edge Swara — video kabhi nahi rukta."""
+    if _eleven(text, path):
+        ENGINES.append("elevenlabs")
+        return
     v = c["voice"]
+    ENGINES.append("edge")
     for attempt in range(3):
         try:
             asyncio.run(_edge(text, v.get("edge_voice", "hi-IN-SwaraNeural"), v.get("edge_rate", "+10%"), path))
@@ -364,7 +395,7 @@ def main():
         beat_audio[b] = mp3
         beat_times[b] = (t, t + d)
         t += d
-    ok(f"voice: {t:.1f}s ({source})")
+    ok(f"voice: {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
     assemble(beat_pngs, beat_audio, beat_times, build_ass(topic, beat_times, spoken))
     write_compat(topic, n, spoken, beat_times)
     ok(f"wrote run/final.mp4 ({t:.1f}s) + thumbnail.jpg")
