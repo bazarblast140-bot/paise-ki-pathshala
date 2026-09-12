@@ -260,7 +260,16 @@ ENGINES = []
 
 
 def tts(text, path, c):
-    """ElevenLabs agar secrets hain, warna / fail hone par Edge Swara — video kabhi nahi rukta."""
+    """ElevenLabs agar secrets hain, warna / fail hone par Edge Swara — video kabhi nahi rukta.
+    Voice ko speak.speakable() wala text jaata hai (₹ -> रुपये, 4,231 -> चार हज़ार...);
+    ElevenLabs "₹1 लाख" ko "Rs 1 लाख" bolta tha. Captions original text dikhate hain."""
+    import speak
+    text = speak.speakable(text)
+    left = speak.leftovers(text)
+    if left:
+        print(f"[warn] voice text me ab bhi: {sorted(set(left))} — speak.py me jodo")
+    with open(RUN / "tts_text.txt", "a", encoding="utf-8") as f:
+        f.write(f"{path.stem}: {text}\n")
     if _eleven(text, path):
         ENGINES.append("elevenlabs")
         return
@@ -478,6 +487,7 @@ def main():
     spoken = dict(n["beats"])
     spoken["karein"] = spoken["karein"].rstrip() + " " + CTA
     beat_audio, beat_times, t = {}, {}, 0.0
+    (RUN / "tts_text.txt").unlink(missing_ok=True)
     for b in BEATS:
         mp3 = RUN / f"tts_{b}.mp3"
         tts(spoken[b], mp3, c)

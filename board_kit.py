@@ -35,6 +35,25 @@ _FONTS = [
 _font_cache = {}
 
 
+def _has_rupee():
+    """Screen par "Rs" ki jagah ₹ — sirf jab font me glyph ho (warna dabba dikhega)."""
+    try:
+        from fontTools.ttLib import TTFont
+        for p in _FONTS:
+            if pathlib.Path(p).exists():
+                return 0x20B9 in TTFont(p, lazy=True).getBestCmap()
+    except Exception:  # noqa: BLE001
+        pass
+    return False
+
+
+RUPEE = _has_rupee()
+
+
+def rs(text):
+    return text.replace("Rs ", "₹").replace("Rs", "₹") if RUPEE and isinstance(text, str) else text
+
+
 def font(size):
     if size not in _font_cache:
         for p in _FONTS:
@@ -156,6 +175,7 @@ def arrow(img, p1, p2, col, w=12, head=38):
 
 
 def label(img, x, y, text, col=INK, size=38, bg=None, anchor="la"):
+    text = rs(text)
     d = ImageDraw.Draw(img)
     f = font(size)
     if bg is not None:
@@ -167,6 +187,7 @@ def label(img, x, y, text, col=INK, size=38, bg=None, anchor="la"):
 def fit_label(img, x, y, text, max_w, col=INK, size=38, min_size=22, anchor="la"):
     """Label that shrinks until it fits max_w — long English labels never run
     off the board."""
+    text = rs(text)
     d = ImageDraw.Draw(img)
     while size > min_size and d.textlength(text, font=font(size)) > max_w:
         size -= 2
@@ -224,6 +245,7 @@ def big_text(img, box, lines):
     room = (box[2] - box[0]) - 60
     fitted = []
     for text, size, col in lines:
+        text = rs(text)
         while size > 24 and d.textlength(text, font=font(size)) > room:
             size -= 4
         fitted.append((text, size, col))
