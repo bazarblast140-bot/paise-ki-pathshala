@@ -4,7 +4,7 @@
   {
    "id": 1,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "hammer",
    "cat": "CANDLESTICK",
    "topic": "Hammer कैंडल — डाउनट्रेंड के बाद लंबी निचली wick",
