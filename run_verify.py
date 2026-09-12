@@ -51,7 +51,9 @@ def reused_content_signals(c, shots):
     total = len(shot_list) or 1
     stock = sum(1 for s in shot_list if str(s.get("visual_type", "")).lower() == "stock_footage")
     charts = sum(1 for s in shot_list if str(s.get("visual_type", "")).lower() == "chart")
-    engine = str(c["voice"].get("engine", "edge")).lower()
+    used = RUN / "voice_engine.txt"          # board_short: jo engine asal me chala
+    engine = (used.read_text(encoding="utf-8").strip() if used.exists()
+              else str(c["voice"].get("engine", "edge"))).lower()
     return {
         "stock_footage_pct": round(stock / total * 100),
         "chart_shots": charts,

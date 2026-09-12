@@ -960,7 +960,9 @@ def data_line(series, year, cagr=False, balance=None):
                          [(f"{mult:.2f}x  IN  {yrs:.0f} SAAL", 60, INK), (f"~ {c:.1f}% / SAAL", 96, YELLOW)])
             else:
                 big_text(img, (X0, Y0 + 60, X1, Y1 - 60),
-                         [(f"{last['close']:,.0f}  /  {start['close']:,.0f}", 60, INK),
+                         # start 2 decimal tak: "4,231 / 71 = 59.53" galat lagta tha (4231/71 = 59.59)
+                         [(f"{last['close']:,.0f}  /  {start['close']:,.2f}" if start["close"] < 1000
+                           else f"{last['close']:,.0f}  /  {start['close']:,.0f}", 60, INK),
                           (f"= {mult:.2f}x", 120, RED if loser else YELLOW)])
             return A, img
         # karein / nateeja: result, then (when the voice gets there) the balance picture

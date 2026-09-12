@@ -497,6 +497,8 @@ def main():
         beat_times[b] = (t, t + d)
         t += d
     ok(f"voice: {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
+    # verify config ka "edge" padh ke ElevenLabs video ko bhi "robotic" maanta tha
+    save("voice_engine.txt", "edge" if "edge" in ENGINES else "elevenlabs")
     switch = {b: cue_frac(topic["key"], spoken[b]) for b in BEATS if len(beat_pngs[b]) == 3}
     if switch:
         ok("3rd picture at " + ", ".join(f"{b} {f:.0%}" for b, f in switch.items()))
