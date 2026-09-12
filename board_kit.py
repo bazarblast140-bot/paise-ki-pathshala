@@ -217,8 +217,17 @@ def series_panel(img, box, series, hlines=(), lo=None, hi=None, pad=(40, 30, 40,
 
 
 def big_text(img, box, lines):
-    """lines: list of (text, size, colour) centred vertically inside box."""
+    """lines: list of (text, size, colour) centred vertically inside box.
+    Each line shrinks to fit the box width — CI (Linux) fonts are wider than
+    local ones ("Rs 59.5 LAKH" spilled off the board in CI only)."""
     d = ImageDraw.Draw(img)
+    room = (box[2] - box[0]) - 60
+    fitted = []
+    for text, size, col in lines:
+        while size > 24 and d.textlength(text, font=font(size)) > room:
+            size -= 4
+        fitted.append((text, size, col))
+    lines = fitted
     total = sum(s * 1.25 for _, s, _ in lines)
     y = (box[1] + box[3]) / 2 - total / 2
     cx = (box[0] + box[2]) / 2

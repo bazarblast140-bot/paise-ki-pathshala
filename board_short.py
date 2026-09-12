@@ -413,6 +413,15 @@ def write_compat(topic, n, spoken, beat_times):
     """script.txt / spoken.txt / shots.json in the shapes run_verify + publish expect."""
     b = n["beats"]
     facts = "\n".join(f"- {f}" for f in topic["facts"])
+    if topic.get("cat") == "REAL DATA":
+        # verify ne ek run me "Yes Bank 85% bina source/date" par roka (doosre run me wahi line pass) —
+        # source + tareekh ledger me pakki, taaki roz ka slot skip na ho
+        d = json.loads((ROOT / "data" / "index_monthly.json").read_text(encoding="utf-8"))["series"]
+        y0, yl = d["YES BANK"]["first_of_year"]["2015"], d["YES BANK"]["last"]
+        facts += (f"\n- SOURCE: Yahoo Finance monthly close (split/bonus adjusted, dividend alag), "
+                  f"last close {yl['date']} — 3 mahine purana data, live nahi."
+                  f"\n- SOURCE Yes Bank: {y0['date']} close {y0['close']:,.0f} -> {yl['date']} close "
+                  f"{yl['close']:,.0f} = -{(1 - yl['close'] / y0['close']) * 100:.0f}% (Yahoo Finance).")
     script = (f"TITLE:\n{n['title']}\n\nHOOK (0-3 sec):\n{b['hook']}\n\nBODY:\n"
               f"[SEGMENT 1: PEHCHAN]\n{b['pehchan']}\n\n[SEGMENT 2: MATLAB]\n{b['matlab']}\n\n"
               f"[SEGMENT 3: KYA KAREIN]\n{b['karein']}\n\nCTA:\n{CTA}\n\nDISCLAIMER LINE:\n{DISCLAIMER}\n\n"
