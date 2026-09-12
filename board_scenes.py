@@ -12,6 +12,7 @@ import math
 import pathlib
 import random
 
+import board_kit as K
 from board_kit import (BOARD, BLUE, GREEN, INK, MUTED, RED, YELLOW, Axes, arrow, bars, big_text,
                        candles, cross, dashed, fit_label, label, ohlc_from_closes, panel, payoff,
                        polyline, ring, rsi, series_panel, sma, ema, tick, timeline)
@@ -962,22 +963,93 @@ def data_line(series, year, cagr=False, balance=None):
                          [(f"{last['close']:,.0f}  /  {start['close']:,.0f}", 60, INK),
                           (f"= {mult:.2f}x", 120, RED if loser else YELLOW)])
             return A, img
-        # karein / nateeja
+        # karein / nateeja: result, then (when the voice gets there) the balance picture
+        box = (X0, Y0 + 60, X1, Y1 - 60)
         if cagr:
             c = (mult ** (1 / yrs) - 1) * 100
-            big_text(img, (X0, Y0 + 60, X1, Y0 + 420), [("NIFTY 50", 56, INK), (f"~ {c:.1f}% / SAAL", 96, GREEN)])
+            A = img.copy()
+            big_text(A, box, [("NIFTY 50", 60, INK)])
+            big_text(img, box, [("NIFTY 50", 60, INK), (f"~ {c:.1f}% / SAAL", 110, GREEN), ("(PRICE)", 40, MUTED)])
+            if balance:
+                C = K.background()
+                K.chips(C, *CHIP_OF_LAST)
+                _balance_panel(C, balance, year)
+                return A, img, C
+            return A, img
         else:
             end_txt = (f"Rs {round(mult * 100000, -3):,.0f}" if loser else f"Rs {mult:.1f} LAKH")
-            big_text(img, (X0, Y0 + 60, X1, Y0 + 420),
-                     [("Rs 1 LAKH  ->", 56, INK), (end_txt, 100, col), ("(JUN 2026)", 40, MUTED)])
+            A = img.copy()
+            big_text(A, box, [("Rs 1 LAKH  ->", 64, INK)])
+            big_text(img, box, [("Rs 1 LAKH  ->", 64, INK), (end_txt, 120, col), ("(JUN 2026)", 44, MUTED)])
+            if not balance:
+                return A, img
+            C = K.background()
+            K.chips(C, *CHIP_OF_LAST)
+            _balance_panel(C, balance, year)
+            return A, img, C
         A = img.copy()
         if balance:
-            by = Y0 + 470
-            bcol = GREEN if balance[0].startswith("INDEX") else RED
-            d.rounded_rectangle([X0 + 60, by, X1 - 60, by + 170], 24, fill=(20, 12, 16, 235), outline=bcol, width=5)
-            big_text(img, (X0 + 60, by, X1 - 60, by + 170), [(balance[0], 40, INK), (balance[1], 56, bcol)])
+            C = K.background()
+            K.chips(C, *CHIP_OF_LAST)
+            _balance_panel(C, balance, year)
+            return A, img, C
         return A, img
+    beat.cue = _cue_for(balance) if balance else None
     return beat
+
+
+CHIP_OF_LAST = ("REAL DATA", "3 NATEEJA")
+CUES = {"YES": r"Yes Bank|यस बैंक|हर शेयर",
+        "EK SHARE": r"एक शेयर|एक ही शेयर|जोखिम|रिस्क|risk",
+        "INDEX": r"index|इंडेक्स|कंपनि|कंपनी|बैंक",
+        "DIVIDEND": r"dividend|डिविडेंड|लाभांश"}
+
+
+def _cue_for(balance):
+    head = balance[0].upper()
+    for k, rx in CUES.items():
+        if k in head:
+            return rx
+    return None
+
+
+def _balance_panel(img, balance, year):
+    """Full-board picture for the balance line, so the last beat isn't one still."""
+    from PIL import ImageDraw
+    panel(img)
+    d = ImageDraw.Draw(img, "RGBA")
+    head, val = balance
+    if "YES BANK" in head:
+        s = _data()["series"]["YES BANK"]
+        pts = [v for m, v in s["monthly"] if m >= "2015-01"]
+        label(img, X0 + 50, Y0 + 30, "YES BANK", INK, 36)
+        ax = Axes((X0, Y0 + 40, X1, Y0 + 400), len(pts), 0, max(pts), pad=(60, 60, 60, 30), ypad=0.06)
+        ax.grid(img, rows=3)
+        polyline(img, [(ax.x(i), ax.y(v)) for i, v in enumerate(pts)], RED, 6)
+        ring(img, ax.x(len(pts) - 1), ax.y(pts[-1]), 30, 30, YELLOW)
+        big_text(img, (X0, Y0 + 405, X1, Y1 - 15),
+                 [("2015  ->  JUN 2026", 38, MUTED), (val, 110, RED), ("HAR SHARE AISA NAHI", 42, INK)])
+        return
+    if head.startswith("INDEX"):
+        import re as _re
+        m = _re.search(r"\d+", val)
+        n = int(m.group()) if m else 12
+        cols = 10
+        rows = -(-n // cols)
+        cell, gap = 62, 14
+        gw = cols * cell + (cols - 1) * gap
+        gx = (X0 + X1) / 2 - gw / 2
+        gy = Y0 + 90
+        for i in range(n):
+            r, c = divmod(i, cols)
+            x, y = gx + c * (cell + gap), gy + r * (cell + gap)
+            d.rounded_rectangle([x, y, x + cell, y + cell], 10, fill=(21, 128, 61, 235), outline=(187, 247, 208), width=3)
+        top = gy + rows * (cell + gap) + 20
+        big_text(img, (X0, top, X1, Y1 - 20), [(head, 50, INK), (val, 84, GREEN)])
+        return
+    colr = RED if "RISK" in val else YELLOW
+    d.rounded_rectangle([X0 + 60, Y0 + 170, X1 - 60, Y1 - 170], 30, fill=(20, 12, 16, 235), outline=colr, width=6)
+    big_text(img, (X0 + 60, Y0 + 170, X1 - 60, Y1 - 170), [(head, 70, INK), (val, 110, colr)])
 
 
 def _yes_bank_loss():
@@ -992,6 +1064,7 @@ def stock_line(series, year):
         mult = s["last"]["close"] / s["first_of_year"][str(year)]["close"]
         bal = ("EK SHARE =", "BADA RISK") if mult < 1 else ("BUT: YES BANK (2015)", f"-{_yes_bank_loss()}%")
         return data_line(series, year, balance=bal)(b, img)
+    beat.cue = CUES["EK SHARE"] if series == "YES BANK" else CUES["YES"]
     return beat
 
 
@@ -1147,3 +1220,8 @@ SCENES = {
 
 def render_beat(key, beat, img):
     return SCENES[key]()(beat, img)
+
+
+def cue(key):
+    """Regex: the spoken phrase at which a beat's third picture should appear."""
+    return getattr(SCENES[key](), "cue", None)

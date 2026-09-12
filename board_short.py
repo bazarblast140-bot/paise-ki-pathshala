@@ -77,36 +77,44 @@ def thumbnail(topic, out_path, hook_img=None):
     """Tagda hook thumbnail: red ground, huge 2-line Hindi hook, the topic's own
     board picture, big host, sticker. Hindi via libass."""
     W, H = K.W, K.H
+    data = topic.get("cat") == "REAL DATA"
     img = Image.new("RGB", (W, H))
     d = ImageDraw.Draw(img)
     for y in range(H):
         t = y / H
         d.line([(0, y), (W, y)], fill=(int(120 - 70 * t), int(10 + 4 * t), int(16 + 6 * t)))
     if topic.get("cat") == "REAL DATA":
-        _, hook_img = beat_images(topic, "pehchan")      # data: chart khinchta hai, note nahi
+        hook_img = beat_images(topic, "pehchan")[1]      # data: chart khinchta hai, note nahi
     elif hook_img is None:
-        _, hook_img = beat_images(topic, "hook")
+        hook_img = beat_images(topic, "hook")[1]
     x0, y0, x1, y1 = K.BOARD
     board = hook_img.crop((x0, y0, x1, y1))
-    bw = 1000
+    bw = 860 if data else 1000              # data: daayein patti host ke liye, chart ke labels khule
     board = board.resize((bw, int(board.height * bw / board.width)))
-    img.paste(board, ((W - bw) // 2, 820))
+    img.paste(board, (20 if data else (W - bw) // 2, 820))
     try:
         import sketch
         host = sketch.load_host_pose("warn" if topic["sticker"] in ("चेतावनी", "सावधान") else "point", height=620)
-        img.paste(host, (20, H - host.height - 120), host)
+        if data:
+            # chart ka start label neeche-baayein hota hai -> host daayein, chart ki taraf
+            host = host.transpose(Image.FLIP_LEFT_RIGHT)
+            host = host.resize((int(host.width * 0.85), int(host.height * 0.85)))
+            img.paste(host, (W - host.width - 5, 820 + board.height - host.height + 60), host)
+        else:
+            img.paste(host, (20, H - host.height - 120), host)
     except Exception as e:  # noqa: BLE001
         print(f"[thumb] host skipped: {e}")
     d = ImageDraw.Draw(img)
     st = topic["sticker"]
     s_size = fit_size(st, 330, 72, 40)
-    d.rounded_rectangle([620, 1560, 1040, 1690], 32, fill=K.RED)
+    sx = 40 if data else 620
+    d.rounded_rectangle([sx, 1600, sx + 420, 1730], 32, fill=K.RED)
     base = out_path.with_name(out_path.stem + "_base.png")
     img.save(base)
     t1, t2 = topic["thumb"]
     ev = [K.ass_text(0, 5, 540, 150, fit_size(t1, 940, 150), K.WHITE, t1, 8, fade=False),
           K.ass_text(0, 5, 540, 350, fit_size(t2, 940, 170), K.YEL, t2, 8, fade=False),
-          K.ass_text(0, 5, 830, 1582, s_size, K.WHITE, st, 8, fade=False)]
+          K.ass_text(0, 5, sx + 210, 1622, s_size, K.WHITE, st, 8, fade=False)]
     third = topic["beats"]["hook"][0]
     seen = set((t1 + " " + t2).lower().replace("?", "").split())
     if not seen & set(third.lower().replace("?", "").split()):
@@ -275,13 +283,39 @@ def duration(path):
 
 
 # ---------------------------------------------------------------- captions
+UNITS = {"लाख", "करोड़", "गुना", "साल", "%", "रुपये", "पर", "तक", "में"}
+
+
 def chunks(text, n=4):
-    """Caption pieces of <= n words that never cross a sentence end."""
+    """Caption pieces of <= n words that never cross a sentence end and never
+    leave a number on one line and its unit on the next ("₹1 / लाख करीब")."""
     out = []
     for sent in re.split(r"(?<=[।.?!])\s+", text.strip()):
-        words = sent.split()
-        out += [" ".join(words[i:i + n]) for i in range(0, len(words), n)]
+        words, cur = sent.split(), []
+        for i, w in enumerate(words):
+            cur.append(w)
+            nxt = words[i + 1] if i + 1 < len(words) else ""
+            glued = (re.search(r"\d", w) and nxt.strip("।.,?!") in UNITS) or                 (w in ("करीब", "लगभग", "₹") and re.search(r"\d", nxt))
+            orphan = len(words) - i - 1 == 1       # "जाता।" akela line par na bache
+            if len(cur) >= n and not glued and not orphan:
+                out.append(" ".join(cur))
+                cur = []
+        if cur:
+            out.append(" ".join(cur))
     return [c for c in out if c]
+
+
+def cue_frac(key, text):
+    """Where (0..1, by characters like the captions) the third picture comes in."""
+    rx = S.cue(key)
+    if not rx:
+        return 0.58
+    pos = 0
+    for sent in re.split(r"(?<=[।.?!])\s+", text.strip()):
+        if re.search(rx, sent, re.I):
+            return min(0.8, max(0.35, pos / max(1, len(text))))
+        pos += len(sent) + 1
+    return 0.58
 
 
 def build_ass(topic, beat_times, spoken):
@@ -310,24 +344,40 @@ def build_ass(topic, beat_times, spoken):
 X264 = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p"]
 
 
-def beat_clip(a_png, b_png, dur, out, fps=30):
+def beat_clip(pngs, dur, out, fps=30, switch=0.58):
+    """A (short) -> B, and for 3 pictures B -> C at `switch` of the beat."""
     a = max(0.6, min(1.1, dur * 0.3))
-    b = dur - a + 0.25
+    if len(pngs) == 2:
+        b = dur - a + 0.25
+        subprocess.run(["ffmpeg", "-v", "error", "-y",
+                        "-loop", "1", "-t", f"{a:.3f}", "-i", str(pngs[0]),
+                        "-loop", "1", "-t", f"{b:.3f}", "-i", str(pngs[1]),
+                        "-filter_complex",
+                        f"[0:v]fps={fps},format=yuv420p[a];[1:v]fps={fps},format=yuv420p[b];"
+                        f"[a][b]xfade=transition=fade:duration=0.25:offset={a - 0.25:.3f},format=yuv420p[v]",
+                        "-map", "[v]", "-t", f"{dur:.3f}", "-r", str(fps), *X264, str(out)], check=True)
+        return
+    tc = max(a + 1.0, min(dur - 1.5, dur * switch))
+    b = tc - a + 0.25
+    c = dur - tc + 0.35
     subprocess.run(["ffmpeg", "-v", "error", "-y",
-                    "-loop", "1", "-t", f"{a:.3f}", "-i", str(a_png),
-                    "-loop", "1", "-t", f"{b:.3f}", "-i", str(b_png),
+                    "-loop", "1", "-t", f"{a:.3f}", "-i", str(pngs[0]),
+                    "-loop", "1", "-t", f"{b:.3f}", "-i", str(pngs[1]),
+                    "-loop", "1", "-t", f"{c:.3f}", "-i", str(pngs[2]),
                     "-filter_complex",
-                    f"[0:v]fps={fps},format=yuv420p[a];[1:v]fps={fps},format=yuv420p[b];"
-                    f"[a][b]xfade=transition=fade:duration=0.25:offset={a - 0.25:.3f},format=yuv420p[v]",
+                    f"[0:v]fps={fps},format=yuv420p[a];[1:v]fps={fps},format=yuv420p[b];[2:v]fps={fps},format=yuv420p[c];"
+                    f"[a][b]xfade=transition=fade:duration=0.25:offset={a - 0.25:.3f}[ab];"
+                    f"[ab][c]xfade=transition=fade:duration=0.3:offset={tc - 0.3:.3f},format=yuv420p[v]",
                     "-map", "[v]", "-t", f"{dur:.3f}", "-r", str(fps), *X264, str(out)], check=True)
 
 
-def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30):
+def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None):
     clips = []
+    switch = switch or {}
     for b in BEATS:
         t0, t1 = beat_times[b]
         out = RUN / f"beat_{b}.mp4"
-        beat_clip(beat_pngs[b][0], beat_pngs[b][1], t1 - t0, out, fps)
+        beat_clip(beat_pngs[b], t1 - t0, out, fps, switch.get(b, 0.58))
         clips.append(out.name)
     (RUN / "clips.txt").write_text("\n".join(f"file '{c}'" for c in clips), encoding="utf-8")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", "clips.txt",
@@ -405,10 +455,11 @@ def main():
 
     beat_pngs = {}
     for b in BEATS:
-        A, B = beat_images(topic, b)
-        pa, pb = RUN / f"b_{b}_A.png", RUN / f"b_{b}_B.png"
-        A.save(pa); B.save(pb)
-        beat_pngs[b] = (pa, pb)
+        pics = beat_images(topic, b)
+        paths = tuple(RUN / f"b_{b}_{'ABC'[i]}.png" for i in range(len(pics)))
+        for im, p in zip(pics, paths):
+            im.save(p)
+        beat_pngs[b] = paths
     thumbnail(topic, RUN / "thumbnail.jpg", Image.open(beat_pngs["hook"][1]))
     ok("frames + thumbnail")
     if args.qa:
@@ -427,7 +478,10 @@ def main():
         beat_times[b] = (t, t + d)
         t += d
     ok(f"voice: {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
-    assemble(beat_pngs, beat_audio, beat_times, build_ass(topic, beat_times, spoken))
+    switch = {b: cue_frac(topic["key"], spoken[b]) for b in BEATS if len(beat_pngs[b]) == 3}
+    if switch:
+        ok("3rd picture at " + ", ".join(f"{b} {f:.0%}" for b, f in switch.items()))
+    assemble(beat_pngs, beat_audio, beat_times, build_ass(topic, beat_times, spoken), switch=switch)
     write_compat(topic, n, spoken, beat_times)
     ok(f"wrote run/final.mp4 ({t:.1f}s) + thumbnail.jpg")
 
