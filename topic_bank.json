@@ -233,7 +233,7 @@
   {
    "id": 7,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "hdfcbank_2010",
    "cat": "REAL DATA",
    "topic": "2010 में HDFC Bank में ₹1 लाख — जून 2026 तक कितना",
