@@ -275,7 +275,7 @@
   {
    "id": 8,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "long_call_theta",
    "cat": "OPTIONS",
    "topic": "Option ख़रीदार — max loss premium, पर theta रोज़ खाता है",
