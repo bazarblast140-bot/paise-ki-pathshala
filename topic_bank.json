@@ -197,7 +197,7 @@
   {
    "id": 6,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "limit_vs_market",
    "cat": "ORDERS",
    "topic": "Limit order बनाम Market order — slippage",
