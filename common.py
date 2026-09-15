@@ -1,5 +1,5 @@
 """Shared helpers for the finance pipeline. Import this everywhere."""
-import os, json, sys, time, pathlib, re
+import os, json, sys, time, pathlib, re, threading
 import openai
 from datetime import datetime
 
@@ -71,6 +71,28 @@ def read(name):
     return (RUN / name).read_text(encoding="utf-8")
 
 # ---- LLM calls (Anthropic or Kimi) ----
+def _with_deadline(fn, seconds):
+    """fn() ko daemon thread me chalao; `seconds` me jawab na aaye to TimeoutError.
+    14-Sep-2026: DeepSeek ek call par ~15 min latka aur phir choices=None bheja —
+    httpx ka read timeout fire hi nahi hua (overload me server connection zinda rakhta hai)."""
+    box = {}
+
+    def run():
+        try:
+            box["ok"] = fn()
+        except BaseException as e:  # noqa: BLE001 — caller ko wapas do
+            box["err"] = e
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    t.join(seconds)
+    if t.is_alive():
+        raise TimeoutError(f"no response in {seconds}s")
+    if "err" in box:
+        raise box["err"]
+    return box["ok"]
+
+
 def claude(system, user, model=None, max_tokens=16000, retries=3):
     """One LLM call. Retries transient errors, handles truncation gracefully."""
     c = cfg()
@@ -93,7 +115,9 @@ def claude(system, user, model=None, max_tokens=16000, retries=3):
     # ---- DeepSeek V4 Pro (OpenAI-compatible) ----
     if provider == "deepseek":
         base_url = os.environ.get("DEEPSEEK_BASE_URL") or "https://api.deepseek.com"
-        client = openai.OpenAI(api_key=deepseek_key, base_url=base_url, timeout=180)
+        # max_retries=0: retry neeche wala loop karta hai (SDK ke chupe retries latkan badhate the)
+        client = openai.OpenAI(api_key=deepseek_key, base_url=base_url, timeout=180, max_retries=0)
+        call_limit = int(os.environ.get("LLM_CALL_TIMEOUT", "180"))  # har try ki total time limit (sec)
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         # Prefer non-thinking for structured script/JSON speed; can enable via env
         thinking = os.environ.get("DEEPSEEK_THINKING", "disabled").lower()
@@ -108,18 +132,20 @@ def claude(system, user, model=None, max_tokens=16000, retries=3):
         effective_retries = max(retries, 5)
         for attempt in range(effective_retries):
             try:
-                completion = client.chat.completions.create(**kwargs)
-                content = completion.choices[0].message.content or ""
+                completion = _with_deadline(lambda: client.chat.completions.create(**kwargs), call_limit)
+                choices = getattr(completion, "choices", None)
+                content = (choices[0].message.content or "") if choices else ""
                 if not content.strip():
-                    last = RuntimeError("DeepSeek returned empty content")
+                    last = RuntimeError("DeepSeek returned empty content" if choices else
+                                        f"DeepSeek returned no choices: {str(completion)[:200]}")
                     if attempt < effective_retries - 1:
                         wait = min(60, 10 * (2 ** attempt))
-                        print(f"[retry] DeepSeek empty; wait {wait}s")
+                        print(f"[retry] {last}; wait {wait}s ({attempt+1}/{effective_retries})")
                         time.sleep(wait)
                         continue
                     die(str(last))
                 return content
-            except (openai.APIStatusError, openai.APIConnectionError) as e:
+            except (openai.APIStatusError, openai.APIConnectionError, TimeoutError) as e:
                 status = getattr(e, "status_code", None)
                 if status is not None and status not in (429, 500, 502, 503, 529):
                     die(f"DeepSeek API error {status}: {e}")
