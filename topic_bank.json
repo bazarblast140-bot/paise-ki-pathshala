@@ -418,7 +418,7 @@
   {
    "id": 12,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "yesbank_2015",
    "cat": "REAL DATA",
    "topic": "2015 में Yes Bank में ₹1 लाख — जून 2026 तक कितना बचा",
