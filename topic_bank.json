@@ -459,7 +459,7 @@
   {
    "id": 13,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "doji",
    "cat": "CANDLESTICK",
    "topic": "Doji — open और close बराबर, indecision",
