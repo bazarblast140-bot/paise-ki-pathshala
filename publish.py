@@ -316,6 +316,9 @@ def main():
             raise
 
     video_id = resp["id"]
+    # run_pipeline isi file se jaanta hai ki upload hua — iske baad koi error aaye
+    # (thumbnail wagairah) to bhi topic rotation me wapas NAHI jaata (duplicate video).
+    (RUN / "uploaded.txt").write_text(video_id, encoding="utf-8")
     ok(f"Uploaded as {visibility}: https://youtu.be/{video_id}")
     # Short par bhi hook thumbnail try karo. Channel phone-verified na ho to
     # YouTube 403 deta hai — set_thumbnail use skip karke upload ko safal rakhta hai.

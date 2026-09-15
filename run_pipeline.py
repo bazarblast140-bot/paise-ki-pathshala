@@ -6,14 +6,17 @@ Usage:
   python run_pipeline.py --publish  # also publish IF verdict READY (opt-in)
   python run_pipeline.py --format short --publish   # 9:16 Short (~50s)
 """
-import os, subprocess, sys
+import json, os, subprocess, sys
 
 # Format env me daalo, cfg() import se PEHLE — har stage subprocess isi env ko
 # inherit karta hai aur apna config (resolution, word count) isi se leta hai.
 if "--format" in sys.argv:
     os.environ["VIDEO_FORMAT"] = sys.argv[sys.argv.index("--format") + 1]
 
-from common import ROOT, cfg, video_format
+from common import ROOT, RUN, cfg, video_format
+
+# Itni baar upload na ho paaye to topic chhod do — warna har slot usi par atakta.
+MAX_TOPIC_TRIES = 2
 
 STAGES = [
     ("Preflight",       "check_setup.py"),
@@ -38,6 +41,37 @@ SHORT_STAGES = [
 ]
 
 
+def settle_topic(uploaded):
+    """pick_topic topic ko pehle hi used mark kar deta hai. Upload na hua (verify
+    NOT READY / upload error) to use rotation me wapas daalo — 14-Sep-2026 ko
+    nifty_base aise hi bina video ke kharch ho gaya tha. Har fail ginti hoti hai;
+    MAX_TOPIC_TRIES ke baad topic chhoot jaata hai. Upload hone par ginti saaf."""
+    if os.environ.get("TOPIC_KEY", "").strip():
+        return  # test run: pick_topic ne used mark hi nahi kiya
+    try:
+        tid = json.loads((RUN / "topic.json").read_text(encoding="utf-8"))["id"]
+    except (OSError, ValueError, KeyError):
+        return
+    bank_path = ROOT / "topic_bank.json"
+    bank = json.loads(bank_path.read_text(encoding="utf-8"))
+    t = next((t for t in bank["topics"] if t.get("id") == tid), None)
+    flag = "used_short" if video_format() == "short" else "used"
+    fails_key = f"{flag}_fails"
+    if not t or (uploaded and fails_key not in t):
+        return
+    if uploaded:
+        del t[fails_key]
+    else:
+        t[fails_key] = t.get(fails_key, 0) + 1
+        if t[fails_key] < MAX_TOPIC_TRIES:
+            t[flag] = False
+            print(f"[info] upload nahi hua — topic #{tid} agle slot me dobara "
+                  f"({t[fails_key]}/{MAX_TOPIC_TRIES})")
+        else:
+            print(f"[warn] topic #{tid} {t[fails_key]} baar upload nahi hua — chhod raha hoon")
+    bank_path.write_text(json.dumps(bank, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
 def main():
     global STAGES
     print(f"[info] format: {video_format()}")
@@ -55,7 +89,9 @@ def main():
     # optional publish
     if status == "success" and "--publish" in sys.argv and cfg()["pipeline"]["auto_publish"]:
         print("\n=== Publish (opt-in) ===")
+        (RUN / "uploaded.txt").unlink(missing_ok=True)
         run("publish.py", "--only-if-ready")
+        settle_topic((RUN / "uploaded.txt").exists())
 
     # always notify
     print("\n=== Notify ===")

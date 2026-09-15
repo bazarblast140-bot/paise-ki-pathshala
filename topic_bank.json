@@ -311,7 +311,7 @@
   {
    "id": 9,
    "used": false,
-   "used_short": true,
+   "used_short": false,
    "key": "nifty_base",
    "cat": "MARKET FACT",
    "topic": "Nifty 50 की base value 1000, base date 3 नवंबर 1995",
@@ -341,7 +341,8 @@
    "facts": [
     "base date 3 नवंबर 1995, base value 1000"
    ],
-   "seo": "Nifty 50 Base Value"
+   "seo": "Nifty 50 Base Value",
+   "used_short_fails": 1
   },
   {
    "id": 10,
