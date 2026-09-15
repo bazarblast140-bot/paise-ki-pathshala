@@ -382,7 +382,7 @@
   {
    "id": 11,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "rr_breakeven",
    "cat": "RISK",
    "topic": "Risk-reward 1:2 — 33% जीतकर भी breakeven",
