@@ -1,1 +1,2304 @@
-{"_comment":"Chart Board Shorts — har topic ka on-screen Hindi yahin likha hai (drawing se match). key = board_scenes.SCENES. LLM sirf bolne wali lines likhta hai aur sirf yahan ke numbers use kar sakta hai.","topics":[{"id":1,"used":false,"used_short":true,"key":"hammer","cat":"CANDLESTICK","topic":"Hammer कैंडल — डाउनट्रेंड के बाद लंबी निचली wick","thumb":["ये कैंडल दिखे","तो गिरावट ख़त्म?"],"sticker":"ज़रूर जानो","beats":{"hook":["नीचे लंबी wick","गिरावट के बाद ख़रीदार लौटे?"],"pehchan":["पहचान","छोटी बॉडी ऊपर, नीचे 2 गुना wick"],"matlab":["मतलब","sellers ने गिराया, buyers ने उठाया"],"karein":["क्या करें","अगली हरी कैंडल पर, SL low के नीचे"]},"facts":["Hammer डाउनट्रेंड के बाद बनता है","निचली wick बॉडी से कम से कम 2 गुना","पुष्टि: अगली कैंडल ऊपर बंद","ये संभावना है, गारंटी नहीं"],"seo":"Hammer Candlestick Pattern"}]}
+{
+ "_comment": "Chart Board Shorts — har topic ka on-screen Hindi yahin likha hai (drawing se match). key = board_scenes.SCENES. LLM sirf bolne wali lines likhta hai aur sirf yahan ke numbers use kar sakta hai.",
+ "topics": [
+  {
+   "id": 1,
+   "used": false,
+   "used_short": true,
+   "key": "hammer",
+   "cat": "CANDLESTICK",
+   "topic": "Hammer कैंडल — डाउनट्रेंड के बाद लंबी निचली wick",
+   "thumb": [
+    "ये कैंडल दिखे",
+    "तो गिरावट ख़त्म?"
+   ],
+   "sticker": "ज़रूर जानो",
+   "beats": {
+    "hook": [
+     "नीचे लंबी wick",
+     "गिरावट के बाद ख़रीदार लौटे?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "छोटी बॉडी ऊपर, नीचे 2 गुना wick"
+    ],
+    "matlab": [
+     "मतलब",
+     "sellers ने गिराया, buyers ने उठाया"
+    ],
+    "karein": [
+     "क्या करें",
+     "अगली हरी कैंडल पर, SL low के नीचे"
+    ]
+   },
+   "facts": [
+    "Hammer डाउनट्रेंड के बाद बनता है",
+    "निचली wick बॉडी से कम से कम 2 गुना",
+    "पुष्टि: अगली कैंडल ऊपर बंद",
+    "ये संभावना है, गारंटी नहीं"
+   ],
+   "seo": "Hammer Candlestick Pattern"
+  },
+  {
+   "id": 2,
+   "used": false,
+   "used_short": true,
+   "key": "titan_2010",
+   "cat": "REAL DATA",
+   "topic": "2010 में Titan में ₹1 लाख — जून 2026 तक कितना",
+   "thumb": [
+    "2010 में ₹1 लाख",
+    "Titan में = ?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "2010 में ₹1 लाख",
+     "Titan में लगाते तो?"
+    ],
+    "pehchan": [
+     "TITAN",
+     "71 से 4,231"
+    ],
+    "matlab": [
+     "हिसाब",
+     "करीब 59.53 गुना"
+    ],
+    "karein": [
+     "नतीजा",
+     "जून 2026 तक करीब ₹59.5 लाख"
+    ]
+   },
+   "facts": [
+    "2010-01-04 को 71",
+    "2026-06-04 को 4,231",
+    "59.53 गुना",
+    "₹1 लाख = करीब ₹59.5 लाख",
+    "dividend शामिल नहीं",
+    "पिछला रिटर्न आगे की गारंटी नहीं",
+    "हर शेयर ऐसा नहीं करता — कुछ शेयर 80-90% गिर भी सकते हैं",
+    "ये किसी शेयर को ख़रीदने या बेचने की सलाह नहीं"
+   ],
+   "seo": "Titan Share Return"
+  },
+  {
+   "id": 3,
+   "used": false,
+   "used_short": true,
+   "key": "rsi_levels",
+   "cat": "INDICATOR",
+   "topic": "RSI 70 और 30 — overbought और oversold का सही मतलब",
+   "thumb": [
+    "RSI 70 का",
+    "असली मतलब"
+   ],
+   "sticker": "सच",
+   "beats": {
+    "hook": [
+     "RSI 70 पार",
+     "क्या अब गिरेगा?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "70 ऊपर overbought, 30 नीचे oversold"
+    ],
+    "matlab": [
+     "मतलब",
+     "तेज़ी में RSI 70 पर टिका रह सकता है"
+    ],
+    "karein": [
+     "क्या करें",
+     "70 से नीचे आए और लाल कैंडल, तब सोचो"
+    ]
+   },
+   "facts": [
+    "RSI का default period 14",
+    "70 ऊपर overbought, 30 नीचे oversold",
+    "ये अपने आप बेचने या ख़रीदने का सिग्नल नहीं"
+   ],
+   "seo": "RSI Indicator"
+  },
+  {
+   "id": 4,
+   "used": false,
+   "used_short": true,
+   "key": "one_percent",
+   "cat": "RISK",
+   "topic": "1% risk rule — पूँजी 1 लाख, entry 500, SL 490",
+   "thumb": [
+    "1% नियम",
+    "खाता बचाओ"
+   ],
+   "sticker": "ज़रूर जानो",
+   "beats": {
+    "hook": [
+     "1% नियम",
+     "एक trade में 1% से ज़्यादा risk नहीं"
+    ],
+    "pehchan": [
+     "मिसाल",
+     "पूँजी 1 लाख, risk 1,000"
+    ],
+    "matlab": [
+     "हिसाब",
+     "500 से 490 = 10 प्रति शेयर"
+    ],
+    "karein": [
+     "नतीजा",
+     "1,000 / 10 = 100 शेयर"
+    ]
+   },
+   "facts": [
+    "पूँजी 1,00,000",
+    "risk 1% = 1,000",
+    "entry 500, SL 490",
+    "100 शेयर"
+   ],
+   "seo": "1 Percent Risk Rule"
+  },
+  {
+   "id": 5,
+   "used": false,
+   "used_short": true,
+   "key": "shooting_star",
+   "cat": "CANDLESTICK",
+   "topic": "Shooting Star — अपट्रेंड के ऊपर लंबी ऊपरी wick",
+   "thumb": [
+    "ये कैंडल दिखे",
+    "तो सावधान!"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "ऊपर लंबी wick",
+     "अपट्रेंड के टॉप पर ख़तरे की घंटी"
+    ],
+    "pehchan": [
+     "पहचान",
+     "छोटी बॉडी नीचे, ऊपर 2 गुना wick"
+    ],
+    "matlab": [
+     "मतलब",
+     "buyers ऊपर गए, sellers ने गिराया"
+    ],
+    "karein": [
+     "क्या करें",
+     "अगली कैंडल low तोड़े, SL wick के ऊपर"
+    ]
+   },
+   "facts": [
+    "अपट्रेंड के बाद बनता है",
+    "ऊपरी wick बॉडी से कम से कम 2 गुना",
+    "पुष्टि: अगली कैंडल star के low के नीचे बंद",
+    "ये संभावना है, गारंटी नहीं"
+   ],
+   "seo": "Shooting Star Candlestick"
+  },
+  {
+   "id": 6,
+   "used": false,
+   "used_short": true,
+   "key": "limit_vs_market",
+   "cat": "ORDERS",
+   "topic": "Limit order बनाम Market order — slippage",
+   "thumb": [
+    "Market order",
+    "से नुकसान?"
+   ],
+   "sticker": "सावधान",
+   "beats": {
+    "hook": [
+     "Market order",
+     "जो भाव मिले उस पर"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Limit: तय भाव या बेहतर पर ही"
+    ],
+    "matlab": [
+     "मतलब",
+     "कम liquidity में महँगा भरता है"
+    ],
+    "karein": [
+     "क्या करें",
+     "कम liquidity में limit order"
+    ]
+   },
+   "facts": [
+    "market order तुरंत भरता है, भाव पक्का नहीं",
+    "limit order भाव पक्का, भरना पक्का नहीं"
+   ],
+   "seo": "Limit Order vs Market Order"
+  },
+  {
+   "id": 7,
+   "used": false,
+   "used_short": true,
+   "key": "hdfcbank_2010",
+   "cat": "REAL DATA",
+   "topic": "2010 में HDFC Bank में ₹1 लाख — जून 2026 तक कितना",
+   "thumb": [
+    "2010 में ₹1 लाख",
+    "HDFC Bank में = ?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "2010 में ₹1 लाख",
+     "HDFC Bank में लगाते तो?"
+    ],
+    "pehchan": [
+     "HDFC BANK",
+     "85 से 754"
+    ],
+    "matlab": [
+     "हिसाब",
+     "करीब 8.84 गुना"
+    ],
+    "karein": [
+     "नतीजा",
+     "जून 2026 तक करीब ₹8.8 लाख"
+    ]
+   },
+   "facts": [
+    "2010-01-04 को 85",
+    "2026-06-04 को 754",
+    "8.84 गुना",
+    "₹1 लाख = करीब ₹8.8 लाख",
+    "dividend शामिल नहीं",
+    "पिछला रिटर्न आगे की गारंटी नहीं",
+    "हर शेयर ऐसा नहीं करता — कुछ शेयर 80-90% गिर भी सकते हैं",
+    "ये किसी शेयर को ख़रीदने या बेचने की सलाह नहीं"
+   ],
+   "seo": "HDFC Bank Share Return"
+  },
+  {
+   "id": 8,
+   "used": false,
+   "used_short": true,
+   "key": "long_call_theta",
+   "cat": "OPTIONS",
+   "topic": "Option ख़रीदार — max loss premium, पर theta रोज़ खाता है",
+   "thumb": [
+    "Option ख़रीदा",
+    "पैसा रोज़ घटता"
+   ],
+   "sticker": "सच",
+   "beats": {
+    "hook": [
+     "Option buyer",
+     "नुकसान सिर्फ़ premium तक"
+    ],
+    "pehchan": [
+     "पहचान",
+     "call, strike 100, premium 4"
+    ],
+    "matlab": [
+     "मतलब",
+     "भाव ऊपर गया तो फ़ायदा"
+    ],
+    "karein": [
+     "पर theta",
+     "premium हर दिन घटता है"
+    ]
+   },
+   "facts": [
+    "option buyer का max loss = premium",
+    "theta से time value घटती है"
+   ],
+   "seo": "Option Buying Theta"
+  },
+  {
+   "id": 9,
+   "used": false,
+   "used_short": true,
+   "key": "nifty_base",
+   "cat": "MARKET FACT",
+   "topic": "Nifty 50 की base value 1000, base date 3 नवंबर 1995",
+   "thumb": [
+    "Nifty की",
+    "शुरुआत 1000 से"
+   ],
+   "sticker": "फैक्ट",
+   "beats": {
+    "hook": [
+     "Nifty 50",
+     "1000 से शुरू"
+    ],
+    "pehchan": [
+     "Base",
+     "3 नवंबर 1995, value 1000"
+    ],
+    "matlab": [
+     "आज",
+     "जून 2026 में 23,417"
+    ],
+    "karein": [
+     "याद रखो",
+     "50 बड़ी कंपनियों का index"
+    ]
+   },
+   "facts": [
+    "base date 3 नवंबर 1995, base value 1000"
+   ],
+   "seo": "Nifty 50 Base Value",
+   "used_short_fails": 2
+  },
+  {
+   "id": 10,
+   "used": false,
+   "used_short": true,
+   "key": "rsi_divergence",
+   "cat": "INDICATOR",
+   "topic": "Bullish divergence — price नया low, RSI ऊँचा low",
+   "thumb": [
+    "Price नीचे",
+    "RSI ऊपर?"
+   ],
+   "sticker": "राज़",
+   "beats": {
+    "hook": [
+     "Bullish Divergence",
+     "गिरावट की ताक़त घटी"
+    ],
+    "pehchan": [
+     "पहचान",
+     "price नया low, RSI ऊँचा low"
+    ],
+    "matlab": [
+     "मतलब",
+     "बिकवाली कमज़ोर हो रही है"
+    ],
+    "karein": [
+     "क्या करें",
+     "पुष्टि कैंडल का इंतज़ार, SL low के नीचे"
+    ]
+   },
+   "facts": [
+    "divergence जल्दी संकेत देता है, पक्का नहीं"
+   ],
+   "seo": "RSI Divergence"
+  },
+  {
+   "id": 11,
+   "used": false,
+   "used_short": true,
+   "key": "rr_breakeven",
+   "cat": "RISK",
+   "topic": "Risk-reward 1:2 — 33% जीतकर भी breakeven",
+   "thumb": [
+    "33% जीतकर",
+    "भी फ़ायदा?"
+   ],
+   "sticker": "गणित",
+   "beats": {
+    "hook": [
+     "Risk 1 : Reward 2",
+     "कितने trade जीतने ज़रूरी?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "1 का risk, 2 का reward"
+    ],
+    "matlab": [
+     "हिसाब",
+     "1 / (1+2) = 33%"
+    ],
+    "karein": [
+     "मतलब",
+     "33% से ज़्यादा जीते तो फ़ायदा"
+    ]
+   },
+   "facts": [
+    "brokerage छोड़कर",
+    "1 / (1 + 2) = 33.3%"
+   ],
+   "seo": "Risk Reward Ratio"
+  },
+  {
+   "id": 12,
+   "used": false,
+   "used_short": true,
+   "key": "yesbank_2015",
+   "cat": "REAL DATA",
+   "topic": "2015 में Yes Bank में ₹1 लाख — जून 2026 तक कितना बचा",
+   "thumb": [
+    "2015 में ₹1 लाख",
+    "Yes Bank में डूबे?"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "2015 में ₹1 लाख",
+     "Yes Bank में लगाते तो?"
+    ],
+    "pehchan": [
+     "YES BANK",
+     "155 से 23"
+    ],
+    "matlab": [
+     "हिसाब",
+     "करीब 85% नुकसान"
+    ],
+    "karein": [
+     "नतीजा",
+     "जून 2026 तक करीब ₹15,000"
+    ]
+   },
+   "facts": [
+    "2015-01-01 को 155",
+    "2026-06-04 को 23",
+    "करीब 85% नुकसान",
+    "₹1 लाख = करीब ₹15,000",
+    "dividend शामिल नहीं",
+    "एक शेयर पर पूरा पैसा लगाना बड़ा risk है",
+    "ये किसी शेयर को ख़रीदने या बेचने की सलाह नहीं"
+   ],
+   "seo": "Yes Bank Share Fall"
+  },
+  {
+   "id": 13,
+   "used": false,
+   "used_short": false,
+   "key": "doji",
+   "cat": "CANDLESTICK",
+   "topic": "Doji — open और close बराबर, indecision",
+   "thumb": [
+    "ये कैंडल बोले",
+    "रुको, सोचो"
+   ],
+   "sticker": "ध्यान दो",
+   "beats": {
+    "hook": [
+     "Open = Close",
+     "बाज़ार उलझन में है"
+    ],
+    "pehchan": [
+     "पहचान",
+     "बॉडी लगभग नहीं, दोनों तरफ़ wick"
+    ],
+    "matlab": [
+     "मतलब",
+     "buyers और sellers बराबर"
+    ],
+    "karein": [
+     "क्या करें",
+     "अगली कैंडल की दिशा का इंतज़ार"
+    ]
+   },
+   "facts": [
+    "Doji में open और close लगभग बराबर",
+    "ये indecision दिखाती है, दिशा नहीं"
+   ],
+   "seo": "Doji Candlestick"
+  },
+  {
+   "id": 14,
+   "used": false,
+   "used_short": false,
+   "key": "asianpaints_2010",
+   "cat": "REAL DATA",
+   "topic": "2010 में Asian Paints में ₹1 लाख — जून 2026 तक कितना",
+   "thumb": [
+    "2010 में ₹1 लाख",
+    "Asian Paints में = ?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "2010 में ₹1 लाख",
+     "Asian Paints में लगाते तो?"
+    ],
+    "pehchan": [
+     "ASIAN PAINTS",
+     "179 से 2,662"
+    ],
+    "matlab": [
+     "हिसाब",
+     "करीब 14.88 गुना"
+    ],
+    "karein": [
+     "नतीजा",
+     "जून 2026 तक करीब ₹14.9 लाख"
+    ]
+   },
+   "facts": [
+    "2010-01-04 को 179",
+    "2026-06-04 को 2,662",
+    "14.88 गुना",
+    "₹1 लाख = करीब ₹14.9 लाख",
+    "dividend शामिल नहीं",
+    "पिछला रिटर्न आगे की गारंटी नहीं",
+    "हर शेयर ऐसा नहीं करता — कुछ शेयर 80-90% गिर भी सकते हैं",
+    "ये किसी शेयर को ख़रीदने या बेचने की सलाह नहीं"
+   ],
+   "seo": "Asian Paints Share Return"
+  },
+  {
+   "id": 15,
+   "used": false,
+   "used_short": false,
+   "key": "golden_cross",
+   "cat": "INDICATOR",
+   "topic": "Golden Cross — 50 DMA का 200 DMA के ऊपर जाना",
+   "thumb": [
+    "Golden Cross",
+    "क्या है?"
+   ],
+   "sticker": "ज़रूर जानो",
+   "beats": {
+    "hook": [
+     "Golden Cross",
+     "50 DMA ने 200 को पार किया"
+    ],
+    "pehchan": [
+     "पहचान",
+     "छोटी औसत, लंबी औसत के ऊपर"
+    ],
+    "matlab": [
+     "मतलब",
+     "लंबा trend ऊपर की ओर"
+    ],
+    "karein": [
+     "क्या करें",
+     "ये देर से आता है, SL ज़रूरी"
+    ]
+   },
+   "facts": [
+    "50 दिन और 200 दिन की moving average",
+    "ये lagging संकेत है"
+   ],
+   "seo": "Golden Cross"
+  },
+  {
+   "id": 16,
+   "used": false,
+   "used_short": false,
+   "key": "loss_recovery",
+   "cat": "RISK",
+   "topic": "नुकसान का गणित — 50% घटे तो 100% चाहिए",
+   "thumb": [
+    "50% डूबे",
+    "100% चाहिए!"
+   ],
+   "sticker": "गणित",
+   "beats": {
+    "hook": [
+     "नुकसान का गणित",
+     "वापसी मुश्किल क्यों?"
+    ],
+    "pehchan": [
+     "10% घटे तो",
+     "11% चाहिए"
+    ],
+    "matlab": [
+     "20% घटे तो",
+     "25% चाहिए"
+    ],
+    "karein": [
+     "50% घटे तो",
+     "100% चाहिए"
+    ]
+   },
+   "facts": [
+    "10% नुकसान के बाद 11% चाहिए",
+    "20% के बाद 25%",
+    "50% के बाद 100%"
+   ],
+   "seo": "Loss Recovery Math"
+  },
+  {
+   "id": 17,
+   "used": false,
+   "used_short": false,
+   "key": "bullish_engulfing",
+   "cat": "CANDLESTICK",
+   "topic": "Bullish Engulfing — हरी कैंडल लाल को पूरा ढके",
+   "thumb": [
+    "हरी कैंडल ने",
+    "लाल को निगला"
+   ],
+   "sticker": "ज़रूर जानो",
+   "beats": {
+    "hook": [
+     "Bullish Engulfing",
+     "गिरावट में ख़रीदारों की वापसी"
+    ],
+    "pehchan": [
+     "पहचान",
+     "बड़ी हरी बॉडी, छोटी लाल को पूरा ढके"
+    ],
+    "matlab": [
+     "मतलब",
+     "कंट्रोल buyers के पास आया"
+    ],
+    "karein": [
+     "क्या करें",
+     "पुष्टि के बाद, SL पैटर्न के low के नीचे"
+    ]
+   },
+   "facts": [
+    "डाउनट्रेंड के बाद बनता है",
+    "दूसरी हरी बॉडी पहली लाल बॉडी को पूरा ढकती है"
+   ],
+   "seo": "Bullish Engulfing Pattern"
+  },
+  {
+   "id": 18,
+   "used": false,
+   "used_short": false,
+   "key": "sl_vs_slm",
+   "cat": "ORDERS",
+   "topic": "SL बनाम SL-M — gap down में क्या होता है",
+   "thumb": [
+    "SL लगाया",
+    "फिर भी नुकसान?"
+   ],
+   "sticker": "सच",
+   "beats": {
+    "hook": [
+     "Gap down",
+     "SL से नीचे खुला"
+    ],
+    "pehchan": [
+     "पहचान",
+     "SL-L में limit, SL-M में market"
+    ],
+    "matlab": [
+     "मतलब",
+     "SL-L भरा नहीं, SL-M नीचे भरा"
+    ],
+    "karein": [
+     "क्या करें",
+     "SL-L में limit थोड़ा दूर रखो"
+    ]
+   },
+   "facts": [
+    "gap में SL-L भर नहीं पाता",
+    "SL-M trigger के बाद market पर भरता है"
+   ],
+   "seo": "SL vs SL-M Order"
+  },
+  {
+   "id": 19,
+   "used": false,
+   "used_short": false,
+   "key": "titan_vs_yes_2015",
+   "cat": "REAL DATA",
+   "topic": "2015 में ₹1 लाख — Titan बनाम Yes Bank",
+   "thumb": [
+    "₹1 लाख: 11 लाख",
+    "या ₹15,000?"
+   ],
+   "sticker": "सच",
+   "beats": {
+    "hook": [
+     "एक साल, दो शेयर",
+     "2015 में ₹1 लाख"
+    ],
+    "pehchan": [
+     "Titan बनाम Yes Bank",
+     "हरा Titan, लाल Yes Bank"
+    ],
+    "matlab": [
+     "फ़र्क",
+     "₹11.1 लाख बनाम ₹15,000"
+    ],
+    "karein": [
+     "सबक",
+     "एक शेयर पर सब कुछ नहीं"
+    ]
+   },
+   "facts": [
+    "Titan: ₹1 लाख = करीब ₹11.1 लाख",
+    "Yes Bank: ₹1 लाख = करीब ₹15,000",
+    "जून 2026 तक, dividend शामिल नहीं",
+    "इसीलिए diversification",
+    "ये किसी शेयर को ख़रीदने या बेचने की सलाह नहीं"
+   ],
+   "seo": "Titan vs Yes Bank"
+  },
+  {
+   "id": 20,
+   "used": false,
+   "used_short": false,
+   "key": "naked_call",
+   "cat": "OPTIONS",
+   "topic": "Naked call selling — असीमित risk",
+   "thumb": [
+    "Call बेचना",
+    "असीमित risk"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "Naked call",
+     "नुकसान की कोई सीमा नहीं"
+    ],
+    "pehchan": [
+     "पहचान",
+     "call बेची, premium 4 मिला"
+    ],
+    "matlab": [
+     "मतलब",
+     "फ़ायदा 4 तक, नुकसान खुला"
+    ],
+    "karein": [
+     "क्या करें",
+     "hedge, SL और margin समझो"
+    ]
+   },
+   "facts": [
+    "naked call seller का नुकसान सैद्धांतिक रूप से असीमित"
+   ],
+   "seo": "Naked Call Selling Risk"
+  },
+  {
+   "id": 21,
+   "used": false,
+   "used_short": false,
+   "key": "circuit",
+   "cat": "MARKET FACT",
+   "topic": "Market-wide circuit breaker — 10%, 15%, 20%",
+   "thumb": [
+    "पूरा बाज़ार",
+    "रुक जाता है!"
+   ],
+   "sticker": "सच",
+   "beats": {
+    "hook": [
+     "Circuit breaker",
+     "index बहुत गिरे तो"
+    ],
+    "pehchan": [
+     "पहला स्तर",
+     "10%"
+    ],
+    "matlab": [
+     "दूसरा स्तर",
+     "15%"
+    ],
+    "karein": [
+     "तीसरा स्तर",
+     "20%"
+    ]
+   },
+   "facts": [
+    "index 10%, 15% या 20% हिले तो पूरे बाज़ार में ट्रेडिंग रुकती है"
+   ],
+   "seo": "Circuit Breaker"
+  },
+  {
+   "id": 22,
+   "used": false,
+   "used_short": false,
+   "key": "death_cross",
+   "cat": "INDICATOR",
+   "topic": "Death Cross — 50 DMA का 200 DMA के नीचे आना",
+   "thumb": [
+    "Death Cross",
+    "से डर?"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "Death Cross",
+     "50 DMA 200 के नीचे"
+    ],
+    "pehchan": [
+     "पहचान",
+     "छोटी औसत, लंबी औसत के नीचे"
+    ],
+    "matlab": [
+     "मतलब",
+     "लंबा trend नीचे की ओर"
+    ],
+    "karein": [
+     "क्या करें",
+     "देर का संकेत, अकेले पर फ़ैसला नहीं"
+    ]
+   },
+   "facts": [
+    "50 दिन और 200 दिन की moving average",
+    "ये lagging संकेत है"
+   ],
+   "seo": "Death Cross"
+  },
+  {
+   "id": 23,
+   "used": false,
+   "used_short": false,
+   "key": "leverage",
+   "cat": "RISK",
+   "topic": "5x leverage पर 20% उल्टा move = पूरी पूँजी साफ़",
+   "thumb": [
+    "5x leverage",
+    "पूरा खाता साफ़"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "Leverage",
+     "फ़ायदा भी, नुकसान भी"
+    ],
+    "pehchan": [
+     "पहचान",
+     "भाव 20% उल्टा गया"
+    ],
+    "matlab": [
+     "5x पर",
+     "5 गुना 20% = 100% नुकसान"
+    ],
+    "karein": [
+     "क्या करें",
+     "leverage कम, SL पक्का"
+    ]
+   },
+   "facts": [
+    "1x पर 20% नुकसान",
+    "5x पर 100% नुकसान"
+   ],
+   "seo": "Leverage Risk"
+  },
+  {
+   "id": 24,
+   "used": false,
+   "used_short": false,
+   "key": "infosys_2015",
+   "cat": "REAL DATA",
+   "topic": "2015 में Infosys में ₹1 लाख — जून 2026 तक कितना",
+   "thumb": [
+    "2015 में ₹1 लाख",
+    "Infosys में = ?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "2015 में ₹1 लाख",
+     "Infosys में लगाते तो?"
+    ],
+    "pehchan": [
+     "INFOSYS",
+     "494 से 1,201"
+    ],
+    "matlab": [
+     "हिसाब",
+     "करीब 2.43 गुना"
+    ],
+    "karein": [
+     "नतीजा",
+     "जून 2026 तक करीब ₹2.4 लाख"
+    ]
+   },
+   "facts": [
+    "2015-01-01 को 494",
+    "2026-06-04 को 1,201",
+    "2.43 गुना",
+    "₹1 लाख = करीब ₹2.4 लाख",
+    "dividend शामिल नहीं",
+    "पिछला रिटर्न आगे की गारंटी नहीं",
+    "हर शेयर ऐसा नहीं करता — कुछ शेयर 80-90% गिर भी सकते हैं",
+    "ये किसी शेयर को ख़रीदने या बेचने की सलाह नहीं"
+   ],
+   "seo": "Infosys Share Return"
+  },
+  {
+   "id": 25,
+   "used": false,
+   "used_short": false,
+   "key": "bearish_engulfing",
+   "cat": "CANDLESTICK",
+   "topic": "Bearish Engulfing — लाल कैंडल हरी को पूरा ढके",
+   "thumb": [
+    "लाल कैंडल ने",
+    "हरी को निगला"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "Bearish Engulfing",
+     "तेज़ी में sellers का हमला"
+    ],
+    "pehchan": [
+     "पहचान",
+     "बड़ी लाल बॉडी, छोटी हरी को पूरा ढके"
+    ],
+    "matlab": [
+     "मतलब",
+     "कंट्रोल sellers के पास गया"
+    ],
+    "karein": [
+     "क्या करें",
+     "पुष्टि के बाद, SL पैटर्न के high के ऊपर"
+    ]
+   },
+   "facts": [
+    "अपट्रेंड के बाद बनता है",
+    "दूसरी लाल बॉडी पहली हरी बॉडी को पूरा ढकती है"
+   ],
+   "seo": "Bearish Engulfing Pattern"
+  },
+  {
+   "id": 26,
+   "used": false,
+   "used_short": false,
+   "key": "sbi_2015",
+   "cat": "REAL DATA",
+   "topic": "2015 में SBI में ₹1 लाख — जून 2026 तक कितना",
+   "thumb": [
+    "2015 में ₹1 लाख",
+    "SBI में = ?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "2015 में ₹1 लाख",
+     "SBI में लगाते तो?"
+    ],
+    "pehchan": [
+     "SBI",
+     "314 से 979"
+    ],
+    "matlab": [
+     "हिसाब",
+     "करीब 3.12 गुना"
+    ],
+    "karein": [
+     "नतीजा",
+     "जून 2026 तक करीब ₹3.1 लाख"
+    ]
+   },
+   "facts": [
+    "2015-01-01 को 314",
+    "2026-06-04 को 979",
+    "3.12 गुना",
+    "₹1 लाख = करीब ₹3.1 लाख",
+    "dividend शामिल नहीं",
+    "पिछला रिटर्न आगे की गारंटी नहीं",
+    "हर शेयर ऐसा नहीं करता — कुछ शेयर 80-90% गिर भी सकते हैं",
+    "ये किसी शेयर को ख़रीदने या बेचने की सलाह नहीं"
+   ],
+   "seo": "SBI Share Return"
+  },
+  {
+   "id": 27,
+   "used": false,
+   "used_short": false,
+   "key": "macd",
+   "cat": "INDICATOR",
+   "topic": "MACD — लाइन, signal और histogram",
+   "thumb": [
+    "MACD",
+    "आसान भाषा में"
+   ],
+   "sticker": "सीखो",
+   "beats": {
+    "hook": [
+     "MACD crossover",
+     "लाइन ने signal को काटा"
+    ],
+    "pehchan": [
+     "पहचान",
+     "12-26 की लाइन, 9 की signal"
+    ],
+    "matlab": [
+     "मतलब",
+     "momentum ऊपर मुड़ा"
+    ],
+    "karein": [
+     "क्या करें",
+     "price और volume से पुष्टि लो"
+    ]
+   },
+   "facts": [
+    "MACD = 12 EMA और 26 EMA का फ़र्क",
+    "signal लाइन 9 की EMA"
+   ],
+   "seo": "MACD Indicator"
+  },
+  {
+   "id": 28,
+   "used": false,
+   "used_short": false,
+   "key": "revenge",
+   "cat": "RISK",
+   "topic": "Revenge trading — नुकसान के बाद का सबसे महँगा ट्रेड",
+   "thumb": [
+    "नुकसान के बाद",
+    "सबसे बड़ी ग़लती"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "Revenge trading",
+     "ग़ुस्से वाला trade"
+    ],
+    "pehchan": [
+     "पहचान",
+     "loss, फिर ग़ुस्से में बड़ा trade"
+    ],
+    "matlab": [
+     "मतलब",
+     "छोटा loss बड़ा बन जाता है"
+    ],
+    "karein": [
+     "क्या करें",
+     "daily loss limit पर रुक जाओ"
+    ]
+   },
+   "facts": [
+    "फ़ैसला प्लान से नहीं, भावना से होता है"
+   ],
+   "seo": "Revenge Trading"
+  },
+  {
+   "id": 29,
+   "used": false,
+   "used_short": false,
+   "key": "morning_star",
+   "cat": "CANDLESTICK",
+   "topic": "Morning Star — तीन कैंडल का bullish reversal",
+   "thumb": [
+    "3 कैंडल का",
+    "सुबह का तारा"
+   ],
+   "sticker": "ज़रूर जानो",
+   "beats": {
+    "hook": [
+     "Morning Star",
+     "गिरावट के अंत का संकेत"
+    ],
+    "pehchan": [
+     "पहचान",
+     "बड़ी लाल, छोटी, फिर बड़ी हरी"
+    ],
+    "matlab": [
+     "मतलब",
+     "बिकवाली थकी, ख़रीदार आए"
+    ],
+    "karein": [
+     "क्या करें",
+     "पुष्टि के बाद, SL सबसे निचले low के नीचे"
+    ]
+   },
+   "facts": [
+    "तीन कैंडल का पैटर्न",
+    "डाउनट्रेंड के बाद बनता है"
+   ],
+   "seo": "Morning Star Pattern"
+  },
+  {
+   "id": 30,
+   "used": false,
+   "used_short": false,
+   "key": "products",
+   "cat": "ORDERS",
+   "topic": "MIS, CNC, NRML — कौन सा product कब",
+   "thumb": [
+    "MIS, CNC, NRML",
+    "कौन सा कब?"
+   ],
+   "sticker": "सीखो",
+   "beats": {
+    "hook": [
+     "3 product",
+     "ग़लत चुना तो झटका"
+    ],
+    "pehchan": [
+     "MIS",
+     "intraday, उसी दिन बंद"
+    ],
+    "matlab": [
+     "CNC",
+     "delivery, शेयर demat में"
+    ],
+    "karein": [
+     "NRML",
+     "F&O पोज़िशन आगे ले जाओ"
+    ]
+   },
+   "facts": [
+    "MIS उसी दिन बंद करना होता है",
+    "CNC से शेयर demat में आते हैं",
+    "NRML से F&O carry forward"
+   ],
+   "seo": "MIS CNC NRML"
+  },
+  {
+   "id": 31,
+   "used": false,
+   "used_short": false,
+   "key": "tcs_2020",
+   "cat": "REAL DATA",
+   "topic": "2020 में TCS में ₹1 लाख — जून 2026 तक कितना",
+   "thumb": [
+    "2020 में ₹1 लाख",
+    "TCS में = ?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "2020 में ₹1 लाख",
+     "TCS में लगाते तो?"
+    ],
+    "pehchan": [
+     "TCS",
+     "2,168 से 2,241"
+    ],
+    "matlab": [
+     "हिसाब",
+     "करीब 1.03 गुना"
+    ],
+    "karein": [
+     "नतीजा",
+     "जून 2026 तक करीब ₹1.0 लाख"
+    ]
+   },
+   "facts": [
+    "2020-01-01 को 2,168",
+    "2026-06-04 को 2,241",
+    "1.03 गुना",
+    "₹1 लाख = करीब ₹1.0 लाख",
+    "dividend शामिल नहीं",
+    "पिछला रिटर्न आगे की गारंटी नहीं",
+    "हर शेयर ऐसा नहीं करता — कुछ शेयर 80-90% गिर भी सकते हैं",
+    "ये किसी शेयर को ख़रीदने या बेचने की सलाह नहीं"
+   ],
+   "seo": "TCS Share Return"
+  },
+  {
+   "id": 32,
+   "used": false,
+   "used_short": false,
+   "key": "atm_delta",
+   "cat": "OPTIONS",
+   "topic": "ATM option का delta करीब 0.5",
+   "thumb": [
+    "Delta 0.5",
+    "का मतलब?"
+   ],
+   "sticker": "सीखो",
+   "beats": {
+    "hook": [
+     "ATM delta",
+     "करीब 0.5"
+    ],
+    "pehchan": [
+     "पहचान",
+     "spot 10 ऊपर, premium कितना?"
+    ],
+    "matlab": [
+     "मतलब",
+     "ATM premium करीब 5 बढ़ता है"
+    ],
+    "karein": [
+     "याद रखो",
+     "₹1 पर करीब 50 पैसे"
+    ]
+   },
+   "facts": [
+    "ATM call का delta करीब 0.5",
+    "ITM ज़्यादा, OTM कम"
+   ],
+   "seo": "Option Delta"
+  },
+  {
+   "id": 33,
+   "used": false,
+   "used_short": false,
+   "key": "bse_1875",
+   "cat": "MARKET FACT",
+   "topic": "BSE 1875 — एशिया के सबसे पुराने exchanges में",
+   "thumb": [
+    "एशिया का",
+    "सबसे पुराना?"
+   ],
+   "sticker": "फैक्ट",
+   "beats": {
+    "hook": [
+     "BSE 1875",
+     "एशिया के सबसे पुराने exchanges में"
+    ],
+    "pehchan": [
+     "1875",
+     "BSE की शुरुआत"
+    ],
+    "matlab": [
+     "1986",
+     "Sensex आया"
+    ],
+    "karein": [
+     "1994",
+     "NSE पर ट्रेडिंग शुरू"
+    ]
+   },
+   "facts": [
+    "BSE 1875",
+    "Sensex 1986 में शुरू",
+    "NSE पर equity trading 1994 से"
+   ],
+   "seo": "BSE History"
+  },
+  {
+   "id": 34,
+   "used": false,
+   "used_short": false,
+   "key": "vwap",
+   "cat": "INDICATOR",
+   "topic": "VWAP — intraday traders इसे क्यों देखते हैं",
+   "thumb": [
+    "VWAP",
+    "intraday का राज़"
+   ],
+   "sticker": "राज़",
+   "beats": {
+    "hook": [
+     "VWAP",
+     "बड़े traders की लाइन"
+    ],
+    "pehchan": [
+     "पहचान",
+     "volume के हिसाब से दिन का औसत भाव"
+    ],
+    "matlab": [
+     "मतलब",
+     "ऊपर रहे तो buyers मज़बूत"
+    ],
+    "karein": [
+     "क्या करें",
+     "VWAP के नीचे आए तो सावधान"
+    ]
+   },
+   "facts": [
+    "VWAP = volume weighted average price",
+    "ये सिर्फ़ उसी दिन का होता है"
+   ],
+   "seo": "VWAP Indicator"
+  },
+  {
+   "id": 35,
+   "used": false,
+   "used_short": false,
+   "key": "averaging",
+   "cat": "RISK",
+   "topic": "Averaging down का जाल — घाटे वाले ट्रेड में और ख़रीदना",
+   "thumb": [
+    "गिरते शेयर में",
+    "और ख़रीदना?"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "Averaging down",
+     "घाटे में और पैसा"
+    ],
+    "pehchan": [
+     "पहचान",
+     "10, 20, 40, 80, 160 की ख़रीद"
+    ],
+    "matlab": [
+     "मतलब",
+     "औसत घटा, पर नुकसान बढ़ा"
+    ],
+    "karein": [
+     "क्या करें",
+     "ग़लत trade में पैसा मत बढ़ाओ"
+    ]
+   },
+   "facts": [
+    "हर गिरावट पर दोगुनी ख़रीद से risk बढ़ता जाता है"
+   ],
+   "seo": "Averaging Down"
+  },
+  {
+   "id": 36,
+   "used": false,
+   "used_short": false,
+   "key": "dmart_2020",
+   "cat": "REAL DATA",
+   "topic": "2020 में DMart में ₹1 लाख — जून 2026 तक कितना",
+   "thumb": [
+    "2020 में ₹1 लाख",
+    "DMart में = ?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "2020 में ₹1 लाख",
+     "DMart में लगाते तो?"
+    ],
+    "pehchan": [
+     "DMART",
+     "1,828 से 4,139"
+    ],
+    "matlab": [
+     "हिसाब",
+     "करीब 2.26 गुना"
+    ],
+    "karein": [
+     "नतीजा",
+     "जून 2026 तक करीब ₹2.3 लाख"
+    ]
+   },
+   "facts": [
+    "2020-01-01 को 1,828",
+    "2026-06-04 को 4,139",
+    "2.26 गुना",
+    "₹1 लाख = करीब ₹2.3 लाख",
+    "dividend शामिल नहीं",
+    "पिछला रिटर्न आगे की गारंटी नहीं",
+    "हर शेयर ऐसा नहीं करता — कुछ शेयर 80-90% गिर भी सकते हैं",
+    "ये किसी शेयर को ख़रीदने या बेचने की सलाह नहीं"
+   ],
+   "seo": "DMart Share Return"
+  },
+  {
+   "id": 37,
+   "used": false,
+   "used_short": false,
+   "key": "evening_star",
+   "cat": "CANDLESTICK",
+   "topic": "Evening Star — तीन कैंडल का bearish reversal",
+   "thumb": [
+    "3 कैंडल का",
+    "शाम का तारा"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "Evening Star",
+     "तेज़ी के अंत का संकेत"
+    ],
+    "pehchan": [
+     "पहचान",
+     "बड़ी हरी, छोटी, फिर बड़ी लाल"
+    ],
+    "matlab": [
+     "मतलब",
+     "ख़रीदारी थकी, sellers आए"
+    ],
+    "karein": [
+     "क्या करें",
+     "पुष्टि के बाद, SL सबसे ऊँचे high के ऊपर"
+    ]
+   },
+   "facts": [
+    "तीन कैंडल का पैटर्न",
+    "अपट्रेंड के बाद बनता है"
+   ],
+   "seo": "Evening Star Pattern"
+  },
+  {
+   "id": 38,
+   "used": false,
+   "used_short": false,
+   "key": "nifty_2010",
+   "cat": "REAL DATA",
+   "topic": "2010 में NIFTY 50 में ₹1 लाख — जून 2026 तक कितना",
+   "thumb": [
+    "2010 में ₹1 लाख",
+    "आज कितना?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "2010 में ₹1 लाख",
+     "NIFTY 50 में"
+    ],
+    "pehchan": [
+     "NIFTY 50",
+     "5,232 से 23,417"
+    ],
+    "matlab": [
+     "हिसाब",
+     "करीब 4.48 गुना"
+    ],
+    "karein": [
+     "नतीजा",
+     "जून 2026 तक करीब ₹4.5 लाख"
+    ]
+   },
+   "facts": [
+    "2010-01-04 को 5,232",
+    "2026-06-04 को 23,417",
+    "4.48 गुना",
+    "₹1 लाख = करीब ₹4.5 लाख",
+    "dividend शामिल नहीं",
+    "पिछला रिटर्न गारंटी नहीं"
+   ],
+   "seo": "Nifty 50 Return"
+  },
+  {
+   "id": 39,
+   "used": false,
+   "used_short": false,
+   "key": "volume_breakout",
+   "cat": "INDICATOR",
+   "topic": "Volume के बिना breakout — fake breakout",
+   "thumb": [
+    "Breakout",
+    "असली या नकली?"
+   ],
+   "sticker": "सच",
+   "beats": {
+    "hook": [
+     "Breakout",
+     "resistance टूटा"
+    ],
+    "pehchan": [
+     "पहचान",
+     "breakout के साथ बड़ा volume"
+    ],
+    "matlab": [
+     "मतलब",
+     "बड़े खिलाड़ी भी साथ हैं"
+    ],
+    "karein": [
+     "क्या करें",
+     "कम volume वाला breakout, सावधान"
+    ]
+   },
+   "facts": [
+    "बिना volume का breakout अक्सर वापस आता है"
+   ],
+   "seo": "Breakout Volume"
+  },
+  {
+   "id": 40,
+   "used": false,
+   "used_short": false,
+   "key": "journal",
+   "cat": "RISK",
+   "topic": "Trading journal — अपनी ग़लतियाँ पकड़ने का तरीका",
+   "thumb": [
+    "प्रो traders",
+    "ये रोज़ करते हैं"
+   ],
+   "sticker": "राज़",
+   "beats": {
+    "hook": [
+     "Trading journal",
+     "हर trade लिखो"
+    ],
+    "pehchan": [
+     "क्या लिखें",
+     "date, setup, result, ग़लती"
+    ],
+    "matlab": [
+     "मतलब",
+     "बार-बार की ग़लती दिख जाती है"
+    ],
+    "karein": [
+     "क्या करें",
+     "हर हफ़्ते review करो"
+    ]
+   },
+   "facts": [
+    "journal में कारण और नतीजा दोनों लिखो"
+   ],
+   "seo": "Trading Journal"
+  },
+  {
+   "id": 41,
+   "used": false,
+   "used_short": false,
+   "key": "hanging_man",
+   "cat": "CANDLESTICK",
+   "topic": "Hanging Man — Hammer जैसी शक्ल, अपट्रेंड के ऊपर",
+   "thumb": [
+    "Hammer जैसी",
+    "पर ख़तरनाक"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "Hanging Man",
+     "अपट्रेंड के ऊपर hammer जैसी कैंडल"
+    ],
+    "pehchan": [
+     "पहचान",
+     "छोटी बॉडी ऊपर, नीचे लंबी wick"
+    ],
+    "matlab": [
+     "मतलब",
+     "ऊपर sellers ने पहली बार ज़ोर दिखाया"
+    ],
+    "karein": [
+     "क्या करें",
+     "अगली कैंडल नीचे बंद हो, SL high के ऊपर"
+    ]
+   },
+   "facts": [
+    "शक्ल hammer जैसी, पर अपट्रेंड के ऊपर",
+    "पुष्टि: अगली कैंडल नीचे बंद"
+   ],
+   "seo": "Hanging Man Candlestick"
+  },
+  {
+   "id": 42,
+   "used": false,
+   "used_short": false,
+   "key": "gtt_amo",
+   "cat": "ORDERS",
+   "topic": "GTT और AMO — बाज़ार बंद होने पर भी ऑर्डर",
+   "thumb": [
+    "बाज़ार बंद",
+    "फिर भी ऑर्डर!"
+   ],
+   "sticker": "ज़रूर जानो",
+   "beats": {
+    "hook": [
+     "AMO और GTT",
+     "बाज़ार बंद में भी ऑर्डर"
+    ],
+    "pehchan": [
+     "AMO",
+     "बंद के बाद लगाओ, सुबह जाए"
+    ],
+    "matlab": [
+     "GTT",
+     "तय भाव आने तक इंतज़ार"
+    ],
+    "karein": [
+     "क्या करें",
+     "GTT से भाव पर नज़र नहीं रखनी"
+    ]
+   },
+   "facts": [
+    "AMO = after market order",
+    "GTT = good till triggered"
+   ],
+   "seo": "GTT and AMO Order"
+  },
+  {
+   "id": 43,
+   "used": false,
+   "used_short": false,
+   "key": "nifty_2015",
+   "cat": "REAL DATA",
+   "topic": "2015 में NIFTY 50 में ₹1 लाख — जून 2026 तक कितना",
+   "thumb": [
+    "2015 में ₹1 लाख",
+    "आज कितना?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "2015 में ₹1 लाख",
+     "NIFTY 50 में"
+    ],
+    "pehchan": [
+     "NIFTY 50",
+     "8,395 से 23,417"
+    ],
+    "matlab": [
+     "हिसाब",
+     "करीब 2.79 गुना"
+    ],
+    "karein": [
+     "नतीजा",
+     "जून 2026 तक करीब ₹2.8 लाख"
+    ]
+   },
+   "facts": [
+    "2015-01-02 को 8,395",
+    "2026-06-04 को 23,417",
+    "2.79 गुना",
+    "₹1 लाख = करीब ₹2.8 लाख",
+    "dividend शामिल नहीं",
+    "पिछला रिटर्न गारंटी नहीं"
+   ],
+   "seo": "Nifty 50 Return"
+  },
+  {
+   "id": 44,
+   "used": false,
+   "used_short": false,
+   "key": "open_interest",
+   "cat": "OPTIONS",
+   "topic": "Open Interest — क्या बताता है, क्या नहीं",
+   "thumb": [
+    "OI बढ़ा",
+    "मतलब क्या?"
+   ],
+   "sticker": "सच",
+   "beats": {
+    "hook": [
+     "Open Interest",
+     "खुले contracts की गिनती"
+    ],
+    "pehchan": [
+     "पहचान",
+     "call OI और put OI अलग"
+    ],
+    "matlab": [
+     "मतलब",
+     "ज़्यादा OI, ज़्यादा भागीदारी"
+    ],
+    "karein": [
+     "क्या करें",
+     "OI को price के साथ पढ़ो"
+    ]
+   },
+   "facts": [
+    "OI = अभी खुले contracts",
+    "OI अकेले दिशा नहीं बताता"
+   ],
+   "seo": "Open Interest"
+  },
+  {
+   "id": 45,
+   "used": false,
+   "used_short": false,
+   "key": "preopen",
+   "cat": "MARKET FACT",
+   "topic": "Pre-open session 9:00 से 9:15 — भाव कैसे तय होता है",
+   "thumb": [
+    "9:15 से पहले",
+    "क्या होता है?"
+   ],
+   "sticker": "राज़",
+   "beats": {
+    "hook": [
+     "Pre-open",
+     "9:00 से 9:15"
+    ],
+    "pehchan": [
+     "9:00 से 9:08",
+     "ऑर्डर लगते हैं"
+    ],
+    "matlab": [
+     "9:08 के बाद",
+     "opening भाव तय होता है"
+    ],
+    "karein": [
+     "9:15",
+     "normal market शुरू"
+    ]
+   },
+   "facts": [
+    "9:00 से 9:08 ऑर्डर",
+    "फिर matching",
+    "9:15 से normal market"
+   ],
+   "seo": "Pre Open Session"
+  },
+  {
+   "id": 46,
+   "used": false,
+   "used_short": false,
+   "key": "atr_sl",
+   "cat": "INDICATOR",
+   "topic": "ATR से stop loss — भाव रोज़ कितना हिलता है",
+   "thumb": [
+    "Stop loss",
+    "कहाँ लगाएँ?"
+   ],
+   "sticker": "ज़रूर जानो",
+   "beats": {
+    "hook": [
+     "ATR से SL",
+     "अंदाज़े से नहीं"
+    ],
+    "pehchan": [
+     "पहचान",
+     "ATR = रोज़ की औसत range"
+    ],
+    "matlab": [
+     "मतलब",
+     "ज़्यादा ATR, ज़्यादा हिलता भाव"
+    ],
+    "karein": [
+     "क्या करें",
+     "मिसाल: SL entry से 2 ATR नीचे"
+    ]
+   },
+   "facts": [
+    "ATR = average true range, default 14",
+    "2 ATR सिर्फ़ मिसाल है, नियम नहीं"
+   ],
+   "seo": "ATR Stop Loss"
+  },
+  {
+   "id": 47,
+   "used": false,
+   "used_short": false,
+   "key": "sensex_2008",
+   "cat": "REAL DATA",
+   "topic": "2008 में SENSEX में ₹1 लाख — जून 2026 तक कितना",
+   "thumb": [
+    "2008 के शिखर पर",
+    "₹1 लाख लगाए तो?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "2008 में ₹1 लाख",
+     "SENSEX में"
+    ],
+    "pehchan": [
+     "SENSEX",
+     "20,465 से 74,360"
+    ],
+    "matlab": [
+     "हिसाब",
+     "करीब 3.63 गुना"
+    ],
+    "karein": [
+     "नतीजा",
+     "जून 2026 तक करीब ₹3.6 लाख"
+    ]
+   },
+   "facts": [
+    "2008-01-02 को 20,465",
+    "2026-06-04 को 74,360",
+    "3.63 गुना",
+    "₹1 लाख = करीब ₹3.6 लाख",
+    "dividend शामिल नहीं",
+    "पिछला रिटर्न गारंटी नहीं"
+   ],
+   "seo": "Sensex Return"
+  },
+  {
+   "id": 48,
+   "used": false,
+   "used_short": false,
+   "key": "inverted_hammer",
+   "cat": "CANDLESTICK",
+   "topic": "Inverted Hammer — गिरावट के बाद ऊपर लंबी wick",
+   "thumb": [
+    "उल्टा Hammer",
+    "क्या बताता है?"
+   ],
+   "sticker": "ज़रूर जानो",
+   "beats": {
+    "hook": [
+     "Inverted Hammer",
+     "गिरावट के बाद ऊपर लंबी wick"
+    ],
+    "pehchan": [
+     "पहचान",
+     "छोटी बॉडी नीचे, ऊपर 2 गुना wick"
+    ],
+    "matlab": [
+     "मतलब",
+     "buyers ने पहली बार ऊपर धकेला"
+    ],
+    "karein": [
+     "क्या करें",
+     "अगली हरी कैंडल से पुष्टि, SL low के नीचे"
+    ]
+   },
+   "facts": [
+    "डाउनट्रेंड के बाद बनता है",
+    "ऊपरी wick बॉडी से कम से कम 2 गुना"
+   ],
+   "seo": "Inverted Hammer Candlestick"
+  },
+  {
+   "id": 49,
+   "used": false,
+   "used_short": false,
+   "key": "niftybank_2010",
+   "cat": "REAL DATA",
+   "topic": "2010 में NIFTY BANK में ₹1 लाख — जून 2026 तक कितना",
+   "thumb": [
+    "2010 में ₹1 लाख",
+    "आज कितना?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "2010 में ₹1 लाख",
+     "NIFTY BANK में"
+    ],
+    "pehchan": [
+     "NIFTY BANK",
+     "9,112 से 54,308"
+    ],
+    "matlab": [
+     "हिसाब",
+     "करीब 5.96 गुना"
+    ],
+    "karein": [
+     "नतीजा",
+     "जून 2026 तक करीब ₹6.0 लाख"
+    ]
+   },
+   "facts": [
+    "2010-01-04 को 9,112",
+    "2026-06-04 को 54,308",
+    "5.96 गुना",
+    "₹1 लाख = करीब ₹6.0 लाख",
+    "dividend शामिल नहीं",
+    "पिछला रिटर्न गारंटी नहीं"
+   ],
+   "seo": "Nifty Bank Return"
+  },
+  {
+   "id": 50,
+   "used": false,
+   "used_short": false,
+   "key": "marubozu",
+   "cat": "CANDLESTICK",
+   "topic": "Marubozu — बिना wick की मज़बूत कैंडल",
+   "thumb": [
+    "बिना wick",
+    "की कैंडल"
+   ],
+   "sticker": "ताक़त",
+   "beats": {
+    "hook": [
+     "Marubozu",
+     "शुरू से अंत तक एक का राज"
+    ],
+    "pehchan": [
+     "पहचान",
+     "ना ऊपर wick, ना नीचे"
+    ],
+    "matlab": [
+     "मतलब",
+     "पूरे सेशन buyers हावी रहे"
+    ],
+    "karein": [
+     "क्या करें",
+     "trend के साथ, SL कैंडल के low के नीचे"
+    ]
+   },
+   "facts": [
+    "हरी marubozu में open ही low और close ही high"
+   ],
+   "seo": "Marubozu Candlestick"
+  },
+  {
+   "id": 51,
+   "used": false,
+   "used_short": false,
+   "key": "t_plus_1",
+   "cat": "ORDERS",
+   "topic": "T+1 settlement — ख़रीदे शेयर demat में कब आते हैं",
+   "thumb": [
+    "शेयर ख़रीदे",
+    "demat में कब?"
+   ],
+   "sticker": "सीखो",
+   "beats": {
+    "hook": [
+     "T+1",
+     "अगले कारोबारी दिन"
+    ],
+    "pehchan": [
+     "Day T",
+     "आज ख़रीदा"
+    ],
+    "matlab": [
+     "T+1",
+     "अगले दिन demat में"
+    ],
+    "karein": [
+     "ध्यान दो",
+     "पहले बेचना = BTST risk"
+    ]
+   },
+   "facts": [
+    "भारत में जनवरी 2023 से पूरा T+1 settlement"
+   ],
+   "seo": "T+1 Settlement"
+  },
+  {
+   "id": 52,
+   "used": false,
+   "used_short": false,
+   "key": "nifty_cagr",
+   "cat": "REAL DATA",
+   "topic": "2010 से जून 2026: NIFTY 50 का सालाना औसत रिटर्न",
+   "thumb": [
+    "Nifty ने",
+    "हर साल कितना दिया?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "2010 से 2026",
+     "Nifty का सालाना औसत"
+    ],
+    "pehchan": [
+     "हिसाब",
+     "16 साल में 4.48 गुना"
+    ],
+    "matlab": [
+     "सालाना",
+     "करीब 9.6%"
+    ],
+    "karein": [
+     "याद रखो",
+     "dividend अलग, पिछला रिटर्न गारंटी नहीं"
+    ]
+   },
+   "facts": [
+    "2010-01-04 को 5,232",
+    "2026-06-04 को 23,417",
+    "4.48 गुना",
+    "CAGR करीब 9.6%",
+    "dividend शामिल नहीं"
+   ],
+   "seo": "Nifty CAGR"
+  },
+  {
+   "id": 53,
+   "used": false,
+   "used_short": false,
+   "key": "iv_premium",
+   "cat": "OPTIONS",
+   "topic": "IV बढ़े तो option premium क्यों बढ़ता है",
+   "thumb": [
+    "Premium",
+    "महँगा क्यों?"
+   ],
+   "sticker": "राज़",
+   "beats": {
+    "hook": [
+     "IV",
+     "implied volatility"
+    ],
+    "pehchan": [
+     "पहचान",
+     "IV = उम्मीद का move"
+    ],
+    "matlab": [
+     "मतलब",
+     "IV बढ़े तो premium बढ़े"
+    ],
+    "karein": [
+     "सावधान",
+     "event के बाद IV crush"
+    ]
+   },
+   "facts": [
+    "बाक़ी सब बराबर हो तो IV बढ़ने पर premium बढ़ता है"
+   ],
+   "seo": "Implied Volatility"
+  },
+  {
+   "id": 54,
+   "used": false,
+   "used_short": false,
+   "key": "muhurat",
+   "cat": "MARKET FACT",
+   "topic": "Muhurat trading — दिवाली का ख़ास सेशन",
+   "thumb": [
+    "दिवाली की",
+    "ख़ास ट्रेडिंग"
+   ],
+   "sticker": "फैक्ट",
+   "beats": {
+    "hook": [
+     "Muhurat trading",
+     "दिवाली का ख़ास सेशन"
+    ],
+    "pehchan": [
+     "पहचान",
+     "करीब 1 घंटे का सेशन"
+    ],
+    "matlab": [
+     "मतलब",
+     "नए संवत की शुभ शुरुआत"
+    ],
+    "karein": [
+     "याद रखो",
+     "छोटा सेशन, risk वही"
+    ]
+   },
+   "facts": [
+    "दिवाली की शाम करीब एक घंटे का सेशन"
+   ],
+   "seo": "Muhurat Trading"
+  },
+  {
+   "id": 55,
+   "used": false,
+   "used_short": false,
+   "key": "spinning_top",
+   "cat": "CANDLESTICK",
+   "topic": "Spinning Top — छोटी बॉडी, दोनों तरफ़ लंबी wick",
+   "thumb": [
+    "छोटी बॉडी",
+    "लंबी wick"
+   ],
+   "sticker": "ध्यान दो",
+   "beats": {
+    "hook": [
+     "Spinning Top",
+     "दोनों तरफ़ ज़ोरदार लड़ाई"
+    ],
+    "pehchan": [
+     "पहचान",
+     "छोटी बॉडी, दोनों तरफ़ लंबी wick"
+    ],
+    "matlab": [
+     "मतलब",
+     "कोई भी पक्का हावी नहीं"
+    ],
+    "karein": [
+     "क्या करें",
+     "अगली कैंडल की दिशा देखो"
+    ]
+   },
+   "facts": [
+    "ये indecision दिखाता है"
+   ],
+   "seo": "Spinning Top Candlestick"
+  },
+  {
+   "id": 56,
+   "used": false,
+   "used_short": false,
+   "key": "three_white_soldiers",
+   "cat": "CANDLESTICK",
+   "topic": "Three White Soldiers — लगातार तीन बड़ी हरी कैंडल",
+   "thumb": [
+    "3 हरी कैंडल",
+    "लगातार"
+   ],
+   "sticker": "ताक़त",
+   "beats": {
+    "hook": [
+     "Three White Soldiers",
+     "गिरावट के बाद तीन सिपाही"
+    ],
+    "pehchan": [
+     "पहचान",
+     "तीन बड़ी हरी, हर बार ऊँचा close"
+    ],
+    "matlab": [
+     "मतलब",
+     "buyers का लगातार कंट्रोल"
+    ],
+    "karein": [
+     "क्या करें",
+     "पीछा मत करो, SL पैटर्न के नीचे"
+    ]
+   },
+   "facts": [
+    "तीन लगातार बड़ी हरी कैंडल",
+    "हर कैंडल पिछली से ऊपर बंद"
+   ],
+   "seo": "Three White Soldiers Pattern"
+  },
+  {
+   "id": 57,
+   "used": false,
+   "used_short": false,
+   "key": "sebi_study",
+   "cat": "OPTIONS",
+   "topic": "SEBI स्टडी — FY22 में 89% individual F&O traders घाटे में",
+   "thumb": [
+    "10 में से 9",
+    "F&O में घाटे में"
+   ],
+   "sticker": "सच",
+   "beats": {
+    "hook": [
+     "89%",
+     "F&O traders घाटे में"
+    ],
+    "pehchan": [
+     "स्रोत",
+     "SEBI स्टडी, FY22"
+    ],
+    "matlab": [
+     "मतलब",
+     "सिर्फ़ 11% को फ़ायदा"
+    ],
+    "karein": [
+     "क्या करें",
+     "पहले risk, फिर trade"
+    ]
+   },
+   "facts": [
+    "SEBI की जनवरी 2023 की स्टडी",
+    "FY22 में 89% individual F&O traders को नुकसान"
+   ],
+   "seo": "SEBI F&O Study"
+  },
+  {
+   "id": 58,
+   "used": false,
+   "used_short": false,
+   "key": "depository",
+   "cat": "MARKET FACT",
+   "topic": "NSDL और CDSL — आपके शेयर असल में कहाँ रखे हैं",
+   "thumb": [
+    "आपके शेयर",
+    "असल में कहाँ?"
+   ],
+   "sticker": "सच",
+   "beats": {
+    "hook": [
+     "NSDL / CDSL",
+     "असली तिजोरी"
+    ],
+    "pehchan": [
+     "पहचान",
+     "शेयर depository में रहते हैं"
+    ],
+    "matlab": [
+     "Broker",
+     "बीच की कड़ी (DP)"
+    ],
+    "karein": [
+     "आप",
+     "demat खाता आपके नाम"
+    ]
+   },
+   "facts": [
+    "भारत की दो depositories: NSDL और CDSL"
+   ],
+   "seo": "NSDL CDSL"
+  },
+  {
+   "id": 59,
+   "used": false,
+   "used_short": false,
+   "key": "three_black_crows",
+   "cat": "CANDLESTICK",
+   "topic": "Three Black Crows — लगातार तीन बड़ी लाल कैंडल",
+   "thumb": [
+    "3 लाल कैंडल",
+    "लगातार गिरावट"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "Three Black Crows",
+     "तेज़ी के बाद तीन कौवे"
+    ],
+    "pehchan": [
+     "पहचान",
+     "तीन बड़ी लाल, हर बार नीचा close"
+    ],
+    "matlab": [
+     "मतलब",
+     "sellers का लगातार कंट्रोल"
+    ],
+    "karein": [
+     "क्या करें",
+     "long से बचो, SL पैटर्न के ऊपर"
+    ]
+   },
+   "facts": [
+    "तीन लगातार बड़ी लाल कैंडल",
+    "हर कैंडल पिछली से नीचे बंद"
+   ],
+   "seo": "Three Black Crows Pattern"
+  },
+  {
+   "id": 60,
+   "used": false,
+   "used_short": false,
+   "key": "dark_cloud",
+   "cat": "CANDLESTICK",
+   "topic": "Dark Cloud Cover — तेज़ी पर काले बादल",
+   "thumb": [
+    "काले बादल",
+    "छा गए"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "Dark Cloud Cover",
+     "तेज़ी पर काले बादल"
+    ],
+    "pehchan": [
+     "पहचान",
+     "लाल ऊपर खुले, हरी के आधे से नीचे बंद"
+    ],
+    "matlab": [
+     "मतलब",
+     "ऊँचे भाव पर बिकवाली"
+    ],
+    "karein": [
+     "क्या करें",
+     "पुष्टि का इंतज़ार, SL high के ऊपर"
+    ]
+   },
+   "facts": [
+    "अपट्रेंड में बनता है",
+    "लाल कैंडल हरी के बीच से नीचे बंद होती है"
+   ],
+   "seo": "Dark Cloud Cover Pattern"
+  },
+  {
+   "id": 61,
+   "used": false,
+   "used_short": false,
+   "key": "piercing",
+   "cat": "CANDLESTICK",
+   "topic": "Piercing Line — गिरावट में पलटवार",
+   "thumb": [
+    "लाल को चीरती",
+    "हरी कैंडल"
+   ],
+   "sticker": "ज़रूर जानो",
+   "beats": {
+    "hook": [
+     "Piercing Line",
+     "गिरावट में पलटवार"
+    ],
+    "pehchan": [
+     "पहचान",
+     "हरी नीचे खुले, लाल के आधे से ऊपर बंद"
+    ],
+    "matlab": [
+     "मतलब",
+     "नीचे के भाव पर ख़रीदारी"
+    ],
+    "karein": [
+     "क्या करें",
+     "पुष्टि के बाद, SL low के नीचे"
+    ]
+   },
+   "facts": [
+    "डाउनट्रेंड में बनता है",
+    "हरी कैंडल लाल के बीच से ऊपर बंद होती है"
+   ],
+   "seo": "Piercing Line Pattern"
+  },
+  {
+   "id": 62,
+   "used": false,
+   "used_short": false,
+   "key": "confirmation",
+   "cat": "CANDLESTICK",
+   "topic": "कैंडल पैटर्न अकेले क्यों फेल होते हैं — confirmation",
+   "thumb": [
+    "पैटर्न देखा",
+    "और फँस गए?"
+   ],
+   "sticker": "सच",
+   "beats": {
+    "hook": [
+     "पैटर्न गारंटी नहीं",
+     "अकेला पैटर्न अक्सर फेल होता है"
+    ],
+    "pehchan": [
+     "पहचान",
+     "hammer बना, अभी सिर्फ़ संकेत है"
+    ],
+    "matlab": [
+     "मतलब",
+     "buyers ने कोशिश की, जीत पक्की नहीं"
+    ],
+    "karein": [
+     "क्या करें",
+     "अगली कैंडल low तोड़े तो ट्रेड नहीं"
+    ]
+   },
+   "facts": [
+    "पैटर्न संभावना बताता है, गारंटी नहीं",
+    "confirmation और stop loss साथ ज़रूरी"
+   ],
+   "seo": "Candlestick Confirmation"
+  }
+ ]
+}
