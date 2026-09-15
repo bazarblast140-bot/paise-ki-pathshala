@@ -7,20 +7,20 @@ name: Paise Ki Pathshala
 # Do format: long (16:9, ~5 min) aur short (9:16, ~50s, bina intro). Har topic
 # ka ek short aur ek long banta hai (topic_bank: used / used_short).
 #
-# REVIEW PHASE: schedule band hai, videos unlisted jaate hain. 3-5 video dekh
-# kar retention theek lage tabhi neeche wali lines uncomment karna.
-#   short 12:00 IST = 06:30 UTC,  long 20:00 IST = 14:30 UTC
-# GitHub ka cron late chal sakta hai.
-# 12-Sep-2026: Rajesh ne roz publish OK kiya. Roz 3 Shorts, public at:
+# Roz 3 Shorts, public at:
 #   premarket 08:30 IST, postmarket 16:00 IST, night 21:00 IST
-# GitHub ka cron late chalta hai (quiz channel par 10-20 ghante tak), isliye
-# build target se ~20h pehle fire hota hai aur upload private + publishAt
-# se hota hai — YouTube theek slot ke time public karta hai.
+#
+# GitHub Actions cron late chal sakta hai (kabhi 1-6 ghante). Isliye build
+# target se ~1.5–6h pehle fire hota hai. Upload private + publishAt se hota
+# hai — YouTube theek slot ke time public karta hai.
+#
+# 15-Sep-2026: purane cron (07/14:30/19:30 UTC) slot ke baad fire ho rahe the
+# → publishAt next-day ban jata tha. Ab early + matching SLOT.
 on:
   schedule:
-    - cron: "0 7 * * *"      # -> premarket  08:30 IST (target 03:00 UTC)
-    - cron: "30 14 * * *"    # -> postmarket 16:00 IST (target 10:30 UTC)
-    - cron: "30 19 * * *"    # -> night      21:00 IST (target 15:30 UTC)
+    - cron: "0 2 * * *"      # ~07:30 IST → premarket  08:30 IST
+    - cron: "0 8 * * *"      # ~13:30 IST → postmarket 16:00 IST
+    - cron: "0 13 * * *"     # ~18:30 IST → night      21:00 IST
   workflow_dispatch:
     inputs:
       format:
@@ -76,9 +76,9 @@ jobs:
           if [ -z "$F" ]; then
             F=short; VIS=public
             case "${{ github.event.schedule }}" in
-              "0 7 * * *")   SLOT="08:30" ;;
-              "30 14 * * *") SLOT="16:00" ;;
-              "30 19 * * *") SLOT="21:00" ;;
+              "0 2 * * *")   SLOT="08:30" ;;
+              "0 8 * * *")   SLOT="16:00" ;;
+              "0 13 * * *")  SLOT="21:00" ;;
             esac
           elif [ "$VIS" = "now" ]; then
             VIS=public; SLOT=""          # turant public, koi publishAt nahi
