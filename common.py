@@ -43,7 +43,7 @@ def _merge(base, over):
 
 
 def cfg():
-    """config.json + (short format par) config["formats"]["short"] ke overrides."""
+    """config.json + (short format par) config[\"formats\"][\"short\"] ke overrides."""
     c = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
     over = (c.get("formats") or {}).get(video_format())
     if isinstance(over, dict):
@@ -189,11 +189,21 @@ def claude(system, user, model=None, max_tokens=16000, retries=3):
                 if attempt > 0 and use_model != model:
                     print(f"[info] Trying fallback model: {use_model}")
                 completion = client.chat.completions.create(**kwargs)
-                content = completion.choices[0].message.content or ""
-                if completion.choices[0].finish_reason == "length":
+                # 15-Sep-2026: same NoneType crash as DeepSeek — choices can be None on overload
+                choices = getattr(completion, "choices", None)
+                if not choices:
+                    last = RuntimeError(f"Kimi returned no choices: {str(completion)[:200]}")
+                    if attempt < effective_retries - 1:
+                        wait = min(120, 20 * (2 ** min(attempt, 3)))
+                        print(f"[retry] no choices from {use_model}; wait {wait}s")
+                        time.sleep(wait)
+                        continue
+                    die(str(last))
+                content = choices[0].message.content or ""
+                if choices[0].finish_reason == "length":
                     print(f"[warn] Response reached {max_tokens}-token limit; proceeding with generated text.")
                 if not content.strip():
-                    finish = completion.choices[0].finish_reason
+                    finish = choices[0].finish_reason
                     last = RuntimeError(f"Kimi returned empty content (finish_reason={finish}, model={use_model})")
                     if attempt < effective_retries - 1:
                         wait = min(120, 20 * (2 ** min(attempt, 3)))
@@ -347,4 +357,3 @@ def claude_json(system, user, model=None, max_tokens=4000, retries=3):
 # ---- prompt loading ----
 def load_prompt(name):
     return (ROOT / "prompts" / name).read_text(encoding="utf-8")
-
