@@ -537,7 +537,7 @@
   {
    "id": 15,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "golden_cross",
    "cat": "INDICATOR",
    "topic": "Golden Cross — 50 DMA का 200 DMA के ऊपर जाना",
