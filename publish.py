@@ -9,6 +9,7 @@ import os
 import re
 import sys
 from common import cfg, read, die, ok, RUN, need, video_format
+from ledger import record_publish
 
 # The script is written with bare headings on their own line ("TITLE", then the
 # title underneath). Older drafts used "TITLE: ...". Both must parse, because
@@ -319,6 +320,7 @@ def main():
     # run_pipeline isi file se jaanta hai ki upload hua — iske baad koi error aaye
     # (thumbnail wagairah) to bhi topic rotation me wapas NAHI jaata (duplicate video).
     (RUN / "uploaded.txt").write_text(video_id, encoding="utf-8")
+    record_publish(video_id, publish_at, slot)
     ok(f"Uploaded as {visibility}: https://youtu.be/{video_id}")
     # Short par bhi hook thumbnail try karo. Channel phone-verified na ho to
     # YouTube 403 deta hai — set_thumbnail use skip karke upload ko safal rakhta hai.

@@ -1,0 +1,44 @@
+name: Slot watch
+
+# Har slot ke ~45 min baad dekhta hai ki us slot ka video sach me gaya ya nahi.
+# Khali slot par Telegram. Kyun: GitHub kabhi cron drop kar deta hai aur DeepSeek
+# kabhi fail hota hai — pehle ye chupchaap hota tha (14 aur 15 Sep ko ek-ek slot gaya).
+on:
+  schedule:
+    - cron: "15 3 * * *"     # 08:45 IST -> 08:30 slot
+    - cron: "45 10 * * *"    # 16:15 IST -> 16:00 slot
+    - cron: "45 15 * * *"    # 21:15 IST -> 21:00 slot
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "Kaunsa slot check karein (khali = abhi-abhi guzra slot)"
+        type: choice
+        options: ["", "08:30", "16:00", "21:00"]
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - name: Slot check
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SLOT_CHECK: ${{ inputs.slot }}
+        run: |
+          if [ -z "$SLOT_CHECK" ]; then
+            case "${{ github.event.schedule }}" in
+              "15 3 * * *")  SLOT_CHECK="08:30" ;;
+              "45 10 * * *") SLOT_CHECK="16:00" ;;
+              "45 15 * * *") SLOT_CHECK="21:00" ;;
+            esac
+          fi
+          SLOT_CHECK="$SLOT_CHECK" python slot_watch.py
