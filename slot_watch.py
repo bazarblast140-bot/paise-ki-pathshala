@@ -70,7 +70,13 @@ def main():
     if not LEDGER.exists():
         print(f"[skip] {LEDGER} abhi nahi hai — pehla upload banate hi ban jayega.")
         return
-    hit = next((e for e in entries() if e.get("date_ist") == date and e.get("slot") == slot), None)
+    ents = entries()
+    start = min((e.get("date_ist", "") for e in ents), default="")
+    if start and date < start:
+        # ledger shuru hone se pehle ka din — us waqt ka record hai hi nahi, jhoothi alert mat do
+        print(f"[skip] {date} ledger se purana hai (ledger {start} se).")
+        return
+    hit = next((e for e in ents if e.get("date_ist") == date and e.get("slot") == slot), None)
     if hit:
         print(f"[OK] {date} {slot} IST — https://youtu.be/{hit['video_id']}")
         return
