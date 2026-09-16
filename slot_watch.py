@@ -51,6 +51,14 @@ def target(now):
     return (now - timedelta(days=1)).strftime("%Y-%m-%d"), want
 
 
+def gha_output(key, value):
+    """GitHub Actions ko batao (fill job isi output par chalta hai)."""
+    path = os.environ.get("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a", encoding="utf-8") as f:
+            print(f"{key}={value}", file=f)
+
+
 def send(text):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat = os.environ.get("TELEGRAM_CHAT_ID")
@@ -75,15 +83,18 @@ def main():
     if start and date < start:
         # ledger shuru hone se pehle ka din — us waqt ka record hai hi nahi, jhoothi alert mat do
         print(f"[skip] {date} ledger se purana hai (ledger {start} se).")
+        gha_output("missing", "false")
         return
     hit = next((e for e in ents if e.get("date_ist") == date and e.get("slot") == slot), None)
     if hit:
         print(f"[OK] {date} {slot} IST — https://youtu.be/{hit['video_id']}")
+        gha_output("missing", "false")
         return
     msg = (f"⚠️ Paise Ki Pathshala\n{date} ka {slot} IST slot KHALI gaya — koi video upload nahi hua.\n\n"
            f"Agla slot bharne ke liye:\ngh workflow run \"Paise Ki Pathshala\" "
            f"-R bazarblast140-bot/paise-ki-pathshala -f format=short -f privacy=public")
     print(msg)
+    gha_output("missing", "true")       # fill job agla khali slot bhar dega
     try:
         send(msg)
     except Exception as e:  # noqa: BLE001 — khabar na jaaye to bhi run fail na ho

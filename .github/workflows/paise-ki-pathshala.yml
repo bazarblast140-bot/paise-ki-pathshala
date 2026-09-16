@@ -21,6 +21,18 @@ on:
     - cron: "0 2 * * *"      # ~07:30 IST → premarket  08:30 IST
     - cron: "0 8 * * *"      # ~13:30 IST → postmarket 16:00 IST
     - cron: "0 13 * * *"     # ~18:30 IST → night      21:00 IST
+  workflow_call:          # "Slot watch" khali slot par isse bulati hai
+    inputs:
+      format:
+        type: string
+        default: short
+      privacy:
+        type: string
+        default: public
+      topic_key:
+        type: string
+        default: ""
+
   workflow_dispatch:
     inputs:
       format:
@@ -95,7 +107,17 @@ jobs:
           echo "slot=$SLOT" >> "$GITHUB_OUTPUT"
           echo "format: $F  visibility: $VIS  slot: $SLOT"
 
+      - name: Slot pehle se bhara hai kya
+        id: guard
+        run: |
+          if [ -n "${{ steps.fmt.outputs.slot }}" ]; then
+            python slot_guard.py "${{ steps.fmt.outputs.slot }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "taken=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run Pipeline (+ publish if READY)
+        if: steps.guard.outputs.taken != 'true'
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
@@ -118,7 +140,7 @@ jobs:
         run: python run_pipeline.py --format ${{ steps.fmt.outputs.format }} --publish
 
       - name: Commit topic_bank (prevent topic repeats)
-        if: success()
+        if: success() && steps.guard.outputs.taken != 'true'
         run: |
           if git diff --quiet topic_bank.json data/published.json; then
             echo "No topic_bank / ledger changes"
@@ -132,7 +154,7 @@ jobs:
           fi
 
       - name: Upload video + report as artifact
-        if: ${{ always() }}
+        if: ${{ always() && steps.guard.outputs.taken != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.fmt.outputs.format }}-${{ github.run_number }}

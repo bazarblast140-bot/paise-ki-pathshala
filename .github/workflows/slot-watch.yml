@@ -1,8 +1,10 @@
 name: Slot watch
 
 # Har slot ke ~45 min baad dekhta hai ki us slot ka video sach me gaya ya nahi.
-# Khali slot par Telegram. Kyun: GitHub kabhi cron drop kar deta hai aur DeepSeek
-# kabhi fail hota hai — pehle ye chupchaap hota tha (14 aur 15 Sep ko ek-ek slot gaya).
+# Khali mile to: Telegram par khabar + turant naya Short bana ke agle slot par laga deta hai
+# (fill job neeche build workflow ko hi call karta hai).
+# Kyun: GitHub kabhi cron drop kar deta hai aur DeepSeek kabhi fail hota hai — 14 aur
+# 15 Sep ko ek-ek slot aise hi khali chala gaya tha.
 on:
   schedule:
     - cron: "15 3 * * *"     # 08:45 IST -> 08:30 slot
@@ -15,13 +17,20 @@ on:
         type: choice
         options: ["", "08:30", "16:00", "21:00"]
         default: ""
+      fill:
+        description: "Khali mile to naya video bhi bana do"
+        type: boolean
+        default: true
 
+# build workflow topic_bank + ledger commit karta hai
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    outputs:
+      missing: ${{ steps.check.outputs.missing }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,6 +38,7 @@ jobs:
           python-version: "3.11"
       - run: pip install requests
       - name: Slot check
+        id: check
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -42,3 +52,15 @@ jobs:
             esac
           fi
           SLOT_CHECK="$SLOT_CHECK" python slot_watch.py
+
+  # Khali slot: naya Short bana ke TURANT public (privacy=now). Agle slot par lagane
+  # se fayda nahi hota — wo slot to apne cron se waise bhi banta; is din ka teesra
+  # video tabhi milega jab ye abhi chala jaye (slot se ~45 min late, par gaya to sahi).
+  fill:
+    needs: check
+    if: needs.check.outputs.missing == 'true' && inputs.fill != false
+    uses: ./.github/workflows/paise-ki-pathshala.yml
+    with:
+      format: short
+      privacy: now
+    secrets: inherit
