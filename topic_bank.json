@@ -573,7 +573,7 @@
   {
    "id": 16,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "loss_recovery",
    "cat": "RISK",
    "topic": "नुकसान का गणित — 50% घटे तो 100% चाहिए",
