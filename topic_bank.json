@@ -610,7 +610,7 @@
   {
    "id": 17,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "bullish_engulfing",
    "cat": "CANDLESTICK",
    "topic": "Bullish Engulfing — हरी कैंडल लाल को पूरा ढके",
