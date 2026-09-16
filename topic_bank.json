@@ -646,7 +646,7 @@
   {
    "id": 18,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "sl_vs_slm",
    "cat": "ORDERS",
    "topic": "SL बनाम SL-M — gap down में क्या होता है",
