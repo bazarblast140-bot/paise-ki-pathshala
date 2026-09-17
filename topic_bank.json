@@ -682,7 +682,7 @@
   {
    "id": 19,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "titan_vs_yes_2015",
    "cat": "REAL DATA",
    "topic": "2015 में ₹1 लाख — Titan बनाम Yes Bank",
