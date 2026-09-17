@@ -756,7 +756,7 @@
   {
    "id": 21,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "circuit",
    "cat": "MARKET FACT",
    "topic": "Market-wide circuit breaker — 10%, 15%, 20%",
