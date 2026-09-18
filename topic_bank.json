@@ -827,7 +827,7 @@
   {
    "id": 23,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "leverage",
    "cat": "RISK",
    "topic": "5x leverage पर 20% उल्टा move = पूरी पूँजी साफ़",
@@ -859,7 +859,7 @@
     "5x पर 100% नुकसान"
    ],
    "seo": "Leverage Risk",
-   "used_short_fails": 1
+   "used_short_fails": 2
   },
   {
    "id": 24,
