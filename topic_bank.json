@@ -858,7 +858,8 @@
     "1x पर 20% नुकसान",
     "5x पर 100% नुकसान"
    ],
-   "seo": "Leverage Risk"
+   "seo": "Leverage Risk",
+   "used_short_fails": 1
   },
   {
    "id": 24,
