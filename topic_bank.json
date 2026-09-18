@@ -791,7 +791,7 @@
   {
    "id": 22,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "death_cross",
    "cat": "INDICATOR",
    "topic": "Death Cross — 50 DMA का 200 DMA के नीचे आना",
