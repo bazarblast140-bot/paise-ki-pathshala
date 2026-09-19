@@ -907,7 +907,7 @@
   {
    "id": 25,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "bearish_engulfing",
    "cat": "CANDLESTICK",
    "topic": "Bearish Engulfing — लाल कैंडल हरी को पूरा ढके",
@@ -939,7 +939,7 @@
     "दूसरी लाल बॉडी पहली हरी बॉडी को पूरा ढकती है"
    ],
    "seo": "Bearish Engulfing Pattern",
-   "used_short_fails": 1
+   "used_short_fails": 2
   },
   {
    "id": 26,
