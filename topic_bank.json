@@ -864,7 +864,7 @@
   {
    "id": 24,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "infosys_2015",
    "cat": "REAL DATA",
    "topic": "2015 में Infosys में ₹1 लाख — जून 2026 तक कितना",
@@ -902,7 +902,7 @@
     "ये किसी शेयर को ख़रीदने या बेचने की सलाह नहीं"
    ],
    "seo": "Infosys Share Return",
-   "used_short_fails": 1
+   "used_short_fails": 2
   },
   {
    "id": 25,
