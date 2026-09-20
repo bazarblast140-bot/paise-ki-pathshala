@@ -1018,7 +1018,8 @@
     "MACD = 12 EMA और 26 EMA का फ़र्क",
     "signal लाइन 9 की EMA"
    ],
-   "seo": "MACD Indicator"
+   "seo": "MACD Indicator",
+   "used_short_fails": 1
   },
   {
    "id": 28,
