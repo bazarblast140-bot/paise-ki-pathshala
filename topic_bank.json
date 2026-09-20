@@ -987,7 +987,7 @@
   {
    "id": 27,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "macd",
    "cat": "INDICATOR",
    "topic": "MACD — लाइन, signal और histogram",
@@ -1019,7 +1019,7 @@
     "signal लाइन 9 की EMA"
    ],
    "seo": "MACD Indicator",
-   "used_short_fails": 1
+   "used_short_fails": 2
   },
   {
    "id": 28,
