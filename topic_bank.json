@@ -1134,7 +1134,7 @@
   {
    "id": 31,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "tcs_2020",
    "cat": "REAL DATA",
    "topic": "2020 में TCS में ₹1 लाख — जून 2026 तक कितना",
@@ -1171,7 +1171,8 @@
     "हर शेयर ऐसा नहीं करता — कुछ शेयर 80-90% गिर भी सकते हैं",
     "ये किसी शेयर को ख़रीदने या बेचने की सलाह नहीं"
    ],
-   "seo": "TCS Share Return"
+   "seo": "TCS Share Return",
+   "used_short_at": "2026-09-21T18:26:46Z"
   },
   {
    "id": 32,
