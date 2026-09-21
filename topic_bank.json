@@ -1096,7 +1096,7 @@
   {
    "id": 30,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "products",
    "cat": "ORDERS",
    "topic": "MIS, CNC, NRML — कौन सा product कब",
@@ -1128,7 +1128,8 @@
     "CNC से शेयर demat में आते हैं",
     "NRML से F&O carry forward"
    ],
-   "seo": "MIS CNC NRML"
+   "seo": "MIS CNC NRML",
+   "used_short_at": "2026-09-21T15:00:13Z"
   },
   {
    "id": 31,
