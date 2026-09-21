@@ -1060,7 +1060,7 @@
   {
    "id": 29,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "morning_star",
    "cat": "CANDLESTICK",
    "topic": "Morning Star — तीन कैंडल का bullish reversal",
