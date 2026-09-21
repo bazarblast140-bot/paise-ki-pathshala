@@ -1024,7 +1024,7 @@
   {
    "id": 28,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "revenge",
    "cat": "RISK",
    "topic": "Revenge trading — नुकसान के बाद का सबसे महँगा ट्रेड",
@@ -1055,7 +1055,7 @@
     "फ़ैसला प्लान से नहीं, भावना से होता है"
    ],
    "seo": "Revenge Trading",
-   "used_short_fails": 1
+   "used_short_fails": 2
   },
   {
    "id": 29,
