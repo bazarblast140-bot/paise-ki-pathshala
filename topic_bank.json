@@ -1177,7 +1177,7 @@
   {
    "id": 32,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "atm_delta",
    "cat": "OPTIONS",
    "topic": "ATM option का delta करीब 0.5",
@@ -1208,7 +1208,8 @@
     "ATM call का delta करीब 0.5",
     "ITM ज़्यादा, OTM कम"
    ],
-   "seo": "Option Delta"
+   "seo": "Option Delta",
+   "used_short_at": "2026-09-22T07:29:55Z"
   },
   {
    "id": 33,
