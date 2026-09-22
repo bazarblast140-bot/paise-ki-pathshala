@@ -1252,7 +1252,7 @@
   {
    "id": 34,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "vwap",
    "cat": "INDICATOR",
    "topic": "VWAP — intraday traders इसे क्यों देखते हैं",
@@ -1283,7 +1283,8 @@
     "VWAP = volume weighted average price",
     "ये सिर्फ़ उसी दिन का होता है"
    ],
-   "seo": "VWAP Indicator"
+   "seo": "VWAP Indicator",
+   "used_short_at": "2026-09-22T17:29:56Z"
   },
   {
    "id": 35,
