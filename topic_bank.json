@@ -1214,7 +1214,7 @@
   {
    "id": 33,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "bse_1875",
    "cat": "MARKET FACT",
    "topic": "BSE 1875 — एशिया के सबसे पुराने exchanges में",
@@ -1246,7 +1246,8 @@
     "Sensex 1986 में शुरू",
     "NSE पर equity trading 1994 से"
    ],
-   "seo": "BSE History"
+   "seo": "BSE History",
+   "used_short_at": "2026-09-22T13:17:13Z"
   },
   {
    "id": 34,
