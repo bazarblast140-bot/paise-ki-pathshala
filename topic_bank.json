@@ -1325,7 +1325,7 @@
   {
    "id": 36,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "dmart_2020",
    "cat": "REAL DATA",
    "topic": "2020 में DMart में ₹1 लाख — जून 2026 तक कितना",
@@ -1362,7 +1362,8 @@
     "हर शेयर ऐसा नहीं करता — कुछ शेयर 80-90% गिर भी सकते हैं",
     "ये किसी शेयर को ख़रीदने या बेचने की सलाह नहीं"
    ],
-   "seo": "DMart Share Return"
+   "seo": "DMart Share Return",
+   "used_short_at": "2026-09-23T13:31:51Z"
   },
   {
    "id": 37,
