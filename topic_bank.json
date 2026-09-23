@@ -1368,7 +1368,7 @@
   {
    "id": 37,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "evening_star",
    "cat": "CANDLESTICK",
    "topic": "Evening Star — तीन कैंडल का bearish reversal",
@@ -1399,7 +1399,8 @@
     "तीन कैंडल का पैटर्न",
     "अपट्रेंड के बाद बनता है"
    ],
-   "seo": "Evening Star Pattern"
+   "seo": "Evening Star Pattern",
+   "used_short_at": "2026-09-23T17:39:30Z"
   },
   {
    "id": 38,
