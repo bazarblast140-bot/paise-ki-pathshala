@@ -1289,7 +1289,7 @@
   {
    "id": 35,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "averaging",
    "cat": "RISK",
    "topic": "Averaging down का जाल — घाटे वाले ट्रेड में और ख़रीदना",
@@ -1319,7 +1319,8 @@
    "facts": [
     "हर गिरावट पर दोगुनी ख़रीद से risk बढ़ता जाता है"
    ],
-   "seo": "Averaging Down"
+   "seo": "Averaging Down",
+   "used_short_at": "2026-09-23T07:32:21Z"
   },
   {
    "id": 36,
