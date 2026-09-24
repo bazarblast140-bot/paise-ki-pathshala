@@ -1445,7 +1445,7 @@
   {
    "id": 39,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "volume_breakout",
    "cat": "INDICATOR",
    "topic": "Volume के बिना breakout — fake breakout",
@@ -1475,7 +1475,8 @@
    "facts": [
     "बिना volume का breakout अक्सर वापस आता है"
    ],
-   "seo": "Breakout Volume"
+   "seo": "Breakout Volume",
+   "used_short_at": "2026-09-24T07:25:04Z"
   },
   {
    "id": 40,
