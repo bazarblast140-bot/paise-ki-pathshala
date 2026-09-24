@@ -1481,7 +1481,7 @@
   {
    "id": 40,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "journal",
    "cat": "RISK",
    "topic": "Trading journal — अपनी ग़लतियाँ पकड़ने का तरीका",
@@ -1511,7 +1511,8 @@
    "facts": [
     "journal में कारण और नतीजा दोनों लिखो"
    ],
-   "seo": "Trading Journal"
+   "seo": "Trading Journal",
+   "used_short_at": "2026-09-24T11:06:50Z"
   },
   {
    "id": 41,
