@@ -1405,7 +1405,7 @@
   {
    "id": 38,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "nifty_2010",
    "cat": "REAL DATA",
    "topic": "2010 में NIFTY 50 में ₹1 लाख — जून 2026 तक कितना",
@@ -1441,8 +1441,7 @@
     "पिछला रिटर्न गारंटी नहीं"
    ],
    "seo": "Nifty 50 Return",
-   "used_short_at": "2026-09-24T11:32:37Z",
-   "used_short_fails": 1
+   "used_short_at": "2026-09-24T13:27:14Z"
   },
   {
    "id": 39,
