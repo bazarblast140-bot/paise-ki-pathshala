@@ -4,24 +4,21 @@ name: Paise Ki Pathshala
 # TELEGRAM_*, YT_FIN_* (yt_token_to_github.py --prefix YT_FIN), variable
 # YT_FIN_CHANNEL_ID — publish.py isse check karta hai ki token sahi channel ka hai.
 #
+# Instagram Reel cross-post (short only): same final.mp4, no re-render.
+# Needs secrets IG_ACCESS_TOKEN + vars IG_USER_ID (same as FactVizer/HEYGEN repo).
+# Hosting uses public MEDIA_REPO so Instagram can download the file.
+#
 # Do format: long (16:9, ~5 min) aur short (9:16, ~50s, bina intro). Har topic
 # ka ek short aur ek long banta hai (topic_bank: used / used_short).
 #
 # Roz 3 Shorts, public at:
 #   premarket 08:30 IST, postmarket 16:00 IST, night 21:00 IST
-#
-# GitHub Actions cron late chal sakta hai (kabhi 1-6 ghante). Isliye build
-# target se ~1.5–6h pehle fire hota hai. Upload private + publishAt se hota
-# hai — YouTube theek slot ke time public karta hai.
-#
-# 15-Sep-2026: purane cron (07/14:30/19:30 UTC) slot ke baad fire ho rahe the
-# → publishAt next-day ban jata tha. Ab early + matching SLOT.
 on:
   schedule:
     - cron: "0 2 * * *"      # ~07:30 IST → premarket  08:30 IST
     - cron: "0 8 * * *"      # ~13:30 IST → postmarket 16:00 IST
     - cron: "0 13 * * *"     # ~18:30 IST → night      21:00 IST
-  workflow_call:          # "Slot watch" khali slot par isse bulati hai
+  workflow_call:
     inputs:
       format:
         type: string
@@ -50,7 +47,6 @@ on:
         required: false
         default: ""
 
-# Short aur long alag group — ek dusre ko block na karein.
 concurrency:
   group: paise-ki-pathshala-${{ github.event.schedule || inputs.format }}
   cancel-in-progress: false
@@ -72,7 +68,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      # fonts-noto-core = Devanagari captions (libass); libraqm0 = PIL me sahi matra
       - name: Install FFmpeg & fonts
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
 
@@ -93,9 +88,8 @@ jobs:
               "0 13 * * *")  SLOT="21:00" ;;
             esac
           elif [ "$VIS" = "now" ]; then
-            VIS=public; SLOT=""          # turant public, koi publishAt nahi
+            VIS=public; SLOT=""
           elif [ "$VIS" = "public" ]; then
-            # manual public: next of the three slots
             H=$(TZ=Asia/Kolkata date +%H%M)
             if   [ "$H" -lt 0810 ]; then SLOT="08:30"
             elif [ "$H" -lt 1540 ]; then SLOT="16:00"
@@ -137,6 +131,14 @@ jobs:
           PUBLISH_VISIBILITY: ${{ steps.fmt.outputs.visibility }}
           TOPIC_KEY: ${{ inputs.topic_key }}
           PUBLISH_SLOT_IST: ${{ steps.fmt.outputs.slot }}
+          # Instagram Reel cross-post (short only) — same video, zero extra render
+          IG_CROSSPOST: ${{ steps.fmt.outputs.format == 'short' && '1' || '0' }}
+          IG_USER_ID: ${{ vars.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_SURFACE: ${{ vars.IG_SURFACE || 'facebook' }}
+          # Public bucket so Instagram can fetch the mp4 (this repo is private)
+          MEDIA_REPO: ${{ vars.MEDIA_REPO || 'bazarblast140-bot/HEYGEN--INSTAGRAM-' }}
+          MEDIA_REPO_TOKEN: ${{ secrets.MEDIA_REPO_TOKEN || secrets.GITHUB_TOKEN }}
         run: python run_pipeline.py --format ${{ steps.fmt.outputs.format }} --publish
 
       - name: Commit topic_bank (prevent topic repeats)
@@ -168,4 +170,5 @@ jobs:
             run/gate1_report.txt
             run/gate2_report.txt
             run/gate3_report.txt
+            run/ig_reel.txt
           retention-days: 14
