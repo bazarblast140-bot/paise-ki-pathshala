@@ -1518,7 +1518,7 @@
   {
    "id": 41,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "hanging_man",
    "cat": "CANDLESTICK",
    "topic": "Hanging Man — Hammer जैसी शक्ल, अपट्रेंड के ऊपर",
@@ -1549,7 +1549,8 @@
     "शक्ल hammer जैसी, पर अपट्रेंड के ऊपर",
     "पुष्टि: अगली कैंडल नीचे बंद"
    ],
-   "seo": "Hanging Man Candlestick"
+   "seo": "Hanging Man Candlestick",
+   "used_short_at": "2026-09-24T17:42:59Z"
   },
   {
    "id": 42,
