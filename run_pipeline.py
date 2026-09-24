@@ -5,6 +5,9 @@ Usage:
   python run_pipeline.py            # generate + verify + notify (no publish)
   python run_pipeline.py --publish  # also publish IF verdict READY (opt-in)
   python run_pipeline.py --format short --publish   # 9:16 Short (~50s)
+
+After a successful short YouTube upload, optional Instagram Reel cross-post:
+  IG_CROSSPOST=1  + IG_USER_ID + IG_ACCESS_TOKEN
 """
 import json, os, subprocess, sys
 
@@ -92,6 +95,12 @@ def main():
         (RUN / "uploaded.txt").unlink(missing_ok=True)
         run("publish.py", "--only-if-ready")
         settle_topic((RUN / "uploaded.txt").exists())
+
+        # Same short → Instagram Reel (no re-render). Opt-in via IG_CROSSPOST=1.
+        # Errors inside publish_instagram.py are non-fatal (exit 0).
+        if video_format() == "short" and (RUN / "uploaded.txt").exists():
+            print("\n=== Instagram Reel (cross-post) ===")
+            run("publish_instagram.py")
 
     # always notify
     print("\n=== Notify ===")
