@@ -1783,7 +1783,7 @@
   {
    "id": 48,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "inverted_hammer",
    "cat": "CANDLESTICK",
    "topic": "Inverted Hammer — गिरावट के बाद ऊपर लंबी wick",
@@ -1814,7 +1814,8 @@
     "डाउनट्रेंड के बाद बनता है",
     "ऊपरी wick बॉडी से कम से कम 2 गुना"
    ],
-   "seo": "Inverted Hammer Candlestick"
+   "seo": "Inverted Hammer Candlestick",
+   "used_short_at": "2026-09-25T13:09:06Z"
   },
   {
    "id": 49,
