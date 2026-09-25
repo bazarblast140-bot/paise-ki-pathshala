@@ -8,7 +8,9 @@ import json
 import os
 import re
 import sys
-from common import cfg, read, die, ok, RUN, need, video_format
+from pathlib import Path
+
+from common import ROOT, cfg, read, die, ok, RUN, need, video_format
 from ledger import record_publish
 
 # The script is written with bare headings on their own line ("TITLE", then the
@@ -117,9 +119,11 @@ def build_description(sec, c):
                 label = name.title()
                 selected.append(f"{label}: {p['url']}")
         if selected:
-            parts.append("Referral links (disclosure)\\n" + ref.get("disclosure_hi", "यह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।") + "\\n" + "\\n".join(selected))
-    except (OSError, ValueError, TypeError):
-        pass
+            disclosure = ref.get("disclosure_hi", "यह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।")
+            parts.append("Referral links\n" + disclosure + "\n" + "\n".join(selected))
+            print(f"[OK] referral links in description: {', '.join(names)}")
+    except (OSError, ValueError, TypeError, NameError) as e:
+        print(f"[warn] referral links skipped: {e}")
 
     ledger = sec.get("FACT LEDGER", "").strip()
     if ledger:
