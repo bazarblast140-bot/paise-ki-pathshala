@@ -29,7 +29,11 @@ from common import RUN, ROOT, cfg, claude_json, die, ok, save
 
 BEATS = S.BEATS
 STEP_CHIP = {"hook": "HOOK", "pehchan": "1  PEHCHAN", "matlab": "2  MATLAB", "karein": "3  KYA KAREIN"}
-CTA = "ऐसे ही रोज़ एक ट्रेडिंग फैक्ट के लिए फ़ॉलो करो।"
+# On-video CTA: ask for a useful comment instead of generic engagement bait.
+# The same Reel is cross-posted to YouTube + Instagram, so keep the wording
+# platform-neutral. Platform-specific subscribe/follow language belongs in the
+# post caption, not the educational content.
+CTA = "अगला कौन सा market topic समझना है? Comment में लिखो—ऐसी आसान सीख के लिए जुड़े रहो।"
 DISCLAIMER = "सिर्फ़ जानकारी, निवेश सलाह नहीं।"
 FORBIDDEN = ["दोस्तों", "like", "subscribe", "सब्सक्राइब", "लाइक", "टारगेट", "target price", "टिप",
              "ज़रूर ख़रीद", "जरूर खरीद", "ख़रीद लो", "खरीद लो", "बेच दो", "गारंटी से", "पक्का मुनाफ़ा"]
@@ -184,16 +188,19 @@ Return ONLY JSON:
  "beats": {"hook": "...", "pehchan": "...", "matlab": "...", "karein": "..."}}
 
 Rules:
-- hook: 1 sentence, the surprising fact or costly mistake. No greeting.
-- pehchan / matlab / karein: 1-2 short sentences each (under 12 words per sentence).
-- Total 60-100 words.
+- hook: 1 sentence, the surprising fact, costly mistake, or a clear question. No greeting.
+- pehchan: explain what the viewer is looking at in plain language.
+- matlab: explain the cause → effect and, where the topic allows, give ONE tiny concrete example.
+- karein: finish with one practical takeaway or limitation; never make a personalised trade call.
+- Each beat: 1-2 short sentences, preferably under 12 words per sentence.
+- Total 60-100 words. The narration must add explanation beyond merely reading the on-screen text.
 - Use ONLY numbers that appear in the topic data given to you. Never invent prices, dates, returns.
 - Not a quiz. Do not ask the viewer to pick options.
 - SEBI rules: never tell anyone to buy/sell/hold a specific stock, fund or product; no targets,
   no tips; never promise returns. Patterns/indicators are probabilities, not sure signals.
 - Describe, don't command: for SL / entry / confirmation say how traders usually do it
   ("आमतौर पर traders SL ... रखते हैं", "कई traders ... का इंतज़ार करते हैं"), never "ऐसा करो" as an order.
-- Do not add a CTA or disclaimer — the template adds them.
+- Do not add a CTA or disclaimer inside the narration — the template adds them.
 - If category is "REAL DATA": hook = ONLY the question (year, ₹1 लाख, name), max 10 words —
   NEVER the answer. pehchan = the two prices with years. matlab = the multiple (गुना) once.
   karein = the final value once, then the balance line from facts. Say the final value only in
