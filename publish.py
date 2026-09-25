@@ -104,6 +104,23 @@ def build_description(sec, c):
     parts.append(disclaimer or "यह वीडियो सिर्फ़ जानकारी के लिए है, निवेश सलाह नहीं।")
     parts.append("हम SEBI-रजिस्टर्ड सलाहकार नहीं हैं। किसी भी निवेश से पहले रजिस्टर्ड सलाहकार से बात करें।")
 
+    # Topic-relevant referral links: never dump every broker link into every video.
+    try:
+        ref_path = ROOT / "data" / "referrals.json"
+        ref = json.loads(ref_path.read_text(encoding="utf-8"))
+        names = ref.get("category_map", {}).get(cat, [])
+        links = ref.get("platforms", {})
+        selected = []
+        for name in names:
+            p = links.get(name) or {}
+            if p.get("url"):
+                label = name.title()
+                selected.append(f"{label}: {p['url']}")
+        if selected:
+            parts.append("Referral links (disclosure)\\n" + ref.get("disclosure_hi", "यह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।") + "\\n" + "\\n".join(selected))
+    except (OSError, ValueError, TypeError):
+        pass
+
     ledger = sec.get("FACT LEDGER", "").strip()
     if ledger:
         lines = []
