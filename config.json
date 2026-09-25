@@ -34,9 +34,10 @@
     "typewriter": true,
     "thumbnail": true,
     "background_music": true,
-    "visual_style": "cartoon lab-coat host, white board, big numbers, icons, charts",
+    "visual_style": "Original framed chart cards: keep the chart inside one clear box, use the channel's own palette and hand-drawn chart details, one highlighted insight, and readable spacing. Use competitor research only for broad layout cues.",
     "show_section_labels": false,
-    "outro": false
+    "outro": false,
+    "thumbnail_style": "Original red hook card with our own boxed chart crop, concise Hindi hook, and topic-bank sticker; never use a competitor image or layout verbatim."
   },
   "video": {
     "target_minutes": 5,
@@ -56,10 +57,16 @@
     "visual_max_tokens": 16000
   },
   "voice": {
-    "engine": "edge",
+    "engine": "elevenlabs",
     "edge_voice": "hi-IN-MadhurNeural",
     "edge_rate": "+0%",
-    "edge_pitch": "+0Hz"
+    "edge_pitch": "+0Hz",
+    "voice_id": "7qBNUtXRGP0jPi0H4r8k",
+    "model": "eleven_multilingual_v2",
+    "stability": 0.45,
+    "style": 0.3,
+    "speed": 1.08,
+    "similarity_boost": 0.8
   },
   "pipeline": {
     "auto_publish": true,

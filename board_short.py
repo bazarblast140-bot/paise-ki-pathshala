@@ -240,18 +240,25 @@ async def _edge(text, voice, rate, path):
     await edge_tts.Communicate(text, voice, rate=rate).save(str(path))
 
 
-def _eleven(text, path):
-    """ElevenLabs TTS -> mp3. False on any failure (quota, bad key, network)."""
+def _eleven(text, path, c):
+    """Use the configured ElevenLabs voice when a key is available; return False to fall back."""
     import os
     import requests
-    key, voice = os.environ.get("ELEVENLABS_API_KEY", ""), os.environ.get("ELEVENLABS_VOICE_ID", "")
+    key = os.environ.get("ELEVENLABS_API_KEY", "")
+    voice = c["voice"].get("voice_id") or os.environ.get("ELEVENLABS_VOICE_ID", "")
     if not (key and voice):
         return False
     try:
         r = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
                           headers={"xi-api-key": key, "accept": "audio/mpeg"},
-                          json={"text": text, "model_id": os.environ.get("ELEVENLABS_MODEL") or "eleven_multilingual_v2",
-                                "voice_settings": {"stability": 0.45, "similarity_boost": 0.8, "speed": 1.08}},
+                          json={"text": text,
+                                "model_id": os.environ.get("ELEVENLABS_MODEL") or c["voice"].get("model", "eleven_multilingual_v2"),
+                                "voice_settings": {
+                                    "stability": c["voice"].get("stability", 0.45),
+                                    "similarity_boost": c["voice"].get("similarity_boost", 0.8),
+                                    "style": c["voice"].get("style", 0.3),
+                                    "speed": c["voice"].get("speed", 1.08),
+                                }},
                           timeout=90)
         if r.status_code != 200 or len(r.content) < 2000:
             print(f"[warn] ElevenLabs {r.status_code}: {r.text[:160]}")
@@ -261,7 +268,6 @@ def _eleven(text, path):
     except Exception as e:  # noqa: BLE001
         print(f"[warn] ElevenLabs error: {e}")
         return False
-
 
 ENGINES = []
 
@@ -277,7 +283,7 @@ def tts(text, path, c):
         print(f"[warn] voice text me ab bhi: {sorted(set(left))} — speak.py me jodo")
     with open(RUN / "tts_text.txt", "a", encoding="utf-8") as f:
         f.write(f"{path.stem}: {text}\n")
-    if _eleven(text, path):
+    if _eleven(text, path, c):
         ENGINES.append("elevenlabs")
         return
     v = c["voice"]

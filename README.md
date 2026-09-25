@@ -69,9 +69,7 @@ Edit `config.json`:
 - `channel.name`
 - keep `pipeline.auto_publish: false` for now
 
-**Voice:** defaults to `voice.engine: "edge"` — free Microsoft neural TTS, no API key,
-no per-character cost (same engine the Hindi project uses). To switch to ElevenLabs,
-put a key in `.env` and set `voice.engine: "elevenlabs"` + `voice.voice_id`.
+**Voice:** uses the configured ElevenLabs voice ID when `ELEVENLABS_API_KEY` is available. If the key is missing or ElevenLabs fails, narration falls back to free Edge TTS. Set `voice.engine: "edge"` to force Edge.
 
 Check everything before spending credits:
 ```bash

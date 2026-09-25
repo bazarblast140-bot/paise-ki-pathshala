@@ -144,18 +144,17 @@ def _stitch(files):
 
 
 def synthesize(text, c):
-    engine = "edge"  # FORCE EDGE ONLY — ElevenLabs disabled permanently
+    engine = str(c["voice"].get("engine", "edge")).strip().lower()
     if engine not in ("edge", "elevenlabs"):
         die(f"Unknown voice.engine '{engine}' in config.json — use 'edge' or 'elevenlabs'.")
 
-    key = None
-    if False:  # elevenlabs disabled
-        key = os.environ.get("ELEVENLABS_API_KEY")
+    key = os.environ.get("ELEVENLABS_API_KEY")
+    if engine == "elevenlabs":
         if not key:
-            print("[warn] ELEVENLABS_API_KEY not set in environment — falling back to free Edge TTS engine.")
+            print("[warn] ELEVENLABS_API_KEY not set — falling back to free Edge TTS.")
             engine = "edge"
-        elif str(c["voice"]["voice_id"]).startswith("TODO"):
-            print("[warn] ElevenLabs voice_id is TODO — falling back to free Edge TTS engine.")
+        elif not c["voice"].get("voice_id") or str(c["voice"]["voice_id"]).startswith("TODO"):
+            print("[warn] ElevenLabs voice_id is missing — falling back to free Edge TTS.")
             engine = "edge"
 
     def render_all(active_engine):
@@ -187,10 +186,11 @@ def synthesize(text, c):
     try:
         render_all(engine)
     except RuntimeError as e:
-        if True:  # edge only
+        if engine == "elevenlabs":
+            print(f"[warn] ElevenLabs failed ({e}); falling back to free Edge TTS.")
+            render_all("edge")
+        else:
             die(str(e))
-        print(f"[warn] ElevenLabs failed ({e}); falling back to free Edge TTS engine.")
-        render_all("edge")
 
 
 def main():
