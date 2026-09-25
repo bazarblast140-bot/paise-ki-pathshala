@@ -165,10 +165,9 @@ def ig_call(path: str, *, method: str = "GET", params: dict | None = None) -> di
 
 
 def build_caption() -> str:
-    """Short IG caption from script + topic — not the full YouTube description."""
+    """Short IG caption — no raw URLs (Instagram does not make caption links clickable)."""
     parts = []
     script = (RUN / "script.txt").read_text(encoding="utf-8") if (RUN / "script.txt").exists() else ""
-    # TITLE / HOOK lines
     title = ""
     hook = ""
     current = None
@@ -205,29 +204,24 @@ def build_caption() -> str:
 
     parts.append("यह सिर्फ़ शिक्षा के लिए है — निवेश सलाह नहीं।")
 
+    # Instagram caption URLs are not tappable — point to bio instead.
+    # Full referral URLs stay on YouTube description only.
     topic = {}
     if (RUN / "topic.json").exists():
         try:
             topic = json.loads((RUN / "topic.json").read_text(encoding="utf-8"))
         except Exception:  # noqa: BLE001
             pass
-
-    # Same topic-relevant referral rule as YouTube; keep the Reel itself clean.
     try:
         ref_path = Path(__file__).parent / "data" / "referrals.json"
         ref = json.loads(ref_path.read_text(encoding="utf-8"))
         cat = str(topic.get("cat") or "")
         names = ref.get("category_map", {}).get(cat, [])
-        links = ref.get("platforms", {})
-        selected = []
-        for name in names:
-            p = links.get(name) or {}
-            if p.get("url"):
-                selected.append(f"{name.title()}: {p['url']}")
-        if selected:
-            disclosure = ref.get("disclosure_hi", "यह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।")
-            parts.append("Referral links\n" + disclosure + "\n" + "\n".join(selected))
-            print(f"[OK] IG referral links: {', '.join(names)}")
+        if names:
+            parts.append(
+                "Demat / invest account chahiye ho to profile bio me link dekho."
+            )
+            print(f"[OK] IG bio CTA (topic refs: {', '.join(names)})")
     except (OSError, ValueError, TypeError):
         pass
 
@@ -295,7 +289,6 @@ def main() -> None:
     if not mp4.exists():
         die("run/final.mp4 missing")
 
-    # Prefer after successful YT upload, but allow force
     if not (RUN / "uploaded.txt").exists() and env("IG_CROSSPOST_FORCE") not in ("1", "true"):
         skip("YouTube upload not recorded (uploaded.txt missing) — set IG_CROSSPOST_FORCE=1 to post anyway")
 
@@ -314,6 +307,5 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except Exception as e:  # noqa: BLE001
-        # Never fail the YouTube side of the pipeline because of IG.
         print(f"[ig] error (non-fatal): {e}", file=sys.stderr)
         sys.exit(0)
