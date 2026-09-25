@@ -225,7 +225,9 @@ def build_caption() -> str:
             if p.get("url"):
                 selected.append(f"{name.title()}: {p['url']}")
         if selected:
-            parts.append("Referral links\\n" + ref.get("disclosure_hi", "यह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।") + "\\n" + "\\n".join(selected))
+            disclosure = ref.get("disclosure_hi", "यह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।")
+            parts.append("Referral links\n" + disclosure + "\n" + "\n".join(selected))
+            print(f"[OK] IG referral links: {', '.join(names)}")
     except (OSError, ValueError, TypeError):
         pass
 
