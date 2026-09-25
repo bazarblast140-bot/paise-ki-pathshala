@@ -1555,7 +1555,7 @@
   {
    "id": 42,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "gtt_amo",
    "cat": "ORDERS",
    "topic": "GTT और AMO — बाज़ार बंद होने पर भी ऑर्डर",
@@ -1586,7 +1586,8 @@
     "AMO = after market order",
     "GTT = good till triggered"
    ],
-   "seo": "GTT and AMO Order"
+   "seo": "GTT and AMO Order",
+   "used_short_at": "2026-09-25T06:33:19Z"
   },
   {
    "id": 43,
