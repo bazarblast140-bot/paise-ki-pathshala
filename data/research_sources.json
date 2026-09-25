@@ -1,0 +1,33 @@
+{
+  "purpose": "Competitor/topic research only. Never copy a competitor title, script, thumbnail, watermark, chart, or exact angle.",
+  "vidiq": {
+    "enabled": true,
+    "research_modes": [
+      "competitors",
+      "outliers",
+      "trending",
+      "keywords"
+    ],
+    "channels": [
+      {
+        "name": "Charts Cafe",
+        "handle": "@chartscafe",
+        "channel_id": "UCV3SfInNcBdNtsBxsiRVSmA",
+        "url": "https://youtube.com/@chartscafe?si=Xq5Ex9ri2ElGsOwX"
+      },
+      {
+        "name": "Stock Menthol",
+        "handle": "@stockmenthol",
+        "channel_id": "UC5-09Heo3sFRvVyTqWsXy7Q",
+        "url": "https://youtube.com/@stockmenthol?si=NnU_XFo1EDgTuMvk"
+      }
+    ]
+  },
+  "selection_rules": [
+    "Reject exact or near-duplicate topics already published on this channel.",
+    "Reject topics already observed in competitor screenshots/history unless the new angle is materially different and educational.",
+    "Prefer current/recent market, SEBI, broker, crypto, stocks, SIP, mutual funds, fundamentals, technical analysis and investor-safety topics.",
+    "Use competitor research for inspiration and gap-finding, not copying.",
+    "Every selected topic must have a clear Hook -> Pehchan -> Matlab -> Karein explanation."
+  ]
+}
