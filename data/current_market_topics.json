@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "updated_at": null,
+  "notes": "Optional dated research notes mapped only to existing topic-bank keys; priority 0-2. Verify time-sensitive claims from primary sources before adding.",
   "topics": []
 }
 

@@ -29,6 +29,7 @@ class CompetitorPatternTests(unittest.TestCase):
         self.assertFalse(is_near_competitor_duplicate("SIP में फीस का असर", ["support resistance"]))
         with tempfile.TemporaryDirectory() as directory:
             self.assertEqual(load_research(Path(directory)), ({}, {}, {}))
+        self.assertEqual(pattern_weights({"observations": "not-a-list"}), {})
 
 
 if __name__ == "__main__":

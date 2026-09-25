@@ -20,9 +20,9 @@ def _read_json(path: Path, default):
 def pattern_weights(data):
     """Return dimension -> label -> bounded [0, 1] signal weights.
 
-    Each observation is compared with its creator's baseline views. Median
-    multiples dampen one viral outlier and minimum sample counts prevent a
-    single upload from becoming a rule.
+    Each observation is compared with its creator's baseline views. Ratios are
+    capped to dampen one viral outlier and minimum samples prevent a single
+    upload from becoming a rule.
     """
     grouped = {}
     observations = data.get("observations", []) if isinstance(data, dict) else []

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "updated_at": null,
-  "notes": "Optional aggregate observations only. Add at least two videos per label for a pattern to count. Never add titles, scripts, thumbnails, or trade calls.",
+  "notes": "Optional aggregate observations only. Each row: topic_type, hook_style, pacing, visual_style, angle, views, baseline_views. Use normalized labels: mistake_prevention, mechanism_explainer, real_data, chart_concept, curiosity_question, number_led, warning, fast_paced, deep_dive, whiteboard_chart, or an exact topic-bank category. baseline_views is that competitor channel's median recent views. Add at least two rows per label. Never add titles, scripts, thumbnails, or trade calls.",
   "observations": []
 }
 
