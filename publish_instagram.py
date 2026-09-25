@@ -205,6 +205,23 @@ def build_caption() -> str:
 
     parts.append("यह सिर्फ़ शिक्षा के लिए है — निवेश सलाह नहीं।")
 
+    # Same topic-relevant referral rule as YouTube; keep the Reel itself clean.
+    try:
+        ref_path = Path(__file__).parent / "data" / "referrals.json"
+        ref = json.loads(ref_path.read_text(encoding="utf-8"))
+        cat = str(topic.get("cat") or "")
+        names = ref.get("category_map", {}).get(cat, [])
+        links = ref.get("platforms", {})
+        selected = []
+        for name in names:
+            p = links.get(name) or {}
+            if p.get("url"):
+                selected.append(f"{name.title()}: {p['url']}")
+        if selected:
+            parts.append("Referral links\\n" + ref.get("disclosure_hi", "यह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।") + "\\n" + "\\n".join(selected))
+    except (OSError, ValueError, TypeError):
+        pass
+
     topic = {}
     if (RUN / "topic.json").exists():
         try:
