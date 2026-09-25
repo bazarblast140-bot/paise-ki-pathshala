@@ -24,6 +24,9 @@ W, H = 1080, 1920
 BOARD = (50, 300, 900, 990)
 BG_TOP, BG_BOT = (8, 13, 26), (10, 32, 30)
 GREEN, RED, GRID = (34, 197, 94), (239, 68, 68), (40, 52, 72)
+# Semantic trade markers: keep SL softly red and target/entry softly green.
+SL_RED = (248, 150, 150)
+TARGET_GREEN = (134, 239, 172)
 INK, MUTED, YELLOW, BLUE = (226, 232, 240), (148, 163, 184), (250, 204, 21), (96, 165, 250)
 PANEL = (6, 10, 20)
 
