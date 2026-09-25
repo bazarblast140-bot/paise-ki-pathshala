@@ -1632,7 +1632,7 @@
   {
    "id": 44,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "open_interest",
    "cat": "OPTIONS",
    "topic": "Open Interest — क्या बताता है, क्या नहीं",
@@ -1663,7 +1663,8 @@
     "OI = अभी खुले contracts",
     "OI अकेले दिशा नहीं बताता"
    ],
-   "seo": "Open Interest"
+   "seo": "Open Interest",
+   "used_short_at": "2026-09-25T07:20:17Z"
   },
   {
    "id": 45,
