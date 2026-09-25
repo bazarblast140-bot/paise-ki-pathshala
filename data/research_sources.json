@@ -1,33 +1,38 @@
 {
-  "purpose": "Competitor/topic research only. Never copy a competitor title, script, thumbnail, watermark, chart, or exact angle.",
-  "vidiq": {
-    "enabled": true,
-    "research_modes": [
-      "competitors",
-      "outliers",
-      "trending",
-      "keywords"
-    ],
-    "channels": [
-      {
-        "name": "Charts Cafe",
-        "handle": "@chartscafe",
-        "channel_id": "UCV3SfInNcBdNtsBxsiRVSmA",
-        "url": "https://youtube.com/@chartscafe?si=Xq5Ex9ri2ElGsOwX"
-      },
-      {
-        "name": "Stock Menthol",
-        "handle": "@stockmenthol",
-        "channel_id": "UC5-09Heo3sFRvVyTqWsXy7Q",
-        "url": "https://youtube.com/@stockmenthol?si=NnU_XFo1EDgTuMvk"
-      }
-    ]
+  "purpose": "Learn audience preferences from aggregate public performance signals, then select original educational topics. Competitors are references, never content to reproduce.",
+  "competitors": [
+    {
+      "name": "Charts Cafe",
+      "handle": "@chartscafe",
+      "channel_id": "UCV3SfInNcBdNtsBxsiRVSmA",
+      "url": "https://youtube.com/@chartscafe",
+      "role": "reference_only"
+    },
+    {
+      "name": "Stock Menthol",
+      "handle": "@stockmenthol",
+      "channel_id": "UC5-09Heo3sFRvVyTqWsXy7Q",
+      "url": "https://youtube.com/@stockmenthol",
+      "role": "reference_only"
+    }
+  ],
+  "optional_inputs": {
+    "competitor_performance": "data/competitor_performance.json",
+    "current_market_topics": "data/current_market_topics.json",
+    "own_topic_performance": "data/own_topic_performance.json",
+    "vidiq": {
+      "enabled": false,
+      "required": false,
+      "note": "May be used manually as one source of public signals; no runtime or paid dependency."
+    }
   },
   "selection_rules": [
-    "Reject exact or near-duplicate topics already published on this channel.",
-    "Reject topics already observed in competitor screenshots/history unless the new angle is materially different and educational.",
-    "Prefer current/recent market, SEBI, broker, crypto, stocks, SIP, mutual funds, fundamentals, technical analysis and investor-safety topics.",
-    "Use competitor research for inspiration and gap-finding, not copying.",
-    "Every selected topic must have a clear Hook -> Pehchan -> Matlab -> Karein explanation."
+    "Use public performance only to estimate broad topic, hook, pacing, visual, and educational-angle preferences; require repeated observations before promoting a pattern.",
+    "Never copy competitor titles, scripts, thumbnails, exact topic angles, or trade calls.",
+    "Choose only unused, valid topic-bank entries; preserve each entry's scene key, facts, and beats.",
+    "Blend stable competitor patterns with dated market relevance and our own measured outcomes; market and competitor signals are small ranking inputs, not factual sources.",
+    "Never repeat an own-channel topic. Skip competitor-covered topics from the reviewed phrase list unless a materially different educational angle has been added explicitly to the bank.",
+    "If research data is missing or malformed, continue the normal fresh-topic rotation without failing."
   ]
 }
+

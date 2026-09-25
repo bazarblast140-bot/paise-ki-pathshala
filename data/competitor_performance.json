@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "updated_at": null,
+  "notes": "Optional aggregate observations only. Add at least two videos per label for a pattern to count. Never add titles, scripts, thumbnails, or trade calls.",
+  "observations": []
+}
+

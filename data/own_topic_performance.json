@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "updated_at": null,
+  "notes": "Optional normalized outcome lift by existing topic-bank key; keep values between -1 and 1.",
+  "topics": {}
+}
+
