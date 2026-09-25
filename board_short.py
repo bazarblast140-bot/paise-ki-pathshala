@@ -353,6 +353,11 @@ def build_ass(topic, beat_times, spoken):
             t += dt
     t0, t1 = beat_times["karein"]
     ev.append(K.ass_text(t0, t1, 475, 1215, 34, "&H00B8A394&", DISCLAIMER, 8))
+    # Platform-neutral visual CTA: the same final.mp4 is cross-posted to YouTube + Instagram.
+    # Keep it below the educational content and inside the Shorts/Reels safe area.
+    cta_start = max(t0, t1 - 2.8)
+    ev.append(K.ass_text(cta_start, t1, 540, 1470, 48, K.WHITE,
+                         "LIKE  •  FOLLOW  •  SUBSCRIBE", 10, fade=True))
     return K.ASS_HEAD + "\n".join(ev) + "\n"
 
 
