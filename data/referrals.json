@@ -1,0 +1,9 @@
+{
+  "disclosure_hi": "यह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।",
+  "platforms": {
+    "zerodha": {"code":"KU3466","url":"https://zerodha.com/open-account?c=KU3466"},
+    "upstox": {"code":"3T23","url":"https://upstox.onelink.me/0H1s/3T23"},
+    "indmoney": {"code":"RAJ144A7IND","url":"https://indmoney.onelink.me/RmHC/615z6rm1"}
+  },
+  "usage": "Use only when relevant to the topic; prefer caption/description/bio and keep the educational video clean."
+}
