@@ -80,19 +80,17 @@ def build_title(sec):
 
 
 def build_description(sec, c):
-    """SEO-first description: hook (search snippet) → value → sources → CTA → tags.
+    """SEO-first description: hook → value → disclaimer → referral URLs (one per line) → tags.
 
-    First 100-150 chars are what YouTube shows in search — must be the hook.
+    YouTube makes https:// URLs clickable when they sit on their own line.
     """
     parts = []
 
     hook = sec.get("HOOK", "").strip()
     if hook:
-        # collapse to a tight search snippet
         hook_one = re.sub(r"\s+", " ", hook).strip()
         parts.append(hook_one)
 
-    # title dobara nahi — search snippet ki jagah kaam ki line ko do
     topic = load_topic()
     kw, cat = topic.get("seo"), topic.get("cat")
     if kw and cat == "REAL DATA":
@@ -106,21 +104,30 @@ def build_description(sec, c):
     parts.append(disclaimer or "यह वीडियो सिर्फ़ जानकारी के लिए है, निवेश सलाह नहीं।")
     parts.append("हम SEBI-रजिस्टर्ड सलाहकार नहीं हैं। किसी भी निवेश से पहले रजिस्टर्ड सलाहकार से बात करें।")
 
-    # Topic-relevant referral links: never dump every broker link into every video.
+    # Referral: label on one line, bare https URL on the next (best chance of blue link).
     try:
         ref_path = ROOT / "data" / "referrals.json"
         ref = json.loads(ref_path.read_text(encoding="utf-8"))
         names = ref.get("category_map", {}).get(cat, [])
         links = ref.get("platforms", {})
-        selected = []
+        blocks = []
         for name in names:
             p = links.get(name) or {}
-            if p.get("url"):
-                label = name.title()
-                selected.append(f"{label}: {p['url']}")
-        if selected:
-            disclosure = ref.get("disclosure_hi", "यह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।")
-            parts.append("Referral links\n" + disclosure + "\n" + "\n".join(selected))
+            url = (p.get("url") or "").strip()
+            if url.startswith("http"):
+                blocks.append(f"{name.title()}\n{url}")
+        if blocks:
+            disclosure = ref.get(
+                "disclosure_hi",
+                "यह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।",
+            )
+            parts.append(
+                "Account / referral links\n"
+                + disclosure
+                + "\n\n"
+                + "\n\n".join(blocks)
+                + "\n\nSame links Instagram bio me bhi hain (Zerodha · Upstox · Delta Exchange)."
+            )
             print(f"[OK] referral links in description: {', '.join(names)}")
     except (OSError, ValueError, TypeError, NameError) as e:
         print(f"[warn] referral links skipped: {e}")
@@ -142,8 +149,6 @@ def build_description(sec, c):
     parts.append(f"{name} — {tagline}" if tagline else name)
     parts.append("रोज़ 3 ट्रेडिंग Shorts — कैंडलस्टिक, इंडिकेटर, ऑर्डर, F&O, रिस्क और असली डेटा।")
 
-    # 4-5 hashtags, topic ke hisaab se (15+ par YouTube saare ignore karta hai;
-    # pehle 3 title ke upar dikhte hain). Share ke naam ka hashtag nahi — promotion jaisa lagta.
     hash_tags = ["#StockMarketHindi", CAT_HASH.get(topic.get("cat"), "#TradingHindi")]
     kw = topic.get("seo", "")
     if kw and topic.get("cat") in ("CANDLESTICK", "INDICATOR", "OPTIONS", "RISK", "ORDERS"):
@@ -152,20 +157,12 @@ def build_description(sec, c):
     parts.append(" ".join(dict.fromkeys(h for h in hash_tags if len(h) > 2)))
 
     desc = "\n\n".join(parts)
-    # YouTube "<" / ">" wali description 400 invalidDescription se reject karta hai
-    # (ledger ki "155 -> 23" line par upload fail hua tha)
     desc = desc.replace("->", "→").replace("<", "").replace(">", "").replace("SOURCE", "स्रोत")
     return desc[:MAX_DESC]
 
 
 def build_tags(title, c):
-    """YouTube-safe SEO tags.
-
-    Rules that trigger invalidTags:
-    - empty / too short / too long (>100)
-    - characters other than letters, numbers, spaces, hyphens
-    - total length over ~500
-    """
+    """YouTube-safe SEO tags."""
     stop = {"the", "that", "your", "when", "what", "how", "why", "and", "for",
             "with", "you", "old", "year", "shows", "it", "a", "of", "in", "to",
             "from", "this", "into", "than", "also", "just", "more", "never",
@@ -183,8 +180,6 @@ def build_tags(title, c):
         seen.add(key)
         tags.append(t)
 
-    # sirf relevant tags: topic -> category -> channel core. Doosre topic ke tags
-    # (candle video par "option trading") YouTube ko galat audience batate hain.
     topic = load_topic()
     if topic.get("seo"):
         add(f"{topic['seo']} hindi")
@@ -196,7 +191,6 @@ def build_tags(title, c):
         add(t)
 
     if not topic:
-        # topic ke bina (long video) purana tareeka: title ke English shabd
         words = re.findall(r"[A-Za-z]{3,}", title or "")
         for i in range(len(words) - 1):
             add(f"{words[i]} {words[i+1]}")
@@ -214,9 +208,6 @@ def build_tags(title, c):
 
 
 def set_thumbnail(yt, video_id):
-    """Custom thumbnails need a phone-verified channel. If this account is not
-    verified the API says 403 — that is a channel setting, not a broken upload,
-    so it must not fail the run after the video is already up."""
     thumb = RUN / "thumbnail.jpg"
     if not thumb.exists():
         print("[skip] no run/thumbnail.jpg — set one manually in YouTube Studio")
@@ -252,12 +243,9 @@ def main():
     title = build_title(sec)
     description = build_description(sec, c)
     tags = build_tags(title, c)
-    # Workflow override: scheduled runs = public at the slot's IST time (publishAt),
-    # manual test runs = unlisted. GitHub cron late chal sakta hai — publishAt se
-    # video phir bhi theek slot par public hota hai.
     visibility = os.environ.get("PUBLISH_VISIBILITY") or c["pipeline"]["publish_visibility"]
     publish_at = None
-    slot = os.environ.get("PUBLISH_SLOT_IST", "").strip()          # e.g. "08:30"
+    slot = os.environ.get("PUBLISH_SLOT_IST", "").strip()
     if visibility == "public" and slot:
         from datetime import datetime, timedelta, timezone
         ist = timezone(timedelta(hours=5, minutes=30))
@@ -267,14 +255,13 @@ def main():
         if when < now + timedelta(minutes=20):
             when += timedelta(days=1)
         publish_at = when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        visibility = "private"        # YouTube: private + publishAt = publicly at that time
+        visibility = "private"
 
     print(f"\n  Title      : {title}")
     print(f"  Tags       : {', '.join(tags) or '(none)'}")
     print(f"  Visibility : {visibility}" + (f"  (public at {publish_at} UTC)" if publish_at else ""))
     print(f"  Thumbnail  : {'yes' if (RUN / 'thumbnail.jpg').exists() else 'no'}\n")
 
-    # ---- YouTube upload ----
     from googleapiclient.discovery import build
     from google.oauth2.credentials import Credentials
     creds = Credentials(
@@ -283,15 +270,9 @@ def main():
         client_id=need("YOUTUBE_CLIENT_ID"),
         client_secret=need("YOUTUBE_CLIENT_SECRET"),
         token_uri="https://oauth2.googleapis.com/token",
-        # scopes jaan-boojh ke nahi: refresh par jo grant hua wahi milta hai.
-        # Sirf youtube.upload maangne se neeche wala channels.list 403 deta.
     )
     yt = build("youtube", "v3", credentials=creds)
 
-    # Galat channel par upload KABHI nahi. Ye repo pehle isi workflow se
-    # QUIZ PATHSHALA par upload karta tha; secret mapping zara bhi galat reh
-    # jaaye to finance video quiz channel par chala jaata. Isliye expected
-    # channel ID na ho, ya token kisi aur channel ka ho, to upload ruk jaata hai.
     expected = os.environ.get("EXPECTED_CHANNEL_ID", "").strip()
     if not expected:
         die("EXPECTED_CHANNEL_ID set nahi hai — pata nahi kis channel par upload karna hai. Upload roka.")
@@ -305,10 +286,10 @@ def main():
     from googleapiclient.http import MediaFileUpload
     body = {
         "snippet": {"title": title, "description": description, "tags": tags,
-                    "categoryId": "27",  # 27 = Education
+                    "categoryId": "27",
                     "defaultLanguage": c["channel"].get("default_language", "hi"),
                     "defaultAudioLanguage": c["channel"].get("default_language", "hi")},
-        "status": {"privacyStatus": visibility,  # 'private' by default
+        "status": {"privacyStatus": visibility,
                    "selfDeclaredMadeForKids": False},
     }
     if publish_at:
@@ -338,13 +319,9 @@ def main():
             raise
 
     video_id = resp["id"]
-    # run_pipeline isi file se jaanta hai ki upload hua — iske baad koi error aaye
-    # (thumbnail wagairah) to bhi topic rotation me wapas NAHI jaata (duplicate video).
     (RUN / "uploaded.txt").write_text(video_id, encoding="utf-8")
     record_publish(video_id, publish_at, slot)
     ok(f"Uploaded as {visibility}: https://youtu.be/{video_id}")
-    # Short par bhi hook thumbnail try karo. Channel phone-verified na ho to
-    # YouTube 403 deta hai — set_thumbnail use skip karke upload ko safal rakhta hai.
     set_thumbnail(yt, video_id)
     print(f"\nEdit before going public: https://studio.youtube.com/video/{video_id}/edit")
 
