@@ -2111,7 +2111,7 @@
   {
    "id": 57,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "sebi_study",
    "cat": "OPTIONS",
    "topic": "SEBI स्टडी — FY22 में 89% individual F&O traders घाटे में",
@@ -2142,7 +2142,8 @@
     "SEBI की जनवरी 2023 की स्टडी",
     "FY22 में 89% individual F&O traders को नुकसान"
    ],
-   "seo": "SEBI F&O Study"
+   "seo": "SEBI F&O Study",
+   "used_short_at": "2026-09-25T17:44:35Z"
   },
   {
    "id": 58,
