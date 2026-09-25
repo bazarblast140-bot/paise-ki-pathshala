@@ -205,6 +205,13 @@ def build_caption() -> str:
 
     parts.append("यह सिर्फ़ शिक्षा के लिए है — निवेश सलाह नहीं।")
 
+    topic = {}
+    if (RUN / "topic.json").exists():
+        try:
+            topic = json.loads((RUN / "topic.json").read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            pass
+
     # Same topic-relevant referral rule as YouTube; keep the Reel itself clean.
     try:
         ref_path = Path(__file__).parent / "data" / "referrals.json"
@@ -222,12 +229,6 @@ def build_caption() -> str:
     except (OSError, ValueError, TypeError):
         pass
 
-    topic = {}
-    if (RUN / "topic.json").exists():
-        try:
-            topic = json.loads((RUN / "topic.json").read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
-            pass
     tags = ["#StockMarketHindi", "#TradingHindi", "#PaiseKiPathshala", "#ShareMarket"]
     if topic.get("seo"):
         t = "#" + re.sub(r"[^A-Za-z0-9]", "", str(topic["seo"]).title())
