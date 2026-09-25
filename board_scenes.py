@@ -13,7 +13,7 @@ import pathlib
 import random
 
 import board_kit as K
-from board_kit import (BOARD, BLUE, GREEN, INK, MUTED, RED, YELLOW, Axes, arrow, bars, big_text,
+from board_kit import (BOARD, BLUE, GREEN, INK, MUTED, RED, YELLOW, SL_RED, TARGET_GREEN, Axes, arrow, bars, big_text,
                        candles, cross, dashed, fit_label, label, ohlc_from_closes, panel, payoff,
                        polyline, ring, rsi, series_panel, sma, ema, tick, timeline)
 
@@ -212,13 +212,13 @@ def candle_scene(key):
         if key == "confirmation":
             cross(img, ax.x(i1 + 1) + 70, ax.y(conf[0][2]) - 20, 36)
             label(img, X0 + 60, Y0 + 50, "NO CONFIRM = NO TRADE", RED, 40)
-            dashed(img, x0, x1, ax.y(min(c[2] for c in pat)) + 6, RED, "SL", label_side="left")
+            dashed(img, x0, x1, ax.y(min(c[2] for c in pat)) + 6, SL_RED, "SL", label_side="left")
         elif direction == "bull":
-            dashed(img, x0, x1, ax.y(min(c[2] for c in pat)) + 8, RED, "SL", label_side="left")
+            dashed(img, x0, x1, ax.y(min(c[2] for c in pat)) + 8, SL_RED, "SL", label_side="left")
             if conf:
-                dashed(img, x0, x1, ax.y(conf[0][3]), GREEN, "ENTRY", label_side="left")
+                dashed(img, x0, x1, ax.y(conf[0][3]), TARGET_GREEN, "ENTRY", label_side="left")
         elif direction == "bear":
-            dashed(img, x0, x1, ax.y(max(c[1] for c in pat)) - 8, RED, "SL", label_side="left")
+            dashed(img, x0, x1, ax.y(max(c[1] for c in pat)) - 8, SL_RED, "SL", label_side="left")
             if conf:
                 dashed(img, x0, x1, ax.y(conf[0][3]), GREEN, "ENTRY", label_side="left")
         else:
@@ -300,7 +300,7 @@ def rsi_divergence():
         else:
             nxt = min(l2 + 3, len(oh) - 1)
             ring(img, ax.x(nxt), (ax.y(oh[nxt][1]) + ax.y(oh[nxt][2])) / 2, 45, 90, GREEN)
-            dashed(img, X0 + 30, X1 - 30, ax.y(oh[l2][2]) + 12, RED, "SL")
+            dashed(img, X0 + 30, X1 - 30, ax.y(oh[l2][2]) + 12, SL_RED, "SL")
             label(img, X0 + 60, TOP_BOX[1] + 40, "CONFIRM CANDLE KA WAIT", YELLOW, 34)
         return A, img
     return beat
@@ -411,7 +411,7 @@ def vwap_scene():
             label(img, X0 + 60, Y0 + 40, "ABOVE = BUYERS STRONG", GREEN, 36)
             ring(img, ax.x(cross_i), ax.y(vw[cross_i]), 50, 50)
         else:
-            dashed(img, X0 + 30, X1 - 30, ax.y(vw[-1]) + 6, RED, "VWAP = SL ZONE", label_side="left")
+            dashed(img, X0 + 30, X1 - 30, ax.y(vw[-1]) + 6, SL_RED, "VWAP = SL ZONE", label_side="left")
         return A, img
     return beat
 
@@ -477,8 +477,8 @@ def atr_sl():
         elif b == "matlab":
             label(img, X0 + 60, Y0 + 40, "ZYADA ATR = ZYADA VOLATILITY", YELLOW, 32)
         else:
-            dashed(img, X0 + 30, X1 - 30, ax.y(entry), GREEN, "ENTRY", label_side="left")
-            dashed(img, X0 + 30, X1 - 30, ax.y(entry - 2 * atr), RED, "SL = ENTRY - 2 ATR", size=26, label_side="left")
+            dashed(img, X0 + 30, X1 - 30, ax.y(entry), TARGET_GREEN, "ENTRY", label_side="left")
+            dashed(img, X0 + 30, X1 - 30, ax.y(entry - 2 * atr), SL_RED, "SL = ENTRY - 2 ATR", size=26, label_side="left")
         return A, img
     return beat
 
@@ -751,8 +751,8 @@ def one_percent():
     def beat(b, img):
         panel(img)
         ax = candles(img, (X0, Y0, X1, Y1 - 240), oh, 487, 504)
-        dashed(img, X0 + 30, X1 - 30, ax.y(500), GREEN, "ENTRY 500", label_side="left")
-        dashed(img, X0 + 30, X1 - 30, ax.y(490), RED, "SL 490", label_side="left")
+        dashed(img, X0 + 30, X1 - 30, ax.y(500), TARGET_GREEN, "ENTRY 500", label_side="left")
+        dashed(img, X0 + 30, X1 - 30, ax.y(490), SL_RED, "SL 490", label_side="left")
         A = img.copy()
         lines = {"hook": [("1%", 120, YELLOW)],
                  "pehchan": [("CAPITAL 1,00,000", 44, INK), ("RISK 1% = 1,000", 52, YELLOW)],
@@ -856,7 +856,7 @@ def averaging():
             dashed(img, X0 + 30, X1 - 30, ax.y(avg), YELLOW, f"AVG {avg:.1f}")
         if b == "karein":
             label(img, X0 + 60, Y0 + 40, "GALAT TRADE ME PAISA MAT BADHAO", YELLOW, 30)
-            dashed(img, X0 + 30, X1 - 30, ax.y(96), RED, "SL")
+            dashed(img, X0 + 30, X1 - 30, ax.y(96), SL_RED, "SL")
         return A, img
     return beat
 
