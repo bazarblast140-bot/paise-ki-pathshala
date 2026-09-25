@@ -177,7 +177,7 @@ def check_narration(n, topic):
     return fails
 
 
-NARR_SYSTEM = """You write the SPOKEN Hindi narration for a 40-50 second vertical Short for Indian traders
+NARR_SYSTEM = """You write the SPOKEN Hindi narration for a 55-60 second vertical Short for Indian traders
 (retail to pro). The video template is fixed — four beats, each showing a drawing and an on-screen
 headline + sub line. Your narration for each beat must explain exactly what that beat's on-screen
 text says, in simple spoken Hindi (Devanagari). Trading words stay as traders say them in Roman
@@ -193,7 +193,7 @@ Rules:
 - matlab: explain the cause → effect and, where the topic allows, give ONE tiny concrete example.
 - karein: finish with one practical takeaway or limitation; never make a personalised trade call.
 - Each beat: 1-2 short sentences, preferably under 12 words per sentence.
-- Total 60-100 words. The narration must add explanation beyond merely reading the on-screen text.
+- Total 95-120 words; aim for about 55 seconds of spoken content so the final video, CTA, and natural pauses stay around 60 seconds. The narration must add explanation beyond merely reading the on-screen text.
 - Use ONLY numbers that appear in the topic data given to you. Never invent prices, dates, returns.
 - Not a quiz. Do not ask the viewer to pick options.
 - SEBI rules: never tell anyone to buy/sell/hold a specific stock, fund or product; no targets,
@@ -204,7 +204,7 @@ Rules:
 - If category is "REAL DATA": hook = ONLY the question (year, ₹1 लाख, name), max 10 words —
   NEVER the answer. pehchan = the two prices with years. matlab = the multiple (गुना) once.
   karein = the final value once, then the balance line from facts. Say the final value only in
-  karein, never earlier. Total 45-80 words. Write "लगाते" (not "लगते")."""
+  karein, never earlier. Total 80-100 words. Write "लगाते" (not "लगते")."""
 
 
 def narration(topic, c):
