@@ -1,0 +1,28 @@
+{
+  "source": "User-provided competitor screenshots on 2026-09-25",
+  "phrases_to_avoid_as_exact_or_near_duplicate_topics": [
+    "buy sell",
+    "order block",
+    "breaker block",
+    "support resistance",
+    "liquidity sweep",
+    "supply and demand",
+    "retracement",
+    "double bottom",
+    "stop loss",
+    "trend bearish",
+    "cup and handle",
+    "forex",
+    "200 ema",
+    "parallel channel",
+    "panic selling",
+    "bump and run",
+    "curve line",
+    "one way fall",
+    "seller power",
+    "buyer power",
+    "scalper",
+    "inside bar",
+    "sweep"
+  ]
+}
