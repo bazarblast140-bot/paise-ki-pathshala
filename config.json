@@ -34,10 +34,10 @@
     "typewriter": true,
     "thumbnail": true,
     "background_music": true,
-    "visual_style": "Original framed chart cards: keep the chart inside one clear box, use the channel's own palette and hand-drawn chart details, one highlighted insight, and readable spacing. Use competitor research only for broad layout cues.",
+    "visual_style": "Original single boxed chart card inside the Shorts-safe board area. Preserve clear margins, readable labels, our own palette and hand-drawn charts. Reveal one chart layer at a time and use one focal callout; use side-by-side mini-charts only when the topic truly compares two cases.",
     "show_section_labels": false,
     "outro": false,
-    "thumbnail_style": "Original red hook card with our own boxed chart crop, concise Hindi hook, and topic-bank sticker; never use a competitor image or layout verbatim."
+    "thumbnail_style": "Original red hook card with a crop of our own boxed chart, concise Hindi hook, and topic-bank sticker. Keep SEO title and description descriptive and topic-specific; never reuse competitor images, titles, or exact layouts."
   },
   "video": {
     "target_minutes": 5,

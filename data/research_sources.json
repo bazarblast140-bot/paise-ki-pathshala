@@ -33,10 +33,10 @@
     "Blend stable competitor patterns with dated market relevance and our own measured outcomes; market and competitor signals are small ranking inputs, not factual sources.",
     "Never repeat an own-channel topic. Skip competitor-covered topics from the reviewed phrase list unless a materially different educational angle has been added explicitly to the bank.",
     "If research data is missing or malformed, continue the normal fresh-topic rotation without failing.",
-    "A boxed chart area is an approved high-level format cue; all drawings, colors, labels, hook copy, SEO metadata, and thumbnail composition remain original."
+    "Use competitor charts only for broad lessons such as whitespace, minimal labels, sequential reveals, and focal callouts. Keep the single box by default; use split mini-charts only for genuine comparisons, and keep every chart and thumbnail treatment original."
   ],
   "creative_direction": {
-    "chart_template": "A boxed chart area is an approved format-level reference. Keep our own board frame, color palette, chart drawings, labels, and composition; never recreate a competitor's exact template.",
-    "seo_thumbnail": "Use our topic-bank search phrase for SEO metadata and our own short hook thumbnail with a crop of the original chart drawing. Do not reuse competitor titles, thumbnail images, or exact layouts."
+    "chart_template": "Default to one self-contained chart box with breathing room, minimal labels, and a single focus marker. Reveal chart layers in sequence with narration. Use stacked or side-by-side mini-charts only when a real two-case comparison needs them, and keep each mini-chart legible within the box. Keep our frame, palette, drawings, and labels original.",
+    "seo_thumbnail": "Keep our own branded thumbnail: concise Hindi hook, topic-bank sticker, and crop of our own boxed chart. Continue using the topic-bank SEO phrase in searchable metadata; don't borrow competitor copy or images."
   }
 }
