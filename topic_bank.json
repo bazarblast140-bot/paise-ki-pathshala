@@ -1592,7 +1592,7 @@
   {
    "id": 43,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "nifty_2015",
    "cat": "REAL DATA",
    "topic": "2015 में NIFTY 50 में ₹1 लाख — जून 2026 तक कितना",
@@ -1627,7 +1627,8 @@
     "dividend शामिल नहीं",
     "पिछला रिटर्न गारंटी नहीं"
    ],
-   "seo": "Nifty 50 Return"
+   "seo": "Nifty 50 Return",
+   "used_short_at": "2026-09-25T07:33:51Z"
   },
   {
    "id": 44,
