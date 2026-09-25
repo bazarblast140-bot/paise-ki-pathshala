@@ -17,6 +17,13 @@ class CompetitorPatternTests(unittest.TestCase):
         self.assertGreater(weights["topic_type"]["mistake"], 0)
         self.assertNotIn("one-off", weights.get("hook_style", {}))
 
+    def test_vidiq_performance_indexes_become_usable_pattern_weights(self):
+        weights = pattern_weights({"observations": [
+            {"topic_type": "chart_concept", "performance_index": 2.0},
+            {"topic_type": "chart_concept", "performance_index": 2.5},
+        ]})
+        self.assertGreater(weights["topic_type"]["chart_concept"], 0)
+
     def test_market_and_first_party_data_rank_valid_candidate(self):
         topic = {"key": "rbi_update", "cat": "RBI", "research_tags": ["mistake"]}
         score = score_topic(topic, {"topic_type": {"mistake": 0.5}},

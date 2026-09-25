@@ -1,7 +1,22 @@
 {
   "schema_version": 1,
-  "updated_at": null,
-  "notes": "Optional aggregate observations only. Each row: topic_type, hook_style, pacing, visual_style, angle, views, baseline_views. Use normalized labels: mistake_prevention, mechanism_explainer, real_data, chart_concept, curiosity_question, number_led, warning, fast_paced, deep_dive, whiteboard_chart, or an exact topic-bank category. baseline_views is that competitor channel's median recent views. Add at least two rows per label. Never add titles, scripts, thumbnails, or trade calls.",
-  "observations": []
+  "updated_at": "2026-09-25",
+  "source": "vidIQ public Shorts snapshot; sample uses recent uploads with reported breakout scores. Titles and video identifiers are intentionally omitted.",
+  "notes": "Aggregate observations only. performance_index is vidIQ's breakout score relative to that creator's typical videos, capped during scoring. Use normalized labels: mistake_prevention, mechanism_explainer, real_data, chart_concept, curiosity_question, number_led, warning, fast_paced, deep_dive, whiteboard_chart, or an exact topic-bank category. At least two rows per label are needed. No titles, scripts, thumbnails, or trade calls.",
+  "observations": [
+    {"channel": "Deepu Maurya", "topic_type": "chart_concept", "hook_style": "mechanism_explainer", "pacing": "deep_dive", "performance_index": 3.0},
+    {"channel": "Deepu Maurya", "topic_type": "chart_concept", "hook_style": "mechanism_explainer", "pacing": "deep_dive", "performance_index": 1.28},
+    {"channel": "Deepu Maurya", "topic_type": "chart_concept", "hook_style": "mechanism_explainer", "pacing": "deep_dive", "performance_index": 1.24},
+    {"channel": "Deepu Maurya", "topic_type": "chart_concept", "hook_style": "mechanism_explainer", "pacing": "deep_dive", "performance_index": 1.48},
+    {"channel": "Deepu Maurya", "topic_type": "chart_concept", "hook_style": "mechanism_explainer", "pacing": "deep_dive", "performance_index": 1.35},
+    {"channel": "Deepu Maurya", "topic_type": "chart_concept", "hook_style": "mechanism_explainer", "pacing": "deep_dive", "performance_index": 1.28},
+    {"channel": "Stock Menthol", "topic_type": "chart_concept", "hook_style": "warning", "pacing": "fast_paced", "performance_index": 2.93},
+    {"channel": "Stock Menthol", "topic_type": "mistake_prevention", "hook_style": "warning", "pacing": "fast_paced", "performance_index": 1.65},
+    {"channel": "Stock Menthol", "topic_type": "mistake_prevention", "hook_style": "warning", "pacing": "fast_paced", "performance_index": 1.54},
+    {"channel": "Stock Menthol", "topic_type": "mistake_prevention", "hook_style": "warning", "pacing": "fast_paced", "performance_index": 1.07},
+    {"channel": "Stock Menthol", "topic_type": "chart_concept", "hook_style": "curiosity_question", "pacing": "fast_paced", "performance_index": 1.19},
+    {"channel": "Stock Menthol", "topic_type": "chart_concept", "hook_style": "curiosity_question", "pacing": "fast_paced", "performance_index": 1.21},
+    {"channel": "Stock Menthol", "topic_type": "chart_concept", "hook_style": "warning", "pacing": "fast_paced", "performance_index": 3.0}
+  ]
 }
 

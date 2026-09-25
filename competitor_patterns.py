@@ -32,11 +32,15 @@ def pattern_weights(data):
         if not isinstance(item, dict):
             continue
         try:
-            views = max(0, float(item.get("views", 0)))
-            baseline = max(1, float(item.get("baseline_views", 0)))
+            if item.get("performance_index") is not None:
+                ratio = float(item["performance_index"])
+            else:
+                views = max(0, float(item.get("views", 0)))
+                baseline = max(1, float(item.get("baseline_views", 0)))
+                ratio = views / baseline
         except (TypeError, ValueError):
             continue
-        ratio = min(3.0, views / baseline)
+        ratio = max(0.0, min(3.0, ratio))
         for dimension in ("topic_type", "hook_style", "pacing", "visual_style", "angle"):
             label = str(item.get(dimension) or "").strip().lower()
             if label:
