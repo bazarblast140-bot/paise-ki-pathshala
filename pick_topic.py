@@ -44,30 +44,28 @@ def _bank_recent_cats(bank, flag, n=CAT_COOLDOWN):
     return [c for _, c in stamped[:n] if c]
 
 
+def _seen_competitor_phrases():
+    path = ROOT / "data" / "seen_competitor_topics.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return [str(x).lower().strip() for x in data.get("phrases_to_avoid_as_exact_or_near_duplicate_topics", []) if str(x).strip()]
+    except (OSError, ValueError, TypeError):
+        return []
+
+def _is_competitor_duplicate(topic):
+    text = str(topic.get("topic") or "").lower()
+    return any(p in text for p in _seen_competitor_phrases())
+
 def _pick_fresh(bank, flag, avoid_cats):
-    """First unused topic whose cat is not in avoid_cats; else any unused."""
-    unused = [t for t in bank["topics"] if not t.get(flag)]
+    """Unused topic only; never recycle a published short and never pick a
+    phrase already seen in competitor research/screenshots."""
+    unused = [t for t in bank["topics"] if not t.get(flag) and not _is_competitor_duplicate(t)]
     if not unused:
         return None
     for t in unused:
         if (t.get("cat") or "") not in avoid_cats:
             return t
     return unused[0]
-
-
-def _pick_recycle(bank, flag, avoid_cats):
-    """All used — recycle least-recently-used, still prefer different cat."""
-    at_key = f"{flag}_at"
-    used = [t for t in bank["topics"] if t.get(flag)]
-    if not used:
-        return bank["topics"][0]
-    # oldest used_at first; missing at -> oldest
-    used.sort(key=lambda t: t.get(at_key) or "1970-01-01")
-    for t in used:
-        if (t.get("cat") or "") not in avoid_cats:
-            return t
-    return used[0]
-
 
 def main():
     bank_path = ROOT / "topic_bank.json"
@@ -80,19 +78,7 @@ def main():
     if test_key:
         nxt = next((t for t in bank["topics"] if t.get("key") == test_key), None)
         if not nxt:
-            die(f"TOPIC_KEY '{test_key}' topic_bank me nahi hai")
-        save("topic.txt", nxt["topic"])
-        save("topic.json", json.dumps(nxt, ensure_ascii=False, indent=1))
-        ok(f"TEST topic (used mark nahi): {nxt['key']}")
-        return
-
-    avoid = _bank_recent_cats(bank, flag, CAT_COOLDOWN)
-    nxt = _pick_fresh(bank, flag, avoid)
-    if not nxt:
-        print(f"[warn] saare topics '{flag}' ho gaye — least-recently-used recycle. Naye topics jodo.")
-        nxt = _pick_recycle(bank, flag, avoid)
-        # recycle: clear flag so settle_topic / commit still works; re-mark below
-        nxt[flag] = False
+        die(f"saare fresh topics '{flag}' khatam hain. Purana topic repeat nahi karunga — pehle naye verified topics jodo.")
 
     nxt[flag] = True
     nxt[at_key] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
