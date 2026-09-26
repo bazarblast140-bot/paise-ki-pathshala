@@ -1860,7 +1860,7 @@
   {
    "id": 50,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "marubozu",
    "cat": "CANDLESTICK",
    "topic": "Marubozu — बिना wick की मज़बूत कैंडल",
@@ -1890,7 +1890,8 @@
    "facts": [
     "हरी marubozu में open ही low और close ही high"
    ],
-   "seo": "Marubozu Candlestick"
+   "seo": "Marubozu Candlestick",
+   "used_short_at": "2026-09-26T12:53:37Z"
   },
   {
    "id": 51,
