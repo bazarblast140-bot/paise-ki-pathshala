@@ -2005,7 +2005,7 @@
   {
    "id": 54,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "muhurat",
    "cat": "MARKET FACT",
    "topic": "Muhurat trading — दिवाली का ख़ास सेशन",
@@ -2035,7 +2035,8 @@
    "facts": [
     "दिवाली की शाम करीब एक घंटे का सेशन"
    ],
-   "seo": "Muhurat Trading"
+   "seo": "Muhurat Trading",
+   "used_short_at": "2026-09-26T07:16:30Z"
   },
   {
    "id": 55,
