@@ -275,20 +275,20 @@ def finance_card_scene(key):
         panel(img)
         A = img.copy()
         if b == "hook":
-            big_text(img, X0 + 50, Y0 + 130, labels[0], 62, YELLOW)
-            big_text(img, X0 + 50, Y0 + 250, labels[1], 46, INK)
+            big_text(img, (X0 + 40, Y0 + 80, X1 - 40, Y0 + 190), [(labels[0], 62, YELLOW)])
+            big_text(img, (X0 + 40, Y0 + 205, X1 - 40, Y0 + 330), [(labels[1], 46, INK)])
             ring(img, X0 + 560, Y0 + 330, 150, 150, YELLOW)
         elif b == "pehchan":
-            big_text(img, X0 + 50, Y0 + 100, labels[1], 44, INK)
+            big_text(img, (X0 + 40, Y0 + 55, X1 - 40, Y0 + 155), [(labels[1], 44, INK)])
             for i, word in enumerate(labels[1].split(" / ")):
                 label(img, X0 + 70, Y0 + 250 + i * 125, word, YELLOW, 48)
                 arrow(img, (X0 + 390, Y0 + 275 + i * 125), (X0 + 720, Y0 + 275 + i * 125), BLUE, 8)
         elif b == "matlab":
-            big_text(img, X0 + 50, Y0 + 110, labels[2], 48, YELLOW)
+            big_text(img, (X0 + 40, Y0 + 65, X1 - 40, Y0 + 170), [(labels[2], 48, YELLOW)])
             arrow(img, (X0 + 180, Y0 + 430), (X0 + 700, Y0 + 430), GREEN, 14)
             ring(img, X0 + 700, Y0 + 430, 80, 80, GREEN)
         else:
-            big_text(img, X0 + 50, Y0 + 110, labels[3], 48, YELLOW)
+            big_text(img, (X0 + 40, Y0 + 65, X1 - 40, Y0 + 170), [(labels[3], 48, YELLOW)])
             for i, y in enumerate((Y0 + 290, Y0 + 450, Y0 + 610)):
                 ring(img, X0 + 100, y, 32, 32, GREEN)
                 label(img, X0 + 170, y - 28, "CHECK " + str(i + 1), INK, 36)
