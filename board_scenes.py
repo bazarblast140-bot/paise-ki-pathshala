@@ -227,6 +227,64 @@ def candle_scene(key):
     return beat
 
 
+
+
+# ================================================================ finance education cards
+FINANCE_CARD_LABELS = {
+    "fund": ("BUSINESS QUALITY", "REVENUE / PROFIT / CASH", "MARGIN / ROCE / FCF", "CHECK ANNUAL REPORT"),
+    "opt": ("OPTION SETUP", "PREMIUM / IV / GREEKS", "PAYOFF / RISK", "CHECK EXPIRY PAYOFF"),
+    "intraday": ("INTRADAY", "PRICE / VOLUME / VWAP", "CONTEXT + CONFIRM", "RISK BEFORE ENTRY"),
+    "stock": ("STOCK CASE", "BUSINESS / RESULTS", "VALUATION / RISK", "CHECK FILINGS"),
+    "penny": ("PENNY RISK", "PRICE IS NOT VALUE", "LIQUIDITY / DILUTION", "CHECK DISCLOSURES"),
+    "risk": ("RISK", "CAPITAL / POSITION", "LOSS / RECOVERY", "PROTECT CAPITAL"),
+    "business": ("BUSINESS", "REVENUE / UNIT ECONOMICS", "MARGIN / CASH", "READ THE NUMBERS"),
+    "market": ("MARKET HISTORY", "INDEX / EVENT", "DRAWdown / RECOVERY", "CHECK THE DATES"),
+}
+
+def finance_card_scene(key):
+    low = key.lower()
+    if low.startswith("fund_"):
+        kind = "fund"
+    elif low.startswith("opt_"):
+        kind = "opt"
+    elif low.startswith("intraday_"):
+        kind = "intraday"
+    elif low.startswith("stock_"):
+        kind = "stock"
+    elif low.startswith("penny_"):
+        kind = "penny"
+    elif low.startswith("risk_"):
+        kind = "risk"
+    elif low.startswith("business_"):
+        kind = "business"
+    else:
+        kind = "market"
+    labels = FINANCE_CARD_LABELS[kind]
+
+    def beat(b, img):
+        panel(img)
+        A = img.copy()
+        if b == "hook":
+            big_text(img, X0 + 50, Y0 + 130, labels[0], 62, YELLOW)
+            big_text(img, X0 + 50, Y0 + 250, labels[1], 46, INK)
+            ring(img, X0 + 560, Y0 + 330, 150, 150, YELLOW)
+        elif b == "pehchan":
+            big_text(img, X0 + 50, Y0 + 100, labels[1], 44, INK)
+            for i, word in enumerate(labels[1].split(" / ")):
+                label(img, X0 + 70, Y0 + 250 + i * 125, word, YELLOW, 48)
+                arrow(img, (X0 + 390, Y0 + 275 + i * 125), (X0 + 720, Y0 + 275 + i * 125), BLUE, 8)
+        elif b == "matlab":
+            big_text(img, X0 + 50, Y0 + 110, labels[2], 48, YELLOW)
+            arrow(img, (X0 + 180, Y0 + 430), (X0 + 700, Y0 + 430), GREEN, 14)
+            ring(img, X0 + 700, Y0 + 430, 80, 80, GREEN)
+        else:
+            big_text(img, X0 + 50, Y0 + 110, labels[3], 48, YELLOW)
+            for i, y in enumerate((Y0 + 290, Y0 + 450, Y0 + 610)):
+                ring(img, X0 + 100, y, 32, 32, GREEN)
+                label(img, X0 + 170, y - 28, "CHECK " + str(i + 1), INK, 36)
+        return A, img
+    return beat
+
 # ================================================================ indicators
 def _walk(n, seed, drift=0.0, vol=1.0, start=100.0):
     rng = random.Random(seed)
@@ -1192,6 +1250,15 @@ def depository():
 
 # ================================================================ registry
 SCENES = {
+    **{k: (lambda k=k: finance_card_scene(k)) for k in (
+        "fund_eps_quality","fund_roce","fund_margin","fund_fcf","fund_pledge","fund_working_capital",
+        "opt_iv_crush","opt_bull_call_spread","opt_bear_put_spread","opt_protective_put","opt_straddle","opt_theta_decay",
+        "intraday_orb","intraday_vwap","intraday_gap","intraday_trend_range","intraday_size","intraday_volume",
+        "stock_earnings","stock_turnaround","stock_valuation_trap",
+        "penny_dilution","penny_liquidity","penny_history",
+        "risk_drawdown","risk_rr","risk_leverage","risk_journal",
+        "business_unit_economics","business_cash","market_crash_math","market_index_base"
+    )},
     **{k: (lambda k=k: candle_scene(k)) for k in (
         "hammer", "shooting_star", "doji", "bullish_engulfing", "bearish_engulfing", "morning_star",
         "evening_star", "hanging_man", "inverted_hammer", "marubozu", "spinning_top",
