@@ -1972,7 +1972,7 @@
   {
    "id": 53,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "iv_premium",
    "cat": "OPTIONS",
    "topic": "IV बढ़े तो option premium क्यों बढ़ता है",
@@ -2002,7 +2002,8 @@
    "facts": [
     "बाक़ी सब बराबर हो तो IV बढ़ने पर premium बढ़ता है"
    ],
-   "seo": "Implied Volatility"
+   "seo": "Implied Volatility",
+   "used_short_at": "2026-09-27T07:48:13Z"
   },
   {
    "id": 54,
