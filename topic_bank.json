@@ -3807,6 +3807,1215 @@
     "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
    ],
    "seo": "Penny से multibagger तक — historical winner को पहले कैसे पहचानते?"
+  },
+  {
+   "id": 103,
+   "used": false,
+   "used_short": false,
+   "key": "fund_eps_quality",
+   "cat": "FUNDAMENTALS",
+   "topic": "Earnings quality — profit बढ़े लेकिन cash flow न बढ़े",
+   "thumb": [
+    "EPS बढ़ना काफी नहीं — cash कहाँ है?",
+    "Earnings quality"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "EPS बढ़ना काफी नहीं — cash कहाँ है?",
+     "EPS बढ़ना काफी नहीं — cash कहाँ है?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Operating cash flow को profit के साथ देखो"
+    ],
+    "matlab": [
+     "मतलब",
+     "Profit और cash अलग दिशा में हों तो quality check करो"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Annual report में cash flow statement देखना सीखो"
+    ]
+   },
+   "facts": [
+    "Earnings quality — profit बढ़े लेकिन cash flow न बढ़े",
+    "Operating cash flow को profit के साथ देखो",
+    "Profit और cash अलग दिशा में हों तो quality check करो",
+    "Annual report में cash flow statement देखना सीखो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Earnings quality — profit बढ़े लेकिन cash flow न बढ़े"
+  },
+  {
+   "id": 104,
+   "used": false,
+   "used_short": false,
+   "key": "fund_roce",
+   "cat": "FUNDAMENTALS",
+   "topic": "ROCE — कंपनी पूँजी से कितना operating profit बनाती है",
+   "thumb": [
+    "सिर्फ़ profit नहीं, capital efficiency भी देखो",
+    "ROCE"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "सिर्फ़ profit नहीं, capital efficiency भी देखो",
+     "सिर्फ़ profit नहीं, capital efficiency भी देखो"
+    ],
+    "pehchan": [
+     "पहचान",
+     "ROCE = operating profit के मुकाबले capital employed"
+    ],
+    "matlab": [
+     "मतलब",
+     "Asset-heavy business में capital need बड़ी हो सकती है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "ROCE को अपने historical trend और peers के साथ पढ़ो"
+    ]
+   },
+   "facts": [
+    "ROCE — कंपनी पूँजी से कितना operating profit बनाती है",
+    "ROCE = operating profit के मुकाबले capital employed",
+    "Asset-heavy business में capital need बड़ी हो सकती है",
+    "ROCE को अपने historical trend और peers के साथ पढ़ो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "ROCE — कंपनी पूँजी से कितना operating profit बनाती है"
+  },
+  {
+   "id": 105,
+   "used": false,
+   "used_short": false,
+   "key": "fund_margin",
+   "cat": "FUNDAMENTALS",
+   "topic": "Gross margin बनाम net margin — फर्क कहाँ दिखता है",
+   "thumb": [
+    "Sales बढ़ीं, फिर भी margin क्यों घटा?",
+    "Gross margin बनाम net margin"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "Sales बढ़ीं, फिर भी margin क्यों घटा?",
+     "Sales बढ़ीं, फिर भी margin क्यों घटा?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Gross margin product economics दिखाता है"
+    ],
+    "matlab": [
+     "मतलब",
+     "Interest, tax और other costs के बाद net margin बचता है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "दोनों margins की direction साथ देखो"
+    ]
+   },
+   "facts": [
+    "Gross margin बनाम net margin — फर्क कहाँ दिखता है",
+    "Gross margin product economics दिखाता है",
+    "Interest, tax और other costs के बाद net margin बचता है",
+    "दोनों margins की direction साथ देखो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Gross margin बनाम net margin — फर्क कहाँ दिखता है"
+  },
+  {
+   "id": 106,
+   "used": false,
+   "used_short": false,
+   "key": "fund_fcf",
+   "cat": "FUNDAMENTALS",
+   "topic": "Free cash flow — profit के बाद वास्तव में कितना cash बचा",
+   "thumb": [
+    "Profit दिख रहा है, cash कितना बचा?",
+    "Free cash flow"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "Profit दिख रहा है, cash कितना बचा?",
+     "Profit दिख रहा है, cash कितना बचा?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Operating cash flow से capital expenditure घटाने का concept"
+    ],
+    "matlab": [
+     "मतलब",
+     "Growth के लिए capex ज्यादा हो तो FCF दब सकता है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "कई साल का FCF trend पढ़ो, एक quarter नहीं"
+    ]
+   },
+   "facts": [
+    "Free cash flow — profit के बाद वास्तव में कितना cash बचा",
+    "Operating cash flow से capital expenditure घटाने का concept",
+    "Growth के लिए capex ज्यादा हो तो FCF दब सकता है",
+    "कई साल का FCF trend पढ़ो, एक quarter नहीं",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Free cash flow — profit के बाद वास्तव में कितना cash बचा"
+  },
+  {
+   "id": 107,
+   "used": false,
+   "used_short": false,
+   "key": "fund_pledge",
+   "cat": "FUNDAMENTALS",
+   "topic": "Promoter pledge — shareholding के पीछे छिपा risk",
+   "thumb": [
+    "Promoter shares pledged हैं तो क्यों?",
+    "Promoter pledge"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "Promoter shares pledged हैं तो क्यों?",
+     "Promoter shares pledged हैं तो क्यों?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Pledge borrowing के लिए shares को security बना सकता है"
+    ],
+    "matlab": [
+     "मतलब",
+     "Share price गिरने पर collateral pressure बढ़ सकता है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Exchange disclosures में pledge trend देखो"
+    ]
+   },
+   "facts": [
+    "Promoter pledge — shareholding के पीछे छिपा risk",
+    "Pledge borrowing के लिए shares को security बना सकता है",
+    "Share price गिरने पर collateral pressure बढ़ सकता है",
+    "Exchange disclosures में pledge trend देखो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Promoter pledge — shareholding के पीछे छिपा risk"
+  },
+  {
+   "id": 108,
+   "used": false,
+   "used_short": false,
+   "key": "fund_working_capital",
+   "cat": "FUNDAMENTALS",
+   "topic": "Working capital — sales बढ़ीं लेकिन cash क्यों फँसा",
+   "thumb": [
+    "Revenue बढ़ना हमेशा cash बढ़ना नहीं है",
+    "Working capital"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "Revenue बढ़ना हमेशा cash बढ़ना नहीं है",
+     "Revenue बढ़ना हमेशा cash बढ़ना नहीं है"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Receivables और inventory cash को रोक सकते हैं"
+    ],
+    "matlab": [
+     "मतलब",
+     "Working capital तेज़ बढ़े तो earnings quality पर सवाल उठता है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Cash conversion को annual report में check करो"
+    ]
+   },
+   "facts": [
+    "Working capital — sales बढ़ीं लेकिन cash क्यों फँसा",
+    "Receivables और inventory cash को रोक सकते हैं",
+    "Working capital तेज़ बढ़े तो earnings quality पर सवाल उठता है",
+    "Cash conversion को annual report में check करो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Working capital — sales बढ़ीं लेकिन cash क्यों फँसा"
+  },
+  {
+   "id": 109,
+   "used": false,
+   "used_short": false,
+   "key": "opt_iv_crush",
+   "cat": "OPTIONS",
+   "topic": "IV Crush — result के बाद option premium क्यों गिर सकता है",
+   "thumb": [
+    "सही direction के बावजूद option buyer हार सकता है",
+    "IV Crush"
+   ],
+   "sticker": "OPTIONS",
+   "beats": {
+    "hook": [
+     "सही direction के बावजूद option buyer हार सकता है",
+     "सही direction के बावजूद option buyer हार सकता है"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Implied volatility premium को प्रभावित करती है"
+    ],
+    "matlab": [
+     "मतलब",
+     "Event खत्म होते ही IV गिर सकती है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Direction के साथ IV और expiry भी समझो"
+    ]
+   },
+   "facts": [
+    "IV Crush — result के बाद option premium क्यों गिर सकता है",
+    "Implied volatility premium को प्रभावित करती है",
+    "Event खत्म होते ही IV गिर सकती है",
+    "Direction के साथ IV और expiry भी समझो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "IV Crush — result के बाद option premium क्यों गिर सकता है"
+  },
+  {
+   "id": 110,
+   "used": false,
+   "used_short": false,
+   "key": "opt_bull_call_spread",
+   "cat": "OPTIONS",
+   "topic": "Bull Call Spread — limited risk वाला bullish option setup",
+   "thumb": [
+    "Bullish view है, पर premium कम रखना है?",
+    "Bull Call Spread"
+   ],
+   "sticker": "OPTIONS",
+   "beats": {
+    "hook": [
+     "Bullish view है, पर premium कम रखना है?",
+     "Bullish view है, पर premium कम रखना है?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "एक call खरीदकर higher-strike call बेचने का structure"
+    ],
+    "matlab": [
+     "मतलब",
+     "Upside और maximum loss दोनों defined होते हैं"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Expiry payoff पहले से calculate करो"
+    ]
+   },
+   "facts": [
+    "Bull Call Spread — limited risk वाला bullish option setup",
+    "एक call खरीदकर higher-strike call बेचने का structure",
+    "Upside और maximum loss दोनों defined होते हैं",
+    "Expiry payoff पहले से calculate करो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Bull Call Spread — limited risk वाला bullish option setup"
+  },
+  {
+   "id": 111,
+   "used": false,
+   "used_short": false,
+   "key": "opt_bear_put_spread",
+   "cat": "OPTIONS",
+   "topic": "Bear Put Spread — bearish view को defined risk में समझो",
+   "thumb": [
+    "Bearish trade में risk कैसे सीमित करें?",
+    "Bear Put Spread"
+   ],
+   "sticker": "OPTIONS",
+   "beats": {
+    "hook": [
+     "Bearish trade में risk कैसे सीमित करें?",
+     "Bearish trade में risk कैसे सीमित करें?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Put खरीदकर lower-strike put बेचने का structure"
+    ],
+    "matlab": [
+     "मतलब",
+     "Maximum loss और maximum profit पहले से defined होते हैं"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Payoff और breakeven expiry से पहले calculate करो"
+    ]
+   },
+   "facts": [
+    "Bear Put Spread — bearish view को defined risk में समझो",
+    "Put खरीदकर lower-strike put बेचने का structure",
+    "Maximum loss और maximum profit पहले से defined होते हैं",
+    "Payoff और breakeven expiry से पहले calculate करो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Bear Put Spread — bearish view को defined risk में समझो"
+  },
+  {
+   "id": 112,
+   "used": false,
+   "used_short": false,
+   "key": "opt_protective_put",
+   "cat": "OPTIONS",
+   "topic": "Protective Put — stock holding के साथ downside protection",
+   "thumb": [
+    "Share रखकर downside insurance कैसे समझें?",
+    "Protective Put"
+   ],
+   "sticker": "OPTIONS",
+   "beats": {
+    "hook": [
+     "Share रखकर downside insurance कैसे समझें?",
+     "Share रखकर downside insurance कैसे समझें?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Stock के साथ put खरीदने का basic structure"
+    ],
+    "matlab": [
+     "मतलब",
+     "Premium protection की cost है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Protection की cost और expiry दोनों compare करो"
+    ]
+   },
+   "facts": [
+    "Protective Put — stock holding के साथ downside protection",
+    "Stock के साथ put खरीदने का basic structure",
+    "Premium protection की cost है",
+    "Protection की cost और expiry दोनों compare करो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Protective Put — stock holding के साथ downside protection"
+  },
+  {
+   "id": 113,
+   "used": false,
+   "used_short": false,
+   "key": "opt_straddle",
+   "cat": "OPTIONS",
+   "topic": "Long Straddle — direction नहीं, बड़ा move चाहिए",
+   "thumb": [
+    "Market किस direction जाएगा पता नहीं — फिर भी strategy?",
+    "Long Straddle"
+   ],
+   "sticker": "OPTIONS",
+   "beats": {
+    "hook": [
+     "Market किस direction जाएगा पता नहीं — फिर भी strategy?",
+     "Market किस direction जाएगा पता नहीं — फिर भी strategy?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Same strike call और put खरीदने का structure"
+    ],
+    "matlab": [
+     "मतलब",
+     "दोनों premiums की वजह से बड़ा move चाहिए"
+    ],
+    "karein": [
+     "क्या देखें",
+     "IV और breakeven दोनों समझकर ही payoff पढ़ो"
+    ]
+   },
+   "facts": [
+    "Long Straddle — direction नहीं, बड़ा move चाहिए",
+    "Same strike call और put खरीदने का structure",
+    "दोनों premiums की वजह से बड़ा move चाहिए",
+    "IV और breakeven दोनों समझकर ही payoff पढ़ो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Long Straddle — direction नहीं, बड़ा move चाहिए"
+  },
+  {
+   "id": 114,
+   "used": false,
+   "used_short": false,
+   "key": "opt_theta_decay",
+   "cat": "OPTIONS",
+   "topic": "Theta — expiry पास आते ही time value क्यों घटती है",
+   "thumb": [
+    "Option खरीदा और समय आपके खिलाफ क्यों है?",
+    "Theta"
+   ],
+   "sticker": "OPTIONS",
+   "beats": {
+    "hook": [
+     "Option खरीदा और समय आपके खिलाफ क्यों है?",
+     "Option खरीदा और समय आपके खिलाफ क्यों है?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Theta time value decay को describe करता है"
+    ],
+    "matlab": [
+     "मतलब",
+     "बाकी factors समान हों तो expiry पास decay तेज़ हो सकता है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Option buyer को time decay समझना जरूरी है"
+    ]
+   },
+   "facts": [
+    "Theta — expiry पास आते ही time value क्यों घटती है",
+    "Theta time value decay को describe करता है",
+    "बाकी factors समान हों तो expiry पास decay तेज़ हो सकता है",
+    "Option buyer को time decay समझना जरूरी है",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Theta — expiry पास आते ही time value क्यों घटती है"
+  },
+  {
+   "id": 115,
+   "used": false,
+   "used_short": false,
+   "key": "intraday_orb",
+   "cat": "INTRADAY",
+   "topic": "Opening Range Breakout — पहला range क्यों महत्वपूर्ण",
+   "thumb": [
+    "पहले कुछ मिनट का range बाद में reference बन सकता है",
+    "Opening Range Breakout"
+   ],
+   "sticker": "INTRADAY",
+   "beats": {
+    "hook": [
+     "पहले कुछ मिनट का range बाद में reference बन सकता है",
+     "पहले कुछ मिनट का range बाद में reference बन सकता है"
+    ],
+    "pehchan": [
+     "पहचान",
+     "High और low से opening range define होती है"
+    ],
+    "matlab": [
+     "मतलब",
+     "Breakout को volume और close से confirm करना useful हो सकता है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "False breakout के लिए invalidation पहले तय करो"
+    ]
+   },
+   "facts": [
+    "Opening Range Breakout — पहला range क्यों महत्वपूर्ण",
+    "High और low से opening range define होती है",
+    "Breakout को volume और close से confirm करना useful हो सकता है",
+    "False breakout के लिए invalidation पहले तय करो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Opening Range Breakout — पहला range क्यों महत्वपूर्ण"
+  },
+  {
+   "id": 116,
+   "used": false,
+   "used_short": false,
+   "key": "intraday_vwap",
+   "cat": "INTRADAY",
+   "topic": "VWAP reclaim और rejection — intraday context कैसे पढ़ें",
+   "thumb": [
+    "Price VWAP के ऊपर गया, क्या trend बदल गया?",
+    "VWAP reclaim और rejection"
+   ],
+   "sticker": "INTRADAY",
+   "beats": {
+    "hook": [
+     "Price VWAP के ऊपर गया, क्या trend बदल गया?",
+     "Price VWAP के ऊपर गया, क्या trend बदल गया?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "VWAP session का volume-weighted average price है"
+    ],
+    "matlab": [
+     "मतलब",
+     "Reclaim, rejection और volume context साथ पढ़े जाते हैं"
+    ],
+    "karein": [
+     "क्या देखें",
+     "VWAP अकेला buy/sell signal नहीं है"
+    ]
+   },
+   "facts": [
+    "VWAP reclaim और rejection — intraday context कैसे पढ़ें",
+    "VWAP session का volume-weighted average price है",
+    "Reclaim, rejection और volume context साथ पढ़े जाते हैं",
+    "VWAP अकेला buy/sell signal नहीं है",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "VWAP reclaim और rejection — intraday context कैसे पढ़ें"
+  },
+  {
+   "id": 117,
+   "used": false,
+   "used_short": false,
+   "key": "intraday_trend_range",
+   "cat": "INTRADAY",
+   "topic": "Trend day बनाम range day — strategy क्यों बदलती है",
+   "thumb": [
+    "हर दिन breakout वाला दिन नहीं होता",
+    "Trend day बनाम range day"
+   ],
+   "sticker": "INTRADAY",
+   "beats": {
+    "hook": [
+     "हर दिन breakout वाला दिन नहीं होता",
+     "हर दिन breakout वाला दिन नहीं होता"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Trend day में directional movement टिक सकता है"
+    ],
+    "matlab": [
+     "मतलब",
+     "Range day में price boundaries के बीच घूम सकता है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Day type बदलते ही setup selection भी बदलो"
+    ]
+   },
+   "facts": [
+    "Trend day बनाम range day — strategy क्यों बदलती है",
+    "Trend day में directional movement टिक सकता है",
+    "Range day में price boundaries के बीच घूम सकता है",
+    "Day type बदलते ही setup selection भी बदलो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Trend day बनाम range day — strategy क्यों बदलती है"
+  },
+  {
+   "id": 118,
+   "used": false,
+   "used_short": false,
+   "key": "intraday_size",
+   "cat": "INTRADAY",
+   "topic": "Stop distance बदलते ही position size क्यों बदलनी चाहिए",
+   "thumb": [
+    "एक ही capital में quantity हर trade में समान क्यों नहीं?",
+    "Stop distance बदलते ही position size क्यों बदलनी चाहिए"
+   ],
+   "sticker": "INTRADAY",
+   "beats": {
+    "hook": [
+     "एक ही capital में quantity हर trade में समान क्यों नहीं?",
+     "एक ही capital में quantity हर trade में समान क्यों नहीं?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Fixed rupee risk को stop distance से divide करने का concept"
+    ],
+    "matlab": [
+     "मतलब",
+     "Wide stop = छोटी quantity; tight stop = बड़ी quantity"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Risk पहले तय करो, quantity बाद में"
+    ]
+   },
+   "facts": [
+    "Stop distance बदलते ही position size क्यों बदलनी चाहिए",
+    "Fixed rupee risk को stop distance से divide करने का concept",
+    "Wide stop = छोटी quantity; tight stop = बड़ी quantity",
+    "Risk पहले तय करो, quantity बाद में",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Stop distance बदलते ही position size क्यों बदलनी चाहिए"
+  },
+  {
+   "id": 119,
+   "used": false,
+   "used_short": false,
+   "key": "intraday_volume",
+   "cat": "INTRADAY",
+   "topic": "Volume spike और price stall — demand सच में है?",
+   "thumb": [
+    "Volume बहुत आया, price फिर भी नहीं भागा",
+    "Volume spike और price stall"
+   ],
+   "sticker": "INTRADAY",
+   "beats": {
+    "hook": [
+     "Volume बहुत आया, price फिर भी नहीं भागा",
+     "Volume बहुत आया, price फिर भी नहीं भागा"
+    ],
+    "pehchan": [
+     "पहचान",
+     "High volume activity दिखाता है, direction अकेले नहीं"
+    ],
+    "matlab": [
+     "मतलब",
+     "Price stall supply-demand balance का clue हो सकता है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Volume को price structure के साथ पढ़ो"
+    ]
+   },
+   "facts": [
+    "Volume spike और price stall — demand सच में है?",
+    "High volume activity दिखाता है, direction अकेले नहीं",
+    "Price stall supply-demand balance का clue हो सकता है",
+    "Volume को price structure के साथ पढ़ो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Volume spike और price stall — demand सच में है?"
+  },
+  {
+   "id": 120,
+   "used": false,
+   "used_short": false,
+   "key": "stock_earnings",
+   "cat": "STOCK CASE STUDY",
+   "topic": "Strong quarterly result को पढ़ने के 5 सवाल",
+   "thumb": [
+    "Profit बढ़ा — क्या result सच में मजबूत है?",
+    "Strong quarterly result को पढ़ने के 5 सवाल"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "Profit बढ़ा — क्या result सच में मजबूत है?",
+     "Profit बढ़ा — क्या result सच में मजबूत है?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Revenue, margin, EPS और cash flow की direction देखो"
+    ],
+    "matlab": [
+     "मतलब",
+     "One-off income recurring business को बेहतर दिखा सकती है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Headline profit से आगे notes और cash flow पढ़ो"
+    ]
+   },
+   "facts": [
+    "Strong quarterly result को पढ़ने के 5 सवाल",
+    "Revenue, margin, EPS और cash flow की direction देखो",
+    "One-off income recurring business को बेहतर दिखा सकती है",
+    "Headline profit से आगे notes और cash flow पढ़ो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Strong quarterly result को पढ़ने के 5 सवाल"
+  },
+  {
+   "id": 121,
+   "used": false,
+   "used_short": false,
+   "key": "stock_turnaround",
+   "cat": "STOCK CASE STUDY",
+   "topic": "Turnaround stock — recovery से पहले कौन से संकेत दिखते हैं",
+   "thumb": [
+    "Turnaround सिर्फ़ share price की कहानी नहीं है",
+    "Turnaround stock"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "Turnaround सिर्फ़ share price की कहानी नहीं है",
+     "Turnaround सिर्फ़ share price की कहानी नहीं है"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Revenue stabilization, margin recovery और debt trend देखें"
+    ],
+    "matlab": [
+     "मतलब",
+     "Low price अपने आप turnaround साबित नहीं करता"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Business metrics को price से पहले track करो"
+    ]
+   },
+   "facts": [
+    "Turnaround stock — recovery से पहले कौन से संकेत दिखते हैं",
+    "Revenue stabilization, margin recovery और debt trend देखें",
+    "Low price अपने आप turnaround साबित नहीं करता",
+    "Business metrics को price से पहले track करो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Turnaround stock — recovery से पहले कौन से संकेत दिखते हैं"
+  },
+  {
+   "id": 122,
+   "used": false,
+   "used_short": false,
+   "key": "stock_valuation_trap",
+   "cat": "STOCK CASE STUDY",
+   "topic": "Valuation trap — सस्ता P/E हमेशा सस्ता stock नहीं",
+   "thumb": [
+    "P/E कम है तो stock सस्ता? जरूरी नहीं",
+    "Valuation trap"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "P/E कम है तो stock सस्ता? जरूरी नहीं",
+     "P/E कम है तो stock सस्ता? जरूरी नहीं"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Low multiple weak growth या high risk को reflect कर सकता है"
+    ],
+    "matlab": [
+     "मतलब",
+     "Earnings गिरें तो आज का P/E misleading हो सकता है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Valuation को growth और balance sheet के साथ पढ़ो"
+    ]
+   },
+   "facts": [
+    "Valuation trap — सस्ता P/E हमेशा सस्ता stock नहीं",
+    "Low multiple weak growth या high risk को reflect कर सकता है",
+    "Earnings गिरें तो आज का P/E misleading हो सकता है",
+    "Valuation को growth और balance sheet के साथ पढ़ो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Valuation trap — सस्ता P/E हमेशा सस्ता stock नहीं"
+  },
+  {
+   "id": 123,
+   "used": false,
+   "used_short": false,
+   "key": "penny_dilution",
+   "cat": "PENNY STOCK",
+   "topic": "Penny stock में share dilution का छिपा असर",
+   "thumb": [
+    "कम share price देखकर पूरी कहानी मत समझो",
+    "Penny stock में share dilution का छिपा असर"
+   ],
+   "sticker": "सावधान",
+   "beats": {
+    "hook": [
+     "कम share price देखकर पूरी कहानी मत समझो",
+     "कम share price देखकर पूरी कहानी मत समझो"
+    ],
+    "pehchan": [
+     "पहचान",
+     "New shares issue होने पर ownership dilute हो सकती है"
+    ],
+    "matlab": [
+     "मतलब",
+     "Per-share economics बदल सकती है भले business वही दिखे"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Share count trend और filings check करो"
+    ]
+   },
+   "facts": [
+    "Penny stock में share dilution का छिपा असर",
+    "New shares issue होने पर ownership dilute हो सकती है",
+    "Per-share economics बदल सकती है भले business वही दिखे",
+    "Share count trend और filings check करो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Penny stock में share dilution का छिपा असर"
+  },
+  {
+   "id": 124,
+   "used": false,
+   "used_short": false,
+   "key": "penny_liquidity",
+   "cat": "PENNY STOCK",
+   "topic": "Penny stock liquidity risk — बेचते समय problem क्यों होती है",
+   "thumb": [
+    "खरीदना आसान दिखता है, exit मुश्किल हो सकता है",
+    "Penny stock liquidity risk"
+   ],
+   "sticker": "सावधान",
+   "beats": {
+    "hook": [
+     "खरीदना आसान दिखता है, exit मुश्किल हो सकता है",
+     "खरीदना आसान दिखता है, exit मुश्किल हो सकता है"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Low trading volume में bid-ask spread बड़ा हो सकता है"
+    ],
+    "matlab": [
+     "मतलब",
+     "Large order price को move कर सकता है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Liquidity को return से पहले check करो"
+    ]
+   },
+   "facts": [
+    "Penny stock liquidity risk — बेचते समय problem क्यों होती है",
+    "Low trading volume में bid-ask spread बड़ा हो सकता है",
+    "Large order price को move कर सकता है",
+    "Liquidity को return से पहले check करो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Penny stock liquidity risk — बेचते समय problem क्यों होती है"
+  },
+  {
+   "id": 125,
+   "used": false,
+   "used_short": false,
+   "key": "penny_history",
+   "cat": "PENNY STOCK",
+   "topic": "पुराने penny multibagger को देखकर आज की खरीद क्यों तय नहीं होती",
+   "thumb": [
+    "Past multibagger की कहानी अधूरी क्यों हो सकती है?",
+    "पुराने penny multibagger को देखकर आज की खरीद क्यों तय नहीं होती"
+   ],
+   "sticker": "सावधान",
+   "beats": {
+    "hook": [
+     "Past multibagger की कहानी अधूरी क्यों हो सकती है?",
+     "Past multibagger की कहानी अधूरी क्यों हो सकती है?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Corporate actions, dilution और business changes return बदलते हैं"
+    ],
+    "matlab": [
+     "मतलब",
+     "Survivorship bias सिर्फ़ सफल examples दिखाता है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "पूरे historical dataset को देखकर lesson निकालो"
+    ]
+   },
+   "facts": [
+    "पुराने penny multibagger को देखकर आज की खरीद क्यों तय नहीं होती",
+    "Corporate actions, dilution और business changes return बदलते हैं",
+    "Survivorship bias सिर्फ़ सफल examples दिखाता है",
+    "पूरे historical dataset को देखकर lesson निकालो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "पुराने penny multibagger को देखकर आज की खरीद क्यों तय नहीं होती"
+  },
+  {
+   "id": 126,
+   "used": false,
+   "used_short": false,
+   "key": "risk_drawdown",
+   "cat": "RISK",
+   "topic": "20% drawdown के बाद break-even math",
+   "thumb": [
+    "20% गिरा तो वापस आने के लिए सिर्फ़ 20% क्यों नहीं?",
+    "20% drawdown के बाद break-even math"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "20% गिरा तो वापस आने के लिए सिर्फ़ 20% क्यों नहीं?",
+     "20% गिरा तो वापस आने के लिए सिर्फ़ 20% क्यों नहीं?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Loss के बाद base छोटा हो जाता है"
+    ],
+    "matlab": [
+     "मतलब",
+     "Recovery percentage हमेशा loss percentage से बड़ा होता है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Drawdown control capital survival का हिस्सा है"
+    ]
+   },
+   "facts": [
+    "20% drawdown के बाद break-even math",
+    "Loss के बाद base छोटा हो जाता है",
+    "Recovery percentage हमेशा loss percentage से बड़ा होता है",
+    "Drawdown control capital survival का हिस्सा है",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "20% drawdown के बाद break-even math"
+  },
+  {
+   "id": 127,
+   "used": false,
+   "used_short": false,
+   "key": "risk_rr",
+   "cat": "RISK",
+   "topic": "Risk-reward और win rate — दोनों साथ क्यों देखना चाहिए",
+   "thumb": [
+    "कम जीतकर भी system टिक सकता है?",
+    "Risk-reward और win rate"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "कम जीतकर भी system टिक सकता है?",
+     "कम जीतकर भी system टिक सकता है?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Expected outcome win rate और average win/loss पर depend करता है"
+    ],
+    "matlab": [
+     "मतलब",
+     "High win rate अकेला पर्याप्त नहीं"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Journal में दोनों numbers track करो"
+    ]
+   },
+   "facts": [
+    "Risk-reward और win rate — दोनों साथ क्यों देखना चाहिए",
+    "Expected outcome win rate और average win/loss पर depend करता है",
+    "High win rate अकेला पर्याप्त नहीं",
+    "Journal में दोनों numbers track करो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Risk-reward और win rate — दोनों साथ क्यों देखना चाहिए"
+  },
+  {
+   "id": 128,
+   "used": false,
+   "used_short": false,
+   "key": "risk_leverage",
+   "cat": "RISK",
+   "topic": "Leverage में छोटा price move capital पर बड़ा असर क्यों डालता है",
+   "thumb": [
+    "Leverage return ही नहीं, loss भी amplify करता है",
+    "Leverage में छोटा price move capital पर बड़ा असर क्यों डालता है"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "Leverage return ही नहीं, loss भी amplify करता है",
+     "Leverage return ही नहीं, loss भी amplify करता है"
+    ],
+    "pehchan": [
+     "पहचान",
+     "कम capital से बड़ी exposure बनती है"
+    ],
+    "matlab": [
+     "मतलब",
+     "Adverse move margin पर तेजी से असर डाल सकता है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Leverage से पहले maximum loss calculate करो"
+    ]
+   },
+   "facts": [
+    "Leverage में छोटा price move capital पर बड़ा असर क्यों डालता है",
+    "कम capital से बड़ी exposure बनती है",
+    "Adverse move margin पर तेजी से असर डाल सकता है",
+    "Leverage से पहले maximum loss calculate करो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Leverage में छोटा price move capital पर बड़ा असर क्यों डालता है"
+  },
+  {
+   "id": 129,
+   "used": false,
+   "used_short": false,
+   "key": "risk_journal",
+   "cat": "RISK",
+   "topic": "Trading journal में कौन से numbers track करें",
+   "thumb": [
+    "सिर्फ़ profit-loss लिखना काफी नहीं",
+    "Trading journal में कौन से numbers track करें"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "सिर्फ़ profit-loss लिखना काफी नहीं",
+     "सिर्फ़ profit-loss लिखना काफी नहीं"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Setup, risk, exit reason और mistake category track करो"
+    ],
+    "matlab": [
+     "मतलब",
+     "Data से repeat mistakes दिख सकती हैं"
+    ],
+    "karein": [
+     "क्या देखें",
+     "हर week journal review करो"
+    ]
+   },
+   "facts": [
+    "Trading journal में कौन से numbers track करें",
+    "Setup, risk, exit reason और mistake category track करो",
+    "Data से repeat mistakes दिख सकती हैं",
+    "हर week journal review करो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Trading journal में कौन से numbers track करें"
+  },
+  {
+   "id": 130,
+   "used": false,
+   "used_short": false,
+   "key": "business_unit_economics",
+   "cat": "BUSINESS",
+   "topic": "Unit economics — customer लाने की cost और value का रिश्ता",
+   "thumb": [
+    "Revenue बढ़ रहा है, पर हर customer profitable है?",
+    "Unit economics"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "Revenue बढ़ रहा है, पर हर customer profitable है?",
+     "Revenue बढ़ रहा है, पर हर customer profitable है?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "CAC acquisition cost बताता है"
+    ],
+    "matlab": [
+     "मतलब",
+     "LTV customer से long-term value का concept है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Growth के साथ unit economics improve हो रहे हैं या नहीं देखो"
+    ]
+   },
+   "facts": [
+    "Unit economics — customer लाने की cost और value का रिश्ता",
+    "CAC acquisition cost बताता है",
+    "LTV customer से long-term value का concept है",
+    "Growth के साथ unit economics improve हो रहे हैं या नहीं देखो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Unit economics — customer लाने की cost और value का रिश्ता"
+  },
+  {
+   "id": 131,
+   "used": false,
+   "used_short": false,
+   "key": "business_cash",
+   "cat": "BUSINESS",
+   "topic": "EBITDA और operating cash flow — एक जैसे क्यों नहीं",
+   "thumb": [
+    "EBITDA profit-like metric है, cash नहीं",
+    "EBITDA और operating cash flow"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "EBITDA profit-like metric है, cash नहीं",
+     "EBITDA profit-like metric है, cash नहीं"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Working capital और other cash items फर्क पैदा कर सकते हैं"
+    ],
+    "matlab": [
+     "मतलब",
+     "High EBITDA के बावजूद cash pressure हो सकता है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Cash flow statement को ignore मत करो"
+    ]
+   },
+   "facts": [
+    "EBITDA और operating cash flow — एक जैसे क्यों नहीं",
+    "Working capital और other cash items फर्क पैदा कर सकते हैं",
+    "High EBITDA के बावजूद cash pressure हो सकता है",
+    "Cash flow statement को ignore मत करो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "EBITDA और operating cash flow — एक जैसे क्यों नहीं"
+  },
+  {
+   "id": 132,
+   "used": false,
+   "used_short": false,
+   "key": "market_crash_math",
+   "cat": "MARKET HISTORY",
+   "topic": "Market crash में drawdown को percentage से कैसे मापें",
+   "thumb": [
+    "Index गिरा तो recovery math क्यों बदल जाता है?",
+    "Market crash में drawdown को percentage से कैसे मापें"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "Index गिरा तो recovery math क्यों बदल जाता है?",
+     "Index गिरा तो recovery math क्यों बदल जाता है?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Peak से trough तक percentage fall drawdown है"
+    ],
+    "matlab": [
+     "मतलब",
+     "बड़ा drawdown recover करने में disproportionately बड़ा gain चाहिए"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Historical charts में peak और trough दोनों mark करो"
+    ]
+   },
+   "facts": [
+    "Market crash में drawdown को percentage से कैसे मापें",
+    "Peak से trough तक percentage fall drawdown है",
+    "बड़ा drawdown recover करने में disproportionately बड़ा gain चाहिए",
+    "Historical charts में peak और trough दोनों mark करो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Market crash में drawdown को percentage से कैसे मापें"
+  },
+  {
+   "id": 133,
+   "used": false,
+   "used_short": false,
+   "key": "market_index_base",
+   "cat": "MARKET HISTORY",
+   "topic": "Index base value का असली मतलब",
+   "thumb": [
+    "Index 100 से 1000 कैसे बनता है?",
+    "Index base value का असली मतलब"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "Index 100 से 1000 कैसे बनता है?",
+     "Index 100 से 1000 कैसे बनता है?"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Base date और base value calculation की शुरुआत तय करते हैं"
+    ],
+    "matlab": [
+     "मतलब",
+     "Index level किसी एक stock की price नहीं है"
+    ],
+    "karein": [
+     "क्या देखें",
+     "Index methodology समझे बिना level compare मत करो"
+    ]
+   },
+   "facts": [
+    "Index base value का असली मतलब",
+    "Base date और base value calculation की शुरुआत तय करते हैं",
+    "Index level किसी एक stock की price नहीं है",
+    "Index methodology समझे बिना level compare मत करो",
+    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Index base value का असली मतलब"
   }
  ]
 }
