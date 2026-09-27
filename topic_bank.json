@@ -2331,7 +2331,7 @@
   {
    "id": 63,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "fund_pe",
    "cat": "FUNDAMENTAL",
    "topic": "P/E ratio — सस्ता शेयर या value trap?",
@@ -2363,7 +2363,8 @@
     "P/E = price ÷ EPS",
     "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "P/E ratio — सस्ता शेयर या value trap?"
+   "seo": "P/E ratio — सस्ता शेयर या value trap?",
+   "used_short_at": "2026-09-27T18:15:44Z"
   },
   {
    "id": 64,
