@@ -242,14 +242,24 @@ FINANCE_CARD_LABELS = {
 }
 
 def finance_card_scene(key):
+    """Generic finance-card fallback for every valid topic-bank key.
+
+    Dedicated scenes still win. New finance topics must not crash Chart Board
+    just because a bespoke renderer has not been added yet.
+    """
     low = key.lower()
-    if low.startswith("fund_"):
+
+    if (
+        low.startswith(("fund_", "peg_", "roe_", "debt_", "cashflow_",
+                        "operating_", "eps_", "promoter_", "shareholding"))
+        or low in {"fcf", "quality_stock_checklist"}
+    ):
         kind = "fund"
-    elif low.startswith("opt_"):
+    elif low.startswith(("opt_", "option_")):
         kind = "opt"
     elif low.startswith("intraday_"):
         kind = "intraday"
-    elif low.startswith("stock_"):
+    elif low.startswith(("stock_", "multibagger_", "smallcap_")):
         kind = "stock"
     elif low.startswith("penny_"):
         kind = "penny"
@@ -1287,10 +1297,22 @@ SCENES = {
 }
 
 
+def _scene_factory(key):
+    """Return a dedicated scene when available, otherwise a safe generic card.
+
+    This prevents a newly added topic-bank key from taking down the whole
+    scheduled run with KeyError: <topic_key>.
+    """
+    factory = SCENES.get(key)
+    if factory is not None:
+        return factory
+    return lambda: finance_card_scene(key)
+
+
 def render_beat(key, beat, img):
-    return SCENES[key]()(beat, img)
+    return _scene_factory(key)()(beat, img)
 
 
 def cue(key):
     """Regex: the spoken phrase at which a beat's third picture should appear."""
-    return getattr(SCENES[key](), "cue", None)
+    return getattr(_scene_factory(key)(), "cue", None)
