@@ -253,7 +253,9 @@ def narration(topic, c):
         print(f"[retry] narration attempt {attempt}: {last}")
     print("[warn] LLM narration 3 baar fail — on-screen text se narration bana raha hoon")
     beats = {b: f"{h}। {s}।" for b, (h, s) in topic["beats"].items()}
-    return {"title": f"{topic['thumb'][0]} {topic['thumb'][1]}", "beats": beats}, "fallback"
+    n = {"title": f"{topic['thumb'][0]} {topic['thumb'][1]}", "beats": beats}
+    cache.write_text(json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
+    return n, "fallback"
 
 
 # ---------------------------------------------------------------- voice
