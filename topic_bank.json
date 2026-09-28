@@ -2702,7 +2702,7 @@
   {
    "id": 73,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "intraday_opening_range",
    "cat": "INTRADAY",
    "topic": "Opening Range Breakout — पहले 15 मिनट की range से setup",
@@ -2734,7 +2734,8 @@
     "volume और risk management confirmation",
     "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Opening Range Breakout — पहले 15 मिनट की range से setup"
+   "seo": "Opening Range Breakout — पहले 15 मिनट की range से setup",
+   "used_short_at": "2026-09-28T07:57:53Z"
   },
   {
    "id": 74,
