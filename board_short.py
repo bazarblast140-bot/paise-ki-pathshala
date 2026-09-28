@@ -219,6 +219,16 @@ Rules:
 
 
 def narration(topic, c):
+    cache = RUN / "narration.json"
+    if cache.exists():
+        try:
+            n = json.loads(cache.read_text(encoding="utf-8"))
+            fails = check_narration(n, topic)
+            if not fails:
+                ok("narration cache reused — no LLM credit")
+                return n, "cache"
+        except Exception as e:
+            print(f"[cache] narration invalid, regenerating: {e}")
     user = {"topic": topic["topic"], "category": topic["cat"],
             "on_screen": {b: {"headline": h, "sub": s} for b, (h, s) in topic["beats"].items()},
             "facts": topic["facts"]}
@@ -237,6 +247,7 @@ def narration(topic, c):
         fails = check_narration(n, topic)
         if not fails:
             ok(f"narration OK (attempt {attempt})")
+            cache.write_text(json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
             return n, "llm"
         last = "; ".join(fails)
         print(f"[retry] narration attempt {attempt}: {last}")
@@ -284,6 +295,11 @@ ENGINES = []
 
 
 def tts(text, path, c):
+    # Reuse a valid existing audio file on self-heal retries.
+    if path.exists() and path.stat().st_size > 1000:
+        ok(f"voice cache reused: {path.name} — no TTS credit")
+        ENGINES.append("cached")
+        return
     """ElevenLabs agar secrets hain, warna / fail hone par Edge Swara — video kabhi nahi rukta.
     Voice ko speak.speakable() wala text jaata hai (₹ -> रुपये, 4,231 -> चार हज़ार...);
     ElevenLabs "₹1 लाख" ko "Rs 1 लाख" bolta tha. Captions original text dikhate hain."""
