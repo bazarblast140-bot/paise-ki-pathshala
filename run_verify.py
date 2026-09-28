@@ -1,6 +1,7 @@
 """Stage 6: Final Verify Gate. Runs the verify agent over the finished pipeline outputs
 and writes a Hinglish report (run/report.md) for Rajesh. This is the report you read."""
 import json
+import hashlib
 from common import cfg, claude, read, save, ok, RUN
 
 FINAL_SYSTEM = """You are the Main Verify Agent doing the FINAL GATE on a finished faceless finance video, then writing a report for Rajesh in HINGLISH.
@@ -70,6 +71,18 @@ def main():
     c = cfg()
     script = read("script.txt")
     shots = json.loads(read("shots.json"))
+    cache_key = hashlib.sha256((script + json.dumps(shots, sort_keys=True, ensure_ascii=False)).encode("utf-8")).hexdigest()
+    cache_file = RUN / "verify_cache.json"
+    if cache_file.exists() and (RUN / "report.md").exists():
+        try:
+            cached = json.loads(cache_file.read_text(encoding="utf-8"))
+            if cached.get("key") == cache_key and cached.get("report"):
+                save("report.md", cached["report"])
+                print("\n" + "=" * 50 + "\n" + cached["report"] + "\n" + "=" * 50)
+                ok("verify cache reused — no LLM credit")
+                return
+        except Exception:
+            pass
     subs_made = (RUN / "subs.ass").exists()
     video_made = (RUN / "final.mp4").exists()
     signals = reused_content_signals(c, shots)
@@ -87,6 +100,7 @@ Write the final Hinglish report."""
 
     report = claude(FINAL_SYSTEM, user, model=c["models"]["verify_model"], max_tokens=c["models"]["max_tokens"])
     save("report.md", report)
+    cache_file.write_text(json.dumps({"key": cache_key, "report": report}, ensure_ascii=False), encoding="utf-8")
     print("\n" + "=" * 50 + "\n" + report + "\n" + "=" * 50)
     ok("wrote run/report.md")
 
