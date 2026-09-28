@@ -1,0 +1,45 @@
+name: Restore board_short
+on:
+  workflow_dispatch:
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore board_short from good commit
+        run: |
+          set -e
+          git config user.name "bazarblast140-bot"
+          git config user.email "bazarblast140@gmail.com"
+          # known-good board_short before accidental truncate
+          git show 5d7d34da2f1303b199fd8dfa16cdfa16fb75f043:board_short.py > board_short.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("board_short.py")
+          t = p.read_text(encoding="utf-8")
+          old = '''def beat_images(topic, beat):\n    img = K.background()\n    K.chips(img, topic["cat"], CAT_CHIPS.get(topic["cat"], STEP_CHIP)[beat])\n    return S.render_beat(topic["key"], beat, img)'''
+          new = '''def beat_images(topic, beat):\n    img = K.background()\n    K.chips(img, topic["cat"], CAT_CHIPS.get(topic["cat"], STEP_CHIP)[beat])\n    key = topic["key"]\n    low = key.lower()\n    if low.startswith("intraday_"):\n        try:\n            import board_orb\n            if any(x in low for x in ("opening", "orb", "range", "breakout")):\n                return board_orb.opening_range_breakout()(beat, img)\n            return board_orb.intraday_chart_fallback(key)(beat, img)\n        except Exception as e:\n            print(f"[board_orb] fallback to generic: {e}")\n    return S.render_beat(key, beat, img)'''
+          if old not in t:
+              raise SystemExit("beat_images block not found — abort")
+          p.write_text(t.replace(old, new, 1), encoding="utf-8")
+          print("patched beat_images -> board_orb")
+          print("size", p.stat().st_size)
+          PY
+          # ensure board_orb exists
+          test -f board_orb.py
+          # cleanup broken leftovers
+          rm -f board_short_a.py board_short_b.py board_scenes_patch_note.md
+          rm -rf board_short_chunks
+          git add board_short.py board_orb.py
+          git add -u board_short_a.py board_short_b.py board_scenes_patch_note.md board_short_chunks 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "fix: restore full board_short.py + route intraday_* to real ORB candle charts"
+            git push origin HEAD:main
+          fi
