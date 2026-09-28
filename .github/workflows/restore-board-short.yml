@@ -11,35 +11,132 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Restore board_short from good commit
+      - name: Patch finance_card_scene to use topic headlines
         run: |
           set -e
+          python3 << 'PY'
+          from pathlib import Path
+          p = Path("board_scenes.py")
+          t = p.read_text(encoding="utf-8")
+          start = t.find("# ================================================================ finance education cards")
+          end = t.find("# ================================================================ indicators")
+          if start < 0 or end < 0:
+              raise SystemExit(f"markers missing start={start} end={end}")
+          new_block = r'''# ================================================================ finance education cards
+FINANCE_CARD_LABELS = {
+    "fund": ("BUSINESS QUALITY", "REVENUE / PROFIT / CASH", "MARGIN / ROCE / FCF", "CHECK ANNUAL REPORT"),
+    "opt": ("OPTION SETUP", "PREMIUM / IV / GREEKS", "PAYOFF / RISK", "CHECK EXPIRY PAYOFF"),
+    "intraday": ("INTRADAY", "PRICE / VOLUME / VWAP", "CONTEXT + CONFIRM", "RISK BEFORE ENTRY"),
+    "stock": ("STOCK CASE", "BUSINESS / RESULTS", "VALUATION / RISK", "CHECK FILINGS"),
+    "penny": ("PENNY RISK", "PRICE IS NOT VALUE", "LIQUIDITY / DILUTION", "CHECK DISCLOSURES"),
+    "risk": ("RISK", "CAPITAL / POSITION", "LOSS / RECOVERY", "PROTECT CAPITAL"),
+    "business": ("BUSINESS", "REVENUE / UNIT ECONOMICS", "MARGIN / CASH", "READ THE NUMBERS"),
+    "market": ("MARKET HISTORY", "INDEX / EVENT", "DRAWDOWN / RECOVERY", "CHECK THE DATES"),
+}
+
+
+def _topic_beats(key):
+    """Load this topic's 4 beat headlines from topic_bank so boards match narration."""
+    try:
+        bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))
+        t = next((x for x in bank.get("topics", []) if x.get("key") == key), None)
+        if not t:
+            return {}
+        return {b: list(pair) for b, pair in (t.get("beats") or {}).items()}
+    except Exception as e:  # noqa: BLE001
+        print(f"[finance_card] topic_bank load failed: {e}")
+        return {}
+
+
+def _short_line(text, max_chars=42):
+    s = " ".join(str(text or "").split())
+    if len(s) <= max_chars:
+        return s
+    return s[: max_chars - 1].rstrip() + "…"
+
+
+def finance_card_scene(key):
+    """Topic-aware finance card — NEVER empty REVENUE/PROFIT when topic has beats.
+
+    Board shows this topic's own headlines (from topic_bank). Generic category
+    labels are only a last resort so Chart Board never crashes on a new key.
+    """
+    low = key.lower()
+    if (
+        low.startswith(("fund_", "peg_", "roe_", "debt_", "cashflow_",
+                        "operating_", "eps_", "promoter_", "shareholding"))
+        or low in {"fcf", "quality_stock_checklist"}
+    ):
+        kind = "fund"
+    elif low.startswith(("opt_", "option_")):
+        kind = "opt"
+    elif low.startswith("intraday_"):
+        kind = "intraday"
+    elif low.startswith(("stock_", "multibagger_", "smallcap_")):
+        kind = "stock"
+    elif low.startswith("penny_"):
+        kind = "penny"
+    elif low.startswith("risk_"):
+        kind = "risk"
+    elif low.startswith("business_"):
+        kind = "business"
+    else:
+        kind = "market"
+    fallback = FINANCE_CARD_LABELS[kind]
+    beats_data = _topic_beats(key)
+
+    def lines(b):
+        pair = beats_data.get(b) or []
+        head = _short_line(pair[0] if pair else fallback[{"hook": 0, "pehchan": 1, "matlab": 2, "karein": 3}[b]], 48)
+        sub = _short_line(pair[1] if len(pair) > 1 else "", 52)
+        return head, sub
+
+    def beat(b, img):
+        panel(img)
+        A = img.copy()
+        head, sub = lines(b)
+        if b == "hook":
+            big_text(img, (X0 + 40, Y0 + 70, X1 - 40, Y0 + 220), [(head, 52, YELLOW)])
+            if sub:
+                big_text(img, (X0 + 40, Y0 + 240, X1 - 40, Y0 + 360), [(sub, 36, INK)])
+            ring(img, X0 + 560, Y0 + 480, 120, 120, YELLOW)
+            label(img, X0 + 40, Y0 + 520, "TOPIC BOARD", MUTED, 28)
+        elif b == "pehchan":
+            big_text(img, (X0 + 40, Y0 + 50, X1 - 40, Y0 + 150), [(head, 44, YELLOW)])
+            if sub:
+                big_text(img, (X0 + 40, Y0 + 170, X1 - 40, Y0 + 320), [(sub, 34, INK)])
+            steps = ["WHAT IT IS", "HOW IT WORKS", "WHAT TO NOTE"]
+            for i, word in enumerate(steps):
+                y = Y0 + 400 + i * 95
+                label(img, X0 + 70, y, f"{i+1}. {word}", YELLOW, 36)
+                if i < 2:
+                    arrow(img, (X0 + 90, y + 55), (X0 + 90, y + 85), BLUE, 6)
+        elif b == "matlab":
+            big_text(img, (X0 + 40, Y0 + 50, X1 - 40, Y0 + 160), [(head, 44, YELLOW)])
+            if sub:
+                big_text(img, (X0 + 40, Y0 + 180, X1 - 40, Y0 + 340), [(sub, 34, INK)])
+            arrow(img, (X0 + 160, Y0 + 480), (X0 + 700, Y0 + 480), GREEN, 14)
+            ring(img, X0 + 700, Y0 + 480, 70, 70, GREEN)
+            label(img, X0 + 40, Y0 + 560, "CAUSE  ->  EFFECT", GREEN, 32)
+        else:
+            big_text(img, (X0 + 40, Y0 + 50, X1 - 40, Y0 + 160), [(head, 44, YELLOW)])
+            if sub:
+                big_text(img, (X0 + 40, Y0 + 180, X1 - 40, Y0 + 320), [(sub, 34, INK)])
+            for i, y in enumerate((Y0 + 400, Y0 + 520, Y0 + 640)):
+                ring(img, X0 + 100, y, 28, 28, GREEN)
+                label(img, X0 + 160, y - 22, f"CHECK {i+1}", INK, 34)
+        return A, img
+    return beat
+
+'''
+          p.write_text(t[:start] + new_block + t[end:], encoding="utf-8")
+          compile(p.read_text(encoding="utf-8"), "board_scenes.py", "exec")
+          print("patched OK", p.stat().st_size)
+          PY
           git config user.name "bazarblast140-bot"
           git config user.email "bazarblast140@gmail.com"
-          # known-good board_short before accidental truncate
-          git show 5d7d34da2f1303b199fd8dfa16cdfa16fb75f043:board_short.py > board_short.py
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("board_short.py")
-          t = p.read_text(encoding="utf-8")
-          old = '''def beat_images(topic, beat):\n    img = K.background()\n    K.chips(img, topic["cat"], CAT_CHIPS.get(topic["cat"], STEP_CHIP)[beat])\n    return S.render_beat(topic["key"], beat, img)'''
-          new = '''def beat_images(topic, beat):\n    img = K.background()\n    K.chips(img, topic["cat"], CAT_CHIPS.get(topic["cat"], STEP_CHIP)[beat])\n    key = topic["key"]\n    low = key.lower()\n    if low.startswith("intraday_"):\n        try:\n            import board_orb\n            if any(x in low for x in ("opening", "orb", "range", "breakout")):\n                return board_orb.opening_range_breakout()(beat, img)\n            return board_orb.intraday_chart_fallback(key)(beat, img)\n        except Exception as e:\n            print(f"[board_orb] fallback to generic: {e}")\n    return S.render_beat(key, beat, img)'''
-          if old not in t:
-              raise SystemExit("beat_images block not found — abort")
-          p.write_text(t.replace(old, new, 1), encoding="utf-8")
-          print("patched beat_images -> board_orb")
-          print("size", p.stat().st_size)
-          PY
-          # ensure board_orb exists
-          test -f board_orb.py
-          # cleanup broken leftovers
-          rm -f board_short_a.py board_short_b.py board_scenes_patch_note.md
-          rm -rf board_short_chunks
-          git add board_short.py board_orb.py
-          git add -u board_short_a.py board_short_b.py board_scenes_patch_note.md board_short_chunks 2>/dev/null || true
-          if git diff --cached --quiet; then
-            echo "nothing to commit"
-          else
-            git commit -m "fix: restore full board_short.py + route intraday_* to real ORB candle charts"
+          git add board_scenes.py
+          if git diff --cached --quiet; then echo "no change"; else
+            git commit -m "fix: finance boards show topic headlines, not empty REVENUE/PROFIT"
             git push origin HEAD:main
           fi
