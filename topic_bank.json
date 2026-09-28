@@ -3969,7 +3969,7 @@
   {
    "id": 107,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "fund_pledge",
    "cat": "FUNDAMENTALS",
    "topic": "Promoter pledge — shareholding के पीछे छिपा risk",
@@ -4003,7 +4003,8 @@
     "Exchange disclosures में pledge trend देखो",
     "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Promoter pledge — shareholding के पीछे छिपा risk"
+   "seo": "Promoter pledge — shareholding के पीछे छिपा risk",
+   "used_short_at": "2026-09-28T08:25:51Z"
   },
   {
    "id": 108,
