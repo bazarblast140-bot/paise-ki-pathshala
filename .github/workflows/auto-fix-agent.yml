@@ -1,0 +1,195 @@
+name: Auto-fix agent
+
+# Paise ki Pathshala: fail hone par khud detect → diagnose → heal known issues → retry.
+# Health: board_scenes topic beats, board_short size, board_orb present.
+# User ko bar-bar report karne ki zarurat nahi.
+
+on:
+  workflow_run:
+    workflows: ["Paise Ki Pathshala"]
+    types: [completed]
+  schedule:
+    - cron: "30 */3 * * *"   # har ~3 ghante health
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "health | retry_last_fail"
+        type: choice
+        options: [health, retry_last_fail]
+        default: health
+
+concurrency:
+  group: auto-fix-pkp
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: write
+  checks: read
+
+jobs:
+  heal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: |
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'failure'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Diagnose + heal + notify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EVENT: ${{ github.event_name }}
+          FAILED_RUN_ID: ${{ github.event.workflow_run.id }}
+          FAILED_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          FAILED_URL: ${{ github.event.workflow_run.html_url }}
+          MODE: ${{ github.event.inputs.mode || 'health' }}
+          MAX_AUTO_RETRY: "2"
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+
+          notify() {
+            local msg="$1"
+            echo "$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+            if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
+              curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                -d chat_id="$TELEGRAM_CHAT_ID" \
+                --data-urlencode text="$msg" >/dev/null || true
+            fi
+          }
+
+          HEALED=0
+
+          # ---- Board integrity checks (always) ----
+          echo "## Board integrity" >> "$GITHUB_STEP_SUMMARY"
+
+          # 1) board_scenes must load topic beats (not hardcoded REVENUE/PROFIT only)
+          if [ -f board_scenes.py ]; then
+            if ! grep -q '_topic_beats' board_scenes.py; then
+              echo "MISSING _topic_beats in board_scenes.py" | tee -a "$GITHUB_STEP_SUMMARY"
+              notify "🛠️ PKP auto-fix: board_scenes.py me _topic_beats missing — generic boards risk. Manual patch chahiye."
+            else
+              echo "OK: _topic_beats present" | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+            if grep -q 'FINANCE_CARD_LABELS' board_scenes.py && ! grep -q '_topic_beats' board_scenes.py; then
+              echo "WARN: hardcoded FINANCE_CARD_LABELS without topic beats" | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            notify "❌ PKP auto-fix: board_scenes.py missing!"
+          fi
+
+          # 2) board_short.py must not be a tiny placeholder
+          if [ -f board_short.py ]; then
+            SZ=$(wc -c < board_short.py)
+            echo "board_short.py size=$SZ" | tee -a "$GITHUB_STEP_SUMMARY"
+            if [ "$SZ" -lt 5000 ]; then
+              notify "🛠️ PKP auto-fix: board_short.py corrupted/tiny ($SZ bytes). restore-board-short workflow chalana padega."
+            fi
+          else
+            notify "❌ PKP auto-fix: board_short.py missing!"
+          fi
+
+          # 3) ORB scene
+          if [ -f board_orb.py ]; then
+            echo "OK: board_orb.py present" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "WARN: board_orb.py missing (ORB topics fall back to generic)" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # 4) topic_bank.json parseable
+          if python3 -c "import json; json.load(open('topic_bank.json'))" 2>/dev/null; then
+            echo "OK: topic_bank.json valid JSON" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            notify "❌ PKP auto-fix: topic_bank.json invalid JSON"
+          fi
+
+          # ---- Schedule / manual health only ----
+          if [ "$EVENT" != "workflow_run" ] && [ "$MODE" != "retry_last_fail" ]; then
+            echo "### Recent Paise Ki Pathshala runs" >> "$GITHUB_STEP_SUMMARY"
+            gh run list --repo "$REPO" --workflow "Paise Ki Pathshala" --limit 6 \
+              --json databaseId,conclusion,status,displayTitle,createdAt,url \
+              --jq '.[] | "- \(.conclusion // .status) #\(.databaseId) \(.createdAt)"' \
+              | tee -a "$GITHUB_STEP_SUMMARY" || true
+            FAIL_COUNT=$(gh run list --repo "$REPO" --workflow "Paise Ki Pathshala" --limit 8 \
+              --json conclusion --jq '[.[] | select(.conclusion=="failure")] | length' || echo 0)
+            if [ "${FAIL_COUNT:-0}" -ge 2 ]; then
+              notify "⚠️ PKP auto-fix health: last 8 runs me $FAIL_COUNT failures."
+            fi
+            exit 0
+          fi
+
+          # ---- Failure path ----
+          if [ -z "${FAILED_RUN_ID:-}" ] || [ "$FAILED_RUN_ID" = "" ]; then
+            # retry_last_fail manual
+            FAILED_RUN_ID=$(gh run list --repo "$REPO" --workflow "Paise Ki Pathshala" --limit 5 \
+              --json databaseId,conclusion --jq '[.[] | select(.conclusion=="failure")][0].databaseId // empty')
+            FAILED_URL="https://github.com/$REPO/actions/runs/$FAILED_RUN_ID"
+            FAILED_ATTEMPT=1
+          fi
+
+          if [ -z "${FAILED_RUN_ID:-}" ]; then
+            echo "No failed run to act on" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "## Failed run $FAILED_RUN_ID attempt ${FAILED_ATTEMPT:-1}" >> "$GITHUB_STEP_SUMMARY"
+          echo "$FAILED_URL" >> "$GITHUB_STEP_SUMMARY"
+
+          LOG=$(mktemp)
+          gh run view "$FAILED_RUN_ID" --repo "$REPO" --log-failed 2>/dev/null | tail -n 250 > "$LOG" || true
+          SNIP=$(tail -n 50 "$LOG" | sed 's/\x1b\[[0-9;]*m//g' | head -c 1800)
+          echo '### Log tail' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "$SNIP" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          KIND="unknown"
+          if grep -qiE 'ECONNRESET|ETIMEDOUT|rate limit|429|503|502|socket hang|DeepSeek|timeout' "$LOG"; then
+            KIND="transient_api"
+          elif grep -qiE 'YouTube|quota|upload.*fail|invalid_grant|refresh.token' "$LOG"; then
+            KIND="youtube_auth"
+          elif grep -qiE 'board_short|board_scenes|ImportError|ModuleNotFound|SyntaxError' "$LOG"; then
+            KIND="board_code"
+          elif grep -qiE 'topic_bank|JSONDecode|KeyError.*beats' "$LOG"; then
+            KIND="topic_data"
+          elif grep -qiE 'ffmpeg|Font|PIL|Image' "$LOG"; then
+            KIND="render"
+          fi
+
+          echo "### Classification: \\`$KIND\\`" >> "$GITHUB_STEP_SUMMARY"
+
+          case "$KIND" in
+            transient_api)
+              if [ "${FAILED_ATTEMPT:-1}" -lt "$MAX_AUTO_RETRY" ]; then
+                sleep 60
+                gh run rerun "$FAILED_RUN_ID" --repo "$REPO" --failed
+                notify "🔄 PKP auto-fix: API/transient fail ($KIND). Auto-retry. $FAILED_URL"
+              else
+                notify "❌ PKP auto-fix: still failing after retries ($KIND). $FAILED_URL"
+              fi
+              ;;
+            youtube_auth)
+              notify "🔑 PKP auto-fix: YouTube token/quota issue. YT_FIN secrets check karo. $FAILED_URL"
+              ;;
+            board_code)
+              notify "🛠️ PKP auto-fix: board code error ($KIND). board_short/scenes check. $FAILED_URL"
+              ;;
+            topic_data)
+              notify "📋 PKP auto-fix: topic_bank data issue. $FAILED_URL"
+              ;;
+            *)
+              if [ "${FAILED_ATTEMPT:-1}" -eq 1 ]; then
+                sleep 45
+                gh run rerun "$FAILED_RUN_ID" --repo "$REPO" --failed || true
+                notify "🔄 PKP auto-fix: unknown fail — 1 retry. $FAILED_URL"
+              else
+                notify "❓ PKP auto-fix: unknown after retries. $FAILED_URL\n\n$SNIP"
+              fi
+              ;;
+          esac
