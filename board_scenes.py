@@ -238,17 +238,32 @@ FINANCE_CARD_LABELS = {
     "penny": ("PENNY RISK", "PRICE IS NOT VALUE", "LIQUIDITY / DILUTION", "CHECK DISCLOSURES"),
     "risk": ("RISK", "CAPITAL / POSITION", "LOSS / RECOVERY", "PROTECT CAPITAL"),
     "business": ("BUSINESS", "REVENUE / UNIT ECONOMICS", "MARGIN / CASH", "READ THE NUMBERS"),
-    "market": ("MARKET HISTORY", "INDEX / EVENT", "DRAWdown / RECOVERY", "CHECK THE DATES"),
+    "market": ("MARKET HISTORY", "INDEX / EVENT", "DRAWDOWN / RECOVERY", "CHECK THE DATES"),
 }
 
+
+def _topic_beats(key):
+    try:
+        bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))
+        t = next((x for x in bank.get("topics", []) if x.get("key") == key), None)
+        if not t:
+            return {}
+        return {b: list(pair) for b, pair in (t.get("beats") or {}).items()}
+    except Exception as e:
+        print(f"[finance_card] topic_bank load failed: {e}")
+        return {}
+
+
+def _short_line(text, max_chars=42):
+    s = " ".join(str(text or "").split())
+    if len(s) <= max_chars:
+        return s
+    return s[: max_chars - 1].rstrip() + "..."
+
+
 def finance_card_scene(key):
-    """Generic finance-card fallback for every valid topic-bank key.
-
-    Dedicated scenes still win. New finance topics must not crash Chart Board
-    just because a bespoke renderer has not been added yet.
-    """
+    """Topic-aware finance card - boards show topic headlines, not empty REVENUE/PROFIT."""
     low = key.lower()
-
     if (
         low.startswith(("fund_", "peg_", "roe_", "debt_", "cashflow_",
                         "operating_", "eps_", "promoter_", "shareholding"))
@@ -269,29 +284,49 @@ def finance_card_scene(key):
         kind = "business"
     else:
         kind = "market"
-    labels = FINANCE_CARD_LABELS[kind]
+    fallback = FINANCE_CARD_LABELS[kind]
+    beats_data = _topic_beats(key)
+
+    def lines(b):
+        pair = beats_data.get(b) or []
+        head = _short_line(pair[0] if pair else fallback[{"hook": 0, "pehchan": 1, "matlab": 2, "karein": 3}[b]], 48)
+        sub = _short_line(pair[1] if len(pair) > 1 else "", 52)
+        return head, sub
 
     def beat(b, img):
         panel(img)
         A = img.copy()
+        head, sub = lines(b)
         if b == "hook":
-            big_text(img, (X0 + 40, Y0 + 80, X1 - 40, Y0 + 190), [(labels[0], 62, YELLOW)])
-            big_text(img, (X0 + 40, Y0 + 205, X1 - 40, Y0 + 330), [(labels[1], 46, INK)])
-            ring(img, X0 + 560, Y0 + 330, 150, 150, YELLOW)
+            big_text(img, (X0 + 40, Y0 + 70, X1 - 40, Y0 + 220), [(head, 52, YELLOW)])
+            if sub:
+                big_text(img, (X0 + 40, Y0 + 240, X1 - 40, Y0 + 360), [(sub, 36, INK)])
+            ring(img, X0 + 560, Y0 + 480, 120, 120, YELLOW)
+            label(img, X0 + 40, Y0 + 520, "TOPIC BOARD", MUTED, 28)
         elif b == "pehchan":
-            big_text(img, (X0 + 40, Y0 + 55, X1 - 40, Y0 + 155), [(labels[1], 44, INK)])
-            for i, word in enumerate(labels[1].split(" / ")):
-                label(img, X0 + 70, Y0 + 250 + i * 125, word, YELLOW, 48)
-                arrow(img, (X0 + 390, Y0 + 275 + i * 125), (X0 + 720, Y0 + 275 + i * 125), BLUE, 8)
+            big_text(img, (X0 + 40, Y0 + 50, X1 - 40, Y0 + 150), [(head, 44, YELLOW)])
+            if sub:
+                big_text(img, (X0 + 40, Y0 + 170, X1 - 40, Y0 + 320), [(sub, 34, INK)])
+            steps = ["WHAT IT IS", "HOW IT WORKS", "WHAT TO NOTE"]
+            for i, word in enumerate(steps):
+                y = Y0 + 400 + i * 95
+                label(img, X0 + 70, y, f"{i+1}. {word}", YELLOW, 36)
+                if i < 2:
+                    arrow(img, (X0 + 90, y + 55), (X0 + 90, y + 85), BLUE, 6)
         elif b == "matlab":
-            big_text(img, (X0 + 40, Y0 + 65, X1 - 40, Y0 + 170), [(labels[2], 48, YELLOW)])
-            arrow(img, (X0 + 180, Y0 + 430), (X0 + 700, Y0 + 430), GREEN, 14)
-            ring(img, X0 + 700, Y0 + 430, 80, 80, GREEN)
+            big_text(img, (X0 + 40, Y0 + 50, X1 - 40, Y0 + 160), [(head, 44, YELLOW)])
+            if sub:
+                big_text(img, (X0 + 40, Y0 + 180, X1 - 40, Y0 + 340), [(sub, 34, INK)])
+            arrow(img, (X0 + 160, Y0 + 480), (X0 + 700, Y0 + 480), GREEN, 14)
+            ring(img, X0 + 700, Y0 + 480, 70, 70, GREEN)
+            label(img, X0 + 40, Y0 + 560, "CAUSE -> EFFECT", GREEN, 32)
         else:
-            big_text(img, (X0 + 40, Y0 + 65, X1 - 40, Y0 + 170), [(labels[3], 48, YELLOW)])
-            for i, y in enumerate((Y0 + 290, Y0 + 450, Y0 + 610)):
-                ring(img, X0 + 100, y, 32, 32, GREEN)
-                label(img, X0 + 170, y - 28, "CHECK " + str(i + 1), INK, 36)
+            big_text(img, (X0 + 40, Y0 + 50, X1 - 40, Y0 + 160), [(head, 44, YELLOW)])
+            if sub:
+                big_text(img, (X0 + 40, Y0 + 180, X1 - 40, Y0 + 320), [(sub, 34, INK)])
+            for i, y in enumerate((Y0 + 400, Y0 + 520, Y0 + 640)):
+                ring(img, X0 + 100, y, 28, 28, GREEN)
+                label(img, X0 + 160, y - 22, f"CHECK {i+1}", INK, 34)
         return A, img
     return beat
 
