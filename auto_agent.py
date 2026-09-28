@@ -44,7 +44,7 @@ def external_publish_failure(log_text):
 
 
 def board_quality():
-    """Cheap local visual QA; no AI/API/credit use."""
+    """Cheap local visual + final-video QA; no AI/API/credit use."""
     try:
         from PIL import Image
         import numpy as np
@@ -71,7 +71,50 @@ def board_quality():
         except Exception as e:
             return False, f"{p.name}: {e}"
 
-    return True, f"{len(frames)} frames passed brightness/variance/dimension QA"
+    # Final MP4 checks: duration, dimensions, audio/video streams, and sampled frames.
+    final = RUN / "final.mp4"
+    if not final.exists() or final.stat().st_size < 100_000:
+        return False, "final.mp4 missing or suspiciously small"
+    try:
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries",
+             "format=duration:stream=codec_type,width,height",
+             "-of", "json", str(final)],
+            capture_output=True, text=True, check=True)
+        meta = json.loads(probe.stdout)
+        dur = float(meta["format"]["duration"])
+        streams = meta.get("streams", [])
+        video = next((s for s in streams if s.get("codec_type") == "video"), None)
+        audio = any(s.get("codec_type") == "audio" for s in streams)
+        if not video or not audio:
+            return False, "final.mp4 missing video or audio stream"
+        if video.get("width") != 1080 or video.get("height") != 1920:
+            return False, f"wrong final resolution {video.get('width')}x{video.get('height')}"
+        if not 45 <= dur <= 70:
+            return False, f"final duration {dur:.1f}s outside 45-70s QA window"
+        # Sample the video at 5s intervals. Blank/near-static output is rejected.
+        sample_dir = RUN / "auto_agent_samples"
+        sample_dir.mkdir(exist_ok=True)
+        sample = subprocess.run(
+            ["ffmpeg", "-v", "error", "-i", str(final), "-vf",
+             "fps=1/5,scale=270:-1", "-frames:v", "14",
+             str(sample_dir / "sample_%02d.jpg")],
+            capture_output=True, text=True)
+        if sample.returncode != 0:
+            return False, "ffmpeg sample extraction failed"
+        imgs = list(sample_dir.glob("sample_*.jpg"))
+        if len(imgs) < 5:
+            return False, "too few final-video samples"
+        low_var = 0
+        for p in imgs:
+            a = np.asarray(Image.open(p).convert("L"), dtype=np.uint8)
+            if float(a.std()) < 5.0 or float((a > 42).mean()) < 0.008:
+                low_var += 1
+        if low_var > max(1, len(imgs) // 3):
+            return False, f"{low_var}/{len(imgs)} final-video samples look blank/static"
+        return True, f"{len(frames)} boards + final {dur:.1f}s 1080x1920 + {len(imgs)} video samples passed"
+    except Exception as e:
+        return False, f"final video QA error: {e}"
 
 
 def run_once(fmt, publish=True):
