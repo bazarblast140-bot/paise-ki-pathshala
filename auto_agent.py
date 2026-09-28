@@ -90,10 +90,13 @@ def board_quality(fmt="short"):
         audio = any(s.get("codec_type") == "audio" for s in streams)
         if not video or not audio:
             return False, "final.mp4 missing video or audio stream"
-        if video.get("width") != 1080 or video.get("height") != 1920:
+        expected = (1080, 1920) if fmt == "short" else (1920, 1080)
+        if (video.get("width"), video.get("height")) != expected:
             return False, f"wrong final resolution {video.get('width')}x{video.get('height')}"
-        if not 45 <= dur <= 70:
-            return False, f"final duration {dur:.1f}s outside 45-70s QA window"
+        if fmt == "short" and not 45 <= dur <= 70:
+            return False, f"short duration {dur:.1f}s outside 45-70s QA window"
+        if fmt != "short" and dur < 60:
+            return False, f"long duration {dur:.1f}s unexpectedly short"
         # Sample the video at 5s intervals. Blank/near-static output is rejected.
         sample_dir = RUN / "auto_agent_samples"
         sample_dir.mkdir(exist_ok=True)
