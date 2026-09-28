@@ -21,8 +21,7 @@ def run_cmd(args, env=None, capture=False):
     p = subprocess.run(args, cwd=ROOT, env=env, text=True,
                        capture_output=capture)
     if capture:
-        return p.returncode, (p.stdout or "") + "
-" + (p.stderr or "")
+        return p.returncode, (p.stdout or "") + "\n" + (p.stderr or "")
     return p.returncode
 
 
@@ -117,7 +116,7 @@ def board_quality(fmt="short"):
                 low_var += 1
         if low_var > max(1, len(imgs) // 3):
             return False, f"{low_var}/{len(imgs)} final-video samples look blank/static"
-        return True, f"{len(frames)} boards + final {dur:.1f}s {video.get("width")}x{video.get("height")} + {len(imgs)} video samples passed"
+        return True, f"{len(frames)} boards + final {dur:.1f}s {video.get('width')}x{video.get('height')} + {len(imgs)} video samples passed"
     except Exception as e:
         return False, f"final video QA error: {e}"
 
