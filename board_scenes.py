@@ -261,74 +261,172 @@ def _short_line(text, max_chars=42):
     return s[: max_chars - 1].rstrip() + "..."
 
 
-def finance_card_scene(key):
-    """Topic-aware finance card - boards show topic headlines, not empty REVENUE/PROFIT."""
-    low = key.lower()
-    if (
-        low.startswith(("fund_", "peg_", "roe_", "debt_", "cashflow_",
-                        "operating_", "eps_", "promoter_", "shareholding"))
-        or low in {"fcf", "quality_stock_checklist"}
-    ):
-        kind = "fund"
-    elif low.startswith(("opt_", "option_")):
-        kind = "opt"
-    elif low.startswith("intraday_"):
-        kind = "intraday"
-    elif low.startswith(("stock_", "multibagger_", "smallcap_")):
-        kind = "stock"
-    elif low.startswith("penny_"):
-        kind = "penny"
-    elif low.startswith("risk_"):
-        kind = "risk"
-    elif low.startswith("business_"):
-        kind = "business"
-    else:
-        kind = "market"
-    fallback = FINANCE_CARD_LABELS[kind]
-    beats_data = _topic_beats(key)
+def _ascii_title(key):
+    """Board text is intentionally ASCII-only; Devanagari is rendered by libass.
+    This prevents tofu/square glyphs when CI/Pillow lacks a Devanagari font."""
+    titles = {
+        "option_gamma": "OPTION GAMMA",
+        "option_delta": "OPTION DELTA",
+        "atm_delta": "ATM DELTA",
+        "opt_iv_crush": "IV CRUSH",
+        "opt_bull_call_spread": "BULL CALL SPREAD",
+        "opt_bear_put_spread": "BEAR PUT SPREAD",
+        "opt_protective_put": "PROTECTIVE PUT",
+        "opt_straddle": "LONG STRADDLE",
+        "opt_theta_decay": "THETA DECAY",
+        "fund_eps_quality": "EARNINGS QUALITY",
+        "fund_roce": "ROCE",
+        "fund_margin": "MARGIN",
+        "fund_fcf": "FREE CASH FLOW",
+        "fund_pledge": "PROMOTER PLEDGE",
+        "fund_working_capital": "WORKING CAPITAL",
+        "intraday_orb": "OPENING RANGE",
+        "intraday_vwap": "VWAP",
+        "intraday_gap": "GAP UP / GAP DOWN",
+        "intraday_trend_range": "TREND VS RANGE",
+        "intraday_size": "POSITION SIZING",
+        "intraday_volume": "VOLUME + PRICE",
+        "stock_earnings": "QUARTERLY RESULT",
+        "stock_turnaround": "TURNAROUND",
+        "stock_valuation_trap": "VALUATION TRAP",
+        "penny_dilution": "SHARE DILUTION",
+        "penny_liquidity": "LIQUIDITY RISK",
+        "penny_history": "PENNY STOCK HISTORY",
+        "risk_drawdown": "DRAWDOWN MATH",
+        "risk_rr": "RISK / REWARD",
+        "risk_leverage": "LEVERAGE",
+        "risk_journal": "TRADING JOURNAL",
+        "business_unit_economics": "UNIT ECONOMICS",
+        "business_cash": "EBITDA VS CASH FLOW",
+        "market_crash_math": "CRASH / RECOVERY",
+        "market_index_base": "INDEX BASE VALUE",
+    }
+    return titles.get(key, key.replace("_", " ").upper())
 
-    def lines(b):
-        pair = beats_data.get(b) or []
-        head = _short_line(pair[0] if pair else fallback[{"hook": 0, "pehchan": 1, "matlab": 2, "karein": 3}[b]], 48)
-        sub = _short_line(pair[1] if len(pair) > 1 else "", 52)
-        return head, sub
+
+def _topic_kind(key):
+    low = key.lower()
+    if low.startswith(("opt_", "option_")) or low in {"atm_delta"}:
+        return "opt"
+    if low.startswith(("fund_", "peg_", "roe_", "debt_", "cashflow_", "operating_", "eps_", "promoter_", "shareholding")) or low in {"fcf", "quality_stock_checklist"}:
+        return "fund"
+    if low.startswith("intraday_"):
+        return "intraday"
+    if low.startswith(("stock_", "multibagger_", "smallcap_")):
+        return "stock"
+    if low.startswith("penny_"):
+        return "penny"
+    if low.startswith("risk_"):
+        return "risk"
+    if low.startswith("business_"):
+        return "business"
+    return "market"
+
+
+def _draw_finance_visual(img, kind, key, beat):
+    """Large, topic-relevant visual. No Hindi is drawn by PIL."""
+    box = (X0 + 55, Y0 + 300, X1 - 55, Y1 - 75)
+    title = _ascii_title(key)
+    if kind == "opt":
+        # Delta/Gamma family: sensitivity curve + causal chain.
+        xs = list(range(11))
+        if "gamma" in key.lower():
+            ys = [0.12, 0.16, 0.22, 0.32, 0.48, 0.70, 0.88, 0.70, 0.48, 0.32, 0.22]
+            ax = series_panel(img, box, [(ys, YELLOW, 9)], lo=0, hi=1, pad=(70, 60, 70, 80))
+            label(img, X0 + 85, Y0 + 325, "GAMMA = DELTA SENSITIVITY", INK, 34)
+            label(img, X0 + 85, Y1 - 115, "SPOT MOVE", MUTED, 30)
+            ring(img, ax.x(5), ax.y(ys[5]), 42, 42, GREEN)
+        elif "delta" in key.lower() or key == "atm_delta":
+            ys = [0.18, 0.25, 0.34, 0.43, 0.50, 0.57, 0.66, 0.74, 0.82, 0.88, 0.93]
+            ax = series_panel(img, box, [(ys, GREEN, 9)], lo=0, hi=1, pad=(70, 60, 70, 80))
+            label(img, X0 + 85, Y0 + 325, "DELTA = PREMIUM SENSITIVITY", INK, 34)
+            ring(img, ax.x(5), ax.y(ys[5]), 42, 42, YELLOW)
+        else:
+            payoff(img, box, list(range(11)), [-4,-3,-2,-1,0,1,2,3,4,5,6], strike=5)
+            label(img, X0 + 85, Y0 + 325, "PAYOFF / RISK MAP", INK, 34)
+        if beat == "matlab":
+            arrow(img, (X0 + 170, Y0 + 700), (X1 - 170, Y0 + 700), GREEN, 12)
+            label(img, X0 + 85, Y0 + 640, "SPOT MOVE  ->  DELTA CHANGE  ->  PREMIUM IMPACT", GREEN, 30)
+        elif beat == "karein":
+            label(img, X0 + 85, Y0 + 650, "CHECK EXPIRY / IV / DELTA / MAX RISK", YELLOW, 30)
+        return
+    if kind in {"fund", "stock", "business"}:
+        if kind == "business":
+            steps = [("CAC", 180), ("CUSTOMER", 420), ("LTV", 660)]
+            for i, (t, x) in enumerate(steps):
+                d = __import__("PIL").ImageDraw.Draw(img)
+                d.rounded_rectangle([x-105, Y0+450, x+105, Y0+570], 22, fill=(18,28,45), outline=GREEN if i==2 else MUTED, width=4)
+                label(img, x, Y0+492, t, INK, 34, anchor="ma")
+                if i < 2:
+                    arrow(img, (x+115, Y0+510), (steps[i+1][1]-115, Y0+510), GREEN, 8)
+            label(img, X0 + 85, Y0 + 350, "UNIT ECONOMICS", YELLOW, 42)
+        else:
+            vals = [100, 72, 48] if kind == "fund" else [62, 82, 105]
+            labels = ["REVENUE", "PROFIT", "CASH"] if kind == "fund" else ["SALES", "PROFIT", "VALUE"]
+            bars(img, box, vals, labels, [BLUE, GREEN, YELLOW], fmt="{:g}", hi=120, value_size=42, label_size=30)
+            label(img, X0 + 85, Y0 + 325, "COMPARE THE NUMBERS", INK, 34)
+            if beat == "matlab":
+                label(img, X0 + 85, Y0 + 650, "GROWTH IS NOT THE WHOLE STORY", GREEN, 32)
+            elif beat == "karein":
+                label(img, X0 + 85, Y0 + 650, "CHECK QUALITY / CASH / VALUATION", YELLOW, 32)
+        return
+    if kind == "intraday":
+        closes = [100, 101, 100.5, 102, 101.4, 103, 102.2, 104, 103.2, 105]
+        oh = ohlc_from_closes(closes, seed=7)
+        ax = candles(img, box, oh)
+        vw = [100.2,100.5,100.7,101.1,101.3,101.8,102.0,102.5,102.7,103.0]
+        polyline(img, [(ax.x(i), ax.y(vw[i])) for i in range(len(vw))], YELLOW, 8)
+        label(img, X0 + 85, Y0 + 325, "PRICE + VOLUME + CONTEXT", INK, 34)
+        if beat == "matlab":
+            arrow(img, (ax.x(2), ax.y(vw[2])-50), (ax.x(7), ax.y(vw[7])-50), GREEN, 10)
+        elif beat == "karein":
+            label(img, X0 + 85, Y0 + 650, "CONTEXT FIRST / RISK BEFORE ENTRY", YELLOW, 32)
+        return
+    if kind == "risk":
+        vals = [100, 80, 100]
+        bars(img, box, vals, ["START", "DRAWDOWN", "RECOVERY"], [GREEN, RED, YELLOW], fmt="{:g}", hi=115, value_size=40, label_size=28)
+        label(img, X0 + 85, Y0 + 325, "LOSS %  !=  RECOVERY %", INK, 36)
+        if beat == "matlab":
+            arrow(img, (X0 + 250, Y0 + 700), (X1 - 250, Y0 + 700), GREEN, 10)
+        elif beat == "karein":
+            label(img, X0 + 85, Y0 + 650, "PROTECT CAPITAL / SIZE THE RISK", YELLOW, 32)
+        return
+    if kind == "penny":
+        vals = [100, 35, 12]
+        bars(img, box, vals, ["PRICE", "VOLUME", "LIQUIDITY"], [YELLOW, BLUE, RED], fmt="{:g}", hi=110, value_size=40, label_size=28)
+        label(img, X0 + 85, Y0 + 325, "PRICE IS NOT LIQUIDITY", INK, 36)
+        if beat == "karein":
+            label(img, X0 + 85, Y0 + 650, "CHECK VOLUME / SPREAD / DILUTION", YELLOW, 32)
+        return
+    # Market/history fallback: always show a real-looking index curve.
+    ys = [100, 103, 101, 108, 112, 109, 118, 123, 121, 130, 136]
+    ax = series_panel(img, box, [(ys, GREEN, 9)], lo=95, hi=140, pad=(70, 60, 70, 80))
+    label(img, X0 + 85, Y0 + 325, "INDEX / EVENT / RECOVERY", INK, 34)
+    ring(img, ax.x(7), ax.y(ys[7]), 42, 42, YELLOW)
+    if beat == "karein":
+        label(img, X0 + 85, Y0 + 650, "CHECK THE DATE / SOURCE / METHOD", YELLOW, 32)
+
+
+def finance_card_scene(key):
+    """Safe generic scene for any topic-bank key.
+
+    Rules: use only ASCII inside PIL (avoids tofu), fill the board with a
+    topic-relevant visual, and keep text large enough for a 1080x1920 Short.
+    Hindi explanation is rendered later by libass in board_short.py.
+    """
+    kind = _topic_kind(key)
+    title = _ascii_title(key)
 
     def beat(b, img):
         panel(img)
         A = img.copy()
-        head, sub = lines(b)
-        if b == "hook":
-            big_text(img, (X0 + 40, Y0 + 70, X1 - 40, Y0 + 220), [(head, 52, YELLOW)])
-            if sub:
-                big_text(img, (X0 + 40, Y0 + 240, X1 - 40, Y0 + 360), [(sub, 36, INK)])
-            ring(img, X0 + 560, Y0 + 480, 120, 120, YELLOW)
-            label(img, X0 + 40, Y0 + 520, "TOPIC BOARD", MUTED, 28)
-        elif b == "pehchan":
-            big_text(img, (X0 + 40, Y0 + 50, X1 - 40, Y0 + 150), [(head, 44, YELLOW)])
-            if sub:
-                big_text(img, (X0 + 40, Y0 + 170, X1 - 40, Y0 + 320), [(sub, 34, INK)])
-            steps = ["WHAT IT IS", "HOW IT WORKS", "WHAT TO NOTE"]
-            for i, word in enumerate(steps):
-                y = Y0 + 400 + i * 95
-                label(img, X0 + 70, y, f"{i+1}. {word}", YELLOW, 36)
-                if i < 2:
-                    arrow(img, (X0 + 90, y + 55), (X0 + 90, y + 85), BLUE, 6)
-        elif b == "matlab":
-            big_text(img, (X0 + 40, Y0 + 50, X1 - 40, Y0 + 160), [(head, 44, YELLOW)])
-            if sub:
-                big_text(img, (X0 + 40, Y0 + 180, X1 - 40, Y0 + 340), [(sub, 34, INK)])
-            arrow(img, (X0 + 160, Y0 + 480), (X0 + 700, Y0 + 480), GREEN, 14)
-            ring(img, X0 + 700, Y0 + 480, 70, 70, GREEN)
-            label(img, X0 + 40, Y0 + 560, "CAUSE -> EFFECT", GREEN, 32)
-        else:
-            big_text(img, (X0 + 40, Y0 + 50, X1 - 40, Y0 + 160), [(head, 44, YELLOW)])
-            if sub:
-                big_text(img, (X0 + 40, Y0 + 180, X1 - 40, Y0 + 320), [(sub, 34, INK)])
-            for i, y in enumerate((Y0 + 400, Y0 + 520, Y0 + 640)):
-                ring(img, X0 + 100, y, 28, 28, GREEN)
-                label(img, X0 + 160, y - 22, f"CHECK {i+1}", INK, 34)
+        label(img, (X0 + X1) / 2, Y0 + 92, title, YELLOW, 54, anchor="ma")
+        stage = {"hook":"CORE IDEA", "pehchan":"WHAT IT IS", "matlab":"HOW IT WORKS", "karein":"WHAT TO CHECK"}[b]
+        label(img, (X0 + X1) / 2, Y0 + 170, stage, MUTED, 30, anchor="ma")
+        _draw_finance_visual(img, kind, key, b)
         return A, img
     return beat
+
 
 # ================================================================ indicators
 def _walk(n, seed, drift=0.0, vol=1.0, start=100.0):
