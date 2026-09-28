@@ -30,7 +30,7 @@
   },
   "branding": {
     "intro_seconds": 0,
-    "watermark": true,
+    "watermark": false,
     "typewriter": true,
     "thumbnail": true,
     "background_music": true,
