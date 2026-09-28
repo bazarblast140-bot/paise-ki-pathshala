@@ -6,8 +6,9 @@ Usage:
   python run_pipeline.py --publish  # also publish IF verdict READY (opt-in)
   python run_pipeline.py --format short --publish   # 9:16 Short (~50s)
 
-After a successful short YouTube upload, optional Instagram Reel cross-post:
+For short videos, Instagram Reel cross-post is independent of YouTube upload:
   IG_CROSSPOST=1  + IG_USER_ID + IG_ACCESS_TOKEN
+  A missing/failed YouTube upload must not block Instagram.
 """
 import json, os, subprocess, sys
 
@@ -93,14 +94,32 @@ def main():
     if status == "success" and "--publish" in sys.argv and cfg()["pipeline"]["auto_publish"]:
         print("\n=== Publish (opt-in) ===")
         (RUN / "uploaded.txt").unlink(missing_ok=True)
+        # YouTube is optional for the short: a missing/invalid refresh token
+        # must not block the Instagram Reel cross-post.
         run("publish.py", "--only-if-ready")
-        settle_topic((RUN / "uploaded.txt").exists())
+
+        yt_uploaded = (RUN / "uploaded.txt").exists()
+        ig_published = False
 
         # Same short → Instagram Reel (no re-render). Opt-in via IG_CROSSPOST=1.
-        # Errors inside publish_instagram.py are non-fatal (exit 0).
-        if video_format() == "short" and (RUN / "uploaded.txt").exists():
+        # Instagram can publish from final.mp4 even when YouTube upload failed.
+        # Force is scoped to this pipeline call; direct standalone runs retain
+        # the safer uploaded.txt check.
+        if video_format() == "short":
             print("\n=== Instagram Reel (cross-post) ===")
-            run("publish_instagram.py")
+            old_force = os.environ.get("IG_CROSSPOST_FORCE")
+            os.environ["IG_CROSSPOST_FORCE"] = "1"
+            try:
+                run("publish_instagram.py")
+            finally:
+                if old_force is None:
+                    os.environ.pop("IG_CROSSPOST_FORCE", None)
+                else:
+                    os.environ["IG_CROSSPOST_FORCE"] = old_force
+            ig_published = (RUN / "ig_reel.txt").exists()
+
+        # A topic is considered successfully published if either platform got it.
+        settle_topic(yt_uploaded or ig_published)
 
     # always notify
     print("\n=== Notify ===")
