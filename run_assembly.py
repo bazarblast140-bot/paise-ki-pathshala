@@ -307,7 +307,7 @@ def build_chrome(shot, idx, total, path, channel):
     d = ImageDraw.Draw(layer)
 
     # Section labels (TRAP/RULE/MATH) disabled — clean pro frames only
-    if channel:
+    if channel and cfg()["branding"].get("watermark", True):
         # Pro watermark: small amber pip + uppercase name, soft shadow for legibility
         label = channel.upper().strip()
         f = _font(28)
@@ -441,7 +441,7 @@ def build_chrome_vertical(path, channel):
     """Chhota watermark upar-left. Progress bar nahi — Shorts ka apna hota hai
     aur hamara YouTube ke neeche wale UI ke peeche chhup jaata."""
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    if channel:
+    if channel and cfg()["branding"].get("watermark", True):
         d = ImageDraw.Draw(layer)
         label = channel.upper().strip()
         f = _font(30)
