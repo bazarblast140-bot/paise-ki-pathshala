@@ -3036,7 +3036,7 @@
   {
    "id": 82,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "option_gamma",
    "cat": "OPTIONS",
    "topic": "Gamma — expiry के पास delta इतनी तेज़ी से क्यों बदलता है",
@@ -3069,8 +3069,7 @@
     "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
    ],
    "seo": "Gamma — expiry के पास delta इतनी तेज़ी से क्यों बदलता है",
-   "used_short_at": "2026-09-28T12:40:12Z",
-   "used_short_fails": 1
+   "used_short_at": "2026-09-28T14:29:57Z"
   },
   {
    "id": 83,
