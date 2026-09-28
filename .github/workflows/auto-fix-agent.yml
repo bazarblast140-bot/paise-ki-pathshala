@@ -150,7 +150,7 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
           KIND="unknown"
-          if grep -qiE 'ECONNRESET|ETIMEDOUT|rate limit|429|503|502|socket hang|DeepSeek|timeout' "$LOG"; then
+          if grep -qiE 'ECONNRESET|ETIMEDOUT|rate limit|429|503|502|socket hang|DeepSeek.*(timeout|429|5[0-9][0-9]|rate)|Grok.*(timeout|429|5[0-9][0-9]|rate)|xAI.*(timeout|429|5[0-9][0-9]|rate)|timeout' "$LOG"; then
             KIND="transient_api"
           elif grep -qiE 'YouTube|quota|upload.*fail|invalid_grant|refresh.token' "$LOG"; then
             KIND="youtube_auth"
