@@ -352,9 +352,10 @@ def _draw_finance_visual(img, kind, key, beat):
         return
     if kind in {"fund", "stock", "business"}:
         if kind == "business":
+            from PIL import ImageDraw
             steps = [("CAC", 180), ("CUSTOMER", 420), ("LTV", 660)]
             for i, (t, x) in enumerate(steps):
-                d = __import__("PIL").ImageDraw.Draw(img)
+                d = ImageDraw.Draw(img)
                 d.rounded_rectangle([x-105, Y0+450, x+105, Y0+570], 22, fill=(18,28,45), outline=GREEN if i==2 else MUTED, width=4)
                 label(img, x, Y0+492, t, INK, 34, anchor="ma")
                 if i < 2:
