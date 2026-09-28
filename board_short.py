@@ -22,6 +22,7 @@ import subprocess
 import sys
 
 from PIL import Image, ImageDraw
+import numpy as np
 
 import board_kit as K
 import board_scenes as S
@@ -475,6 +476,29 @@ def write_compat(topic, n, spoken, beat_times):
     (RUN / "shots.json").write_text(json.dumps({"shots": shots}, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+# ---------------------------------------------------------------- visual QA gate
+def visual_gate(beat_pngs):
+    """Reject blank/placeholder boards before TTS or publishing.
+    The board must contain a meaningful amount of visible graphic content;
+    this catches empty panels and broken scene fallbacks automatically."""
+    failures = []
+    x0, y0, x1, y1 = K.BOARD
+    for beat, paths in beat_pngs.items():
+        for p in paths:
+            im = Image.open(p).convert("RGB").crop((x0, y0, x1, y1))
+            a = np.asarray(im, dtype=np.uint8)
+            gray = a.mean(axis=2)
+            bright = float((gray > 42).mean())
+            spread = float(gray.std())
+            # A normal finance chart/card is comfortably above both values.
+            # Blank/empty panels are not allowed through to publish.
+            if bright < 0.010 or spread < 5.0:
+                failures.append(f"{beat}:{p.name} bright={bright:.3%} std={spread:.1f}")
+    if failures:
+        die("VISUAL QA failed — blank/placeholder board detected: " + "; ".join(failures[:8]))
+    ok("visual QA: every board frame has visible educational graphics")
+
+
 # ---------------------------------------------------------------- main
 def load_topic():
     p = RUN / "topic.json"
@@ -506,6 +530,7 @@ def main():
         for im, p in zip(pics, paths):
             im.save(p)
         beat_pngs[b] = paths
+    visual_gate(beat_pngs)
     thumbnail(topic, RUN / "thumbnail.jpg", Image.open(beat_pngs["hook"][1]))
     ok("frames + thumbnail")
     if args.qa:
