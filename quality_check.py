@@ -1,0 +1,62 @@
+"""Pre-publish deterministic quality gate. No LLM/API credits."""
+import os, subprocess, sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+RUN = ROOT / "run"
+
+
+def fail(msg):
+    print("[QUALITY-GATE] FAIL:", msg)
+    raise SystemExit(1)
+
+
+def main():
+    fmt = os.environ.get("VIDEO_FORMAT", "short")
+    final = RUN / "final.mp4"
+    if not final.exists() or final.stat().st_size < 100_000:
+        fail("final.mp4 missing/suspiciously small")
+
+    try:
+        p = subprocess.run(
+            ["ffprobe","-v","error","-show_entries",
+             "format=duration:stream=codec_type,width,height",
+             "-of","json",str(final)],
+            capture_output=True,text=True,check=True)
+        import json
+        m=json.loads(p.stdout)
+        dur=float(m["format"]["duration"])
+        streams=m.get("streams",[])
+        v=next((s for s in streams if s.get("codec_type")=="video"),None)
+        if not v or not any(s.get("codec_type")=="audio" for s in streams):
+            fail("video/audio stream missing")
+        if fmt == "short":
+            if (v.get("width"),v.get("height")) != (1080,1920):
+                fail(f"wrong short resolution {v.get('width')}x{v.get('height')}")
+            if not 45 <= dur <= 70:
+                fail(f"short duration {dur:.1f}s outside 45-70s")
+            frames=sorted(RUN.glob("b_*_*.png"))
+            if len(frames)<4:
+                fail("board frames missing")
+            from PIL import Image
+            import numpy as np
+            for f in frames:
+                a=np.asarray(Image.open(f).convert("RGB"),dtype=np.uint8)
+                gray=a.mean(axis=2)
+                if gray.std()<5.0 or (gray>42).mean()<0.010:
+                    fail(f"blank/static board: {f.name}")
+            print(f"[QUALITY-GATE] PASS short: {len(frames)} boards, {dur:.1f}s, 1080x1920")
+        else:
+            if (v.get("width"),v.get("height")) != (1920,1080):
+                fail(f"wrong long resolution {v.get('width')}x{v.get('height')}")
+            if dur < 60:
+                fail(f"long video unexpectedly short: {dur:.1f}s")
+            print(f"[QUALITY-GATE] PASS long: {dur:.1f}s, 1920x1080")
+    except SystemExit:
+        raise
+    except Exception as e:
+        fail(str(e))
+
+
+if __name__ == "__main__":
+    main()
