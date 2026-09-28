@@ -43,7 +43,7 @@ def external_publish_failure(log_text):
     return any(x in s for x in needles)
 
 
-def board_quality():
+def board_quality(fmt="short"):
     """Cheap local visual + final-video QA; no AI/API/credit use."""
     try:
         from PIL import Image
@@ -52,7 +52,9 @@ def board_quality():
         return False, f"qa dependencies missing: {e}"
 
     frames = sorted(RUN.glob("b_*_*.png"))
-    if len(frames) < 4:
+    if fmt != "short":
+        frames = []
+    if fmt == "short" and len(frames) < 4:
         return False, f"only {len(frames)} board frames found"
 
     stats = []
@@ -112,7 +114,7 @@ def board_quality():
                 low_var += 1
         if low_var > max(1, len(imgs) // 3):
             return False, f"{low_var}/{len(imgs)} final-video samples look blank/static"
-        return True, f"{len(frames)} boards + final {dur:.1f}s 1080x1920 + {len(imgs)} video samples passed"
+        return True, f"{len(frames)} boards + final {dur:.1f}s {video.get("width")}x{video.get("height")} + {len(imgs)} video samples passed"
     except Exception as e:
         return False, f"final video QA error: {e}"
 
@@ -149,7 +151,7 @@ def main():
     (RUN / "auto_agent_last.log").write_text(out[-30000:], encoding="utf-8")
 
     if rc == 0:
-        ok, detail = board_quality()
+        ok, detail = board_quality(fmt)
         log(f"post-run visual QA: {detail}")
         if not ok:
             log("published pipeline reported success but visual QA failed; blocking success.")
@@ -171,7 +173,7 @@ def main():
         log("self-heal retry failed; stopping to avoid credit burn")
         return rc2 or 1
 
-    ok, detail = board_quality()
+    ok, detail = board_quality(fmt)
     log(f"retry visual QA: {detail}")
     if not ok:
         log("retry produced a visually unsafe result; NOT publishing further")
