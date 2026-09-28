@@ -139,7 +139,7 @@ jobs:
           # Public bucket so Instagram can fetch the mp4 (this repo is private)
           MEDIA_REPO: ${{ vars.MEDIA_REPO || 'bazarblast140-bot/HEYGEN--INSTAGRAM-' }}
           MEDIA_REPO_TOKEN: ${{ secrets.MEDIA_REPO_TOKEN || secrets.GITHUB_TOKEN }}
-        run: python run_pipeline.py --format ${{ steps.fmt.outputs.format }} --publish
+        run: python auto_agent.py --format ${{ steps.fmt.outputs.format }} --publish
 
       - name: Commit topic_bank (prevent topic repeats)
         if: success() && steps.guard.outputs.taken != 'true'
