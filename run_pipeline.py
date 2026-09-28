@@ -30,6 +30,7 @@ STAGES = [
     ("Visuals + Gate 3","run_visuals.py"),
     ("Assembly",        "run_assembly.py"),
     ("Final verify",    "run_verify.py"),
+    ("Pre-publish Quality Gate", "quality_check.py"),
 ]
 
 def run(script, *args):
@@ -42,6 +43,7 @@ SHORT_STAGES = [
     ("Pick topic",      "pick_topic.py"),
     ("Chart Board",     "board_short.py"),
     ("Final verify",    "run_verify.py"),
+    ("Pre-publish Quality Gate", "quality_check.py"),
 ]
 
 
