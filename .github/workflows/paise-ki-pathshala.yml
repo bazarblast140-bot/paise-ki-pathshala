@@ -1,6 +1,7 @@
 # recovery: publish today's missed morning slot
 # recovery-v2: duration-safe Shorts voice pacing
 name: Paise Ki Pathshala
+# recovery-v3: deterministic duration budget + strict publish-failure detection
 
 # Hindi personal-finance channel. Secrets: DEEPSEEK_API_KEY, PEXELS_API_KEY,
 # TELEGRAM_*, YT_FIN_* (yt_token_to_github.py --prefix YT_FIN), variable
