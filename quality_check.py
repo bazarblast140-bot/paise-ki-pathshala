@@ -11,8 +11,27 @@ def fail(msg):
     raise SystemExit(1)
 
 
+def semantic_visual_guard():
+    """Zero-credit guard for known topic/visual mismatches before publish."""
+    topic_file = RUN / "topic.json"
+    if not topic_file.exists():
+        return
+    import json
+    topic = json.loads(topic_file.read_text(encoding="utf-8"))
+    key = str(topic.get("key", "")).strip()
+    if key == "intraday_ema":
+        short_src = (ROOT / "board_short.py").read_text(encoding="utf-8")
+        scenes_src = (ROOT / "board_scenes.py").read_text(encoding="utf-8")
+        if 'low == "intraday_ema":' not in short_src or "return S.render_beat(key, beat, img)" not in short_src:
+            fail("intraday_ema is not routed to its dedicated topic scene")
+        if "def intraday_ema_scene():" not in scenes_src or '"intraday_ema"' not in scenes_src:
+            fail("intraday_ema dedicated scene is missing")
+        print("[QUALITY-GATE] semantic guard PASS: intraday_ema -> dedicated EMA scene")
+
+
 def main():
     fmt = os.environ.get("VIDEO_FORMAT", "short")
+    semantic_visual_guard()
     final = RUN / "final.mp4"
     if not final.exists() or final.stat().st_size < 100_000:
         fail("final.mp4 missing/suspiciously small")
