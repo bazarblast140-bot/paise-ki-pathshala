@@ -420,11 +420,13 @@ def finance_card_scene(key):
 
     def beat(b, img):
         panel(img)
-        A = img.copy()
         label(img, (X0 + X1) / 2, Y0 + 92, title, YELLOW, 54, anchor="ma")
         stage = {"hook":"CORE IDEA", "pehchan":"WHAT IT IS", "matlab":"HOW IT WORKS", "karein":"WHAT TO CHECK"}[b]
         label(img, (X0 + X1) / 2, Y0 + 170, stage, MUTED, 30, anchor="ma")
         _draw_finance_visual(img, kind, key, b)
+        # The first picture is the Reel/Short cover frame. It must already
+        # contain the educational visual, not an empty pre-draw board.
+        A = img.copy()
         return A, img
     return beat
 
