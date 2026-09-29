@@ -3261,7 +3261,7 @@
   {
    "id": 88,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "option_bull_call_spread",
    "cat": "OPTIONS",
    "topic": "Bull Call Spread — bullish view में defined-risk strategy",
@@ -3293,7 +3293,8 @@
     "max loss और max profit पहले calculate करें",
     "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Bull Call Spread — bullish view में defined-risk strategy"
+   "seo": "Bull Call Spread — bullish view में defined-risk strategy",
+   "used_short_at": "2026-09-29T06:21:12Z"
   },
   {
    "id": 89,
