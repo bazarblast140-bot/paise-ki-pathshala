@@ -557,17 +557,32 @@ def main():
     n, source = narration(topic, c)
     spoken = dict(n["beats"])
     spoken["karein"] = spoken["karein"].rstrip() + " " + CTA
-    beat_audio, beat_times, t = {}, {}, 0.0
+    # Generate all beat audio first, then budget deterministic pauses so the
+    # assembled Short lands in a real 50-58s window. ElevenLabs speed alone is
+    # not a reliable duration control, so do not depend on it for QA compliance.
+    beat_audio, raw_durations = {}, {}
     (RUN / "tts_text.txt").unlink(missing_ok=True)
     for b in BEATS:
         mp3 = RUN / f"tts_{b}.mp3"
         tts(spoken[b], mp3, c)
-        d = duration(mp3) + (0.25 if b != "karein" else 0.6)
-        d = max(d, 2.4)
+        raw_durations[b] = max(duration(mp3), 2.4)
         beat_audio[b] = mp3
+
+    raw_total = sum(raw_durations.values())
+    base_pad = sum(0.25 if b != "karein" else 0.6 for b in BEATS)
+    # Aim for ~54s when speech is short, never force a Short beyond 58s.
+    target_total = min(58.0, max(50.0, raw_total + base_pad))
+    extra_pause = max(0.0, target_total - (raw_total + base_pad))
+    pause_each = extra_pause / len(BEATS)
+
+    beat_times, t = {}, 0.0
+    for b in BEATS:
+        pad = (0.25 if b != "karein" else 0.6) + pause_each
+        d = raw_durations[b] + pad
         beat_times[b] = (t, t + d)
         t += d
-    ok(f"voice: {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
+
+    ok(f"voice: speech {raw_total:.1f}s -> final budget {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
     # verify config ka "edge" padh ke ElevenLabs video ko bhi "robotic" maanta tha
     save("voice_engine.txt", "edge" if "edge" in ENGINES else "elevenlabs")
     switch = {b: cue_frac(topic["key"], spoken[b]) for b in BEATS if len(beat_pngs[b]) == 3}
