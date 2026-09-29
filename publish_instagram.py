@@ -67,17 +67,13 @@ def http_json(url: str, *, method: str = "GET", data: bytes | None = None,
 import urllib.parse  # after http_json uses it
 
 
-def host_mp4(file: Path) -> str:
-    """Upload to a GitHub Release and return a public browser_download_url."""
+def host_release_asset(file: Path, *, name: str, content_type: str) -> str:
+    """Upload a public release asset so Meta can fetch media without auth."""
     repo = env("MEDIA_REPO") or env("GITHUB_REPOSITORY")
     token = env("MEDIA_REPO_TOKEN") if env("MEDIA_REPO") else (env("GITHUB_TOKEN") or env("MEDIA_REPO_TOKEN"))
     if not repo or not token:
-        die("Need GITHUB_TOKEN+GITHUB_REPOSITORY (Actions) or MEDIA_REPO+MEDIA_REPO_TOKEN for public hosting")
-
+        die("Need GitHub media hosting credentials")
     tag = f"ig-reel-{time.strftime('%Y-%m-%d')}"
-    name = f"paise-short-{int(time.time())}.mp4"
-
-    # Ensure release exists
     try:
         release = http_json(
             f"{API}/repos/{repo}/releases/tags/{tag}",
@@ -89,19 +85,9 @@ def host_mp4(file: Path) -> str:
         release = http_json(
             f"{API}/repos/{repo}/releases",
             method="POST",
-            data=json.dumps({
-                "tag_name": tag,
-                "name": tag,
-                "body": "Paise Ki Pathshala short — IG Reel cross-post media",
-            }).encode(),
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-                "Content-Type": "application/json",
-            },
+            data=json.dumps({"tag_name": tag, "name": tag, "body": "Paise Ki Pathshala short — IG Reel media"}).encode(),
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "Content-Type": "application/json"},
         )
-
-    # Drop same-name asset if re-running
     for asset in release.get("assets") or []:
         if asset.get("name") == name:
             try:
@@ -112,24 +98,16 @@ def host_mp4(file: Path) -> str:
                 )
             except RuntimeError:
                 pass
-
-    data = file.read_bytes()
     asset = http_json(
         f"{UPLOADS}/repos/{repo}/releases/{release['id']}/assets?name={urllib.parse.quote(name)}",
         method="POST",
-        data=data,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-            "Content-Type": "video/mp4",
-            "Content-Length": str(len(data)),
-        },
+        data=file.read_bytes(),
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
+                 "Content-Type": content_type, "Content-Length": str(file.stat().st_size)},
     )
     url = asset.get("browser_download_url") or ""
     if not url.startswith("https://"):
         die(f"No public download URL from release asset: {asset}")
-
-    # Wait until public fetch works (no auth)
     for attempt in range(1, 9):
         try:
             req = urllib.request.Request(url, method="GET", headers={"User-Agent": "ig-host-check"})
@@ -137,12 +115,19 @@ def host_mp4(file: Path) -> str:
                 if res.status == 200 and res.read(8):
                     ok(f"hosted: {url}")
                     return url
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             print(f"  host wait {attempt}/8: {err}")
             time.sleep(1.5)
     die(f"Public URL not serving yet: {url}")
     return url
 
+
+def host_mp4(file: Path) -> str:
+    return host_release_asset(file, name=f"paise-short-{int(time.time())}.mp4", content_type="video/mp4")
+
+
+def host_cover(file: Path) -> str:
+    return host_release_asset(file, name=f"paise-cover-{int(time.time())}.jpg", content_type="image/jpeg")
 
 def ig_host() -> str:
     surface = env("IG_SURFACE", "facebook")
@@ -235,21 +220,29 @@ def build_caption() -> str:
     return "\n\n".join(parts)[:2200]
 
 
-def publish_reel(video_url: str, caption: str) -> str:
+def publish_reel(video_url: str, caption: str, cover_url: str = "") -> str:
     ig_user = env("IG_USER_ID")
     if not ig_user or not env("IG_ACCESS_TOKEN"):
         die("IG_USER_ID and IG_ACCESS_TOKEN required")
 
-    container = ig_call(
-        f"{ig_user}/media",
-        method="POST",
-        params={
-            "media_type": "REELS",
-            "video_url": video_url,
-            "caption": caption,
-            "share_to_feed": "true",
-        },
-    )
+    params = {
+        "media_type": "REELS",
+        "video_url": video_url,
+        "caption": caption,
+        "share_to_feed": "true",
+    }
+    if cover_url:
+        params["cover_url"] = cover_url
+    try:
+        container = ig_call(f"{ig_user}/media", method="POST", params=params)
+    except RuntimeError as e:
+        if cover_url and "cover" in str(e).lower():
+            print("[warn] Instagram cover rejected; retrying Reel without cover")
+            params.pop("cover_url", None)
+            container = ig_call(f"{ig_user}/media", method="POST", params=params)
+        else:
+            raise
+
     container_id = container.get("id")
     if not container_id:
         die(f"No container id: {container}")
@@ -294,9 +287,14 @@ def main() -> None:
 
     print("\n=== Instagram Reel cross-post ===")
     url = host_mp4(mp4)
+    cover_url = ""
+    cover = RUN / "thumbnail.jpg"
+    if cover.exists():
+        cover_url = host_cover(cover)
+        print(f"  cover: {cover_url}")
     caption = build_caption()
     print(f"  caption ({len(caption)} chars): {caption[:80]}…")
-    media_id = publish_reel(url, caption)
+    media_id = publish_reel(url, caption, cover_url)
     (RUN / "ig_reel.txt").write_text(media_id, encoding="utf-8")
     ok(f"IG Reel published: {media_id}")
 
