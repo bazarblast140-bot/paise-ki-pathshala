@@ -307,5 +307,5 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except Exception as e:  # noqa: BLE001
-        print(f"[ig] error (non-fatal): {e}", file=sys.stderr)
-        sys.exit(0)
+        print(f"[ig] error: {e}", file=sys.stderr)
+        sys.exit(1)
