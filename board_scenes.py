@@ -1392,12 +1392,55 @@ def depository():
     return beat
 
 
+
+# ================================================================ intraday EMA
+def intraday_ema_scene():
+    """Dedicated visual for 9 EMA vs 21 EMA; never reuse the ORB board."""
+    closes = [
+        100.0, 99.7, 100.4, 100.1, 100.9, 101.5, 101.1, 102.0, 102.8,
+        102.2, 103.0, 103.7, 103.2, 104.1, 104.8, 104.2, 103.6, 104.0,
+        104.9, 105.7, 106.2, 105.5, 106.4, 107.2, 106.8, 107.7, 108.4,
+        109.0, 108.6, 109.5
+    ]
+    e9 = ema(closes, 9)
+    e21 = ema(closes, 21)
+
+    def beat(b, img):
+        panel(img)
+        ax = series_panel(
+            img, BOARD,
+            [(closes, (100, 116, 139), 4), (e9, YELLOW, 8), (e21, BLUE, 8)],
+            lo=min(closes) - 1.5, hi=max(closes) + 1.5,
+            pad=(70, 80, 70, 110)
+        )
+        A = img.copy()
+        label(img, X0 + 70, Y0 + 45, "PRICE", MUTED, 30)
+        label(img, X0 + 230, Y0 + 45, "9 EMA", YELLOW, 34)
+        label(img, X0 + 390, Y0 + 45, "21 EMA", BLUE, 34)
+        if b == "hook":
+            i = len(closes) - 1
+            ring(img, ax.x(i), ax.y(e9[i]), 48, 48, YELLOW)
+        elif b == "pehchan":
+            label(img, X0 + 70, Y0 + 125, "9 EMA = FAST / 21 EMA = SLOW", INK, 34)
+            ring(img, ax.x(17), ax.y(e9[17]), 44, 44, YELLOW)
+            ring(img, ax.x(17), ax.y(e21[17]), 44, 44, BLUE)
+        elif b == "matlab":
+            i = len(closes) - 1
+            arrow(img, (ax.x(17), ax.y(e9[17]) + 70), (ax.x(i), ax.y(e9[i]) - 30), GREEN, 10)
+            label(img, X0 + 70, Y0 + 125, "9 ABOVE 21 = BULLISH CONTEXT", GREEN, 34)
+        else:
+            i = len(closes) - 1
+            ring(img, ax.x(i), ax.y(e9[i]), 48, 48, GREEN)
+            label(img, X0 + 70, Y0 + 125, "PULLBACK + PRICE HOLDING 9/21", YELLOW, 32)
+        return A, img
+    return beat
+
 # ================================================================ registry
 SCENES = {
     **{k: (lambda k=k: finance_card_scene(k)) for k in (
         "fund_eps_quality","fund_roce","fund_margin","fund_fcf","fund_pledge","fund_working_capital",
         "opt_iv_crush","opt_bull_call_spread","opt_bear_put_spread","opt_protective_put","opt_straddle","opt_theta_decay",
-        "intraday_orb","intraday_vwap","intraday_gap","intraday_trend_range","intraday_size","intraday_volume",
+        "intraday_orb","intraday_vwap","intraday_gap","intraday_trend_range","intraday_size","intraday_volume","intraday_ema",
         "stock_earnings","stock_turnaround","stock_valuation_trap",
         "penny_dilution","penny_liquidity","penny_history",
         "risk_drawdown","risk_rr","risk_leverage","risk_journal",
