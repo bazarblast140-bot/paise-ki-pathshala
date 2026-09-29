@@ -29,9 +29,63 @@ def semantic_visual_guard():
         print("[QUALITY-GATE] semantic guard PASS: intraday_ema -> dedicated EMA scene")
 
 
+
+def audio_continuity_guard():
+    """Reject long voice gaps before publish; no API/credit cost."""
+    voice = RUN / "voice.wav"
+    if not voice.exists():
+        fail("voice.wav missing")
+    try:
+        p = subprocess.run(
+            ["ffmpeg", "-v", "error", "-i", str(voice), "-af",
+             "silencedetect=noise=-38dB:d=0.85", "-f", "null", "-"],
+            capture_output=True, text=True
+        )
+        log = (p.stderr or "") + (p.stdout or "")
+        import re
+        gaps = []
+        starts = [float(x) for x in re.findall(r"silence_start: ([0-9.]+)", log)]
+        ends = [float(x) for x in re.findall(r"silence_end: ([0-9.]+)", log)]
+        for a, b in zip(starts, ends):
+            if b - a >= 0.85:
+                gaps.append(round(b - a, 2))
+        # One long gap is enough to make a spoken Short sound broken.
+        if gaps:
+            fail(f"voice continuity gap(s) detected: {gaps[:5]}s")
+        print("[QUALITY-GATE] audio continuity PASS: no long voice gap")
+    except SystemExit:
+        raise
+    except Exception as e:
+        fail("audio continuity check error: " + str(e))
+
+
+def cover_visual_guard():
+    """Reject an empty first-frame/cover composition."""
+    thumb = RUN / "thumbnail.jpg"
+    hook = RUN / "b_hook_A.png"
+    if not thumb.exists():
+        fail("thumbnail.jpg missing")
+    if not hook.exists():
+        fail("b_hook_A.png missing")
+    from PIL import Image
+    import numpy as np
+    im = Image.open(hook).convert("RGB")
+    a = np.asarray(im, dtype=np.uint8)
+    # Educational board region only; ignore outer captions/branding.
+    h, w = a.shape[:2]
+    crop = a[int(h*0.34):int(h*0.83), int(w*0.08):int(w*0.92)]
+    bright = float((crop.mean(axis=2) > 42).mean())
+    chroma = float((crop.max(axis=2).astype(int) - crop.min(axis=2).astype(int) > 25).mean())
+    if bright < 0.010 and chroma < 0.003:
+        fail(f"hook visual looks empty: bright={bright:.3%}, chroma={chroma:.3%}")
+    print("[QUALITY-GATE] cover visual PASS")
+
+
 def main():
     fmt = os.environ.get("VIDEO_FORMAT", "short")
     semantic_visual_guard()
+    audio_continuity_guard()
+    cover_visual_guard()
     final = RUN / "final.mp4"
     if not final.exists() or final.stat().st_size < 100_000:
         fail("final.mp4 missing/suspiciously small")
