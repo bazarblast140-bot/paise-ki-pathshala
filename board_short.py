@@ -574,7 +574,10 @@ def main():
         beat_audio[b] = mp3
 
     raw_total = sum(raw_durations.values())
-    base_pad = sum(0.25 if b != "karein" else 0.6 for b in BEATS)
+    # Keep beat transitions almost continuous. The old 250ms/600ms padding made
+    # the voice sound like it stopped after every section on mobile playback.
+    # Natural TTS punctuation supplies the pause; assembly only keeps a tiny seam.
+    base_pad = sum(0.06 if b != "karein" else 0.12 for b in BEATS)
     # Aim for ~54s when speech is short, never force a Short beyond 58s.
     target_total = min(58.0, max(50.0, raw_total + base_pad))
     extra_pause = max(0.0, target_total - (raw_total + base_pad))
@@ -582,7 +585,7 @@ def main():
 
     beat_times, t = {}, 0.0
     for b in BEATS:
-        pad = (0.25 if b != "karein" else 0.6) + pause_each
+        pad = (0.06 if b != "karein" else 0.12) + pause_each
         d = raw_durations[b] + pad
         beat_times[b] = (t, t + d)
         t += d
