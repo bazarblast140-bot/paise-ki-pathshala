@@ -1,4 +1,5 @@
 # recovery: publish today's missed morning slot
+# recovery-v2: duration-safe Shorts voice pacing
 name: Paise Ki Pathshala
 
 # Hindi personal-finance channel. Secrets: DEEPSEEK_API_KEY, PEXELS_API_KEY,
