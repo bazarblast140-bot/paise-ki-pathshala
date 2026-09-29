@@ -89,7 +89,8 @@
       },
       "voice": {
         "edge_voice": "hi-IN-SwaraNeural",
-        "edge_rate": "+10%"
+        "edge_rate": "+0%",
+        "speed": 0.92
       },
       "pipeline": {
         "word_count_tolerance": 0.3
