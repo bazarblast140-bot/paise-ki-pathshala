@@ -155,8 +155,8 @@ def check_narration(n, topic):
             fails.append(f"beat '{b}' khaali")
     text = " ".join(str(beats.get(b) or "") for b in BEATS)
     words = len(text.split())
-    if not 55 <= words <= 120:
-        fails.append(f"{words} words (55-120 chahiye)")
+    if not 95 <= words <= 120:
+        fails.append(f"{words} words (95-120 chahiye)")
     extra = {x.replace(",", "") for x in re.findall(r"\d[\d,]*(?:\.\d+)?", text)} - allowed_numbers(topic)
     if extra:
         fails.append(f"ye numbers topic me nahi hain: {sorted(extra)} — sirf diye gaye numbers use karo")
