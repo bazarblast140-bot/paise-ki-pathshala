@@ -33,13 +33,35 @@ def topic_key():
 
 
 def external_publish_failure(log_text):
-    s = log_text.lower()
-    needles = (
-        "invalid_grant", "youtube", "yt_fin_refresh_token",
-        "instagram", "meta graph", "ig_access_token",
-        "oauth", "401 unauthorized", "403 forbidden",
+    """Detect a real publish/auth failure without matching harmless env/config text.
+    Never classify a build failure just because the log contains words like
+    'youtube', 'instagram', or 'oauth' in environment variables or comments.
+    """
+    lines = [ln.lower() for ln in log_text.splitlines()]
+    hard = (
+        "invalid_grant",
+        "refresherror",
+        "invalid credentials",
+        "insufficient permission",
+        "access token has expired",
+        "oauth token has expired",
+        "authentication failed",
     )
-    return any(x in s for x in needles)
+    if any(x in ln for ln in lines for x in hard):
+        return True
+
+    for ln in lines:
+        publish_ctx = any(x in ln for x in (
+            "publish.py", "publish_instagram.py", "youtube upload",
+            "instagram reel", "meta graph", "youtube api",
+        ))
+        auth_error = any(x in ln for x in (
+            "401", "403", "unauthorized", "forbidden",
+            "oauth", "access token", "permission denied",
+        ))
+        if publish_ctx and auth_error:
+            return True
+    return False
 
 
 def board_quality(fmt="short"):
