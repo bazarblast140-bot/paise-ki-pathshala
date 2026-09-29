@@ -175,15 +175,18 @@ def main():
     (RUN / "auto_agent_last.log").write_text(out[-30000:], encoding="utf-8")
 
     if rc == 0:
-        ok, detail = board_quality(fmt)
+        qa_ok, detail = board_quality(fmt)
         log(f"post-run visual QA: {detail}")
-        if not ok:
-            log("published pipeline reported success but visual QA failed; blocking success.")
-            return 2
-        log("pipeline + visual QA passed; no retry needed")
-        return 0
+        if qa_ok:
+            log("pipeline + visual QA passed; no retry needed")
+            return 0
+        # A process exit of 0 is not enough: if the final video looks wrong,
+        # feed the exact QA finding into the autonomous repair loop.
+        out = out + "\n[AUTO-AGENT QA FAILURE]\n" + detail
+        rc = 2
+        log("pipeline exited 0 but visual QA failed; sending QA finding to self-repair")
 
-    log("pipeline failed; diagnosing before spending any more credits")
+    log("pipeline/QA failed; diagnosing before spending any more credits")
     if external_publish_failure(out):
         log("failure looks like external publishing/OAuth; no blind rebuild/retry")
         return rc or 1
