@@ -2,7 +2,7 @@
 # recovery-v2: duration-safe Shorts voice pacing
 name: Paise Ki Pathshala
 # recovery-v4: autonomous self-repair engine live
-# recovery-v3: deterministic duration budget + strict publish-failure detection
+# recovery-v5: continuous TTS boundary-silence repair
 
 # Hindi personal-finance channel. Secrets: DEEPSEEK_API_KEY, PEXELS_API_KEY,
 # TELEGRAM_*, YT_FIN_* (yt_token_to_github.py --prefix YT_FIN), variable
