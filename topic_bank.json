@@ -2889,7 +2889,7 @@
   {
    "id": 78,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "intraday_ema",
    "cat": "INTRADAY",
    "topic": "9 EMA और 21 EMA — intraday trend filter कैसे बनाएं",
@@ -2921,7 +2921,8 @@
     "sideways market में whipsaw risk",
     "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "9 EMA और 21 EMA — intraday trend filter कैसे बनाएं"
+   "seo": "9 EMA और 21 EMA — intraday trend filter कैसे बनाएं",
+   "used_short_at": "2026-09-29T05:50:56Z"
   },
   {
    "id": 79,
