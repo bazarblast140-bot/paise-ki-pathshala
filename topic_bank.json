@@ -2443,7 +2443,7 @@
   {
    "id": 66,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "debt_equity",
    "cat": "FUNDAMENTAL",
    "topic": "Debt-to-Equity — कर्ज़ कंपनी के लिए कब खतरा बनता है",
@@ -2475,7 +2475,8 @@
     "sector के हिसाब से ratio compare करें",
     "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Debt-to-Equity — कर्ज़ कंपनी के लिए कब खतरा बनता है"
+   "seo": "Debt-to-Equity — कर्ज़ कंपनी के लिए कब खतरा बनता है",
+   "used_short_at": "2026-09-29T05:42:13Z"
   },
   {
    "id": 67,
