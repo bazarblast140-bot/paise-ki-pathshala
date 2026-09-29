@@ -4558,7 +4558,7 @@
   {
    "id": 122,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "stock_valuation_trap",
    "cat": "STOCK CASE STUDY",
    "topic": "Valuation trap — सस्ता P/E हमेशा सस्ता stock नहीं",
@@ -4592,7 +4592,8 @@
     "Valuation को growth और balance sheet के साथ पढ़ो",
     "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Valuation trap — सस्ता P/E हमेशा सस्ता stock नहीं"
+   "seo": "Valuation trap — सस्ता P/E हमेशा सस्ता stock नहीं",
+   "used_short_at": "2026-09-29T06:04:07Z"
   },
   {
    "id": 123,
