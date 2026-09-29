@@ -562,35 +562,46 @@ def main():
     n, source = narration(topic, c)
     spoken = dict(n["beats"])
     spoken["karein"] = spoken["karein"].rstrip() + " " + CTA
-    # Generate all beat audio first, then budget deterministic pauses so the
-    # assembled Short lands in a real 50-58s window. ElevenLabs speed alone is
-    # not a reliable duration control, so do not depend on it for QA compliance.
+    # Generate each beat voice, then trim only the *outer* TTS silence.
+    # ElevenLabs/Edge can add a little leading/trailing room around every beat;
+    # concatenating those raw files made the narration sound like it "waited"
+    # at every beat. We keep natural pauses *inside* a sentence, but remove
+    # artificial silence at beat boundaries. No artificial 50s padding.
     beat_audio, raw_durations = {}, {}
     (RUN / "tts_text.txt").unlink(missing_ok=True)
     for b in BEATS:
         mp3 = RUN / f"tts_{b}.mp3"
         tts(spoken[b], mp3, c)
-        raw_durations[b] = max(duration(mp3), 2.4)
-        beat_audio[b] = mp3
+        clean = RUN / f"voice_clean_{b}.wav"
+        subprocess.run([
+            "ffmpeg", "-v", "error", "-y", "-i", str(mp3),
+            "-af",
+            "silenceremove=start_periods=1:start_duration=0.10:start_threshold=-42dB:"
+            "stop_periods=1:stop_duration=0.10:stop_threshold=-42dB",
+            "-ar", "44100", "-ac", "2", str(clean)
+        ], check=True)
+        d = duration(clean)
+        if d < 1.0:
+            die(f"TTS beat {b} became too short after silence trim: {d:.2f}s")
+        raw_durations[b] = d
+        beat_audio[b] = clean
 
     raw_total = sum(raw_durations.values())
-    # Keep beat transitions almost continuous. The old 250ms/600ms padding made
-    # the voice sound like it stopped after every section on mobile playback.
-    # Natural TTS punctuation supplies the pause; assembly only keeps a tiny seam.
-    base_pad = sum(0.06 if b != "karein" else 0.12 for b in BEATS)
-    # Aim for ~54s when speech is short, never force a Short beyond 58s.
-    target_total = min(58.0, max(50.0, raw_total + base_pad))
-    extra_pause = max(0.0, target_total - (raw_total + base_pad))
-    pause_each = extra_pause / len(BEATS)
-
+    # Only a tiny seam remains so the visual beats stay synchronized with speech.
+    # There is deliberately NO extra pause added to stretch the Short.
+    seam = 0.02
     beat_times, t = {}, 0.0
     for b in BEATS:
-        pad = (0.06 if b != "karein" else 0.12) + pause_each
+        pad = seam if b != BEATS[-1] else 0.0
         d = raw_durations[b] + pad
         beat_times[b] = (t, t + d)
         t += d
 
-    ok(f"voice: speech {raw_total:.1f}s -> final budget {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
+    if t < 45.0:
+        die(f"voice too short after boundary-silence trim: {t:.1f}s — narration/TTS must be expanded, not padded")
+    if t > 62.0:
+        die(f"voice too long after boundary-silence trim: {t:.1f}s — narration/TTS must be tightened")
+    ok(f"voice: trimmed speech {raw_total:.1f}s -> final {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
     # verify config ka "edge" padh ke ElevenLabs video ko bhi "robotic" maanta tha
     save("voice_engine.txt", "edge" if "edge" in ENGINES else "elevenlabs")
     switch = {b: cue_frac(topic["key"], spoken[b]) for b in BEATS if len(beat_pngs[b]) == 3}
