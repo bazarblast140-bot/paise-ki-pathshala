@@ -83,11 +83,11 @@ def beat_images(topic, beat):
             # Only ORB topics may use the ORB board. Every other intraday
             # topic must keep its own dedicated visual; otherwise an EMA
             # narration can accidentally ship with OR HIGH/LOW breakout art.
-            if low == "intraday_ema":
-                return S.render_beat(key, beat, img)
-            if any(x in low for x in ("opening", "orb", "range", "breakout")):
+            # Only the explicit Opening Range Breakout topic gets the
+            # ORB board. Other intraday topics keep their own topic visual.
+            if low == "intraday_orb":
                 return board_orb.opening_range_breakout()(beat, img)
-            return board_orb.intraday_chart_fallback(key)(beat, img)
+            return S.render_beat(key, beat, img)
         except Exception as e:
             print(f"[board_orb] fallback to topic scene: {e}")
     return S.render_beat(key, beat, img)
