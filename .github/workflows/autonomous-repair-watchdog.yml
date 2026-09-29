@@ -1,0 +1,91 @@
+name: Autonomous Repair Watchdog
+
+on:
+  workflow_run:
+    workflows: ["Paise Ki Pathshala"]
+    types: [completed]
+
+concurrency:
+  group: autonomous-repair-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  repair:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Collect failed run logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FAILED_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          mkdir -p run
+          gh run view "$FAILED_RUN" --log-failed > run/watchdog_failure.log || true
+          test -s run/watchdog_failure.log
+          echo "Collected failed run $FAILED_RUN"
+
+      - name: Autonomous diagnosis and repair
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FAILED_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          python - <<'PY'
+          import os, sys
+          from pathlib import Path
+          import self_repair
+
+          log = Path("run/watchdog_failure.log").read_text(encoding="utf-8", errors="replace")
+          repaired = False
+          for attempt in (1, 2):
+              changed, detail = self_repair.propose_and_apply(log, attempt)
+              print(f"[WATCHDOG] repair {attempt}: {detail}")
+              if not changed:
+                  break
+              repaired = True
+              # The patch must compile before it can be committed.
+              if any("compile" in x.lower() or "apply" in x.lower() for x in [detail]):
+                  pass
+              # A second repair is based on the same concrete failure only if needed.
+              break
+
+          if not repaired:
+              print("[WATCHDOG] no safe repository repair found; leaving run failed")
+              sys.exit(2)
+
+          self_repair.commit_repair()
+          Path("run/watchdog_repaired").write_text("verified repair committed\n")
+          PY
+
+      - name: Re-run repaired production workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FAILED_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          # Preserve the failed run's broad intent. The production workflow's
+          # slot guard prevents duplicate posting when the original slot already succeeded.
+          FORMAT=short
+          if gh run view "$FAILED_RUN" --log-failed 2>/dev/null | grep -q -- "--format long"; then
+            FORMAT=long
+          fi
+          PRIVACY=public
+          if gh run view "$FAILED_RUN" --log-failed 2>/dev/null | grep -q "PUBLISH_VISIBILITY: unlisted"; then
+            PRIVACY=unlisted
+          fi
+          gh workflow run paise-ki-pathshala.yml --ref main -f format="$FORMAT" -f privacy="$PRIVACY"
+          echo "[WATCHDOG] repaired workflow dispatched: format=$FORMAT privacy=$PRIVACY"
