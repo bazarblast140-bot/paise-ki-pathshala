@@ -18,6 +18,11 @@ on:
     - cron: "0 3 * * *"      # 08:30 IST → premarket
     - cron: "30 10 * * *"   # 16:00 IST → postmarket
     - cron: "30 15 * * *"   # 21:00 IST → night
+  # Controlled recovery trigger: only this workflow file can start an immediate build.
+  # The bot ledger commit uses [skip ci], so normal runs do not loop.
+  push:
+    paths:
+      - ".github/workflows/paise-ki-pathshala.yml"
   workflow_call:
     inputs:
       format:
@@ -48,7 +53,7 @@ on:
         default: ""
 
 concurrency:
-  group: paise-ki-pathshala-${{ github.event.schedule || inputs.format }}
+  group: paise-ki-pathshala-${{ github.event.schedule || inputs.format || github.ref }}
   cancel-in-progress: false
 
 permissions:
