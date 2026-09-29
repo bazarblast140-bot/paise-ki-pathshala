@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 RUN = ROOT / "run"
-MAX_RETRIES = 1
+MAX_REPAIRS = 2
 
 
 def log(msg):
@@ -188,23 +188,51 @@ def main():
         log("failure looks like external publishing/OAuth; no blind rebuild/retry")
         return rc or 1
 
-    # Only one self-heal retry. Existing run/narration + tts files are reused by
-    # board_short, so the retry does not call the LLM/TTS again unnecessarily.
-    log("safe build failure: retrying the SAME topic once")
-    rc2, out2 = retry_same_topic(fmt, publish)
-    (RUN / "auto_agent_retry.log").write_text(out2[-30000:], encoding="utf-8")
-    if rc2 != 0:
-        log("self-heal retry failed; stopping to avoid credit burn")
-        return rc2 or 1
+    # Bounded LLM repair loop. The repair model sees the actual failure,
+    # relevant source files, and proposes a safe patch. Each patch is syntax
+    # checked before the same topic is retried. Max two repairs.
+    try:
+        import self_repair
+    except Exception as e:
+        log("self-repair engine unavailable: " + str(e))
+        self_repair = None
 
-    ok, detail = board_quality(fmt)
-    log(f"retry visual QA: {detail}")
-    if not ok:
-        log("retry produced a visually unsafe result; NOT publishing further")
-        return 2
+    last_out = out
+    for attempt in range(1, MAX_REPAIRS + 1):
+        if self_repair is None:
+            break
+        try:
+            changed, detail = self_repair.propose_and_apply(last_out, attempt)
+        except Exception as e:
+            changed, detail = False, "repair engine error: " + str(e)
+        log("repair " + str(attempt) + ": " + detail)
+        if not changed:
+            break
 
-    log("self-heal succeeded")
-    return 0
+        rc2, out2 = retry_same_topic(fmt, publish)
+        last_out = out2
+        (RUN / ("auto_agent_repair_" + str(attempt) + ".log")).write_text(
+            out2[-30000:], encoding="utf-8"
+        )
+        if rc2 == 0:
+            ok, detail = board_quality(fmt)
+            log("repair " + str(attempt) + " visual QA: " + detail)
+            if ok:
+                try:
+                    self_repair.commit_repair()
+                    log("verified repair committed for future runs")
+                except Exception as e:
+                    log("verified repair could not be committed: " + str(e))
+                log("self-heal succeeded")
+                return 0
+            log("repair produced an unsafe final video; trying next repair")
+        else:
+            if external_publish_failure(out2):
+                log("repair retry exposed external publishing/auth failure; stopping")
+                return rc2 or 1
+
+    log("bounded self-repair exhausted; stopping without publishing an unsafe result")
+    return rc or 1
 
 
 if __name__ == "__main__":
