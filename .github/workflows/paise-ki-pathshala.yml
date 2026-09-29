@@ -15,9 +15,9 @@ name: Paise Ki Pathshala
 #   premarket 08:30 IST, postmarket 16:00 IST, night 21:00 IST
 on:
   schedule:
-    - cron: "0 2 * * *"      # ~07:30 IST → premarket  08:30 IST
-    - cron: "0 8 * * *"      # ~13:30 IST → postmarket 16:00 IST
-    - cron: "0 13 * * *"     # ~18:30 IST → night      21:00 IST
+    - cron: "0 3 * * *"      # 08:30 IST → premarket
+    - cron: "30 10 * * *"   # 16:00 IST → postmarket
+    - cron: "30 15 * * *"   # 21:00 IST → night
   workflow_call:
     inputs:
       format:
@@ -83,9 +83,9 @@ jobs:
           if [ -z "$F" ]; then
             F=short; VIS=public
             case "${{ github.event.schedule }}" in
-              "0 2 * * *")   SLOT="08:30" ;;
-              "0 8 * * *")   SLOT="16:00" ;;
-              "0 13 * * *")  SLOT="21:00" ;;
+              "0 3 * * *")   SLOT="08:30" ;;
+              "30 10 * * *") SLOT="16:00" ;;
+              "30 15 * * *") SLOT="21:00" ;;
             esac
           elif [ "$VIS" = "now" ]; then
             VIS=public; SLOT=""
