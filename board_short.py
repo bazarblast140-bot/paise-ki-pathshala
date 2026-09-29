@@ -80,11 +80,16 @@ def beat_images(topic, beat):
     if low.startswith("intraday_"):
         try:
             import board_orb
+            # Only ORB topics may use the ORB board. Every other intraday
+            # topic must keep its own dedicated visual; otherwise an EMA
+            # narration can accidentally ship with OR HIGH/LOW breakout art.
+            if low == "intraday_ema":
+                return S.render_beat(key, beat, img)
             if any(x in low for x in ("opening", "orb", "range", "breakout")):
                 return board_orb.opening_range_breakout()(beat, img)
             return board_orb.intraday_chart_fallback(key)(beat, img)
         except Exception as e:
-            print(f"[board_orb] fallback to generic: {e}")
+            print(f"[board_orb] fallback to topic scene: {e}")
     return S.render_beat(key, beat, img)
 
 
