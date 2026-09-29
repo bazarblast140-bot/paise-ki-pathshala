@@ -119,6 +119,9 @@ jobs:
             echo "taken=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Agent preflight
+        run: python -m py_compile auto_agent.py self_repair.py
+
       - name: Run Pipeline (+ publish if READY)
         if: steps.guard.outputs.taken != 'true'
         env:
