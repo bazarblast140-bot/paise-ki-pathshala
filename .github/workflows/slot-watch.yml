@@ -58,7 +58,7 @@ jobs:
   # video tabhi milega jab ye abhi chala jaye (slot se ~45 min late, par gaya to sahi).
   fill:
     needs: check
-    if: needs.check.outputs.missing == 'true' && inputs.fill != false
+    if: needs.check.outputs.missing == 'true' && (github.event_name == 'schedule' || inputs.fill == true)
     uses: ./.github/workflows/paise-ki-pathshala.yml
     with:
       format: short
