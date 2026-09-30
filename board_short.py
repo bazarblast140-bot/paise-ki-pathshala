@@ -317,39 +317,11 @@ def _eleven(text, path, c):
     if not voice:
         die("ELEVENLABS_API_KEY is set but ELEVENLABS_VOICE_ID/config voice_id is missing")
 
-    # Check remaining monthly characters once per process. ElevenLabs exposes
-    # character_count and character_limit on /v1/user/subscription.
+    # Do not preflight /v1/user/subscription here. API keys can be endpoint-scoped,
+    # so a valid TTS key may legitimately be unable to read subscription details.
+    # The real TTS request is the authoritative credential/quota check.
     global ELEVEN_REMAINING
-    if ELEVEN_REMAINING is None:
-        try:
-            q = requests.get(
-                "https://api.elevenlabs.io/v1/user/subscription",
-                headers={"xi-api-key": key, "accept": "application/json"},
-                timeout=20,
-            )
-            if q.status_code == 401:
-                die("ElevenLabs API key is invalid/expired; paid voice was not used")
-            if q.status_code != 200:
-                die(f"ElevenLabs quota check failed ({q.status_code}); paid voice was not used")
-            sub = q.json()
-            limit = int(sub.get("character_limit", 0) or 0)
-            used = int(sub.get("character_count", 0) or 0)
-            ELEVEN_REMAINING = max(0, limit - used)
-            print(f"[elevenlabs] paid characters remaining: {ELEVEN_REMAINING}")
-            if ELEVEN_REMAINING <= 0:
-                ELEVEN_EXHAUSTED = True
-                print("[elevenlabs] paid quota exhausted -> switching to Edge free voice")
-                return False
-        except SystemExit:
-            raise
-        except Exception as e:
-            die(f"ElevenLabs quota check error: {e}")
-
     need_chars = len(text)
-    if ELEVEN_REMAINING is not None and need_chars > ELEVEN_REMAINING:
-        ELEVEN_EXHAUSTED = True
-        print(f"[elevenlabs] {need_chars} chars needed but only {ELEVEN_REMAINING} remain -> Edge")
-        return False
 
     model = os.environ.get("ELEVENLABS_MODEL") or c["voice"].get("model", "eleven_multilingual_v2")
     payload = {
