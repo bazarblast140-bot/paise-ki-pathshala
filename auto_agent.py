@@ -187,6 +187,11 @@ def main():
         log("pipeline exited 0 but visual QA failed; sending QA finding to self-repair")
 
     log("pipeline/QA failed; diagnosing before spending any more credits")
+    # Print the captured child-process output so the actual root cause is visible
+    # to Actions and available to the bounded self-repair engine.
+    log("---- pipeline diagnostic tail ----")
+    print(out[-12000:], flush=True)
+    log("---- end pipeline diagnostic ----")
     if external_publish_failure(out):
         log("failure looks like external publishing/OAuth; no blind rebuild/retry")
         return rc or 1
