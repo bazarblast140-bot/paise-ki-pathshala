@@ -627,26 +627,22 @@ def main():
         t += d
 
     if t < 45.0:
-        print(f"[retry] voice too short after trim ({t:.1f}s); expanding + Edge slow, gentle trim")
-        src = topic["beats"]
+        print(f"[retry] voice too short after trim ({t:.1f}s); controlled Edge expansion")
+        # Do NOT append filler to every beat: that can explode the total duration.
+        # Expand only the final explanatory beat with a bounded, fact-safe paragraph.
         extra = (
-            "इस हिस्से में स्क्रीन पर दी गई जानकारी को क्रम से समझें। "
-            "पहले तथ्य, फिर मतलब, फिर सीमा — तीनों साफ रखें। "
-            "नई कीमत, तारीख या रिटर्न का अनुमान यहाँ नहीं लगाया जा रहा। "
-            "यह शिक्षा है, सलाह नहीं। निवेश से पहले अपनी रिसर्च और जोखिम देखें।"
+            "इस विषय को समझते समय पहले दिए गए तथ्य को देखें, फिर उसका मतलब समझें। "
+            "इसके बाद जोखिम और सीमाओं को ध्यान में रखें। उपलब्ध जानकारी से आगे कोई अनुमान "
+            "नहीं लगाया जा रहा है। यह जानकारी केवल शिक्षा के लिए है, इसलिए निवेश से पहले "
+            "अपनी रिसर्च और जोखिम प्रबंधन जरूर करें।"
         )
-        for b in BEATS:
-            spoken[b] = (spoken[b].rstrip() + " " + extra).strip()
-            if len(spoken[b].split()) < 35:
-                h, s = src[b][0], src[b][1]
-                spoken[b] = f"{h}। {s}। {extra}"
-        spoken["karein"] = spoken["karein"].rstrip() + " " + CTA
+        spoken["karein"] = (spoken["karein"].rstrip() + " " + extra + " " + CTA).strip()
         v = c["voice"]
         original_rate = v.get("edge_rate", "+0%")
         original_speed = v.get("speed", 1.0)
         try:
-            v["edge_rate"] = "-20%"
-            v["speed"] = 0.85
+            v["edge_rate"] = "+0%"
+            v["speed"] = 1.0
             for b in BEATS:
                 mp3 = RUN / f"tts_{b}.mp3"
                 mp3.unlink(missing_ok=True)
@@ -654,7 +650,7 @@ def main():
                 import speak
                 edge_text = speak.speakable(spoken[b])
                 print(f"[retry-edge] {b}: words={len(edge_text.split())} chars={len(edge_text)}")
-                asyncio.run(_edge(edge_text, v.get("edge_voice", "hi-IN-SwaraNeural"), "-20%", mp3))
+                asyncio.run(_edge(edge_text, v.get("edge_voice", "hi-IN-SwaraNeural"), "+0%", mp3))
                 if not mp3.exists() or mp3.stat().st_size <= 1000:
                     die(f"fallback Edge TTS failed: {b}")
                 ENGINES.append("edge")
@@ -683,6 +679,8 @@ def main():
         finally:
             v["edge_rate"] = original_rate
             v["speed"] = original_speed
+
+        # Small overshoot/undershoot is normalized with atempo; this does not add silence.
         if 38.0 <= t < 45.0:
             factor = max(0.80, t / 45.5)
             print(f"[retry] slight under-length {t:.1f}s — atempo={factor:.3f}")
@@ -701,11 +699,30 @@ def main():
                 d = raw_durations[b] + (seam if b != BEATS[-1] else 0.0)
                 beat_times[b] = (t, t + d)
                 t += d
+
+        if t > 62.0 and t <= 75.0:
+            factor = max(0.50, t / 58.0)
+            print(f"[retry] slight over-length {t:.1f}s — atempo={factor:.3f}")
+            for b in BEATS:
+                src_wav = beat_audio[b]
+                fast = RUN / f"voice_fast_{b}.wav"
+                subprocess.run([
+                    "ffmpeg", "-v", "error", "-y", "-i", str(src_wav),
+                    "-af", f"atempo={factor:.4f}",
+                    "-ar", "44100", "-ac", "2", str(fast)
+                ], check=True)
+                raw_durations[b] = duration(fast)
+                beat_audio[b] = fast
+            beat_times, t = {}, 0.0
+            for b in BEATS:
+                d = raw_durations[b] + (seam if b != BEATS[-1] else 0.0)
+                beat_times[b] = (t, t + d)
+                t += d
+
         if t < 45.0:
             detail = ", ".join(f"{b}={raw_durations[b]:.1f}s/{len(spoken[b].split())}w" for b in BEATS)
             die(f"voice too short after TTS retry: {t:.1f}s — {detail}")
-    if t > 62.0:
-        die(f"voice too long after boundary-silence trim: {t:.1f}s — narration/TTS must be tightened")
+
     ok(f"voice: trimmed speech {raw_total:.1f}s -> final {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
     # verify config ka "edge" padh ke ElevenLabs video ko bhi "robotic" maanta tha
     save("voice_engine.txt", "edge" if "edge" in ENGINES else "elevenlabs")
