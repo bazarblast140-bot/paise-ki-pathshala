@@ -1,12 +1,23 @@
 name: Autonomous Repair Watchdog
 
+# MANUAL ONLY now. It used to fire automatically after every failed build, let an
+# LLM patch source files, commit straight to main and re-dispatch a PUBLIC
+# upload. Between 28-30 Sep 2026 that loop pushed dozens of broken commits and
+# burned LLM credit without fixing the real causes. Run it by hand if you want it:
+#   gh workflow run "Autonomous Repair Watchdog" -f failed_run_id=<run id>
 on:
-  workflow_run:
-    workflows: ["Paise Ki Pathshala"]
-    types: [completed]
+  workflow_dispatch:
+    inputs:
+      failed_run_id:
+        description: "Failed 'Paise Ki Pathshala' run id to diagnose"
+        required: true
+      redispatch:
+        description: "Repair ke baad production run dobara chalana hai?"
+        type: boolean
+        default: false
 
 concurrency:
-  group: autonomous-repair-${{ github.event.workflow_run.id }}
+  group: autonomous-repair-${{ inputs.failed_run_id }}
   cancel-in-progress: false
 
 permissions:
@@ -15,7 +26,6 @@ permissions:
 
 jobs:
   repair:
-    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -33,7 +43,7 @@ jobs:
       - name: Collect failed run logs
         env:
           GH_TOKEN: ${{ github.token }}
-          FAILED_RUN: ${{ github.event.workflow_run.id }}
+          FAILED_RUN: ${{ inputs.failed_run_id }}
         run: |
           mkdir -p run
           gh run view "$FAILED_RUN" --log-failed > run/watchdog_failure.log || true
@@ -46,7 +56,7 @@ jobs:
       - name: Autonomous diagnosis and repair
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          FAILED_RUN: ${{ github.event.workflow_run.id }}
+          FAILED_RUN: ${{ inputs.failed_run_id }}
         run: |
           python - <<'PY'
           import os, sys
@@ -76,9 +86,10 @@ jobs:
           PY
 
       - name: Re-run repaired production workflow
+        if: ${{ inputs.redispatch }}
         env:
           GH_TOKEN: ${{ github.token }}
-          FAILED_RUN: ${{ github.event.workflow_run.id }}
+          FAILED_RUN: ${{ inputs.failed_run_id }}
         run: |
           # Preserve the failed run's broad intent. The production workflow's
           # slot guard prevents duplicate posting when the original slot already succeeded.

@@ -50,6 +50,16 @@ def cfg():
         _merge(c, over)
     return c
 
+def short_qa_window():
+    """(min, max) seconds a finished Short may be, for the QA gates. Same source
+    as board_short.py (config formats.short.video.min/max_seconds) plus a little
+    slack for the CTA tail / container rounding. The old hard-coded 45-70s window
+    rejected normal 33-40s Shorts and led to the filler-narration hacks."""
+    c = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
+    v = ((c.get("formats") or {}).get("short") or {}).get("video") or {}
+    return float(v.get("min_seconds", 32)) - 1.0, float(v.get("max_seconds", 62)) + 3.0
+
+
 def need(key):
     v = os.environ.get(key)
     if not v:
@@ -119,10 +129,17 @@ def claude(system, user, model=None, max_tokens=16000, retries=3):
         client = openai.OpenAI(api_key=deepseek_key, base_url=base_url, timeout=180, max_retries=0)
         call_limit = int(os.environ.get("LLM_CALL_TIMEOUT", "180"))  # har try ki total time limit (sec)
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        # deepseek-flash (V4.1) runs in THINKING mode by default. The hidden
+        # chain-of-thought counts against max_tokens, so a 2000-token narration
+        # call often ended with finish_reason=length and EMPTY content — the
+        # "DeepSeek returned empty content" loop of 29/30-Sep-2026. Our prompts
+        # need a direct JSON/text answer, so thinking is off unless config says so.
+        thinking = bool(c["models"].get("deepseek_thinking", False))
         kwargs = dict(
-            model=model or "deepseek-v4-flash",
+            model=model or "deepseek-flash",
             messages=messages,
             max_tokens=max_tokens,
+            extra_body={"thinking": {"type": "enabled" if thinking else "disabled"}},
         )
         last = None
         effective_retries = max(retries, 5)
@@ -131,8 +148,12 @@ def claude(system, user, model=None, max_tokens=16000, retries=3):
                 completion = _with_deadline(lambda: client.chat.completions.create(**kwargs), call_limit)
                 choices = getattr(completion, "choices", None)
                 content = (choices[0].message.content or "") if choices else ""
+                finish = getattr(choices[0], "finish_reason", None) if choices else None
+                if not content.strip() and finish == "length":
+                    # reasoning ate the budget: give the next try more room
+                    kwargs["max_tokens"] = min(int(kwargs["max_tokens"]) * 2, 32000)
                 if not content.strip():
-                    last = RuntimeError("DeepSeek returned empty content" if choices else
+                    last = RuntimeError(f"DeepSeek returned empty content (finish_reason={finish})" if choices else
                                         f"DeepSeek returned no choices: {str(completion)[:200]}")
                     if attempt < effective_retries - 1:
                         wait = min(60, 10 * (2 ** attempt))

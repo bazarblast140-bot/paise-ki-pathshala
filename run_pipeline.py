@@ -96,12 +96,23 @@ def main():
     if status == "success" and "--publish" in sys.argv and cfg()["pipeline"]["auto_publish"]:
         print("\n=== Publish (opt-in) ===")
         (RUN / "uploaded.txt").unlink(missing_ok=True)
+        (RUN / "youtube_status.txt").unlink(missing_ok=True)
         # YouTube is optional for the short: a missing/invalid refresh token
         # must not block the Instagram Reel cross-post.
-        run("publish.py", "--only-if-ready")
+        yt_rc = run("publish.py", "--only-if-ready")
 
         yt_uploaded = (RUN / "uploaded.txt").exists()
         ig_published = False
+        yt_note = ""
+        if not yt_uploaded:
+            if yt_rc == 3:   # yt_credentials.EXIT_TOKEN_DEAD
+                yt_note = "YouTube TOKEN EXPIRED/REVOKED — README: 'YouTube token permanent kaise karein'"
+                print("::error title=YouTube token expired or revoked::Regenerate YT_FIN_REFRESH_TOKEN "
+                      "after publishing the OAuth app to 'In production' (README).")
+            else:
+                yt_note = f"YouTube upload nahi hua (publish.py rc={yt_rc})"
+                print(f"::warning title=YouTube upload skipped::publish.py exit code {yt_rc}")
+            (RUN / "youtube_status.txt").write_text(yt_note + "\n", encoding="utf-8")
 
         # Same short → Instagram Reel (no re-render). Opt-in via IG_CROSSPOST=1.
         # Instagram can publish from final.mp4 even when YouTube upload failed.
@@ -120,8 +131,23 @@ def main():
                     os.environ["IG_CROSSPOST_FORCE"] = old_force
             ig_published = (RUN / "ig_reel.txt").exists()
 
+        # Instagram-only publish still fills the slot in the ledger, so Slot watch
+        # doesn't fire a second "fill" run (which re-posts to IG and can't fix a
+        # dead YouTube token anyway).
+        if ig_published and not yt_uploaded:
+            try:
+                from ledger import record_publish
+                from slot_guard import target_date
+                slot = os.environ.get("PUBLISH_SLOT_IST", "").strip()
+                record_publish(None, None, slot or None, platform="instagram",
+                               date_ist=target_date(slot) if slot else None)
+            except Exception as e:  # noqa: BLE001
+                print(f"[warn] ledger IG-only entry skipped: {e}")
+
         # A topic is considered successfully published if either platform got it.
         settle_topic(yt_uploaded or ig_published)
+        if yt_note:
+            status = "success (Instagram only) — " + yt_note if ig_published else "publish failed — " + yt_note
 
     # always notify
     print("\n=== Notify ===")
@@ -130,7 +156,7 @@ def main():
     # Propagate stage failures to CI (and cron callers).  Previously the
     # notification step ran and the process exited 0 even when a stage had
     # failed, making GitHub Actions report a misleading success.
-    if status != "success":
+    if not status.startswith("success"):
         sys.exit(1)
 
 if __name__ == "__main__":

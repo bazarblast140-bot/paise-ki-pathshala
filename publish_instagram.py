@@ -282,6 +282,12 @@ def main() -> None:
     if not mp4.exists():
         die("run/final.mp4 missing")
 
+    # Same quality bar as YouTube: IG_CROSSPOST_FORCE only bypasses "YouTube
+    # upload missing" (e.g. dead token), never a NOT-READY verify verdict.
+    report = RUN / "report.md"
+    if not report.exists() or "READY TO PUBLISH" not in report.read_text(encoding="utf-8"):
+        skip("verify verdict is not READY TO PUBLISH — Reel not posted")
+
     if not (RUN / "uploaded.txt").exists() and env("IG_CROSSPOST_FORCE") not in ("1", "true"):
         skip("YouTube upload not recorded (uploaded.txt missing) — set IG_CROSSPOST_FORCE=1 to post anyway")
 

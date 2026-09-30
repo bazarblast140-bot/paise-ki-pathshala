@@ -152,6 +152,21 @@ def allowed_numbers(topic):
     return {n.replace(",", "") for n in re.findall(r"\d[\d,]*(?:\.\d+)?", blob)} | {"1", "2", "3"}
 
 
+def word_range(c=None):
+    """Narration word window. ~3 spoken Hindi words/sec (ElevenLabs @0.92, Edge +0%),
+    so 110-145 words = ~37-48s of speech. Config: formats.short.narration."""
+    c = c or cfg()
+    n = c.get("narration") or {}
+    return int(n.get("min_words", 110)), int(n.get("max_words", 145))
+
+
+def duration_window(c=None):
+    """(min, max) seconds the final Short may be. Config: formats.short.video."""
+    c = c or cfg()
+    v = c.get("video") or {}
+    return float(v.get("min_seconds", 32)), float(v.get("max_seconds", 62))
+
+
 def check_narration(n, topic):
     fails = []
     beats = n.get("beats") or {}
@@ -160,8 +175,9 @@ def check_narration(n, topic):
             fails.append(f"beat '{b}' khaali")
     text = " ".join(str(beats.get(b) or "") for b in BEATS)
     words = len(text.split())
-    if not 95 <= words <= 120:
-        fails.append(f"{words} words (95-120 chahiye)")
+    lo, hi = word_range()
+    if not lo <= words <= hi:
+        fails.append(f"{words} words ({lo}-{hi} chahiye)")
     extra = {x.replace(",", "") for x in re.findall(r"\d[\d,]*(?:\.\d+)?", text)} - allowed_numbers(topic)
     if extra:
         fails.append(f"ye numbers topic me nahi hain: {sorted(extra)} — sirf diye gaye numbers use karo")
@@ -209,7 +225,7 @@ Rules:
 - matlab: explain the cause → effect and, where the topic allows, give ONE tiny concrete example.
 - karein: finish with one practical takeaway or limitation; never make a personalised trade call.
 - Each beat: 1-2 short sentences, preferably under 12 words per sentence.
-- Total 95-120 words; aim for about 55 seconds of spoken content so the final video, CTA, and natural pauses stay around 60 seconds. The narration must add explanation beyond merely reading the on-screen text.
+- Total {min_words}-{max_words} words (count them!); that is ~40-48 seconds of speech. The narration must add explanation beyond merely reading the on-screen text.
 - Use ONLY numbers that appear in the topic data given to you. Never invent prices, dates, returns.
 - Not a quiz. Do not ask the viewer to pick options.
 - SEBI rules: never tell anyone to buy/sell/hold a specific stock, fund or product; no targets,
@@ -220,7 +236,19 @@ Rules:
 - If category is "REAL DATA": hook = ONLY the question (year, ₹1 लाख, name), max 10 words —
   NEVER the answer. pehchan = the two prices with years. matlab = the multiple (गुना) once.
   karein = the final value once, then the balance line from facts. Say the final value only in
-  karein, never earlier. Total 80-100 words. Write "लगाते" (not "लगते")."""
+  karein, never earlier. Same {min_words}-{max_words} word total. Write "लगाते" (not "लगते").{insights}"""
+
+
+def _insight_hint():
+    """Optional: competitor/own-channel title patterns (data/competitor_insights.json,
+    written by competitor_research.py). Only aggregate patterns are passed -- never
+    a competitor's title to copy. Missing file = no hint, pipeline unchanged."""
+    try:
+        import competitor_research
+        return competitor_research.prompt_hint()
+    except Exception as e:  # noqa: BLE001 -- research must never break a run
+        print(f"[info] competitor insights skipped: {type(e).__name__}")
+        return ""
 
 
 def narration(topic, c):
@@ -238,10 +266,14 @@ def narration(topic, c):
             "on_screen": {b: {"headline": h, "sub": s} for b, (h, s) in topic["beats"].items()},
             "facts": topic["facts"]}
     msg = json.dumps(user, ensure_ascii=False)
+    lo, hi = word_range(c)
+    # str.replace, not .format(): the prompt contains literal JSON braces
+    system = (NARR_SYSTEM.replace("{min_words}", str(lo)).replace("{max_words}", str(hi))
+              .replace("{insights}", _insight_hint()))
     last = None
     for attempt in range(1, 4):
         try:
-            n = claude_json(NARR_SYSTEM, msg + ("" if not last else f"\n\nFIX THESE: {last}"),
+            n = claude_json(system, msg + ("" if not last else f"\n\nFIX THESE: {last}"),
                             model=c["models"]["script_model"], max_tokens=2000)
         except SystemExit:
             raise
@@ -256,39 +288,23 @@ def narration(topic, c):
             return n, "llm"
         last = "; ".join(fails)
         print(f"[retry] narration attempt {attempt}: {last}")
-    print("[warn] LLM narration 3 baar fail — on-screen text se narration bana raha hoon")
-    # Deterministic fallback must still be long enough for a real 55-60s Short.
-    # The old fallback only read headline + sub-line, producing ~10-15s audio and
-    # repeatedly failing Gate 2. Expand each beat using only existing topic text;
-    # no new prices, dates, returns, or trade calls are invented.
+    print("[warn] LLM narration 3 baar fail — on-screen text + topic facts se narration bana raha hoon")
+    # Deterministic fallback built ONLY from this topic's own on-screen lines and
+    # verified facts (no invented prices/dates/returns, no generic filler lines
+    # that sound robotic). Duration is then handled by fit_duration() below.
     src = topic["beats"]
+    facts = [str(f).strip().rstrip("।.") for f in (topic.get("facts") or []) if str(f).strip()]
+    fact = lambda i: (facts[i] + "।") if i < len(facts) else ""
     beats = {
-        "hook": (
-            f'{src["hook"][0]}। {src["hook"][1]}। '
-            "इस हिस्से में पहले सवाल और उसके संदर्भ को समझते हैं। "
-            "आगे की जानकारी इसी दिए गए तथ्य को आसान भाषा में समझाती है।"
-        ),
-        "pehchan": (
-            f'{src["pehchan"][0]}। {src["pehchan"][1]}। '
-            "यहां दिख रही जानकारी को ध्यान से पढ़ना जरूरी है। "
-            "पहचान का मतलब है कि पहले स्क्रीन पर मौजूद तथ्य को साफ समझें। "
-            "इसके बाद ही अगले हिस्से का मतलब समझ आता है।"
-        ),
-        "matlab": (
-            f'{src["matlab"][0]}। {src["matlab"][1]}। '
-            "इसका सीधा मतलब यही है कि दिए गए तथ्य को उसके संदर्भ में देखें। "
-            "यहां किसी अतिरिक्त कीमत, तारीख या रिटर्न का अनुमान नहीं लगाया जा रहा है। "
-            "सिर्फ उपलब्ध जानकारी से कारण और असर को समझें।"
-        ),
-        "karein": (
-            f'{src["karein"][0]}। {src["karein"][1]}। '
-            "आखिर में इस जानकारी की सीमा भी याद रखें। "
-            "स्क्रीन पर दिए गए तथ्य को समझना पहला कदम है। "
-            "किसी भी निवेश फैसले के लिए अलग से पूरी जानकारी और जोखिम देखना जरूरी है।"
-        ),
+        "hook": f'{src["hook"][0]}। {src["hook"][1]}।',
+        "pehchan": f'{src["pehchan"][0]}। {src["pehchan"][1]}। {fact(0)}',
+        "matlab": f'{src["matlab"][0]}। {src["matlab"][1]}। {fact(1)} {fact(2)}',
+        "karein": (f'{src["karein"][0]}। {src["karein"][1]}। {fact(3)} '
+                   "याद रखें, ये एक संभावना है, पक्का संकेत नहीं — फैसला अपने जोखिम को देखकर ही लें।"),
     }
+    beats = {k: re.sub(r"\s+", " ", v).strip() for k, v in beats.items()}
     n = {"title": f"{topic['thumb'][0]} {topic['thumb'][1]}", "beats": beats}
-    cache.write_text(json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
+    # not cached: a later run with a working LLM should write a proper narration
     return n, "fallback"
 
 
@@ -551,6 +567,54 @@ def visual_gate(beat_pngs):
     ok("visual QA: every board frame has visible educational graphics")
 
 
+
+# ---------------------------------------------------------------- duration fit
+SEAM = 0.02          # tiny gap between beats so visuals stay in sync with speech
+MIN_TEMPO, MAX_TEMPO = 0.90, 1.12   # max 10% slower / 12% faster — still sounds natural
+
+
+def timeline(durs):
+    beat_times, t = {}, 0.0
+    for b in BEATS:
+        d = durs[b] + (SEAM if b != BEATS[-1] else 0.0)
+        beat_times[b] = (t, t + d)
+        t += d
+    return beat_times
+
+
+def fit_duration(beat_audio, durs, c):
+    """Bring the voice into the configured Shorts window WITHOUT padding the
+    script with filler (the old retry appended ~50 generic words per beat and
+    produced 193s "Shorts"). Only a gentle, uniform tempo change is allowed;
+    if that is not enough the run stops with a clear, actionable message."""
+    lo, hi = duration_window(c)
+    total = sum(durs.values()) + SEAM * (len(BEATS) - 1)
+    if lo <= total <= hi:
+        return beat_audio, durs, total
+    want = (lo + 1.0) if total < lo else (hi - 1.0)
+    factor = total / want            # atempo >1 = faster, <1 = slower
+    if not MIN_TEMPO <= factor <= MAX_TEMPO:
+        words = sum(len(str(x).split()) for x in (RUN / "tts_text.txt").read_text(encoding="utf-8").splitlines()) \
+            if (RUN / "tts_text.txt").exists() else 0
+        # don't let a self-heal retry reuse a narration/voice of the wrong length
+        (RUN / "narration.json").unlink(missing_ok=True)
+        for b in BEATS:
+            (RUN / f"tts_{b}.mp3").unlink(missing_ok=True)
+        detail = ", ".join(f"{b}={durs[b]:.1f}s" for b in BEATS)
+        die(f"voice {total:.1f}s is outside the {lo:.0f}-{hi:.0f}s Shorts window and a natural "
+            f"tempo fix ({MIN_TEMPO}-{MAX_TEMPO}x) can't reach it ({detail}; ~{words} words). "
+            f"Narration word range in config.json formats.short.narration needs tuning.")
+    print(f"[fit] voice {total:.1f}s -> atempo {factor:.3f} (target {want:.0f}s)")
+    new_audio, new_durs = {}, {}
+    for b in BEATS:
+        out = RUN / f"voice_fit_{b}.wav"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(beat_audio[b]),
+                        "-af", f"atempo={factor:.4f}", "-ar", "44100", "-ac", "2", str(out)], check=True)
+        new_audio[b], new_durs[b] = out, duration(out)
+    total = sum(new_durs.values()) + SEAM * (len(BEATS) - 1)
+    return new_audio, new_durs, total
+
+
 # ---------------------------------------------------------------- main
 def load_topic():
     p = RUN / "topic.json"
@@ -591,11 +655,8 @@ def main():
     n, source = narration(topic, c)
     spoken = dict(n["beats"])
     spoken["karein"] = spoken["karein"].rstrip() + " " + CTA
-    # Generate each beat voice, then trim only the *outer* TTS silence.
-    # ElevenLabs/Edge can add a little leading/trailing room around every beat;
-    # concatenating those raw files made the narration sound like it "waited"
-    # at every beat. We keep natural pauses *inside* a sentence, but remove
-    # artificial silence at beat boundaries. No artificial 50s padding.
+    # Generate each beat voice, then trim only the *outer* TTS silence so beats
+    # join without dead air. Natural pauses inside a sentence are kept.
     beat_audio, raw_durations = {}, {}
     (RUN / "tts_text.txt").unlink(missing_ok=True)
     for b in BEATS:
@@ -616,96 +677,8 @@ def main():
         beat_audio[b] = clean
 
     raw_total = sum(raw_durations.values())
-    # Only a tiny seam remains so the visual beats stay synchronized with speech.
-    # There is deliberately NO extra pause added to stretch the Short.
-    seam = 0.02
-    beat_times, t = {}, 0.0
-    for b in BEATS:
-        pad = seam if b != BEATS[-1] else 0.0
-        d = raw_durations[b] + pad
-        beat_times[b] = (t, t + d)
-        t += d
-
-    if t < 45.0:
-        print(f"[retry] voice too short after trim ({t:.1f}s); expanding + Edge slow, gentle trim")
-        src = topic["beats"]
-        extra = (
-            "इस हिस्से में स्क्रीन पर दी गई जानकारी को क्रम से समझें। "
-            "पहले तथ्य, फिर मतलब, फिर सीमा — तीनों साफ रखें। "
-            "नई कीमत, तारीख या रिटर्न का अनुमान यहाँ नहीं लगाया जा रहा। "
-            "यह शिक्षा है, सलाह नहीं। निवेश से पहले अपनी रिसर्च और जोखिम देखें।"
-        )
-        for b in BEATS:
-            spoken[b] = (spoken[b].rstrip() + " " + extra).strip()
-            if len(spoken[b].split()) < 35:
-                h, s = src[b][0], src[b][1]
-                spoken[b] = f"{h}। {s}। {extra}"
-        spoken["karein"] = spoken["karein"].rstrip() + " " + CTA
-        v = c["voice"]
-        original_rate = v.get("edge_rate", "+0%")
-        original_speed = v.get("speed", 1.0)
-        try:
-            v["edge_rate"] = "-20%"
-            v["speed"] = 0.85
-            for b in BEATS:
-                mp3 = RUN / f"tts_{b}.mp3"
-                mp3.unlink(missing_ok=True)
-                (RUN / f"voice_clean_{b}.wav").unlink(missing_ok=True)
-                import speak
-                edge_text = speak.speakable(spoken[b])
-                print(f"[retry-edge] {b}: words={len(edge_text.split())} chars={len(edge_text)}")
-                asyncio.run(_edge(edge_text, v.get("edge_voice", "hi-IN-SwaraNeural"), "-20%", mp3))
-                if not mp3.exists() or mp3.stat().st_size <= 1000:
-                    die(f"fallback Edge TTS failed: {b}")
-                ENGINES.append("edge")
-                clean = RUN / f"voice_clean_{b}.wav"
-                subprocess.run([
-                    "ffmpeg", "-v", "error", "-y", "-i", str(mp3),
-                    "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
-                    "-ar", "44100", "-ac", "2", str(clean)
-                ], check=True)
-                d = duration(clean)
-                d_raw = duration(mp3)
-                if d < d_raw * 0.7:
-                    subprocess.run([
-                        "ffmpeg", "-v", "error", "-y", "-i", str(mp3),
-                        "-ar", "44100", "-ac", "2", str(clean)
-                    ], check=True)
-                    d = duration(clean)
-                raw_durations[b] = d
-                beat_audio[b] = clean
-                print(f"[retry-edge] {b} duration={d:.1f}s")
-            beat_times, t = {}, 0.0
-            for b in BEATS:
-                d = raw_durations[b] + (seam if b != BEATS[-1] else 0.0)
-                beat_times[b] = (t, t + d)
-                t += d
-        finally:
-            v["edge_rate"] = original_rate
-            v["speed"] = original_speed
-        if 38.0 <= t < 45.0:
-            factor = max(0.80, t / 45.5)
-            print(f"[retry] slight under-length {t:.1f}s — atempo={factor:.3f}")
-            for b in BEATS:
-                src_wav = beat_audio[b]
-                slow = RUN / f"voice_slow_{b}.wav"
-                subprocess.run([
-                    "ffmpeg", "-v", "error", "-y", "-i", str(src_wav),
-                    "-af", f"atempo={factor:.4f}",
-                    "-ar", "44100", "-ac", "2", str(slow)
-                ], check=True)
-                raw_durations[b] = duration(slow)
-                beat_audio[b] = slow
-            beat_times, t = {}, 0.0
-            for b in BEATS:
-                d = raw_durations[b] + (seam if b != BEATS[-1] else 0.0)
-                beat_times[b] = (t, t + d)
-                t += d
-        if t < 45.0:
-            detail = ", ".join(f"{b}={raw_durations[b]:.1f}s/{len(spoken[b].split())}w" for b in BEATS)
-            die(f"voice too short after TTS retry: {t:.1f}s — {detail}")
-    if t > 62.0:
-        die(f"voice too long after boundary-silence trim: {t:.1f}s — narration/TTS must be tightened")
+    beat_audio, raw_durations, t = fit_duration(beat_audio, raw_durations, c)
+    beat_times = timeline(raw_durations)
     ok(f"voice: trimmed speech {raw_total:.1f}s -> final {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
     # verify config ka "edge" padh ke ElevenLabs video ko bhi "robotic" maanta tha
     save("voice_engine.txt", "edge" if "edge" in ENGINES else "elevenlabs")

@@ -64,6 +64,14 @@ def external_publish_failure(log_text):
     return False
 
 
+def _short_window():
+    try:
+        from common import short_qa_window
+        return short_qa_window()
+    except Exception:
+        return 31.0, 65.0
+
+
 def board_quality(fmt="short"):
     """Cheap local visual + final-video QA; no AI/API/credit use."""
     try:
@@ -114,8 +122,9 @@ def board_quality(fmt="short"):
         expected = (1080, 1920) if fmt == "short" else (1920, 1080)
         if (video.get("width"), video.get("height")) != expected:
             return False, f"wrong final resolution {video.get('width')}x{video.get('height')}"
-        if fmt == "short" and not 45 <= dur <= 70:
-            return False, f"short duration {dur:.1f}s outside 45-70s QA window"
+        lo, hi = _short_window()
+        if fmt == "short" and not lo <= dur <= hi:
+            return False, f"short duration {dur:.1f}s outside {lo:.0f}-{hi:.0f}s QA window"
         if fmt != "short" and dur < 60:
             return False, f"long duration {dur:.1f}s unexpectedly short"
         # Sample the video at 5s intervals. Blank/near-static output is rejected.
@@ -173,6 +182,12 @@ def main():
     # First normal run.
     rc, out = run_once(fmt, publish)
     (RUN / "auto_agent_last.log").write_text(out[-30000:], encoding="utf-8")
+    # Always show what the pipeline did (upload URLs, auth errors, IG status).
+    # Previously the output was swallowed on success, so a dead YouTube token
+    # was invisible in the Actions log while "green" runs posted nothing.
+    log("---- pipeline output (tail) ----")
+    print(out[-15000:], flush=True)
+    log("---- end pipeline output ----")
 
     if rc == 0:
         qa_ok, detail = board_quality(fmt)
@@ -186,14 +201,16 @@ def main():
         rc = 2
         log("pipeline exited 0 but visual QA failed; sending QA finding to self-repair")
 
-    log("pipeline/QA failed; diagnosing before spending any more credits")
-    # Print the captured child-process output so the actual root cause is visible
-    # to Actions and available to the bounded self-repair engine.
-    log("---- pipeline diagnostic tail ----")
-    print(out[-12000:], flush=True)
-    log("---- end pipeline diagnostic ----")
+    log("pipeline/QA failed (see pipeline output above)")
     if external_publish_failure(out):
         log("failure looks like external publishing/OAuth; no blind rebuild/retry")
+        return rc or 1
+
+    # LLM self-repair (patching source files from inside CI) is OFF by default.
+    # Between 28-30 Sep it produced dozens of broken commits, burned DeepSeek/
+    # Anthropic/Kimi credit, and weakened the real fix. Opt in with SELF_REPAIR=1.
+    if os.environ.get("SELF_REPAIR", "0").strip().lower() not in ("1", "true", "yes"):
+        log("self-repair disabled (set SELF_REPAIR=1 to enable); failing clearly instead")
         return rc or 1
 
     # Bounded LLM repair loop. The repair model sees the actual failure,

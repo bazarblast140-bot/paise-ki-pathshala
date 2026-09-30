@@ -33,7 +33,11 @@ def main():
         diag = "\n\n".join(details) if details else "Check console output logs."
         body = f"STATUS: {status}\n\n⚠️ Gate Details:\n{diag}"
 
-    message = "🎬 Daily Finance Video\n\n" + body
+    head = f"STATUS: {status}\n"
+    yt = RUN / "youtube_status.txt"
+    if yt.exists():
+        head += "⚠️ " + yt.read_text(encoding="utf-8").strip() + "\n"
+    message = "🎬 Paise Ki Pathshala\n" + head + "\n" + body
     try:
         if send(message):
             ok("notified on Telegram")

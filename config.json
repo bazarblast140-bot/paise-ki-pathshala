@@ -54,7 +54,9 @@
     "visual_model": "deepseek-flash",
     "max_tokens": 16000,
     "script_max_tokens": 12000,
-    "visual_max_tokens": 16000
+    "visual_max_tokens": 16000,
+    "deepseek_thinking": false,
+    "_thinking_note": "deepseek-flash defaults to THINKING mode: the chain-of-thought used up max_tokens and 'content' came back empty (Sep-29/30 failures). Keep false for script/narration JSON."
   },
   "voice": {
     "engine": "elevenlabs",
@@ -85,7 +87,9 @@
         "resolution": "1080x1920",
         "target_minutes": 0.85,
         "words_per_minute": 135,
-        "target_word_count": 105
+        "target_word_count": 105,
+        "min_seconds": 32,
+        "max_seconds": 62
       },
       "voice": {
         "edge_voice": "hi-IN-SwaraNeural",
@@ -97,7 +101,27 @@
       },
       "branding": {
         "thumbnail": true
+      },
+      "narration": {
+        "_note": "~3 spoken Hindi words/sec -> 110-145 words = ~37-48s. board_short.py checks this before TTS.",
+        "min_words": 110,
+        "max_words": 145
       }
     }
+  },
+  "research": {
+    "_note": "competitor_research.py (optional). Needs secret YT_DATA_API_KEY, or falls back to the channel OAuth token. Missing creds = step skipped, pipeline unaffected.",
+    "enabled": true,
+    "lookback_days": 30,
+    "max_videos_per_channel": 25,
+    "search_keywords": [
+      "stock market hindi shorts",
+      "option trading hindi",
+      "candlestick pattern hindi"
+    ],
+    "max_search_keywords": 3,
+    "region_code": "IN",
+    "relevance_language": "hi",
+    "include_own_channel": true
   }
 }

@@ -106,8 +106,11 @@ def main():
         if fmt == "short":
             if (v.get("width"),v.get("height")) != (1080,1920):
                 fail(f"wrong short resolution {v.get('width')}x{v.get('height')}")
-            if not 45 <= dur <= 70:
-                fail(f"short duration {dur:.1f}s outside 45-70s")
+            sys.path.insert(0, str(ROOT))
+            from common import short_qa_window
+            lo, hi = short_qa_window()
+            if not lo <= dur <= hi:
+                fail(f"short duration {dur:.1f}s outside {lo:.0f}-{hi:.0f}s")
             frames=sorted(RUN.glob("b_*_*.png"))
             if len(frames)<4:
                 fail("board frames missing")
