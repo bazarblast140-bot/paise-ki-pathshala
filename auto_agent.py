@@ -49,6 +49,9 @@ def external_publish_failure(log_text):
         "instagram publish failed",
         "ig_reel.txt missing",
         "instagram reel not confirmed",
+        "elevenlabs api key is invalid",
+        "elevenlabs api key is invalid/expired",
+        "paid voice was not used",
     )
     if any(x in ln for ln in lines for x in hard):
         return True
