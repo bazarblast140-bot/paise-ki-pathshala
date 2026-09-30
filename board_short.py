@@ -728,8 +728,39 @@ def main():
     if switch:
         ok("3rd picture at " + ", ".join(f"{b} {f:.0%}" for b, f in switch.items()))
     assemble(beat_pngs, beat_audio, beat_times, build_ass(topic, beat_times, spoken), switch=switch)
+
+    # Final-file hard gate: the QA gate measures final.mp4, not the pre-mux
+    # speech estimate.  If muxing/codec timestamps drift outside 45-62s,
+    # deterministically retime the already-rendered final file once.  This
+    # avoids spending LLM repair credits on a mechanical duration mismatch.
+    final_path = RUN / "final.mp4"
+    final_dur = duration(final_path)
+    if final_dur < 45.0 or final_dur > 62.0:
+        target = 56.0
+        tempo = final_dur / target
+        if tempo < 0.5:
+            tempo = 0.5
+        if tempo > 2.0:
+            tempo = 2.0
+        print(f"[final-duration-fix] final.mp4 {final_dur:.1f}s -> target {target:.1f}s, tempo={tempo:.4f}")
+        tmp = RUN / "final_duration_fix.mp4"
+        subprocess.run([
+            "ffmpeg", "-v", "error", "-y", "-i", str(final_path),
+            "-filter_complex",
+            f"[0:v]setpts=PTS/{tempo:.6f}[v];[0:a]atempo={tempo:.6f}[a]",
+            "-map", "[v]", "-map", "[a]",
+            "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+            "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+            str(tmp)
+        ], check=True)
+        tmp.replace(final_path)
+        final_dur = duration(final_path)
+        print(f"[final-duration-fix] verified final.mp4={final_dur:.1f}s")
+    if final_dur < 45.0 or final_dur > 62.0:
+        die(f"final.mp4 duration outside 45-62s after deterministic fix: {final_dur:.1f}s")
+
     write_compat(topic, n, spoken, beat_times)
-    ok(f"wrote run/final.mp4 ({t:.1f}s) + thumbnail.jpg")
+    ok(f"wrote run/final.mp4 ({final_dur:.1f}s) + thumbnail.jpg")
 
 
 if __name__ == "__main__":
