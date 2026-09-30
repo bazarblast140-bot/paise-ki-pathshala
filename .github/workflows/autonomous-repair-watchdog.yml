@@ -40,6 +40,9 @@ jobs:
           test -s run/watchdog_failure.log
           echo "Collected failed run $FAILED_RUN"
 
+      - name: Install repair dependencies
+        run: python -m pip install -r requirements.txt
+
       - name: Autonomous diagnosis and repair
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
