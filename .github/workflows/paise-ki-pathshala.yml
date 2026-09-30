@@ -190,3 +190,5 @@ jobs:
             run/gate3_report.txt
             run/ig_reel.txt
           retention-days: 14
+
+# verified recovery trigger refresh: 2026-09-30
