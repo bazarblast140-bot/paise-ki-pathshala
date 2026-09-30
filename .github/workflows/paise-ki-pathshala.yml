@@ -68,7 +68,7 @@ permissions:
 
 jobs:
   build-video:
-    if: github.event_name != 'push' || contains(github.event.head_commit.message, 'fix: fallback to Edge TTS when short narration is too fast')
+    # Manual/scheduled runs and controlled recovery pushes all execute this job.
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
