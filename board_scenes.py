@@ -432,11 +432,15 @@ def _draw_finance_visual(img, kind, key, beat):
 
 
 def finance_card_scene(key):
-    """Safe generic scene for any topic-bank key.
+    """Safe generic scene with a genuinely different visual composition per beat.
 
-    Rules: use only ASCII inside PIL (avoids tofu), fill the board with a
-    topic-relevant visual, and keep text large enough for a 1080x1920 Short.
-    Hindi explanation is rendered later by libass in board_short.py.
+    Each beat intentionally changes the visual grammar:
+      hook    = overview / attention point
+      pehchan = component breakdown
+      matlab  = cause -> effect flow
+      karein  = practical checklist / risk frame
+
+    This prevents the same static chart from occupying the whole Short.
     """
     kind = _topic_kind(key)
     title = _ascii_title(key)
@@ -444,15 +448,108 @@ def finance_card_scene(key):
     def beat(b, img):
         panel(img)
         label(img, (X0 + X1) / 2, Y0 + 92, title, YELLOW, 54, anchor="ma")
-        stage = {"hook":"CORE IDEA", "pehchan":"WHAT IT IS", "matlab":"HOW IT WORKS", "karein":"WHAT TO CHECK"}[b]
+        stage = {
+            "hook": "CORE IDEA",
+            "pehchan": "WHAT IT IS",
+            "matlab": "HOW IT WORKS",
+            "karein": "WHAT TO CHECK",
+        }[b]
         label(img, (X0 + X1) / 2, Y0 + 170, stage, MUTED, 30, anchor="ma")
-        _draw_finance_visual(img, kind, key, b)
-        # The first picture is the Reel/Short cover frame. It must already
-        # contain the educational visual, not an empty pre-draw board.
+
+        from PIL import ImageDraw
+        d = ImageDraw.Draw(img)
+
+        if b == "hook":
+            # Wide overview: one strong visual with a single emphasis point.
+            _draw_finance_visual(img, kind, key, "hook")
+            A = img.copy()
+            label(img, X0 + 85, Y0 + 255, "1 IDEA", YELLOW, 34)
+            return A, img
+
+        if b == "pehchan":
+            # Replace the overview with a component map; deliberately no copy
+            # of the hook chart.
+            panel(img)
+            boxes = {
+                "fund": [("REVENUE", 170), ("PROFIT", 390), ("CASH", 610)],
+                "stock": [("BUSINESS", 170), ("RESULTS", 390), ("VALUE", 610)],
+                "business": [("CUSTOMER", 170), ("UNIT ECONOMICS", 390), ("CASH", 610)],
+                "intraday": [("PRICE", 170), ("VOLUME", 390), ("VWAP", 610)],
+                "opt": [("PREMIUM", 170), ("IV / GREEKS", 390), ("PAYOFF", 610)],
+                "penny": [("PRICE", 170), ("VOLUME", 390), ("LIQUIDITY", 610)],
+                "risk": [("CAPITAL", 170), ("DRAWDOWN", 390), ("RECOVERY", 610)],
+                "market": [("INDEX", 170), ("EVENT", 390), ("RECOVERY", 610)],
+            }[kind]
+            for i, (txt, y) in enumerate(boxes):
+                d.rounded_rectangle(
+                    [X0 + 90, Y0 + y, X1 - 90, Y0 + y + 130],
+                    24, fill=(18, 28, 45),
+                    outline=GREEN if i == 1 else MUTED, width=5
+                )
+                label(img, (X0 + X1) / 2, Y0 + y + 38, txt, INK, 38, anchor="ma")
+                if i < 2:
+                    arrow(img, ((X0 + X1) / 2, Y0 + y + 138),
+                          ((X0 + X1) / 2, Y0 + y + 202), YELLOW, 8, 20)
+            label(img, X0 + 90, Y1 - 95, "BREAK IT INTO 3 PARTS", YELLOW, 32)
+            A = img.copy()
+            return A, img
+
+        if b == "matlab":
+            # Cause -> effect visual. This is a new line/flow composition,
+            # not the hook chart.
+            panel(img)
+            vals = {
+                "fund": ([40, 65, 90], ["REVENUE", "PROFIT", "CASH"]),
+                "stock": ([55, 72, 88], ["SALES", "PROFIT", "VALUE"]),
+                "business": ([35, 60, 92], ["CAC", "MARGIN", "LTV"]),
+                "intraday": ([45, 62, 84], ["PRICE", "CONTEXT", "CONFIRM"]),
+                "opt": ([30, 52, 80], ["SPOT", "DELTA", "PREMIUM"]),
+                "penny": ([85, 48, 20], ["PRICE", "VOLUME", "LIQUIDITY"]),
+                "risk": ([100, 80, 112], ["START", "LOSS", "RECOVERY"]),
+                "market": ([100, 82, 128], ["INDEX", "EVENT", "RECOVERY"]),
+            }[kind]
+            ax = Axes((X0 + 80, Y0 + 300, X1 - 80, Y1 - 120),
+                      len(vals[0]), 0, max(vals[0]) * 1.15,
+                      pad=(70, 60, 70, 70), ypad=0.03)
+            polyline(img, [(ax.x(i), ax.y(v)) for i, v in enumerate(vals[0])],
+                     GREEN if kind not in {"penny", "risk"} else RED, 10)
+            for i, txt in enumerate(vals[1]):
+                ring(img, ax.x(i), ax.y(vals[0][i]), 34, 34,
+                     YELLOW if i == 1 else MUTED)
+                label(img, ax.x(i), Y1 - 85, txt, INK, 28, anchor="ma")
+                if i < 2:
+                    arrow(img, (ax.x(i) + 35, ax.y(vals[0][i])),
+                          (ax.x(i + 1) - 35, ax.y(vals[0][i + 1])),
+                          GREEN, 7, 18)
+            label(img, X0 + 85, Y0 + 255, "CAUSE  ->  EFFECT", YELLOW, 34)
+            A = img.copy()
+            return A, img
+
+        # karein: a checklist/risk frame, intentionally no chart reuse.
+        panel(img)
+        checks = {
+            "fund": ["QUALITY", "CASH FLOW", "VALUATION"],
+            "stock": ["RESULTS", "DEBT", "VALUATION"],
+            "business": ["CUSTOMER", "MARGIN", "CASH"],
+            "intraday": ["CONTEXT", "CONFIRMATION", "RISK"],
+            "opt": ["IV", "EXPIRY", "MAX RISK"],
+            "penny": ["VOLUME", "SPREAD", "DILUTION"],
+            "risk": ["POSITION SIZE", "STOP LOSS", "RECOVERY MATH"],
+            "market": ["DATE", "SOURCE", "METHOD"],
+        }[kind]
+        for i, txt in enumerate(checks):
+            y = Y0 + 300 + i * 190
+            d.rounded_rectangle(
+                [X0 + 100, y, X1 - 100, y + 125],
+                26, fill=(15, 23, 42), outline=GREEN, width=6
+            )
+            tick(img, X0 + 155, y + 62, 30)
+            fit_label(img, X0 + 220, y + 35, txt, X1 - X0 - 360, INK, 38)
+        label(img, X0 + 100, Y1 - 80, "CHECK BEFORE YOU ACT", YELLOW, 32)
         A = img.copy()
         return A, img
-    return beat
 
+    return beat
 
 # ================================================================ indicators
 def _walk(n, seed, drift=0.0, vol=1.0, start=100.0):
