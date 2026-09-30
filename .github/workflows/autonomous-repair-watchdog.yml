@@ -46,6 +46,12 @@ jobs:
       - name: Autonomous diagnosis and repair
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          KIMI_BASE_URL: ${{ secrets.KIMI_BASE_URL }}
+          SELF_HEAL_MODEL: deepseek-flash
+          SELF_HEAL_FALLBACK_MODEL: claude-haiku-4-5-20251001
           FAILED_RUN: ${{ github.event.workflow_run.id }}
         run: |
           python - <<'PY'
@@ -68,8 +74,8 @@ jobs:
               break
 
           if not repaired:
-              print("[WATCHDOG] no safe repository repair found; leaving run failed")
-              sys.exit(2)
+              print("[WATCHDOG] no safe repository repair found; leaving original run failed")
+              sys.exit(0)
 
           self_repair.commit_repair()
           Path("run/watchdog_repaired").write_text("verified repair committed\n")
