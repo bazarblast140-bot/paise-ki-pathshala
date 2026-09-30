@@ -178,6 +178,16 @@ def main():
         qa_ok, detail = board_quality(fmt)
         log(f"post-run visual QA: {detail}")
         if qa_ok:
+            yt_id = (RUN / "uploaded.txt").read_text(encoding="utf-8").strip() if (RUN / "uploaded.txt").exists() else ""
+            ig_id = (RUN / "ig_reel.txt").read_text(encoding="utf-8").strip() if (RUN / "ig_reel.txt").exists() else ""
+            if yt_id:
+                log(f"YouTube publish confirmed: {yt_id}")
+            else:
+                log("YouTube publish: no uploaded.txt confirmation")
+            if ig_id:
+                log(f"Instagram Reel publish confirmed: {ig_id}")
+            else:
+                log("Instagram Reel publish: no ig_reel.txt confirmation")
             log("pipeline + visual QA passed; no retry needed")
             return 0
         # A process exit of 0 is not enough: if the final video looks wrong,
