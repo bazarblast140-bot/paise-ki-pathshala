@@ -61,49 +61,57 @@ def _relevant_files(log_text: str) -> list[str]:
     return seen[:14]
 
 def _call_model(prompt: str) -> str:
-    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    if not key:
-        raise RuntimeError("ANTHROPIC_API_KEY not available")
-
-    def call(model: str) -> str:
-        body = {
-            "model": model,
-            "max_tokens": 8192,
-            "system": (
-                "You are an autonomous production repair engineer. Diagnose the "
-                "actual root cause from failure logs and source, then return ONLY "
-                "a complete unified git diff. Make the smallest robust fix. Never "
-                "add/expose credentials, exfiltrate data, bypass authentication, "
-                "weaken/delete QA gates, or hide errors. If an external credential "
-                "or service is genuinely the root cause, return NO_PATCH."
-            ),
-            "messages": [{"role": "user", "content": prompt}],
-        }
-        req = urllib.request.Request(
-            "https://api.anthropic.com/v1/messages",
-            data=json.dumps(body).encode(),
-            headers={"content-type": "application/json",
-                     "x-api-key": key, "anthropic-version": "2023-06-01", "accept": "application/json"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                payload = json.loads(resp.read().decode())
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", "replace")
-            raise RuntimeError(f"Anthropic API HTTP {exc.code}: {body[:1200]}") from exc
-        return "".join(
-            b.get("text", "") for b in payload.get("content", [])
-            if b.get("type") == "text"
-        ).strip()
-
+    """Use the same configured LLM provider as the production pipeline.
+    Anthropic is only a fallback; a depleted Anthropic balance must never
+    stop the autonomous repair loop when DeepSeek/Kimi credentials exist.
+    """
+    system = (
+        "You are an autonomous production repair engineer. Diagnose the "
+        "actual root cause from failure logs and source, then return ONLY "
+        "a complete unified git diff. Make the smallest robust fix. Never "
+        "add/expose credentials, exfiltrate data, bypass authentication, "
+        "weaken/delete QA gates, or hide errors. If an external credential "
+        "or service is genuinely the root cause, return NO_PATCH."
+    )
     try:
-        return call(MODEL)
-    except Exception as first:
-        if FALLBACK_MODEL == MODEL:
-            raise
+        from common import claude
+        model = os.environ.get("SELF_HEAL_MODEL", "deepseek-flash")
+        return claude(system, prompt, model=model, max_tokens=8192, retries=3).strip()
+    except BaseException as first:
+        # If the configured provider is unavailable, try an already-configured
+        # Kimi key directly. This keeps self-healing independent of Anthropic
+        # billing/credit state.
+        key = os.environ.get("KIMI_API_KEY", "").strip()
+        if not key:
+            raise RuntimeError("repair model unavailable: " + str(first))
         try:
-            return call(FALLBACK_MODEL)
+            from openai import OpenAI
+            client = OpenAI(
+                api_key=key,
+                base_url=os.environ.get("KIMI_BASE_URL") or "https://api.moonshot.ai/v1",
+                timeout=120,
+                max_retries=0,
+            )
+            for model in (
+                os.environ.get("SELF_HEAL_KIMI_MODEL", "kimi-k2.5"),
+                "kimi-k2.7-code-highspeed",
+                "kimi-k2.5",
+                "moonshot-v1-32k",
+            ):
+                try:
+                    resp = client.chat.completions.create(
+                        model=model,
+                        messages=[{"role": "system", "content": system},
+                                  {"role": "user", "content": prompt}],
+                        max_tokens=8192,
+                        temperature=0.1,
+                    )
+                    text = (resp.choices[0].message.content or "").strip()
+                    if text:
+                        return text
+                except Exception as exc:
+                    print(f"[repair] Kimi {model} failed: {exc}", flush=True)
+            raise RuntimeError("all configured repair models failed: " + str(first))
         except Exception as second:
             raise RuntimeError("repair model failed: " + str(first) + " | " + str(second))
 
