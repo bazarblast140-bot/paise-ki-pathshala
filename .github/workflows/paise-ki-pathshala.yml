@@ -200,3 +200,5 @@ jobs:
           retention-days: 14
 
 # verified recovery trigger refresh: 2026-09-30
+
+# verified Instagram confirmation watchdog active
