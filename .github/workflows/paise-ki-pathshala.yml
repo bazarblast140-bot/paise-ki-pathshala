@@ -1,4 +1,4 @@
-# recovery-v11: harden duration normalization + provider-independent scheduling
+# recovery-v12: fix voice-config retry + duration normalization
 # recovery: publish today's missed morning slot — pro-visual-audio QA recovery
 # recovery-v2: duration-safe Shorts voice pacing
 name: Paise Ki Pathshala
