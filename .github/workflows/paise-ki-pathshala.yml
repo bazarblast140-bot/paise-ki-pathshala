@@ -131,7 +131,7 @@ jobs:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
           KIMI_BASE_URL: ${{ secrets.KIMI_BASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          SELF_HEAL_MODEL: claude-sonnet-4-6
+          SELF_HEAL_MODEL: deepseek-flash
           SELF_HEAL_FALLBACK_MODEL: claude-haiku-4-5-20251001
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
