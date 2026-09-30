@@ -79,6 +79,36 @@ def build_title(sec):
     return title
 
 
+def topic_hashtags(topic):
+    """Generate concise topic-specific hashtags from the selected topic SEO phrase."""
+    cat = str(topic.get("cat") or "")
+    seo = str(topic.get("seo") or "").strip()
+    base = ["#StockMarketHindi", "#TradingHindi", "#PaiseKiPathshala", "#ShareMarket"]
+    cat_map = {
+        "CANDLESTICK": ["#CandlestickPatterns", "#CandlestickTrading"],
+        "INDICATOR": ["#TechnicalAnalysis", "#TradingIndicators"],
+        "OPTIONS": ["#OptionTrading", "#OptionsTrading"],
+        "RISK": ["#RiskManagement", "#TradingRisk"],
+        "ORDERS": ["#StockMarketBasics", "#OrderTypes"],
+        "REAL DATA": ["#StockMarketFacts", "#MarketData"],
+        "MARKET FACT": ["#StockMarketFacts", "#FinanceFacts"],
+        "FUNDAMENTAL": ["#FundamentalAnalysis", "#StockAnalysis"],
+        "PENNY STOCK": ["#PennyStocks", "#LiquidityRisk"],
+        "INTRADAY": ["#IntradayTrading", "#PriceAction"],
+    }
+    out = []
+    for h in base + cat_map.get(cat, []):
+        if h not in out:
+            out.append(h)
+    if seo:
+        words = re.findall(r"[A-Za-z0-9]+", seo)
+        if words:
+            tag = "#" + "".join(w[:1].upper() + w[1:] for w in words)
+            if len(tag) <= 40 and tag not in out:
+                out.insert(1, tag)
+    return out[:10]
+
+
 def build_description(sec, c):
     """SEO-first description: hook → value → disclaimer → referral URLs (one per line) → tags.
 
@@ -149,11 +179,7 @@ def build_description(sec, c):
     parts.append(f"{name} — {tagline}" if tagline else name)
     parts.append("रोज़ 3 ट्रेडिंग Shorts — कैंडलस्टिक, इंडिकेटर, ऑर्डर, F&O, रिस्क और असली डेटा।")
 
-    hash_tags = ["#StockMarketHindi", CAT_HASH.get(topic.get("cat"), "#TradingHindi")]
-    kw = topic.get("seo", "")
-    if kw and topic.get("cat") in ("CANDLESTICK", "INDICATOR", "OPTIONS", "RISK", "ORDERS"):
-        hash_tags.append("#" + re.sub(r"[^A-Za-z0-9]", "", kw.title()))
-    hash_tags += ["#TradingHindi", "#PaiseKiPathshala"]
+    hash_tags = topic_hashtags(topic)
     parts.append(" ".join(dict.fromkeys(h for h in hash_tags if len(h) > 2)))
 
     desc = "\n\n".join(parts)
