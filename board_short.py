@@ -299,42 +299,138 @@ async def _edge(text, voice, rate, path):
 
 
 def _eleven(text, path, c):
-    """Use the configured ElevenLabs voice when a key is available; return False to fall back."""
+    """Paid ElevenLabs first; Edge is allowed only when paid quota is exhausted.
+    A configured-but-invalid ElevenLabs key never silently falls back to free TTS."""
     import os
+    import time
     import requests
-    key = os.environ.get("ELEVENLABS_API_KEY", "")
+
+    key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
     voice = c["voice"].get("voice_id") or os.environ.get("ELEVENLABS_VOICE_ID", "")
-    if not (key and voice):
-        return False
-    try:
-        r = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
-                          headers={"xi-api-key": key, "accept": "audio/mpeg"},
-                          json={"text": text,
-                                "model_id": os.environ.get("ELEVENLABS_MODEL") or c["voice"].get("model", "eleven_multilingual_v2"),
-                                "voice_settings": {
-                                    "stability": c["voice"].get("stability", 0.45),
-                                    "similarity_boost": c["voice"].get("similarity_boost", 0.8),
-                                    "style": c["voice"].get("style", 0.3),
-                                    "speed": c["voice"].get("speed", 1.08),
-                                }},
-                          timeout=90)
-        if r.status_code != 200 or len(r.content) < 2000:
-            print(f"[warn] ElevenLabs {r.status_code}: {r.text[:160]}")
-            return False
-        path.write_bytes(r.content)
-        return True
-    except Exception as e:  # noqa: BLE001
-        print(f"[warn] ElevenLabs error: {e}")
+    if not key:
         return False
 
+    global ELEVEN_EXHAUSTED
+    if ELEVEN_EXHAUSTED:
+        return False
+    if not voice:
+        die("ELEVENLABS_API_KEY is set but ELEVENLABS_VOICE_ID/config voice_id is missing")
+
+    # Check remaining monthly characters once per process. ElevenLabs exposes
+    # character_count and character_limit on /v1/user/subscription.
+    global ELEVEN_REMAINING
+    if ELEVEN_REMAINING is None:
+        try:
+            q = requests.get(
+                "https://api.elevenlabs.io/v1/user/subscription",
+                headers={"xi-api-key": key, "accept": "application/json"},
+                timeout=20,
+            )
+            if q.status_code == 401:
+                die("ElevenLabs API key is invalid/expired; paid voice was not used")
+            if q.status_code != 200:
+                die(f"ElevenLabs quota check failed ({q.status_code}); paid voice was not used")
+            sub = q.json()
+            limit = int(sub.get("character_limit", 0) or 0)
+            used = int(sub.get("character_count", 0) or 0)
+            ELEVEN_REMAINING = max(0, limit - used)
+            print(f"[elevenlabs] paid characters remaining: {ELEVEN_REMAINING}")
+            if ELEVEN_REMAINING <= 0:
+                ELEVEN_EXHAUSTED = True
+                print("[elevenlabs] paid quota exhausted -> switching to Edge free voice")
+                return False
+        except SystemExit:
+            raise
+        except Exception as e:
+            die(f"ElevenLabs quota check error: {e}")
+
+    need_chars = len(text)
+    if ELEVEN_REMAINING is not None and need_chars > ELEVEN_REMAINING:
+        ELEVEN_EXHAUSTED = True
+        print(f"[elevenlabs] {need_chars} chars needed but only {ELEVEN_REMAINING} remain -> Edge")
+        return False
+
+    model = os.environ.get("ELEVENLABS_MODEL") or c["voice"].get("model", "eleven_multilingual_v2")
+    payload = {
+        "text": text,
+        "model_id": model,
+        "voice_settings": {
+            "stability": c["voice"].get("stability", 0.45),
+            "similarity_boost": c["voice"].get("similarity_boost", 0.8),
+            "style": c["voice"].get("style", 0.3),
+            "speed": c["voice"].get("speed", 1.08),
+        },
+    }
+
+    for attempt in range(3):
+        try:
+            r = requests.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
+                headers={"xi-api-key": key, "accept": "audio/mpeg"},
+                json=payload,
+                timeout=90,
+            )
+            if r.status_code == 200 and len(r.content) >= 2000:
+                path.write_bytes(r.content)
+                cost = int(r.headers.get("character-cost", str(need_chars)) or need_chars)
+                if ELEVEN_REMAINING is not None:
+                    ELEVEN_REMAINING = max(0, ELEVEN_REMAINING - cost)
+                return True
+
+            body = (r.text or "")[:1000]
+            try:
+                detail = r.json().get("detail", {})
+                code = str(detail.get("code") or detail.get("status") or "").lower()
+            except Exception:
+                code = ""
+            combined = f"{code} {body}".lower()
+
+            if r.status_code in (400, 402) and any(x in combined for x in (
+                "quota_exceeded", "insufficient_credits", "payment_required",
+                "max_character_limit_exceeded", "quota",
+            )):
+                ELEVEN_EXHAUSTED = True
+                print("[elevenlabs] paid quota exhausted -> switching to Edge free voice")
+                return False
+
+            if r.status_code == 401:
+                die("ElevenLabs authentication failed; refusing silent free-TTS fallback")
+            if r.status_code in (403, 404, 422):
+                die(f"ElevenLabs request/config error {r.status_code}; refusing silent free-TTS fallback: {body[:300]}")
+
+            if r.status_code in (408, 429, 500, 502, 503, 504) and attempt < 2:
+                wait = 2 ** attempt
+                print(f"[retry] ElevenLabs {r.status_code}; retrying in {wait}s")
+                time.sleep(wait)
+                continue
+
+            die(f"ElevenLabs paid TTS failed ({r.status_code}); refusing silent free-TTS fallback")
+        except SystemExit:
+            raise
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+                continue
+            die(f"ElevenLabs paid TTS error: {e}")
+
+    return False
+
 ENGINES = []
+ELEVEN_EXHAUSTED = False
+ELEVEN_REMAINING = None
 
 
 def tts(text, path, c):
-    # Reuse a valid existing audio file on self-heal retries.
-    if path.exists() and path.stat().st_size > 1000:
-        ok(f"voice cache reused: {path.name} — no TTS credit")
-        ENGINES.append("cached")
+    # Reuse only when the cached engine still matches the current priority.
+    # If ElevenLabs is configured now, an old Edge file is regenerated with paid TTS.
+    engine_file = path.with_suffix(".engine")
+    cached_engine = engine_file.read_text(encoding="utf-8").strip().lower() if engine_file.exists() else ""
+    eleven_key = bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
+    if path.exists() and path.stat().st_size > 1000 and (
+        cached_engine == "elevenlabs" or (cached_engine == "edge" and not eleven_key)
+    ):
+        ok(f"voice cache reused: {path.name} ({cached_engine or 'unknown'})")
+        ENGINES.append(cached_engine or "cached")
         return
     """ElevenLabs agar secrets hain, warna / fail hone par Edge Swara — video kabhi nahi rukta.
     Voice ko speak.speakable() wala text jaata hai (₹ -> रुपये, 4,231 -> चार हज़ार...);
@@ -348,6 +444,7 @@ def tts(text, path, c):
         f.write(f"{path.stem}: {text}\n")
     if _eleven(text, path, c):
         ENGINES.append("elevenlabs")
+        engine_file.write_text("elevenlabs", encoding="utf-8")
         return
     v = c["voice"]
     ENGINES.append("edge")
@@ -355,6 +452,7 @@ def tts(text, path, c):
         try:
             asyncio.run(_edge(text, v.get("edge_voice", "hi-IN-SwaraNeural"), v.get("edge_rate", "+10%"), path))
             if path.exists() and path.stat().st_size > 1000:
+                engine_file.write_text("edge", encoding="utf-8")
                 return
         except Exception as e:  # noqa: BLE001
             print(f"[retry] tts {attempt + 1}: {e}")
