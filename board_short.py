@@ -605,8 +605,8 @@ def main():
         subprocess.run([
             "ffmpeg", "-v", "error", "-y", "-i", str(mp3),
             "-af",
-            "silenceremove=start_periods=1:start_duration=0.10:start_threshold=-42dB:"
-            "stop_periods=1:stop_duration=0.10:stop_threshold=-42dB",
+            "silenceremove=start_periods=1:start_duration=0.10:start_threshold=-42dB,"
+            "areverse,silenceremove=start_periods=1:start_duration=0.10:start_threshold=-42dB,areverse",
             "-ar", "44100", "-ac", "2", str(clean)
         ], check=True)
         d = duration(clean)
