@@ -78,9 +78,27 @@ def _call_model(prompt: str) -> str:
         model = os.environ.get("SELF_HEAL_MODEL", "deepseek-flash")
         return claude(system, prompt, model=model, max_tokens=8192, retries=3).strip()
     except BaseException as first:
-        # If the configured provider is unavailable, try an already-configured
-        # Kimi key directly. This keeps self-healing independent of Anthropic
-        # billing/credit state.
+        # Prefer an explicitly configured Anthropic fallback before trying
+        # provider-specific Kimi model names that may not exist on the account.
+        anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        if anthropic_key:
+            try:
+                from anthropic import Anthropic
+                client = Anthropic(api_key=anthropic_key, timeout=120, max_retries=1)
+                resp = client.messages.create(
+                    model=FALLBACK_MODEL,
+                    system=system,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=8192,
+                )
+                text = "".join(
+                    getattr(block, "text", "") for block in getattr(resp, "content", [])
+                ).strip()
+                if text:
+                    return text
+            except Exception as exc:
+                print(f"[repair] Anthropic fallback failed: {exc}", flush=True)
+        # If both configured providers are unavailable, try Kimi.
         key = os.environ.get("KIMI_API_KEY", "").strip()
         if not key:
             raise RuntimeError("repair model unavailable: " + str(first))
