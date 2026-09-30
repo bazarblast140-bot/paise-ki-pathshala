@@ -8,11 +8,10 @@ local Windows build does not have it; libass shapes it everywhere.
 
 Layout (Shorts UI kept clear):
   y   0-170   YouTube top bar            -> background only
-  y 190-260   chips (category, step)
-  y 300-990   BOARD  x 50..900           -> the picture (like-rail stays clear)
-  y 1010-1240 headline + sub (Hindi, ASS)
-  y 1250-1400 captions (Hindi, ASS)
-  y 1440+     channel name / title       -> empty
+  y 165-1115  BOARD  x 25..1055          -> the picture; use the full safe width
+  y 1140-1270 headline + sub (Hindi, ASS)
+  y 1285-1405 captions (Hindi, ASS)
+  y 1470+     CTA / disclaimer            -> below the educational card
 """
 import math
 import pathlib
@@ -21,7 +20,7 @@ import subprocess
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 W, H = 1080, 1920
-BOARD = (50, 300, 900, 990)
+BOARD = (25, 165, 1055, 1115)
 BG_TOP, BG_BOT = (8, 13, 26), (10, 32, 30)
 GREEN, RED, GRID = (34, 197, 94), (239, 68, 68), (40, 52, 72)
 # Semantic trade markers: keep SL softly red and target/entry softly green.
