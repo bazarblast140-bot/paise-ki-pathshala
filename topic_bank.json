@@ -4404,7 +4404,7 @@
   {
    "id": 118,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "intraday_size",
    "cat": "INTRADAY",
    "topic": "Stop distance बदलते ही position size क्यों बदलनी चाहिए",
@@ -4438,7 +4438,8 @@
     "Risk पहले तय करो, quantity बाद में",
     "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Stop distance बदलते ही position size क्यों बदलनी चाहिए"
+   "seo": "Stop distance बदलते ही position size क्यों बदलनी चाहिए",
+   "used_short_at": "2026-09-30T13:37:06Z"
   },
   {
    "id": 119,
