@@ -212,7 +212,7 @@ def propose_and_apply(log_text: str, attempt: int) -> tuple[bool, str]:
             pass
 
     prompt = (
-        "Repair attempt " + str(attempt) + "/2.\n"
+        "Repair attempt " + str(attempt) + "/3.\n"
         "<failure_log>\n" + _redact(log_text[-24000:]) + "\n</failure_log>\n"
         "<repository_files>\n" + "".join(docs) + "\n</repository_files>\n"
         "<rules>\n"
