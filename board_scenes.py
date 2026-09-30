@@ -365,11 +365,16 @@ def _draw_finance_visual(img, kind, key, beat):
             vals = [100, 72, 48] if kind == "fund" else [62, 82, 105]
             labels = ["REVENUE", "PROFIT", "CASH"] if kind == "fund" else ["SALES", "PROFIT", "VALUE"]
             bars(img, box, vals, labels, [BLUE, GREEN, YELLOW], fmt="{:g}", hi=120, value_size=42, label_size=30)
+            if beat == "hook":
             label(img, X0 + 85, Y0 + 325, "COMPARE THE NUMBERS", INK, 34)
-            if beat == "matlab":
-                label(img, X0 + 85, Y0 + 650, "GROWTH IS NOT THE WHOLE STORY", GREEN, 32)
-            elif beat == "karein":
-                label(img, X0 + 85, Y0 + 650, "CHECK QUALITY / CASH / VALUATION", YELLOW, 32)
+        elif beat == "pehchan":
+            ring(img, X0 + 210, Y0 + 565, 90, 70, YELLOW)
+            label(img, X0 + 85, Y0 + 325, "READ EACH BAR", INK, 34)
+        elif beat == "matlab":
+            arrow(img, (X0 + 270, Y0 + 650), (X1 - 240, Y0 + 650), GREEN, 10)
+            label(img, X0 + 85, Y0 + 650, "RESULT -> CASH -> VALUE", GREEN, 32)
+        elif beat == "karein":
+            label(img, X0 + 85, Y0 + 650, "CHECK QUALITY / CASH / VALUATION", YELLOW, 32)
         return
     if kind == "intraday":
         closes = [100, 101, 100.5, 102, 101.4, 103, 102.2, 104, 103.2, 105]
@@ -377,18 +382,28 @@ def _draw_finance_visual(img, kind, key, beat):
         ax = candles(img, box, oh)
         vw = [100.2,100.5,100.7,101.1,101.3,101.8,102.0,102.5,102.7,103.0]
         polyline(img, [(ax.x(i), ax.y(vw[i])) for i in range(len(vw))], YELLOW, 8)
-        label(img, X0 + 85, Y0 + 325, "PRICE + VOLUME + CONTEXT", INK, 34)
-        if beat == "matlab":
+        if beat == "hook":
+            label(img, X0 + 85, Y0 + 325, "PRICE + VOLUME + CONTEXT", INK, 34)
+        elif beat == "pehchan":
+            ring(img, ax.x(3), ax.y(closes[3]), 55, 55, YELLOW)
+            label(img, X0 + 85, Y0 + 325, "FOLLOW THE PRICE LINE", INK, 30)
+        elif beat == "matlab":
             arrow(img, (ax.x(2), ax.y(vw[2])-50), (ax.x(7), ax.y(vw[7])-50), GREEN, 10)
+            label(img, X0 + 85, Y0 + 650, "CONTEXT CHANGES THE READING", GREEN, 30)
         elif beat == "karein":
             label(img, X0 + 85, Y0 + 650, "CONTEXT FIRST / RISK BEFORE ENTRY", YELLOW, 32)
         return
     if kind == "risk":
         vals = [100, 80, 100]
         bars(img, box, vals, ["START", "DRAWDOWN", "RECOVERY"], [GREEN, RED, YELLOW], fmt="{:g}", hi=115, value_size=40, label_size=28)
-        label(img, X0 + 85, Y0 + 325, "LOSS %  !=  RECOVERY %", INK, 36)
-        if beat == "matlab":
+        if beat == "hook":
+            label(img, X0 + 85, Y0 + 325, "LOSS % != RECOVERY %", INK, 36)
+        elif beat == "pehchan":
+            ring(img, X0 + 410, Y0 + 560, 100, 75, RED)
+            label(img, X0 + 85, Y0 + 325, "DRAWDOWN BAR", INK, 34)
+        elif beat == "matlab":
             arrow(img, (X0 + 250, Y0 + 700), (X1 - 250, Y0 + 700), GREEN, 10)
+            label(img, X0 + 85, Y0 + 650, "RECOVERY NEEDS MORE", GREEN, 30)
         elif beat == "karein":
             label(img, X0 + 85, Y0 + 650, "PROTECT CAPITAL / SIZE THE RISK", YELLOW, 32)
         return
