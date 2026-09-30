@@ -93,12 +93,14 @@ def main():
             break
 
     # optional publish
-    if status == "success" and "--publish" in sys.argv and cfg()["pipeline"]["auto_publish"]:
+    if status == "success" and "--publish" in sys.argv:
         print("\n=== Publish (opt-in) ===")
         (RUN / "uploaded.txt").unlink(missing_ok=True)
         # YouTube is optional for the short: a missing/invalid refresh token
         # must not block the Instagram Reel cross-post.
-        run("publish.py", "--only-if-ready")
+        yt_rc = run("publish.py", "--only-if-ready")
+        if yt_rc != 0:
+            print(f"[WARN] YouTube publish failed (rc={yt_rc}); continuing to Instagram.")
 
         yt_uploaded = (RUN / "uploaded.txt").exists()
         ig_published = False
@@ -112,16 +114,22 @@ def main():
             old_force = os.environ.get("IG_CROSSPOST_FORCE")
             os.environ["IG_CROSSPOST_FORCE"] = "1"
             try:
-                run("publish_instagram.py")
+                ig_rc = run("publish_instagram.py")
             finally:
                 if old_force is None:
                     os.environ.pop("IG_CROSSPOST_FORCE", None)
                 else:
                     os.environ["IG_CROSSPOST_FORCE"] = old_force
             ig_published = (RUN / "ig_reel.txt").exists()
+            if ig_rc != 0:
+                print(f"[WARN] Instagram publish failed (rc={ig_rc}).")
 
         # A topic is considered successfully published if either platform got it.
-        settle_topic(yt_uploaded or ig_published)
+        published = yt_uploaded or ig_published
+        settle_topic(published)
+        if not published:
+            status = "publish failed: YouTube and Instagram both failed"
+            print("[STOP] No platform confirmed a publish; topic was not marked used.")
 
     # always notify
     print("\n=== Notify ===")
