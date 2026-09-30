@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""Patch board_short.py Edge-retry path so 36s audio is not collapsed to 8s."""
+from pathlib import Path
+
+def main():
+    p = Path("board_short.py")
+    t = p.read_text(encoding="utf-8")
+    t = t.replace("start_threshold=-42dB", "start_threshold=-55dB")
+    idx = t.find("[retry] voice too short")
+    if idx < 0:
+        raise SystemExit("retry marker not found")
+    if_start = t.rfind("if t < 45.0:", 0, idx)
+    if if_start < 0:
+        raise SystemExit("if t < 45 not found")
+    die_mark = 'die(f"voice too short after TTS retry'
+    die_pos = t.find(die_mark, idx)
+    if die_pos < 0:
+        raise SystemExit("die short not found")
+    die_end = t.find("\n", die_pos)
+    die_end = len(t) if die_end < 0 else die_end + 1
+    new_block = r'''if t < 45.0:
+        print(f"[retry] voice too short after trim ({t:.1f}s); expanding + Edge slow, gentle trim")
+        src = topic["beats"]
+        extra = (
+            "इस हिस्से में स्क्रीन पर दी गई जानकारी को क्रम से समझें। "
+            "पहले तथ्य, फिर मतलब, फिर सीमा — तीनों साफ रखें। "
+            "नई कीमत, तारीख या रिटर्न का अनुमान यहाँ नहीं लगाया जा रहा। "
+            "यह शिक्षा है, सलाह नहीं। निवेश से पहले अपनी रिसर्च और जोखिम देखें।"
+        )
+        for b in BEATS:
+            spoken[b] = (spoken[b].rstrip() + " " + extra).strip()
+            if len(spoken[b].split()) < 35:
+                h, s = src[b][0], src[b][1]
+                spoken[b] = f"{h}। {s}। {extra}"
+        spoken["karein"] = spoken["karein"].rstrip() + " " + CTA
+        v = c["voice"]
+        original_rate = v.get("edge_rate", "+0%")
+        original_speed = v.get("speed", 1.0)
+        try:
+            v["edge_rate"] = "-20%"
+            v["speed"] = 0.85
+            for b in BEATS:
+                mp3 = RUN / f"tts_{b}.mp3"
+                mp3.unlink(missing_ok=True)
+                (RUN / f"voice_clean_{b}.wav").unlink(missing_ok=True)
+                import speak
+                edge_text = speak.speakable(spoken[b])
+                print(f"[retry-edge] {b}: words={len(edge_text.split())} chars={len(edge_text)}")
+                asyncio.run(_edge(edge_text, v.get("edge_voice", "hi-IN-SwaraNeural"), "-20%", mp3))
+                if not mp3.exists() or mp3.stat().st_size <= 1000:
+                    die(f"fallback Edge TTS failed: {b}")
+                ENGINES.append("edge")
+                clean = RUN / f"voice_clean_{b}.wav"
+                subprocess.run([
+                    "ffmpeg", "-v", "error", "-y", "-i", str(mp3),
+                    "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
+                    "-ar", "44100", "-ac", "2", str(clean)
+                ], check=True)
+                d = duration(clean)
+                d_raw = duration(mp3)
+                if d < d_raw * 0.7:
+                    subprocess.run([
+                        "ffmpeg", "-v", "error", "-y", "-i", str(mp3),
+                        "-ar", "44100", "-ac", "2", str(clean)
+                    ], check=True)
+                    d = duration(clean)
+                raw_durations[b] = d
+                beat_audio[b] = clean
+                print(f"[retry-edge] {b} duration={d:.1f}s")
+            beat_times, t = {}, 0.0
+            for b in BEATS:
+                d = raw_durations[b] + (seam if b != BEATS[-1] else 0.0)
+                beat_times[b] = (t, t + d)
+                t += d
+        finally:
+            v["edge_rate"] = original_rate
+            v["speed"] = original_speed
+        if 38.0 <= t < 45.0:
+            factor = max(0.80, t / 45.5)
+            print(f"[retry] slight under-length {t:.1f}s — atempo={factor:.3f}")
+            for b in BEATS:
+                src_wav = beat_audio[b]
+                slow = RUN / f"voice_slow_{b}.wav"
+                subprocess.run([
+                    "ffmpeg", "-v", "error", "-y", "-i", str(src_wav),
+                    "-af", f"atempo={factor:.4f}",
+                    "-ar", "44100", "-ac", "2", str(slow)
+                ], check=True)
+                raw_durations[b] = duration(slow)
+                beat_audio[b] = slow
+            beat_times, t = {}, 0.0
+            for b in BEATS:
+                d = raw_durations[b] + (seam if b != BEATS[-1] else 0.0)
+                beat_times[b] = (t, t + d)
+                t += d
+        if t < 45.0:
+            detail = ", ".join(f"{b}={raw_durations[b]:.1f}s/{len(spoken[b].split())}w" for b in BEATS)
+            die(f"voice too short after TTS retry: {t:.1f}s — {detail}")
+'''
+    t = t[:if_start] + new_block + t[die_end:]
+    p.write_text(t, encoding="utf-8")
+    compile(p.read_text(encoding="utf-8"), "board_short.py", "exec")
+    print("patched", p.stat().st_size)
+    assert "loudnorm" in p.read_text(encoding="utf-8")
+
+if __name__ == "__main__":
+    main()
