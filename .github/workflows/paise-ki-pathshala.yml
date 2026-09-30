@@ -69,7 +69,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -214,3 +214,5 @@ jobs:
 # autonomous repair: deterministic syntax fix + 3-attempt bounded recovery
 
 # verify deterministic self-repair traceback regex
+
+# cancel stale production runs during recovery
