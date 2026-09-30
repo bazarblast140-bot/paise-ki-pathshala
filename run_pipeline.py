@@ -124,10 +124,20 @@ def main():
             if ig_rc != 0:
                 print(f"[WARN] Instagram publish failed (rc={ig_rc}).")
 
-        # A topic is considered successfully published if either platform got it.
+        # For Shorts with Instagram cross-post enabled, Instagram confirmation
+        # is the production success gate. YouTube remains independent: a YouTube
+        # failure must not prevent Instagram, but a YouTube-only success must not
+        # make the run look fully healthy when the Reel was not confirmed.
+        ig_required = (
+            video_format() == "short"
+            and os.environ.get("IG_CROSSPOST", "").strip().lower() in ("1", "true", "yes", "on")
+        )
         published = yt_uploaded or ig_published
         settle_topic(published)
-        if not published:
+        if ig_required and not ig_published:
+            status = "publish failed: Instagram Reel not confirmed"
+            print("[STOP] Instagram Reel publish was not confirmed; YouTube status is independent.")
+        elif not published:
             status = "publish failed: YouTube and Instagram both failed"
             print("[STOP] No platform confirmed a publish; topic was not marked used.")
 
