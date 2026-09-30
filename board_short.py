@@ -609,7 +609,15 @@ def main():
             for b in BEATS:
                 mp3 = RUN / f"tts_{b}.mp3"
                 mp3.unlink(missing_ok=True)
-                tts(spoken[b], mp3, c)
+                # If the primary TTS engine produced an implausibly short
+                # narration, retry the whole beat with Edge directly. This
+                # avoids a fast ElevenLabs response making the entire Short
+                # fail the duration gate.
+                import speak
+                edge_text = speak.speakable(spoken[b])
+                asyncio.run(_edge(edge_text, v.get("edge_voice", "hi-IN-SwaraNeural"), "-12%", mp3))
+                if not mp3.exists() or mp3.stat().st_size <= 1000:
+                    die(f"fallback Edge TTS failed: {b}")
                 clean = RUN / f"voice_clean_{b}.wav"
                 subprocess.run([
                     "ffmpeg", "-v", "error", "-y", "-i", str(mp3),
