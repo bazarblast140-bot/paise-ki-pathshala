@@ -210,12 +210,26 @@ def build_caption() -> str:
     except (OSError, ValueError, TypeError):
         pass
 
-    tags = ["#StockMarketHindi", "#TradingHindi", "#PaiseKiPathshala", "#ShareMarket"]
+    cat = str(topic.get("cat") or "")
+    cat_tags = {
+        "CANDLESTICK": ["#CandlestickPatterns", "#CandlestickTrading"],
+        "INDICATOR": ["#TechnicalAnalysis", "#TradingIndicators"],
+        "OPTIONS": ["#OptionTrading", "#OptionsTrading"],
+        "RISK": ["#RiskManagement", "#TradingRisk"],
+        "ORDERS": ["#StockMarketBasics", "#OrderTypes"],
+        "REAL DATA": ["#StockMarketFacts", "#MarketData"],
+        "MARKET FACT": ["#StockMarketFacts", "#FinanceFacts"],
+        "FUNDAMENTAL": ["#FundamentalAnalysis", "#StockAnalysis"],
+        "PENNY STOCK": ["#PennyStocks", "#LiquidityRisk"],
+        "INTRADAY": ["#IntradayTrading", "#PriceAction"],
+    }
+    tags = ["#StockMarketHindi", "#TradingHindi", "#PaiseKiPathshala", "#ShareMarket"] + cat_tags.get(cat, [])
     if topic.get("seo"):
-        t = "#" + re.sub(r"[^A-Za-z0-9]", "", str(topic["seo"]).title())
-        if len(t) > 2:
+        words = re.findall(r"[A-Za-z0-9]+", str(topic["seo"]))
+        t = "#" + "".join(w[:1].upper() + w[1:] for w in words)
+        if 2 < len(t) <= 40:
             tags.insert(1, t)
-    parts.append(" ".join(dict.fromkeys(tags)))
+    parts.append(" ".join(dict.fromkeys(tags))[:900])
 
     return "\n\n".join(parts)[:2200]
 
