@@ -4763,7 +4763,7 @@
   {
    "id": 127,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "risk_rr",
    "cat": "RISK",
    "topic": "Risk-reward और win rate — दोनों साथ क्यों देखना चाहिए",
@@ -4797,7 +4797,8 @@
     "Journal में दोनों numbers track करो",
     "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Risk-reward और win rate — दोनों साथ क्यों देखना चाहिए"
+   "seo": "Risk-reward और win rate — दोनों साथ क्यों देखना चाहिए",
+   "used_short_at": "2026-09-30T22:49:45Z"
   },
   {
    "id": 128,
