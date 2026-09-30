@@ -74,7 +74,7 @@ CAT_CHIPS = {
 
 def beat_images(topic, beat):
     img = K.background()
-    K.chips(img, topic["cat"], CAT_CHIPS.get(topic["cat"], STEP_CHIP)[beat])
+    # The chart is the hook; no extra top chip row.
     key = topic["key"]
     low = key.lower()
     if low.startswith("intraday_"):
@@ -160,8 +160,8 @@ def check_narration(n, topic):
             fails.append(f"beat '{b}' khaali")
     text = " ".join(str(beats.get(b) or "") for b in BEATS)
     words = len(text.split())
-    if not 95 <= words <= 120:
-        fails.append(f"{words} words (95-120 chahiye)")
+    if not 85 <= words <= 105:
+        fails.append(f"{words} words (85-105 chahiye)")
     extra = {x.replace(",", "") for x in re.findall(r"\d[\d,]*(?:\.\d+)?", text)} - allowed_numbers(topic)
     if extra:
         fails.append(f"ye numbers topic me nahi hain: {sorted(extra)} — sirf diye gaye numbers use karo")
@@ -209,7 +209,7 @@ Rules:
 - matlab: explain the cause → effect and, where the topic allows, give ONE tiny concrete example.
 - karein: finish with one practical takeaway or limitation; never make a personalised trade call.
 - Each beat: 1-2 short sentences, preferably under 12 words per sentence.
-- Total 95-120 words; aim for about 55 seconds of spoken content so the final video, CTA, and natural pauses stay around 60 seconds. The narration must add explanation beyond merely reading the on-screen text.
+- Total 85-105 words; aim for about 45-50 seconds of spoken explanation. CTA/disclaimer are visual-only so TTS credits are not wasted. The narration must add explanation beyond merely reading the on-screen text.
 - Use ONLY numbers that appear in the topic data given to you. Never invent prices, dates, returns.
 - Not a quiz. Do not ask the viewer to pick options.
 - SEBI rules: never tell anyone to buy/sell/hold a specific stock, fund or product; no targets,
@@ -408,9 +408,9 @@ def build_ass(topic, beat_times, spoken):
     for b in BEATS:
         t0, t1 = beat_times[b]
         head, sub = topic["beats"][b]
-        ev.append(K.ass_text(t0 + (0 if b == "hook" else 0.05), t1, 475, 1020, fit_size(head, 800, 92),
+        ev.append(K.ass_text(t0 + (0 if b == "hook" else 0.05), t1, 540, 1170, fit_size(head, 980, 84),
                              K.YEL, head, 8, fade=(b != "hook")))
-        ev.append(K.ass_text(t0 + (0 if b == "hook" else 0.05), t1, 475, 1128, fit_size(sub, 800, 60, 40),
+        ev.append(K.ass_text(t0 + (0 if b == "hook" else 0.05), t1, 540, 1240, fit_size(sub, 980, 54, 34),
                              K.WHITE, sub, 8, fade=(b != "hook"), wrap=True))
         parts = chunks(spoken[b])
         total = sum(len(p) for p in parts) or 1
@@ -421,11 +421,11 @@ def build_ass(topic, beat_times, spoken):
             ev.append(K.ass_caption(t, t + dt, p))
             t += dt
     t0, t1 = beat_times["karein"]
-    ev.append(K.ass_text(t0, t1, 475, 1215, 34, "&H00B8A394&", DISCLAIMER, 8))
+    ev.append(K.ass_text(t0, t1, 540, 1325, 30, "&H00B8A394&", DISCLAIMER, 8))
     # Platform-neutral visual CTA: the same final.mp4 is cross-posted to YouTube + Instagram.
     # Keep it below the educational content and inside the Shorts/Reels safe area.
     cta_start = max(t0, t1 - 2.8)
-    ev.append(K.ass_text(cta_start, t1, 540, 1470, 48, K.WHITE,
+    ev.append(K.ass_text(cta_start, t1, 540, 1510, 48, K.WHITE,
                          "LIKE  •  FOLLOW  •  SUBSCRIBE", 10, fade=True))
     return K.ASS_HEAD + "\n".join(ev) + "\n"
 
@@ -589,8 +589,8 @@ def main():
         return
 
     n, source = narration(topic, c)
+    # CTA/disclaimer stay on-screen; do not spend TTS credits speaking them.
     spoken = dict(n["beats"])
-    spoken["karein"] = spoken["karein"].rstrip() + " " + CTA
     # Generate each beat voice, then trim only the *outer* TTS silence.
     # ElevenLabs/Edge can add a little leading/trailing room around every beat;
     # concatenating those raw files made the narration sound like it "waited"
