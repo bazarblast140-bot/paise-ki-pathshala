@@ -697,56 +697,10 @@ def main():
         t += d
 
     if t < 45.0:
-        print(f"[retry] voice too short after trim ({t:.1f}s); controlled Edge expansion")
-        extra = (
-            "पहले तथ्य समझें, फिर उसका मतलब और जोखिम देखें। "
-            "बिना पुष्टि के अनुमान न लगाएँ; यह जानकारी शिक्षा के लिए है और "
-            "निवेश से पहले अपनी रिसर्च व जोखिम प्रबंधन करें।"
-        )
-        spoken["karein"] = (spoken["karein"].rstrip() + " " + extra + " " + CTA).strip()
-
-        v = c["voice"]
-        original_rate = v.get("edge_rate", "+0%")
-        original_speed = v.get("speed", 1.0)
-        try:
-            v["edge_rate"] = "+0%"
-            v["speed"] = 1.0
-            for b in BEATS:
-                mp3 = RUN / f"tts_{b}.mp3"
-                mp3.unlink(missing_ok=True)
-                (RUN / f"voice_clean_{b}.wav").unlink(missing_ok=True)
-                import speak
-                edge_text = speak.speakable(spoken[b])
-                print(f"[retry-edge] {b}: words={len(edge_text.split())} chars={len(edge_text)}")
-                asyncio.run(_edge(edge_text, v.get("edge_voice", "hi-IN-SwaraNeural"), "+0%", mp3))
-                if not mp3.exists() or mp3.stat().st_size <= 1000:
-                    die(f"fallback Edge TTS failed: {b}")
-                ENGINES.append("edge")
-                clean = RUN / f"voice_clean_{b}.wav"
-                subprocess.run([
-                    "ffmpeg", "-v", "error", "-y", "-i", str(mp3),
-                    "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
-                    "-ar", "44100", "-ac", "2", str(clean)
-                ], check=True)
-                d = duration(clean)
-                d_raw = duration(mp3)
-                if d < d_raw * 0.7:
-                    subprocess.run([
-                        "ffmpeg", "-v", "error", "-y", "-i", str(mp3),
-                        "-ar", "44100", "-ac", "2", str(clean)
-                    ], check=True)
-                    d = duration(clean)
-                raw_durations[b] = d
-                beat_audio[b] = clean
-                print(f"[retry-edge] {b} duration={d:.1f}s")
-            beat_times, t = {}, 0.0
-            for b in BEATS:
-                d = raw_durations[b] + (seam if b != BEATS[-1] else 0.0)
-                beat_times[b] = (t, t + d)
-                t += d
-        finally:
-            v["edge_rate"] = original_rate
-            v["speed"] = original_speed
+        # Do not switch engines here. If ElevenLabs is configured, all beats must
+        # remain ElevenLabs. The common duration-normalization block below retimes
+        # the already-generated paid audio without changing the voice.
+        print(f"[duration] paid TTS is short ({t:.1f}s); keeping ElevenLabs audio and normalizing speed")
 
     # Normalize any out-of-range speech length to a real speech-speed target.
     # Never add silence; FFmpeg atempo changes speech pacing only.
