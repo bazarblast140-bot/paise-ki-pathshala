@@ -149,75 +149,152 @@ def ig_call(path: str, *, method: str = "GET", params: dict | None = None) -> di
     return http_json(base, method="POST", form=params)
 
 
-def build_caption() -> str:
-    """Short IG caption — no raw URLs (Instagram does not make caption links clickable)."""
-    parts = []
-    script = (RUN / "script.txt").read_text(encoding="utf-8") if (RUN / "script.txt").exists() else ""
-    title = ""
-    hook = ""
-    current = None
-    buf = []
+# ---------------------------------------------------------------- caption
+# Instagram (Dec-2025 se) ek post/Reel par MAX 5 hashtag leta hai — zyada
+# hon to API post reject kar sakta hai. Generic (#reels, #viral) ki jagah
+# topic-specific tag.
+IG_MAX_HASHTAGS = 5
+CAT_HASHTAG = {
+    "OPTIONS": "#OptionsTrading", "CANDLESTICK": "#CandlestickPatterns",
+    "INDICATOR": "#TechnicalAnalysis", "INTRADAY": "#IntradayTrading",
+    "FUNDAMENTAL": "#FundamentalAnalysis", "FUNDAMENTALS": "#FundamentalAnalysis",
+    "RISK": "#RiskManagement", "REAL DATA": "#InvestingIndia", "MARKET FACT": "#StockMarketFacts",
+    "MARKET HISTORY": "#StockMarketFacts", "ORDERS": "#ShareMarketBasics",
+    "PENNY STOCK": "#PennyStocks", "STOCK CASE STUDY": "#StockMarketIndia", "BUSINESS": "#BusinessHindi",
+}
+BASE_HASHTAGS = ["#PaiseKiPathshala", "#StockMarketHindi", "#ShareMarket"]
+
+
+def script_sections(script: str) -> dict:
+    """script.txt ke 'TITLE:' / 'HOOK (0-3 sec):' / 'CTA:' / 'FACT LEDGER:' blocks."""
+    out, cur, buf = {}, None, []
+    head = re.compile(r"^(TITLE|HOOK|BODY|CTA|DISCLAIMER(?: LINE)?|FACT LEDGER)\b[^:]*:?\s*(.*)$", re.I)
     for line in script.splitlines():
-        s = line.strip()
-        if re.match(r"^(TITLE|HOOK)\b", s, re.I):
-            if current == "TITLE":
-                title = "\n".join(buf).strip()
-            elif current == "HOOK":
-                hook = "\n".join(buf).strip()
-            current = s.split()[0].upper()
-            rest = re.sub(r"^(TITLE|HOOK)\b[^:]*:?\s*", "", s, flags=re.I)
-            buf = [rest] if rest.strip() else []
-        elif current in ("TITLE", "HOOK"):
-            if re.match(r"^(BODY|CTA|DISCLAIMER|FACT)\b", s, re.I):
-                if current == "TITLE":
-                    title = "\n".join(buf).strip()
-                elif current == "HOOK":
-                    hook = "\n".join(buf).strip()
-                current = None
-                buf = []
-            else:
-                buf.append(line)
-    if current == "TITLE":
-        title = "\n".join(buf).strip()
-    elif current == "HOOK":
-        hook = "\n".join(buf).strip()
+        m = head.match(line.strip())
+        if m:
+            if cur:
+                out[cur] = "\n".join(buf).strip()
+            cur = m.group(1).upper().split()[0]
+            buf = [m.group(2)] if m.group(2).strip() else []
+        elif cur:
+            buf.append(line)
+    if cur:
+        out[cur] = "\n".join(buf).strip()
+    return out
 
-    if hook:
-        parts.append(re.sub(r"\s+", " ", hook).strip()[:300])
-    elif title:
+
+def load_topic() -> dict:
+    try:
+        return json.loads((RUN / "topic.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def topic_hashtag(topic: dict) -> str:
+    """'Bull Call Spread — bullish view…' -> '#BullCallSpread'. Sirf English
+    shuruaati hissa; lamba/khaali ho to kuch nahi (pehle poora seo string
+    jod ke '#BullCallSpreadBullishViewDefinedriskStrategy' ban jaata tha)."""
+    seo = str(topic.get("seo") or (topic.get("thumb") or [""])[0] or "")
+    lead = re.split(r"\s[—–-]\s|[|:,(]", seo)[0]
+    words = re.findall(r"[A-Za-z0-9]+", lead)
+    if not words or len(words) > 4:
+        return ""
+    tag = "#" + "".join(w[:1].upper() + w[1:] for w in words)
+    return tag if 4 <= len(tag) <= 26 else ""
+
+
+def hashtags_for(topic: dict) -> list[str]:
+    tags = [BASE_HASHTAGS[0]]
+    for t in (topic_hashtag(topic), CAT_HASHTAG.get(str(topic.get("cat") or "").upper(), "")):
+        if t:
+            tags.append(t)
+    tags += BASE_HASHTAGS[1:]
+    return list(dict.fromkeys(tags))[:IG_MAX_HASHTAGS]
+
+
+def build_caption() -> str:
+    """Pro Reel caption. Pehli ~125 characters "more" se pehle dikhte hain aur
+    Instagram search caption ke shabd padhta hai — isliye keyword wala title
+    sabse upar, phir hook, phir 2 yaad rakhne wali baatein (save-worthy),
+    comment + save CTA, disclaimer, bio CTA, max 5 hashtag.
+    Caption me URL nahi (Instagram use clickable nahi banata)."""
+    script = (RUN / "script.txt").read_text(encoding="utf-8") if (RUN / "script.txt").exists() else ""
+    sec = script_sections(script)
+    topic = load_topic()
+    one = lambda t: re.sub(r"\s+", " ", t or "").strip()  # noqa: E731
+    title = one((sec.get("TITLE") or "").splitlines()[0] if sec.get("TITLE") else "")
+    title = title or one((topic.get("thumb") or [""])[0])
+    hook = one(sec.get("HOOK"))
+    parts = []
+    if title:
         parts.append(title[:120])
+    if hook and hook.lower() != title.lower():
+        parts.append(hook[:300])
 
+    facts = [one(re.sub(r"^[-•*]\s*", "", f)) for f in (sec.get("FACT") or "").splitlines() if f.strip()]
+    facts = facts or [one(f) for f in topic.get("facts") or []]
+    facts = [f for f in facts if f and "सलाह नहीं" not in f and "advice" not in f.lower()][:2]
+    if facts:
+        parts.append("📌 याद रखो:\n" + "\n".join(f"• {f}" for f in facts))
+
+    cta = one(sec.get("CTA"))
+    ask = cta.split("—")[0].split("?")[0].strip() + "?" if "?" in cta else "अगला कौन सा topic समझना है?"
+    parts.append(f"💬 {ask} Comment में लिखो।\n💾 Save करो — अगली बार काम आएगा।")
     parts.append("यह सिर्फ़ शिक्षा के लिए है — निवेश सलाह नहीं।")
 
-    # Instagram caption URLs are not tappable — point to bio instead.
-    # Full referral URLs stay on YouTube description only.
-    topic = {}
-    if (RUN / "topic.json").exists():
-        try:
-            topic = json.loads((RUN / "topic.json").read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
-            pass
+    # Referral link sirf bio me (caption URL clickable nahi). ASCI influencer
+    # guidelines: commission wala link ho to saaf batana zaroori hai.
     try:
-        ref_path = Path(__file__).parent / "data" / "referrals.json"
-        ref = json.loads(ref_path.read_text(encoding="utf-8"))
-        cat = str(topic.get("cat") or "")
-        names = ref.get("category_map", {}).get(cat, [])
+        ref = json.loads((Path(__file__).parent / "data" / "referrals.json").read_text(encoding="utf-8"))
+        names = ref.get("category_map", {}).get(str(topic.get("cat") or ""), [])
         if names:
-            parts.append(
-                "Demat / invest account chahiye ho to profile bio me link dekho."
-            )
+            disc = ref.get("disclosure_hi") or "यह referral link है।"
+            parts.append(f"Demat / invest account kholna ho to link bio में है. {disc}")
             print(f"[OK] IG bio CTA (topic refs: {', '.join(names)})")
     except (OSError, ValueError, TypeError):
         pass
 
-    tags = ["#StockMarketHindi", "#TradingHindi", "#PaiseKiPathshala", "#ShareMarket"]
-    if topic.get("seo"):
-        t = "#" + re.sub(r"[^A-Za-z0-9]", "", str(topic["seo"]).title())
-        if len(t) > 2:
-            tags.insert(1, t)
-    parts.append(" ".join(dict.fromkeys(tags)))
-
+    parts.append(" ".join(hashtags_for(topic)))
     return "\n\n".join(parts)[:2200]
+
+
+# ---------------------------------------------------------------- IG media
+def ig_settings() -> dict:
+    return {"grid_safe_cover": True, **(cfg().get("instagram") or {})}
+
+
+def grid_safe_cover(src: Path, out: Path) -> Path:
+    """Profile grid Reel cover ko beech se 3:4 (1080x1440, y 240..1680) crop
+    karta hai. Hamara thumbnail title y~150 par aur sticker y~1600-1730 par
+    rakhta hai — grid me title kat jaata tha. Poora design aspect same rakhkar
+    3:4 box me chhota karo, peeche usi thumbnail ka blur (seam nahi dikhti).
+    Full-screen (9:16) me bhi theek dikhta hai."""
+    from PIL import Image, ImageEnhance, ImageFilter
+    im = Image.open(src).convert("RGB")
+    W, H = 1080, 1920
+    if im.size != (W, H):
+        im = im.resize((W, H))
+    box_h = 1440
+    inner = im.resize((int(W * box_h / H), box_h), Image.LANCZOS)
+    bg = im.filter(ImageFilter.GaussianBlur(48))
+    bg = ImageEnhance.Brightness(bg).enhance(0.55)
+    bg.paste(inner, ((W - inner.width) // 2, (H - box_h) // 2))
+    bg.save(out, quality=92)
+    return out
+
+
+def prepare_cover(thumb: Path | None) -> Path | None:
+    """IG-only cover copy (YouTube wala thumbnail.jpg nahi badalta). Fail ho to
+    original — Reel kabhi is wajah se na ruke."""
+    if thumb is None or not ig_settings().get("grid_safe_cover"):
+        return thumb
+    try:
+        cover = grid_safe_cover(thumb, RUN / "ig_cover.jpg")
+        print("  cover: grid-safe ig_cover.jpg")
+        return cover
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] grid-safe cover skipped ({type(e).__name__}) — original thumbnail")
+        return thumb
 
 
 def publish_reel(video_url: str, caption: str, cover_url: str = "") -> str:
@@ -292,10 +369,11 @@ def main() -> None:
         skip("YouTube upload not recorded (uploaded.txt missing) — set IG_CROSSPOST_FORCE=1 to post anyway")
 
     print("\n=== Instagram Reel cross-post ===")
+    thumb = RUN / "thumbnail.jpg"
+    cover = prepare_cover(thumb if thumb.exists() else None)
     url = host_mp4(mp4)
     cover_url = ""
-    cover = RUN / "thumbnail.jpg"
-    if cover.exists():
+    if cover is not None and cover.exists():
         cover_url = host_cover(cover)
         print(f"  cover: {cover_url}")
     caption = build_caption()

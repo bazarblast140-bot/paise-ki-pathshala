@@ -213,6 +213,7 @@ jobs:
             run/gate2_report.txt
             run/gate3_report.txt
             run/ig_reel.txt
+            run/ig_cover.jpg
             run/youtube_status.txt
             run/auto_agent_last.log
           retention-days: 14

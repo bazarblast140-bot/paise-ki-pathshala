@@ -229,3 +229,25 @@ defaults die with `malloc of size N failed` partway through a render.
 
 **Footage cache:** `assets/cache/` fills up (~120MB per video) and is gitignored.
 Delete it any time — clips are re-fetched from each shot's `source_asset_query`.
+
+## Instagram Reel — kya aur kyun (30-Sep-2026)
+
+`publish_instagram.py` wahi `run/final.mp4` Reel ki tarah daalta hai (sirf public + READY run par).
+
+- **Caption:** keyword wala title sabse upar (pehle ~125 char "more" se pehle dikhte hain, aur
+  Instagram search caption padhta hai) → hook → "📌 याद रखो" 2 bullet (FACT LEDGER se, save-worthy)
+  → comment + save CTA → disclaimer → bio referral line + `data/referrals.json` ki disclosure.
+  Caption me URL nahi (clickable nahi hota).
+- **Hashtag max 5** (Instagram ki Dec-2025 wali limit): `#PaiseKiPathshala`, topic tag
+  (`#BullCallSpread`), category tag (`#OptionsTrading`), `#StockMarketHindi`, `#ShareMarket`.
+  Pehle seo string se `#BullCallSpreadBullishViewDefinedriskStrategy` jaisa tag banta tha.
+- **Cover:** profile grid Reel cover ko beech se 3:4 crop karta hai (y 240–1680) — hamara
+  thumbnail title y≈150 par tha, grid me kat jaata tha. Ab IG-only `run/ig_cover.jpg`: poora
+  design 3:4 box me, peeche blur. YouTube thumbnail nahi badalta. Band karna ho:
+  `config.json` → `"instagram": {"grid_safe_cover": false}`.
+- **Hook / safe area:** frame 0 par board ka hook text (y≈1040–1150) aur board (y 300–990,
+  x < 900) Instagram ke safe zone me hain (upar ~270px aur neeche ~35% UI, right rail).
+  Alag IG hook overlay try kiya tha — board ke hook text par chadh jaata tha, isliye nahi rakha.
+- Token: `IG_ACCESS_TOKEN` ~60 din ka hai (24-Sep set → ~23-Nov expire). Refresh manual.
+
+Monetization thresholds + checklist: `MONETIZATION.md`.
