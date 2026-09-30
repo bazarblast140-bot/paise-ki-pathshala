@@ -14,6 +14,7 @@ name: Paise Ki Pathshala
 # recovery-v10: bounded Edge retry + fresh YouTube refresh-token test
 # recovery-v11: deterministic final.mp4 duration hard gate
 # recovery-v12: execute publish flag and require platform confirmation
+# recovery-v13: validate ElevenLabs with the actual TTS request, not subscription preflight
 
 # Hindi personal-finance channel. Secrets: DEEPSEEK_API_KEY, PEXELS_API_KEY,
 # TELEGRAM_*, YT_FIN_* (yt_token_to_github.py --prefix YT_FIN), variable
