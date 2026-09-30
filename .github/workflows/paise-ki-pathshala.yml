@@ -4,6 +4,7 @@ name: Paise Ki Pathshala
 # recovery-v4: autonomous self-repair engine live
 # recovery-v5: continuous TTS boundary-silence repair
 # recovery-v6: stabilize Anthropic self-repair API
+# manual reel test: 2026-09-30
 
 # Hindi personal-finance channel. Secrets: DEEPSEEK_API_KEY, PEXELS_API_KEY,
 # TELEGRAM_*, YT_FIN_* (yt_token_to_github.py --prefix YT_FIN), variable
