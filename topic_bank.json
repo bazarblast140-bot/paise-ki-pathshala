@@ -3300,7 +3300,7 @@
   {
    "id": 89,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "option_bear_put_spread",
    "cat": "OPTIONS",
    "topic": "Bear Put Spread — bearish view में defined-risk strategy",
@@ -3332,7 +3332,8 @@
     "defined risk का payoff समझें",
     "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Bear Put Spread — bearish view में defined-risk strategy"
+   "seo": "Bear Put Spread — bearish view में defined-risk strategy",
+   "used_short_at": "2026-09-30T14:26:55Z"
   },
   {
    "id": 90,
