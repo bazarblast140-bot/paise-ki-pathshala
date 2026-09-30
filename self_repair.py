@@ -104,7 +104,7 @@ def _call_model(prompt: str) -> str:
                         messages=[{"role": "system", "content": system},
                                   {"role": "user", "content": prompt}],
                         max_tokens=8192,
-                        temperature=0.1,
+                        temperature=1,
                     )
                     text = (resp.choices[0].message.content or "").strip()
                     if text:
