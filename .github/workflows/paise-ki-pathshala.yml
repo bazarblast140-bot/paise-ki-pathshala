@@ -7,6 +7,7 @@ name: Paise Ki Pathshala
 # recovery-v7: execute the recovery job on the next workflow-file push
 # manual reel test: 2026-09-30
 # one-shot trigger
+# recovery-v8: run after watchdog dependency + board syntax repair
 
 # Hindi personal-finance channel. Secrets: DEEPSEEK_API_KEY, PEXELS_API_KEY,
 # TELEGRAM_*, YT_FIN_* (yt_token_to_github.py --prefix YT_FIN), variable
