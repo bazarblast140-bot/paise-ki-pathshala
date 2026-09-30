@@ -300,8 +300,7 @@ async def _edge(text, voice, rate, path):
 
 
 def _eleven(text, path, c):
-    """Paid ElevenLabs first; Edge is allowed only when paid quota is exhausted.
-    A configured-but-invalid ElevenLabs key never silently falls back to free TTS."""
+    """Paid ElevenLabs is a hard requirement when configured; never mix paid and free voices."""
     import os
     import time
     import requests
@@ -362,9 +361,7 @@ def _eleven(text, path, c):
                 "quota_exceeded", "insufficient_credits", "payment_required",
                 "max_character_limit_exceeded", "quota",
             )):
-                ELEVEN_EXHAUSTED = True
-                print("[elevenlabs] paid quota exhausted -> switching to Edge free voice")
-                return False
+                die("ElevenLabs paid TTS quota/credit limit reached; refusing free Edge fallback")
 
             if r.status_code == 401:
                 die("ElevenLabs authentication failed; refusing silent free-TTS fallback")
@@ -415,7 +412,9 @@ def tts(text, path, c):
         print(f"[warn] voice text me ab bhi: {sorted(set(left))} — speak.py me jodo")
     with open(RUN / "tts_text.txt", "a", encoding="utf-8") as f:
         f.write(f"{path.stem}: {text}\n")
-    if _eleven(text, path, c):
+    if eleven_key:
+        if not _eleven(text, path, c):
+            die(f"ElevenLabs TTS did not produce paid audio: {path.name}; refusing free-voice fallback")
         ENGINES.append("elevenlabs")
         engine_file.write_text("elevenlabs", encoding="utf-8")
         return
