@@ -8,6 +8,7 @@ name: Paise Ki Pathshala
 # manual reel test: 2026-09-30
 # one-shot trigger
 # recovery-v8: run after watchdog dependency + board syntax repair
+# recovery-v9: trim only outer TTS silence so speech is not truncated at internal pauses
 # recovery-v9: retest duration-safe Edge TTS fallback
 
 # Hindi personal-finance channel. Secrets: DEEPSEEK_API_KEY, PEXELS_API_KEY,
