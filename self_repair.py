@@ -1,11 +1,11 @@
 """Autonomous bounded self-repair engine for Paise Ki Pathshala."""
 from __future__ import annotations
-import json, os, re, subprocess, urllib.request
+import json, os, re, subprocess, urllib.request, urllib.error
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 RUN = ROOT / "run"
-MODEL = os.environ.get("SELF_HEAL_MODEL", "claude-sonnet-5")
+MODEL = os.environ.get("SELF_HEAL_MODEL", "claude-sonnet-4-6")
 FALLBACK_MODEL = os.environ.get("SELF_HEAL_FALLBACK_MODEL", "claude-haiku-4-5-20251001")
 MAX_PATCH_BYTES = 120_000
 ALLOWED_PREFIXES = (".github/workflows/", "src/", "pipeline/", "data/", "scripts/")
@@ -68,7 +68,7 @@ def _call_model(prompt: str) -> str:
     def call(model: str) -> str:
         body = {
             "model": model,
-            "max_tokens": 16000,
+            "max_tokens": 8192,
             "system": (
                 "You are an autonomous production repair engineer. Diagnose the "
                 "actual root cause from failure logs and source, then return ONLY "
@@ -83,11 +83,15 @@ def _call_model(prompt: str) -> str:
             "https://api.anthropic.com/v1/messages",
             data=json.dumps(body).encode(),
             headers={"content-type": "application/json",
-                     "x-api-key": key, "anthropic-version": "2023-06-01"},
+                     "x-api-key": key, "anthropic-version": "2023-06-01", "accept": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            payload = json.loads(resp.read().decode())
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                payload = json.loads(resp.read().decode())
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", "replace")
+            raise RuntimeError(f"Anthropic API HTTP {exc.code}: {body[:1200]}") from exc
         return "".join(
             b.get("text", "") for b in payload.get("content", [])
             if b.get("type") == "text"
