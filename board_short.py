@@ -598,7 +598,38 @@ def main():
         t += d
 
     if t < 45.0:
-        die(f"voice too short after boundary-silence trim: {t:.1f}s — narration/TTS must be expanded, not padded")
+        # Retry TTS once at a slower rate before failing; never pad silence.
+        print(f"[retry] voice too short after trim ({t:.1f}s); regenerating audio slower")
+        v = c["voice"]
+        original_rate = v.get("edge_rate", "+0%")
+        original_speed = v.get("speed", 1.08)
+        try:
+            v["edge_rate"] = "-12%"
+            v["speed"] = 0.88
+            for b in BEATS:
+                mp3 = RUN / f"tts_{b}.mp3"
+                mp3.unlink(missing_ok=True)
+                tts(spoken[b], mp3, c)
+                clean = RUN / f"voice_clean_{b}.wav"
+                subprocess.run([
+                    "ffmpeg", "-v", "error", "-y", "-i", str(mp3),
+                    "-af",
+                    "silenceremove=start_periods=1:start_duration=0.10:start_threshold=-42dB:"
+                    "stop_periods=1:stop_duration=0.10:stop_threshold=-42dB",
+                    "-ar", "44100", "-ac", "2", str(clean)
+                ], check=True)
+                raw_durations[b] = duration(clean)
+                beat_audio[b] = clean
+            beat_times, t = {}, 0.0
+            for b in BEATS:
+                d = raw_durations[b] + (seam if b != BEATS[-1] else 0.0)
+                beat_times[b] = (t, t + d)
+                t += d
+        finally:
+            v["edge_rate"] = original_rate
+            v["speed"] = original_speed
+        if t < 45.0:
+            die(f"voice too short after TTS retry: {t:.1f}s — narration/TTS must be expanded")
     if t > 62.0:
         die(f"voice too long after boundary-silence trim: {t:.1f}s — narration/TTS must be tightened")
     ok(f"voice: trimmed speech {raw_total:.1f}s -> final {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
