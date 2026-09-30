@@ -137,8 +137,8 @@ def _deterministic_syntax_repair(log_text: str) -> tuple[bool, str]:
     """Fix simple, mechanically provable Python suite-indentation errors without LLM spend."""
     if "IndentationError: expected an indented block" not in log_text:
         return False, ""
-    mfile = re.search(r'File "([^"]+\\.py)", line \\d+', log_text)
-    mline = re.search(r'expected an indented block after [^\\n]* on line (\\d+)', log_text)
+    mfile = re.search(r'File "([^"]+\.py)", line \d+', log_text)
+    mline = re.search(r'expected an indented block after [^\n]* on line (\d+)', log_text)
     if not mfile or not mline:
         return False, ""
     raw = Path(mfile.group(1))
