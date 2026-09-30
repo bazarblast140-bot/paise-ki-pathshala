@@ -206,3 +206,5 @@ jobs:
 # chart-layout + ElevenLabs paid-first verification trigger: 2026-09-30
 
 # verification: paid ElevenLabs updated + progressive chart + topic hashtags
+
+# verify board_scenes indentation fix
