@@ -395,7 +395,7 @@ def _draw_finance_visual(img, kind, key, beat):
     if kind == "penny":
         vals = [100, 35, 12]
         bars(img, box, vals, ["PRICE", "VOLUME", "LIQUIDITY"], [YELLOW, BLUE, RED], fmt="{:g}", hi=110, value_size=40, label_size=28)
-        label(img, X0 + 85, Y0 + 325, "PRICE IS NOT LIQUIDITY", INK, 36)
+        # Do not place a sentence over the bar values; the title + bars explain the point.
         if beat == "karein":
             label(img, X0 + 85, Y0 + 650, "CHECK VOLUME / SPREAD / DILUTION", YELLOW, 32)
         return
