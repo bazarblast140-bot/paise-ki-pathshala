@@ -628,16 +628,13 @@ def main():
 
     if t < 45.0:
         print(f"[retry] voice too short after trim ({t:.1f}s); controlled Edge expansion")
-        # Do NOT append filler to every beat: that can explode the total duration.
-        # Expand only the final explanatory beat with a bounded, fact-safe paragraph.
         extra = (
-            "इस विषय को समझते समय पहले दिए गए तथ्य को देखें, फिर उसका मतलब समझें। "
-            "इसके बाद जोखिम और सीमाओं को ध्यान में रखें। उपलब्ध जानकारी से आगे कोई अनुमान "
-            "नहीं लगाया जा रहा है। यह जानकारी केवल शिक्षा के लिए है, इसलिए निवेश से पहले "
-            "अपनी रिसर्च और जोखिम प्रबंधन जरूर करें।"
+            "पहले तथ्य समझें, फिर उसका मतलब और जोखिम देखें। "
+            "बिना पुष्टि के अनुमान न लगाएँ; यह जानकारी शिक्षा के लिए है और "
+            "निवेश से पहले अपनी रिसर्च व जोखिम प्रबंधन करें।"
         )
         spoken["karein"] = (spoken["karein"].rstrip() + " " + extra + " " + CTA).strip()
-        v = c["voice"]
+
         original_rate = v.get("edge_rate", "+0%")
         original_speed = v.get("speed", 1.0)
         try:
@@ -680,48 +677,48 @@ def main():
             v["edge_rate"] = original_rate
             v["speed"] = original_speed
 
-        # Small overshoot/undershoot is normalized with atempo; this does not add silence.
-        if 38.0 <= t < 45.0:
-            factor = max(0.80, t / 45.5)
-            print(f"[retry] slight under-length {t:.1f}s — atempo={factor:.3f}")
-            for b in BEATS:
-                src_wav = beat_audio[b]
-                slow = RUN / f"voice_slow_{b}.wav"
-                subprocess.run([
-                    "ffmpeg", "-v", "error", "-y", "-i", str(src_wav),
-                    "-af", f"atempo={factor:.4f}",
-                    "-ar", "44100", "-ac", "2", str(slow)
-                ], check=True)
-                raw_durations[b] = duration(slow)
-                beat_audio[b] = slow
-            beat_times, t = {}, 0.0
-            for b in BEATS:
-                d = raw_durations[b] + (seam if b != BEATS[-1] else 0.0)
-                beat_times[b] = (t, t + d)
-                t += d
+    # Normalize any out-of-range speech length to a real speech-speed target.
+    # Never add silence; FFmpeg atempo changes speech pacing only.
+    if t < 45.0 or t > 62.0:
+        target = 56.0
+        factor = t / target
 
-        if t > 62.0 and t <= 75.0:
-            factor = max(0.50, t / 58.0)
-            print(f"[retry] slight over-length {t:.1f}s — atempo={factor:.3f}")
-            for b in BEATS:
-                src_wav = beat_audio[b]
-                fast = RUN / f"voice_fast_{b}.wav"
-                subprocess.run([
-                    "ffmpeg", "-v", "error", "-y", "-i", str(src_wav),
-                    "-af", f"atempo={factor:.4f}",
-                    "-ar", "44100", "-ac", "2", str(fast)
-                ], check=True)
-                raw_durations[b] = duration(fast)
-                beat_audio[b] = fast
-            beat_times, t = {}, 0.0
-            for b in BEATS:
-                d = raw_durations[b] + (seam if b != BEATS[-1] else 0.0)
-                beat_times[b] = (t, t + d)
-                t += d
+        def _tempo_chain(mult):
+            parts = []
+            if mult > 2.0:
+                while mult > 2.0:
+                    parts.append("atempo=2.0")
+                    mult /= 2.0
+            elif mult < 0.5:
+                while mult < 0.5:
+                    parts.append("atempo=0.5")
+                    mult /= 0.5
+            parts.append(f"atempo={mult:.4f}")
+            return ",".join(parts)
 
-        if t < 45.0:
-            detail = ", ".join(f"{b}={raw_durations[b]:.1f}s/{len(spoken[b].split())}w" for b in BEATS)
-            die(f"voice too short after TTS retry: {t:.1f}s — {detail}")
+        print(f"[duration-normalize] {t:.1f}s -> target {target:.1f}s, atempo={factor:.3f}")
+        filt = _tempo_chain(factor)
+        for b in BEATS:
+            src_wav = beat_audio[b]
+            norm = RUN / f"voice_norm_{b}.wav"
+            subprocess.run([
+                "ffmpeg", "-v", "error", "-y", "-i", str(src_wav),
+                "-af", filt,
+                "-ar", "44100", "-ac", "2", str(norm)
+            ], check=True)
+            raw_durations[b] = duration(norm)
+            beat_audio[b] = norm
+
+        beat_times, t = {}, 0.0
+        for b in BEATS:
+            d = raw_durations[b] + (seam if b != BEATS[-1] else 0.0)
+            beat_times[b] = (t, t + d)
+            t += d
+        print(f"[duration-normalize] final speech duration={t:.1f}s")
+
+    if t < 45.0 or t > 62.0:
+        detail = ", ".join(f"{b}={raw_durations[b]:.1f}s/{len(spoken[b].split())}w" for b in BEATS)
+        die(f"voice duration outside 45-62s after normalization: {t:.1f}s — {detail}")
 
     ok(f"voice: trimmed speech {raw_total:.1f}s -> final {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
     # verify config ka "edge" padh ke ElevenLabs video ko bhi "robotic" maanta tha
