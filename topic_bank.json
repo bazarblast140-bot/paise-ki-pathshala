@@ -4016,7 +4016,7 @@
   {
    "id": 108,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "fund_working_capital",
    "cat": "FUNDAMENTALS",
    "topic": "Working capital — sales बढ़ीं लेकिन cash क्यों फँसा",
@@ -4050,7 +4050,8 @@
     "Cash conversion को annual report में check करो",
     "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Working capital — sales बढ़ीं लेकिन cash क्यों फँसा"
+   "seo": "Working capital — sales बढ़ीं लेकिन cash क्यों फँसा",
+   "used_short_at": "2026-09-30T22:27:44Z"
   },
   {
    "id": 109,
