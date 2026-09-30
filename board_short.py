@@ -16,6 +16,7 @@ Writes run/: final.mp4, thumbnail.jpg, script.txt, spoken.txt, shots.json, subs.
 import argparse
 import asyncio
 import json
+import os
 import re
 import shutil
 import subprocess
