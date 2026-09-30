@@ -410,8 +410,16 @@ def _draw_finance_visual(img, kind, key, beat):
     if kind == "penny":
         vals = [100, 35, 12]
         bars(img, box, vals, ["PRICE", "VOLUME", "LIQUIDITY"], [YELLOW, BLUE, RED], fmt="{:g}", hi=110, value_size=40, label_size=28)
-        # Do not place a sentence over the bar values; the title + bars explain the point.
-        if beat == "karein":
+        # Keep 100 / 35 / 12 unobstructed and progress the explanation visually.
+        if beat == "hook":
+            ring(img, X0 + 210, Y0 + 560, 90, 70, YELLOW)
+        elif beat == "pehchan":
+            ring(img, X0 + 470, Y0 + 560, 85, 65, BLUE)
+            label(img, X0 + 85, Y0 + 325, "PRICE != VOLUME", INK, 34)
+        elif beat == "matlab":
+            arrow(img, (X0 + 560, Y0 + 620), (X1 - 150, Y0 + 620), RED, 10)
+            label(img, X0 + 85, Y0 + 650, "LOW LIQUIDITY = HARDER EXIT", RED, 28)
+        elif beat == "karein":
             label(img, X0 + 85, Y0 + 650, "CHECK VOLUME / SPREAD / DILUTION", YELLOW, 32)
         return
     # Market/history fallback: always show a real-looking index curve.
