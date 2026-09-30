@@ -1,38 +1,62 @@
-name: Instagram Reel Repair
+name: Instagram Reel Publish Watchdog
 
 on:
-  push:
-    paths:
-      - ".github/workflows/instagram-repair.yml"
+  workflow_run:
+    workflows: ["Paise Ki Pathshala"]
+    types: [completed]
   workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Failed Paise Ki Pathshala run ID (optional; auto-detected for workflow_run)"
+        required: false
+        default: ""
 
 permissions:
   actions: read
   contents: read
 
 jobs:
-  repair:
+  retry-instagram:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download latest verified short artifact
+      - name: Download failed run artifact
+        id: artifact
         env:
           GH_TOKEN: ${{ github.token }}
+          FAILED_RUN: ${{ inputs.run_id || github.event.workflow_run.id }}
         run: |
           rm -rf run
           mkdir -p run
-          gh run download 36723623534 -n short-118 -D run
-          test -s run/final.mp4
-          test -s run/thumbnail.jpg
-          test -s run/script.txt
+          gh run download "$FAILED_RUN" -D run || true
 
-      - name: Install Python dependency
+          # gh may place files under an artifact-named directory.
+          if [ ! -s run/final.mp4 ]; then
+            MP4="$(find run -type f -name final.mp4 -print -quit)"
+            if [ -n "$MP4" ]; then
+              SRC="$(dirname "$MP4")"
+              cp -f "$SRC"/* run/ 2>/dev/null || true
+            fi
+          fi
+
+          if [ -s run/final.mp4 ] && [ -s run/script.txt ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "Short artifact found; Instagram-only retry is eligible."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "No usable short artifact in failed run; nothing to retry."
+          fi
+
+      - name: Install dependencies
+        if: steps.artifact.outputs.ready == 'true'
         run: python -m pip install -r requirements.txt
 
-      - name: Publish existing short to Instagram only
+      - name: Publish Reel only
+        if: steps.artifact.outputs.ready == 'true'
         env:
           VIDEO_FORMAT: short
           IG_CROSSPOST: "1"
@@ -45,13 +69,13 @@ jobs:
           MEDIA_REPO_TOKEN: ${{ secrets.MEDIA_REPO_TOKEN || secrets.GITHUB_TOKEN }}
         run: python publish_instagram.py
 
-      - name: Upload Instagram result
-        if: always()
+      - name: Upload verified Instagram ID
+        if: always() && steps.artifact.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: instagram-repair-result
+          name: instagram-retry-result-${{ github.run_id }}
           path: |
             run/ig_reel.txt
             run/script.txt
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 14
