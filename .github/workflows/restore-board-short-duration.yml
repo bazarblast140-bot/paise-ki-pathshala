@@ -1,0 +1,154 @@
+name: Restore board_short + duration fix
+on:
+  workflow_dispatch:
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore board_short from pre-placeholder commit
+        run: |
+          # Last known full board_short before PLACEHOLDER corruption
+          git show 99c043ad48391eba81108452a65f2daf47471a95:board_short.py > board_short.py
+          wc -c board_short.py
+          python3 -m py_compile board_short.py
+      - name: Apply duration-safe TTS patch
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+          p = Path('board_short.py')
+          text = p.read_text(encoding='utf-8')
+          start = text.find('    # Generate each beat voice')
+          end = text.find('    ok(f"voice: trimmed speech')
+          if start < 0 or end < 0:
+              raise SystemExit(f'anchors missing start={start} end={end}')
+          new = r'''    # Generate each beat voice with duration-safe path.
+    def _wc(s):
+        return len(str(s or "").split())
+
+    def _ensure_len(spoken_map, topic_obj):
+        total = sum(_wc(spoken_map[b]) for b in BEATS)
+        if total >= 100:
+            return spoken_map, total
+        print(f"[expand] spoken only {total} words — expanding from on-screen topic")
+        src = topic_obj["beats"]
+        facts = " ".join(topic_obj.get("facts") or [])[:220]
+        expansions = {
+            "hook": f'{src["hook"][0]}। {src["hook"][1]}। इस शॉर्ट में स्क्रीन की जानकारी आसान हिंदी में समझेंगे। कोई ट्रेड कॉल नहीं।',
+            "pehchan": f'{src["pehchan"][0]}। {src["pehchan"][1]}। पहचान का मतलब है स्क्रीन पर तथ्य साफ पढ़ना। ' + (f"संदर्भ: {facts}।" if facts else "दिए गए तथ्य के बाहर कुछ नहीं।"),
+            "matlab": f'{src["matlab"][0]}। {src["matlab"][1]}। मतलब: कारण और असर दिए गए तथ्य के अंदर देखें। नई कीमत या रिटर्न का अनुमान नहीं।',
+            "karein": f'{src["karein"][0]}। {src["karein"][1]}। सीमा याद रखें: यह शिक्षा है, सलाह नहीं। निवेश से पहले रिसर्च और जोखिम देखें।',
+        }
+        out = dict(spoken_map)
+        for b in BEATS:
+            if _wc(out[b]) < 28:
+                out[b] = expansions[b]
+            else:
+                out[b] = (out[b].rstrip() + " " + expansions[b]).strip()
+        return out, sum(_wc(out[b]) for b in BEATS)
+
+    def _to_wav(src_mp3, dest_wav, gentle=False):
+        if gentle:
+            af = "loudnorm=I=-16:TP=-1.5:LRA=11"
+        else:
+            af = (
+                "silenceremove=start_periods=1:start_duration=0.05:start_threshold=-55dB,"
+                "areverse,silenceremove=start_periods=1:start_duration=0.05:start_threshold=-55dB,areverse"
+            )
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-y", "-i", str(src_mp3), "-af", af,
+             "-ar", "44100", "-ac", "2", str(dest_wav)], check=True)
+
+    spoken, word_total = _ensure_len(spoken, topic)
+    print(f"[voice] words={word_total} " + " | ".join(f"{b}={_wc(spoken[b])}" for b in BEATS))
+
+    beat_audio, raw_durations = {}, {}
+    (RUN / "tts_text.txt").unlink(missing_ok=True)
+    for b in BEATS:
+        mp3 = RUN / f"tts_{b}.mp3"
+        mp3.unlink(missing_ok=True)
+        tts(spoken[b], mp3, c)
+        clean = RUN / f"voice_clean_{b}.wav"
+        _to_wav(mp3, clean, gentle=False)
+        d_clean, d_raw = duration(clean), duration(mp3)
+        d = max(d_clean, d_raw * 0.92)
+        if d_clean < d_raw * 0.55:
+            print(f"[warn] trim aggressive on {b}: raw={d_raw:.1f} clean={d_clean:.1f}")
+            _to_wav(mp3, clean, gentle=True)
+            d = duration(clean)
+        if d < 1.0:
+            die(f"TTS beat {b} too short: {d:.2f}s words={_wc(spoken[b])}")
+        raw_durations[b] = d
+        beat_audio[b] = clean
+        print(f"[voice] {b}: {_wc(spoken[b])}w -> {d:.1f}s")
+
+    raw_total = sum(raw_durations.values())
+    seam = 0.05
+    beat_times, t = {}, 0.0
+    for b in BEATS:
+        pad = seam if b != BEATS[-1] else 0.0
+        d = raw_durations[b] + pad
+        beat_times[b] = (t, t + d)
+        t += d
+
+    if t < 45.0:
+        print(f"[retry] voice short ({t:.1f}s); force long Edge")
+        src = topic["beats"]
+        spoken = {
+            "hook": f'{src["hook"][0]}। {src["hook"][1]}। आज इस शॉर्ट में एक अवधारणा क्रम से समझेंगे। पहले सवाल, फिर पहचान, फिर मतलब, अंत में सावधानी। यह शिक्षा है, सलाह नहीं।',
+            "pehchan": f'{src["pehchan"][0]}। {src["pehchan"][1]}। पहचान: स्क्रीन पर तथ्य साफ देखें। तथ्य साफ हो तभी मतलब समझ आता है। दी गई जानकारी के बाहर नया आंकड़ा नहीं।',
+            "matlab": f'{src["matlab"][0]}। {src["matlab"][1]}। मतलब: कारण और असर दिए गए तथ्य के अंदर जोड़ें। नई कीमत, तारीख, रिटर्न या टारगेट का अनुमान नहीं।',
+            "karein": f'{src["karein"][0]}। {src["karein"][1]}। समझना अलग है, फैसला अलग। निवेश से पहले जरूरत, जोखिम और रिसर्च देखें।',
+        }
+        spoken["karein"] = spoken["karein"].rstrip() + " " + CTA
+        v = c["voice"]
+        original_rate = v.get("edge_rate", "+0%")
+        original_speed = v.get("speed", 1.0)
+        try:
+            v["edge_rate"] = "-15%"
+            v["speed"] = 0.85
+            for b in BEATS:
+                mp3 = RUN / f"tts_{b}.mp3"
+                mp3.unlink(missing_ok=True)
+                import speak
+                edge_text = speak.speakable(spoken[b])
+                print(f"[retry-edge] {b}: {len(edge_text.split())}w")
+                asyncio.run(_edge(edge_text, v.get("edge_voice", "hi-IN-SwaraNeural"), "-15%", mp3))
+                if not mp3.exists() or mp3.stat().st_size <= 1000:
+                    die(f"fallback Edge TTS failed: {b}")
+                ENGINES.append("edge")
+                clean = RUN / f"voice_clean_{b}.wav"
+                _to_wav(mp3, clean, gentle=True)
+                raw_durations[b] = duration(clean)
+                beat_audio[b] = clean
+                print(f"[retry-edge] {b}={raw_durations[b]:.1f}s")
+            beat_times, t = {}, 0.0
+            for b in BEATS:
+                d = raw_durations[b] + (seam if b != BEATS[-1] else 0.0)
+                beat_times[b] = (t, t + d)
+                t += d
+        finally:
+            v["edge_rate"] = original_rate
+            v["speed"] = original_speed
+        if t < 45.0:
+            detail = ", ".join(f"{b}={raw_durations[b]:.1f}s/{_wc(spoken[b])}w" for b in BEATS)
+            die(f"voice too short after TTS retry: {t:.1f}s — {detail}")
+    if t > 62.0:
+        die(f"voice too long after boundary-silence trim: {t:.1f}s — narration/TTS must be tightened")
+'''
+          text = text[:start] + new + text[end:]
+          p.write_text(text, encoding='utf-8')
+          print('patched', len(text))
+          PY
+          python3 -m py_compile board_short.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add board_short.py
+          git commit -m "fix: duration-safe TTS — gentler trim, expand short scripts, Edge retry" || echo nochange
+          git push
