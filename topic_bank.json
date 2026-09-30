@@ -4720,7 +4720,7 @@
   {
    "id": 126,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "risk_drawdown",
    "cat": "RISK",
    "topic": "20% drawdown के बाद break-even math",
@@ -4754,7 +4754,8 @@
     "Drawdown control capital survival का हिस्सा है",
     "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "20% drawdown के बाद break-even math"
+   "seo": "20% drawdown के बाद break-even math",
+   "used_short_at": "2026-09-30T22:05:51Z"
   },
   {
    "id": 127,
