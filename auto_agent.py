@@ -46,6 +46,9 @@ def external_publish_failure(log_text):
         "access token has expired",
         "oauth token has expired",
         "authentication failed",
+        "instagram publish failed",
+        "ig_reel.txt missing",
+        "instagram reel not confirmed",
     )
     if any(x in ln for ln in lines for x in hard):
         return True
