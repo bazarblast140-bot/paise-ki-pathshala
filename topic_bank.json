@@ -3487,7 +3487,7 @@
   {
    "id": 94,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "option_credit_spread",
    "cat": "OPTIONS",
    "topic": "Credit Spread — premium collect करने के साथ defined risk",
@@ -3519,7 +3519,8 @@
     "premium income = guaranteed profit नहीं",
     "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Credit Spread — premium collect करने के साथ defined risk"
+   "seo": "Credit Spread — premium collect करने के साथ defined risk",
+   "used_short_at": "2026-09-30T22:37:44Z"
   },
   {
    "id": 95,
