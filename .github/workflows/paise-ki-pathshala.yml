@@ -1,3 +1,4 @@
+# recovery-v11: harden duration normalization + provider-independent scheduling
 # recovery: publish today's missed morning slot — pro-visual-audio QA recovery
 # recovery-v2: duration-safe Shorts voice pacing
 name: Paise Ki Pathshala
@@ -65,7 +66,7 @@ on:
         default: ""
 
 concurrency:
-  group: paise-ki-pathshala-${{ github.event.schedule || inputs.format || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
