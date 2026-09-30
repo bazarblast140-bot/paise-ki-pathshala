@@ -133,7 +133,74 @@ def _call_model(prompt: str) -> str:
         except Exception as second:
             raise RuntimeError("repair model failed: " + str(first) + " | " + str(second))
 
+def _deterministic_syntax_repair(log_text: str) -> tuple[bool, str]:
+    """Fix simple, mechanically provable Python suite-indentation errors without LLM spend."""
+    if "IndentationError: expected an indented block" not in log_text:
+        return False, ""
+    mfile = re.search(r'File "([^"]+\\.py)", line \\d+', log_text)
+    mline = re.search(r'expected an indented block after [^\\n]* on line (\\d+)', log_text)
+    if not mfile or not mline:
+        return False, ""
+    raw = Path(mfile.group(1))
+    path = raw if raw.is_absolute() else (ROOT / raw)
+    if not path.exists():
+        # GitHub traceback paths may be absolute inside the runner.
+        candidate = ROOT / Path(raw).name
+        if candidate.exists():
+            path = candidate
+        else:
+            return False, "syntax repair target not found"
+    rel = str(path.relative_to(ROOT)) if str(path).startswith(str(ROOT)) else ""
+    if not rel or not _allowed(rel):
+        return False, "syntax repair target is outside allowed files"
+
+    lines = path.read_text(encoding="utf-8").splitlines(True)
+    header = int(mline.group(1)) - 1
+    if header < 0 or header >= len(lines):
+        return False, "syntax repair line is out of range"
+    base = len(lines[header]) - len(lines[header].lstrip(" \\t"))
+    start = header + 1
+    while start < len(lines) and not lines[start].strip():
+        start += 1
+    if start >= len(lines):
+        return False, "syntax repair found no suite body"
+    first_indent = len(lines[start]) - len(lines[start].lstrip(" \\t"))
+    if first_indent > base:
+        return False, "suite is already indented"
+
+    end = start
+    while end < len(lines):
+        stripped = lines[end].strip()
+        if stripped:
+            indent = len(lines[end]) - len(lines[end].lstrip(" \\t"))
+            if indent <= base:
+                break
+        end += 1
+    if end == start:
+        return False, "no repairable suite body found"
+
+    for i in range(start, end):
+        if lines[i].strip():
+            lines[i] = "    " + lines[i]
+    candidate = "".join(lines)
+    path.write_text(candidate, encoding="utf-8")
+    check = subprocess.run(
+        [os.environ.get("PYTHON", "python"), "-m", "py_compile", rel],
+        cwd=ROOT, text=True, capture_output=True,
+    )
+    if check.returncode != 0:
+        path.write_text("".join(lines[:start] + [
+            (ln[4:] if ln.startswith("    ") else ln) for ln in lines[start:end]
+        ] + lines[end:]), encoding="utf-8")
+        return False, "deterministic syntax repair did not compile"
+    return True, "deterministic indentation repair verified: " + rel
+
+
 def propose_and_apply(log_text: str, attempt: int) -> tuple[bool, str]:
+    fixed, detail = _deterministic_syntax_repair(log_text)
+    if fixed:
+        return True, detail
+
     docs = []
     for p in _relevant_files(log_text):
         try:
