@@ -4640,7 +4640,7 @@
   {
    "id": 124,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "penny_liquidity",
    "cat": "PENNY STOCK",
    "topic": "Penny stock liquidity risk — बेचते समय problem क्यों होती है",
@@ -4674,7 +4674,8 @@
     "Liquidity को return से पहले check करो",
     "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Penny stock liquidity risk — बेचते समय problem क्यों होती है"
+   "seo": "Penny stock liquidity risk — बेचते समय problem क्यों होती है",
+   "used_short_at": "2026-09-30T13:44:31Z"
   },
   {
    "id": 125,
