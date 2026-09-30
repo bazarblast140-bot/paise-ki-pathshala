@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 RUN = ROOT / "run"
-MAX_REPAIRS = 2
+MAX_REPAIRS = 3
 
 
 def log(msg):
