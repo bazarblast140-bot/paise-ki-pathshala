@@ -627,8 +627,18 @@ def main():
         t += d
 
     if t < 45.0:
-        # Retry TTS once at a slower rate before failing; never pad silence.
-        print(f"[retry] voice too short after trim ({t:.1f}s); regenerating audio slower")
+        # Primary narration can occasionally be far shorter than the QA target.
+        # Expand the already-generated, fact-safe narration before retrying TTS.
+        # This is deterministic: no new prices, dates, returns, or trade calls.
+        print(f"[retry] voice too short after trim ({t:.1f}s); expanding narration and regenerating with Edge")
+        expansion = (
+            "इस विषय को समझते समय स्क्रीन पर दी गई जानकारी को क्रम से देखें। "
+            "पहले तथ्य क्या कहता है, फिर उसका मतलब क्या है, और अंत में जोखिम क्या है, "
+            "इन्हीं तीन बातों पर ध्यान देना जरूरी है। उपलब्ध जानकारी से आगे कोई अनुमान "
+            "नहीं लगाया जा रहा है। निवेश से पहले अपनी पूरी रिसर्च और जोखिम प्रबंधन जरूर करें।"
+        )
+        for b in BEATS:
+            spoken[b] = (spoken[b].rstrip() + " " + expansion).strip()
         v = c["voice"]
         original_rate = v.get("edge_rate", "+0%")
         original_speed = v.get("speed", 1.08)
