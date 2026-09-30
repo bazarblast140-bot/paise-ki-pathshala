@@ -17,6 +17,7 @@ name: Paise Ki Pathshala
 # recovery-v16: ElevenLabs-only voice engine, no mixed Edge fallback
 # recovery-v17: fresh production run after ElevenLabs-only enforcement
 # recovery-v18: verify faster ElevenLabs Shorts voice pacing
+# recovery-v19: remove artificial 56s speech stretching
 on:
   schedule:
     - cron: "0 3 * * *"
