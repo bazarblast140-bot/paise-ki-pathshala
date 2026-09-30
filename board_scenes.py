@@ -366,15 +366,15 @@ def _draw_finance_visual(img, kind, key, beat):
             labels = ["REVENUE", "PROFIT", "CASH"] if kind == "fund" else ["SALES", "PROFIT", "VALUE"]
             bars(img, box, vals, labels, [BLUE, GREEN, YELLOW], fmt="{:g}", hi=120, value_size=42, label_size=30)
             if beat == "hook":
-            label(img, X0 + 85, Y0 + 325, "COMPARE THE NUMBERS", INK, 34)
+        label(img, X0 + 85, Y0 + 325, "COMPARE THE NUMBERS", INK, 34)
         elif beat == "pehchan":
-            ring(img, X0 + 210, Y0 + 565, 90, 70, YELLOW)
-            label(img, X0 + 85, Y0 + 325, "READ EACH BAR", INK, 34)
+        ring(img, X0 + 210, Y0 + 565, 90, 70, YELLOW)
+        label(img, X0 + 85, Y0 + 325, "READ EACH BAR", INK, 34)
         elif beat == "matlab":
-            arrow(img, (X0 + 270, Y0 + 650), (X1 - 240, Y0 + 650), GREEN, 10)
-            label(img, X0 + 85, Y0 + 650, "RESULT -> CASH -> VALUE", GREEN, 32)
+        arrow(img, (X0 + 270, Y0 + 650), (X1 - 240, Y0 + 650), GREEN, 10)
+        label(img, X0 + 85, Y0 + 650, "RESULT -> CASH -> VALUE", GREEN, 32)
         elif beat == "karein":
-            label(img, X0 + 85, Y0 + 650, "CHECK QUALITY / CASH / VALUATION", YELLOW, 32)
+        label(img, X0 + 85, Y0 + 650, "CHECK QUALITY / CASH / VALUATION", YELLOW, 32)
         return
     if kind == "intraday":
         closes = [100, 101, 100.5, 102, 101.4, 103, 102.2, 104, 103.2, 105]
