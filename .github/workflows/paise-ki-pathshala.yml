@@ -67,6 +67,7 @@ permissions:
 
 jobs:
   build-video:
+    if: github.event_name != 'push' || contains(github.event.head_commit.message, 'fix: one reel test')
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
