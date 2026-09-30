@@ -63,9 +63,9 @@
     "edge_pitch": "+0Hz",
     "voice_id": "7qBNUtXRGP0jPi0H4r8k",
     "model": "eleven_multilingual_v2",
-    "stability": 0.45,
-    "style": 0.3,
-    "speed": 1.08,
+    "stability": 0.50,
+    "style": 0.0,
+    "speed": 1.10,
     "similarity_boost": 0.8
   },
   "pipeline": {
@@ -90,7 +90,7 @@
       "voice": {
         "edge_voice": "hi-IN-SwaraNeural",
         "edge_rate": "+0%",
-        "speed": 0.92
+        "speed": 1.10
       },
       "pipeline": {
         "word_count_tolerance": 0.3
