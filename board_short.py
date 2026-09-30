@@ -257,7 +257,36 @@ def narration(topic, c):
         last = "; ".join(fails)
         print(f"[retry] narration attempt {attempt}: {last}")
     print("[warn] LLM narration 3 baar fail — on-screen text se narration bana raha hoon")
-    beats = {b: f"{h}। {s}।" for b, (h, s) in topic["beats"].items()}
+    # Deterministic fallback must still be long enough for a real 55-60s Short.
+    # The old fallback only read headline + sub-line, producing ~10-15s audio and
+    # repeatedly failing Gate 2. Expand each beat using only existing topic text;
+    # no new prices, dates, returns, or trade calls are invented.
+    src = topic["beats"]
+    beats = {
+        "hook": (
+            f"{src["hook"][0]}। {src["hook"][1]}। "
+            "इस हिस्से में पहले सवाल और उसके संदर्भ को समझते हैं। "
+            "आगे की जानकारी इसी दिए गए तथ्य को आसान भाषा में समझाती है।"
+        ),
+        "pehchan": (
+            f"{src["pehchan"][0]}। {src["pehchan"][1]}। "
+            "यहां दिख रही जानकारी को ध्यान से पढ़ना जरूरी है। "
+            "पहचान का मतलब है कि पहले स्क्रीन पर मौजूद तथ्य को साफ समझें। "
+            "इसके बाद ही अगले हिस्से का मतलब समझ आता है।"
+        ),
+        "matlab": (
+            f"{src["matlab"][0]}। {src["matlab"][1]}। "
+            "इसका सीधा मतलब यही है कि दिए गए तथ्य को उसके संदर्भ में देखें। "
+            "यहां किसी अतिरिक्त कीमत, तारीख या रिटर्न का अनुमान नहीं लगाया जा रहा है। "
+            "सिर्फ उपलब्ध जानकारी से कारण और असर को समझें।"
+        ),
+        "karein": (
+            f"{src["karein"][0]}। {src["karein"][1]}। "
+            "आखिर में इस जानकारी की सीमा भी याद रखें। "
+            "स्क्रीन पर दिए गए तथ्य को समझना पहला कदम है। "
+            "किसी भी निवेश फैसले के लिए अलग से पूरी जानकारी और जोखिम देखना जरूरी है।"
+        ),
+    }
     n = {"title": f"{topic['thumb'][0]} {topic['thumb'][1]}", "beats": beats}
     cache.write_text(json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
     return n, "fallback"
