@@ -4,6 +4,7 @@ name: Paise Ki Pathshala
 # recovery-v4: autonomous self-repair engine live
 # recovery-v5: continuous TTS boundary-silence repair
 # recovery-v6: stabilize Anthropic self-repair API
+# recovery-v7: execute the recovery job on the next workflow-file push
 # manual reel test: 2026-09-30
 # one-shot trigger
 
