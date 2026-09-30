@@ -125,7 +125,7 @@ def claude(system, user, model=None, max_tokens=16000, retries=3):
             max_tokens=max_tokens,
         )
         last = None
-        effective_retries = max(retries, 5)
+        effective_retries = max(retries, 2)
         for attempt in range(effective_retries):
             try:
                 completion = _with_deadline(lambda: client.chat.completions.create(**kwargs), call_limit)
@@ -135,7 +135,7 @@ def claude(system, user, model=None, max_tokens=16000, retries=3):
                     last = RuntimeError("DeepSeek returned empty content" if choices else
                                         f"DeepSeek returned no choices: {str(completion)[:200]}")
                     if attempt < effective_retries - 1:
-                        wait = min(60, 10 * (2 ** attempt))
+                        wait = min(10, 5 * (2 ** attempt))
                         print(f"[retry] {last}; wait {wait}s ({attempt+1}/{effective_retries})")
                         time.sleep(wait)
                         continue
@@ -148,7 +148,7 @@ def claude(system, user, model=None, max_tokens=16000, retries=3):
                     die(f"DeepSeek API error {status}: {e}")
                 last = e
                 if attempt < effective_retries - 1:
-                    wait = min(90, 15 * (2 ** attempt))
+                    wait = min(20, 5 * (2 ** attempt))
                     print(f"[retry] DeepSeek {status or type(e).__name__}; wait {wait}s "
                           f"({attempt+1}/{effective_retries})")
                     time.sleep(wait)
