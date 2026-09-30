@@ -696,54 +696,15 @@ def main():
         beat_times[b] = (t, t + d)
         t += d
 
+    # IMPORTANT: never stretch short speech to a fixed 56s target.
+    # Doing so with atempo < 1 made an otherwise normal ElevenLabs narration
+    # sound like slow-motion. Visual beats follow the real speech duration.
     if t < 45.0:
-        # Do not switch engines here. If ElevenLabs is configured, all beats must
-        # remain ElevenLabs. The common duration-normalization block below retimes
-        # the already-generated paid audio without changing the voice.
-        print(f"[duration] paid TTS is short ({t:.1f}s); keeping ElevenLabs audio and normalizing speed")
+        print(f"[duration] natural paid TTS is {t:.1f}s; no slow-motion stretching")
 
-    # Normalize any out-of-range speech length to a real speech-speed target.
-    # Never add silence; FFmpeg atempo changes speech pacing only.
-    if t < 45.0 or t > 62.0:
-        target = 56.0
-        factor = t / target
-
-        def _tempo_chain(mult):
-            parts = []
-            if mult > 2.0:
-                while mult > 2.0:
-                    parts.append("atempo=2.0")
-                    mult /= 2.0
-            elif mult < 0.5:
-                while mult < 0.5:
-                    parts.append("atempo=0.5")
-                    mult /= 0.5
-            parts.append(f"atempo={mult:.4f}")
-            return ",".join(parts)
-
-        print(f"[duration-normalize] {t:.1f}s -> target {target:.1f}s, atempo={factor:.3f}")
-        filt = _tempo_chain(factor)
-        for b in BEATS:
-            src_wav = beat_audio[b]
-            norm = RUN / f"voice_norm_{b}.wav"
-            subprocess.run([
-                "ffmpeg", "-v", "error", "-y", "-i", str(src_wav),
-                "-af", filt,
-                "-ar", "44100", "-ac", "2", str(norm)
-            ], check=True)
-            raw_durations[b] = duration(norm)
-            beat_audio[b] = norm
-
-        beat_times, t = {}, 0.0
-        for b in BEATS:
-            d = raw_durations[b] + (seam if b != BEATS[-1] else 0.0)
-            beat_times[b] = (t, t + d)
-            t += d
-        print(f"[duration-normalize] final speech duration={t:.1f}s")
-
-    if t < 45.0 or t > 62.0:
+    if t < 42.0 or t > 62.0:
         detail = ", ".join(f"{b}={raw_durations[b]:.1f}s/{len(spoken[b].split())}w" for b in BEATS)
-        die(f"voice duration outside 45-62s after normalization: {t:.1f}s — {detail}")
+        die(f"voice duration outside 42-62s; refusing artificial speed change: {t:.1f}s — {detail}")
 
     ok(f"voice: trimmed speech {raw_total:.1f}s -> final {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
     # verify config ka "edge" padh ke ElevenLabs video ko bhi "robotic" maanta tha
