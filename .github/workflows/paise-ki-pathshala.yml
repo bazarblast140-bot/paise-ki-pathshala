@@ -7,37 +7,20 @@ name: Paise Ki Pathshala
 # recovery-v5: continuous TTS boundary-silence repair
 # recovery-v6: stabilize Anthropic self-repair API
 # recovery-v7: execute the recovery job on the next workflow-file push
-# manual reel test: 2026-09-30
-# one-shot trigger
 # recovery-v8: run after watchdog dependency + board syntax repair
 # recovery-v9: trim only outer TTS silence so speech is not truncated at internal pauses
-# recovery-v9: retest duration-safe Edge TTS fallback
-# recovery-v10: bounded Edge retry + fresh YouTube refresh-token test
+# recovery-v10: retest duration-safe Edge TTS fallback
 # recovery-v11: deterministic final.mp4 duration hard gate
 # recovery-v12: execute publish flag and require platform confirmation
 # recovery-v13: validate ElevenLabs with the actual TTS request, not subscription preflight
 # recovery-v14: fresh production verification after actual ElevenLabs TTS validation
-
-# Hindi personal-finance channel. Secrets: DEEPSEEK_API_KEY, PEXELS_API_KEY,
-# TELEGRAM_*, YT_FIN_* (yt_token_to_github.py --prefix YT_FIN), variable
-# YT_FIN_CHANNEL_ID — publish.py isse check karta hai ki token sahi channel ka hai.
-#
-# Instagram Reel cross-post (short only): same final.mp4, no re-render.
-# Needs secrets IG_ACCESS_TOKEN + vars IG_USER_ID (same as FactVizer/HEYGEN repo).
-# Hosting uses public MEDIA_REPO so Instagram can download the file.
-#
-# Do format: long (16:9, ~5 min) aur short (9:16, ~50s, bina intro). Har topic
-# ka ek short aur ek long banta hai (topic_bank: used / used_short).
-#
-# Roz 3 Shorts, public at:
-#   premarket 08:30 IST, postmarket 16:00 IST, night 21:00 IST
+# recovery-v16: ElevenLabs-only voice engine, no mixed Edge fallback
+# recovery-v17: fresh production run after ElevenLabs-only enforcement
 on:
   schedule:
-    - cron: "0 3 * * *"      # 08:30 IST → premarket
-    - cron: "30 10 * * *"   # 16:00 IST → postmarket
-    - cron: "30 15 * * *"   # 21:00 IST → night
-  # Controlled recovery trigger: only this workflow file can start an immediate build.
-  # The bot ledger commit uses [skip ci], so normal runs do not loop.
+    - cron: "0 3 * * *"
+    - cron: "30 10 * * *"
+    - cron: "30 15 * * *"
   push:
     paths:
       - ".github/workflows/paise-ki-pathshala.yml"
@@ -52,7 +35,6 @@ on:
       topic_key:
         type: string
         default: ""
-
   workflow_dispatch:
     inputs:
       format:
@@ -69,35 +51,26 @@ on:
         description: "TEST: sirf ye topic (jaise titan_2010); rotation me used mark nahi hota"
         required: false
         default: ""
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 permissions:
   contents: write
-
 jobs:
   build-video:
-    # Manual/scheduled runs and controlled recovery pushes all execute this job.
     runs-on: ubuntu-latest
     timeout-minutes: 90
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install FFmpeg & fonts
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
-
       - name: Install deps
         run: pip install -r requirements.txt
-
       - name: Format decide karo
         id: fmt
         run: |
@@ -107,7 +80,7 @@ jobs:
           if [ -z "$F" ]; then
             F=short; VIS=public
             case "${{ github.event.schedule }}" in
-              "0 3 * * *")   SLOT="08:30" ;;
+              "0 3 * * *") SLOT="08:30" ;;
               "30 10 * * *") SLOT="16:00" ;;
               "30 15 * * *") SLOT="21:00" ;;
             esac
@@ -115,7 +88,7 @@ jobs:
             VIS=public; SLOT=""
           elif [ "$VIS" = "public" ]; then
             H=$(TZ=Asia/Kolkata date +%H%M)
-            if   [ "$H" -lt 0810 ]; then SLOT="08:30"
+            if [ "$H" -lt 0810 ]; then SLOT="08:30"
             elif [ "$H" -lt 1540 ]; then SLOT="16:00"
             elif [ "$H" -lt 2040 ]; then SLOT="21:00"
             else SLOT="08:30"; fi
@@ -123,8 +96,6 @@ jobs:
           echo "format=$F" >> "$GITHUB_OUTPUT"
           echo "visibility=$VIS" >> "$GITHUB_OUTPUT"
           echo "slot=$SLOT" >> "$GITHUB_OUTPUT"
-          echo "format: $F  visibility: $VIS  slot: $SLOT"
-
       - name: Slot pehle se bhara hai kya
         id: guard
         run: |
@@ -133,10 +104,8 @@ jobs:
           else
             echo "taken=false" >> "$GITHUB_OUTPUT"
           fi
-
       - name: Agent preflight
         run: python -m py_compile auto_agent.py self_repair.py
-
       - name: Run Pipeline (+ publish if READY)
         if: steps.guard.outputs.taken != 'true'
         env:
@@ -160,16 +129,13 @@ jobs:
           PUBLISH_VISIBILITY: ${{ steps.fmt.outputs.visibility }}
           TOPIC_KEY: ${{ inputs.topic_key }}
           PUBLISH_SLOT_IST: ${{ steps.fmt.outputs.slot }}
-          # Instagram Reel cross-post (short only) — same video, zero extra render
           IG_CROSSPOST: ${{ steps.fmt.outputs.format == 'short' && '1' || '0' }}
           IG_USER_ID: ${{ vars.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_SURFACE: ${{ vars.IG_SURFACE || 'facebook' }}
-          # Public bucket so Instagram can fetch the mp4 (this repo is private)
           MEDIA_REPO: ${{ vars.MEDIA_REPO || 'bazarblast140-bot/HEYGEN--INSTAGRAM-' }}
           MEDIA_REPO_TOKEN: ${{ secrets.MEDIA_REPO_TOKEN || secrets.GITHUB_TOKEN }}
         run: python auto_agent.py --format ${{ steps.fmt.outputs.format }} --publish
-
       - name: Commit topic_bank (prevent topic repeats)
         if: success() && steps.guard.outputs.taken != 'true'
         run: |
@@ -183,7 +149,6 @@ jobs:
             git pull --rebase --autostash || true
             git push
           fi
-
       - name: Upload video + report as artifact
         if: ${{ always() && steps.guard.outputs.taken != 'true' }}
         uses: actions/upload-artifact@v4
@@ -201,21 +166,12 @@ jobs:
             run/gate3_report.txt
             run/ig_reel.txt
           retention-days: 14
-
 # verified recovery trigger refresh: 2026-09-30
-
 # verified Instagram confirmation watchdog active
-
 # chart-layout + ElevenLabs paid-first verification trigger: 2026-09-30
-
 # verification: paid ElevenLabs updated + progressive chart + topic hashtags
-
 # verify board_scenes indentation fix
-
 # verify chart beat indentation fix
-
 # autonomous repair: deterministic syntax fix + 3-attempt bounded recovery
-
 # verify deterministic self-repair traceback regex
-
 # cancel stale production runs during recovery
