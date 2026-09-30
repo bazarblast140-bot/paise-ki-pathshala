@@ -2044,7 +2044,7 @@
   {
    "id": 55,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "spinning_top",
    "cat": "CANDLESTICK",
    "topic": "Spinning Top — छोटी बॉडी, दोनों तरफ़ लंबी wick",
@@ -2074,7 +2074,8 @@
    "facts": [
     "ये indecision दिखाता है"
    ],
-   "seo": "Spinning Top Candlestick"
+   "seo": "Spinning Top Candlestick",
+   "used_short_at": "2026-09-30T22:19:50Z"
   },
   {
    "id": 56,
