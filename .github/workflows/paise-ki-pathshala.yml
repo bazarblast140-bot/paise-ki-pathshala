@@ -212,3 +212,5 @@ jobs:
 # verify chart beat indentation fix
 
 # autonomous repair: deterministic syntax fix + 3-attempt bounded recovery
+
+# verify deterministic self-repair traceback regex
