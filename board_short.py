@@ -635,6 +635,7 @@ def main():
         )
         spoken["karein"] = (spoken["karein"].rstrip() + " " + extra + " " + CTA).strip()
 
+        v = c["voice"]
         original_rate = v.get("edge_rate", "+0%")
         original_speed = v.get("speed", 1.0)
         try:
