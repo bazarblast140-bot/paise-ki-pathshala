@@ -136,95 +136,150 @@ def _zoom_labels(img, labels):
 
 
 def candle_scene(key):
+    """Dedicated four-beat teaching flow for candle patterns.
+
+    Each beat has a different visual purpose:
+      hook     = isolate the pattern/question
+      pehchan  = anatomy/recognition
+      matlab   = buyer/seller meaning
+      karein   = confirmation + risk plan
+
+    Do not keep the same full chart on screen for every beat; that makes the
+    narration hard to follow and can make the video look like the chart is
+    unrelated to what is being explained.
+    """
     before, pat, conf, direction, anatomy = _pattern(key)
-    seq = before + pat
-    allc = seq + conf
-    lo = min(c[2] for c in allc)
-    hi = max(c[1] for c in allc)
-    i0, i1 = len(before), len(before) + len(pat) - 1
 
-    def ring_pattern(img, ax, col=YELLOW):
-        top = max(c[1] for c in pat)
-        bot = min(c[2] for c in pat)
-        cx = (ax.x(i0) + ax.x(i1)) / 2
-        rx = max(60, (ax.x(i1) - ax.x(i0)) / 2 + 55)
-        ring(img, cx, (ax.y(top) + ax.y(bot)) / 2, rx, (ax.y(bot) - ax.y(top)) / 2 + 45, col)
-
-    def base_full(img, with_conf=False):
+    def _pattern_only(img):
         panel(img)
-        return candles(img, BOARD, allc if with_conf else seq, lo, hi)
+        lo = min(c[2] for c in pat)
+        hi = max(c[1] for c in pat)
+        # Give the pattern the whole board instead of carrying the old trend
+        # chart through every beat.
+        return candles(img, BOARD, pat, lo, hi, grid=False,
+                        width_frac=0.62, pad=(100, 150, 100, 150))
+
+    def _draw_direction(img, ax):
+        x = ax.x(len(pat) - 1)
+        if direction == "bull":
+            arrow(img, (x + 90, ax.y(min(c[2] for c in pat)) - 10),
+                  (x + 90, ax.y(max(c[1] for c in pat)) - 30), GREEN, 12)
+            label(img, X0 + 60, Y0 + 55, "BUYERS IN CONTROL", GREEN, 42)
+        elif direction == "bear":
+            arrow(img, (x + 90, ax.y(max(c[1] for c in pat)) + 10),
+                  (x + 90, ax.y(min(c[2] for c in pat)) + 30), RED, 12)
+            label(img, X0 + 60, Y0 + 55, "SELLERS IN CONTROL", RED, 42)
+        else:
+            label(img, X0 + 60, Y0 + 55, "INDECISION", YELLOW, 42)
+
+    def _confirmation_candle():
+        # Some patterns (e.g. Three White Soldiers) are themselves the signal
+        # and have no separate confirmation candle in _pattern(). For the
+        # action beat, draw a clearly marked *illustrative* next candle rather
+        # than reusing the same chart.
+        p = pat[-1][3]
+        if direction == "bull":
+            return [(p, p + 5.0, p - 0.3, p + 4.4)]
+        if direction == "bear":
+            return [(p, p + 0.3, p - 5.0, p - 4.4)]
+        return [(p, p + 2.0, p - 2.0, p + 0.1)]
 
     def beat(b, img):
         if b == "hook":
-            ax = base_full(img)
+            # Question/recognition: show only the pattern, not the whole trend.
+            ax = _pattern_only(img)
             A = img.copy()
-            ring_pattern(img, ax)
-            x = ax.x(i1) + 70
-            if direction == "bull":
-                arrow(img, (x, ax.y(lo) - 10), (x, ax.y(lo) - 230), GREEN)
-            elif direction == "bear":
-                arrow(img, (x, ax.y(hi) + 10), (x, ax.y(hi) + 230), RED)
-            else:
-                label(img, x - 20, ax.y(hi) + 20, "?", YELLOW, 110)
+            for i in range(len(pat)):
+                ring(img, ax.x(i), (ax.y(pat[i][1]) + ax.y(pat[i][2])) / 2,
+                     48, max(55, abs(ax.y(pat[i][2]) - ax.y(pat[i][1])) / 2 + 35),
+                     YELLOW)
+            label(img, X0 + 60, Y0 + 55,
+                  f"{len(pat)} CANDLE PATTERN", YELLOW, 42)
             return A, img
+
         if b == "pehchan":
-            _zoom(img, pat, anatomy, direction)
+            # Recognition: enlarged anatomy with three concrete checks.
+            panel(img)
+            lo = min(c[2] for c in pat)
+            hi = max(c[1] for c in pat)
+            box = (X0 + 35, Y0 + 60, X0 + 470, Y1 - 70)
+            ax = candles(img, box, pat, lo, hi, grid=False,
+                         width_frac=0.62, pad=(25, 45, 25, 45))
             A = img.copy()
-            _zoom_labels(img, anatomy)
+            x = X0 + 510
+            ys = [Y0 + 145, Y0 + 335, Y0 + 525]
+            for t, y in zip(anatomy, ys):
+                label(img, x - 35, y + 22, "•", YELLOW, 58)
+                fit_label(img, x, y, t, X1 - x - 30, INK, 36)
             return A, img
+
         if b == "matlab":
-            ax = base_full(img)
+            # Meaning: remove the old trend and explain the force behind the
+            # pattern on the pattern itself.
+            ax = _pattern_only(img)
             A = img.copy()
-            c = pat[-1]
-            x = ax.x(i1)
-            # free corner: uptrend leaves top-left empty, downtrend bottom-left
-            up = before[-1][3] > before[0][3]
-            lx, ly = X0 + 50, (Y0 + 50 if up else Y1 - 140)
-            if key in ("marubozu", "three_white_soldiers"):
-                arrow(img, (x + 70, ax.y(pat[0][2])), (x + 70, ax.y(pat[-1][1]) - 10), GREEN, 10)
-                label(img, lx, ly, "BUYERS: OPEN SE CLOSE TAK", GREEN, 38, bg=(6, 10, 20))
-            elif key == "three_black_crows":
-                arrow(img, (x + 70, ax.y(pat[0][1])), (x + 70, ax.y(pat[-1][2]) + 10), RED, 10)
-                label(img, lx, ly, "SELLERS: LAGATAAR", RED, 40, bg=(6, 10, 20))
-            elif direction == "bear":
-                arrow(img, (x - 150, ax.y(c[0]) + 40), (x - 40, ax.y(c[1]) + 20), GREEN, 10)
-                arrow(img, (x + 40, ax.y(c[1]) + 20), (x + 150, ax.y(min(c[0], c[3])) + 60), RED, 10)
-                label(img, lx, ly, "BUYERS UPAR LE GAYE", GREEN, 38, bg=(6, 10, 20))
-                label(img, lx, ly + 62, "SELLERS NE GIRAYA", RED, 38, bg=(6, 10, 20))
-            elif direction == "bull":
-                arrow(img, (x - 150, ax.y(c[0]) - 40), (x - 40, ax.y(c[2]) - 20), RED, 10)
-                arrow(img, (x + 40, ax.y(c[2]) - 20), (x + 150, ax.y(max(c[0], c[3])) - 60), GREEN, 10)
-                label(img, lx, ly, "SELLERS NEECHE LE GAYE", RED, 38, bg=(6, 10, 20))
-                label(img, lx, ly + 62, "BUYERS NE UTHAYA", GREEN, 38, bg=(6, 10, 20))
+            _draw_direction(img, ax)
+            if key in ("three_white_soldiers", "morning_star", "bullish_engulfing",
+                       "piercing", "hammer", "inverted_hammer", "marubozu"):
+                label(img, X0 + 60, Y1 - 135,
+                      "BUYERS PUSH PRICE HIGHER", GREEN, 36, bg=(6, 10, 20))
+            elif key in ("three_black_crows", "evening_star", "bearish_engulfing",
+                         "dark_cloud", "shooting_star", "hanging_man"):
+                label(img, X0 + 60, Y1 - 135,
+                      "SELLERS PUSH PRICE LOWER", RED, 36, bg=(6, 10, 20))
             else:
-                label(img, lx, ly, "BUYERS = SELLERS", YELLOW, 42, bg=(6, 10, 20))
-            ring_pattern(img, ax)
+                label(img, X0 + 60, Y1 - 135,
+                      "WAIT FOR THE NEXT CANDLE", YELLOW, 36, bg=(6, 10, 20))
             return A, img
-        # karein
-        ax = base_full(img, with_conf=bool(conf))
+
+        # karein: action/risk beat. Show a separate confirmation candle and
+        # explicit SL area instead of another copy of the hook chart.
+        panel(img)
+        lo = min(c[2] for c in pat)
+        hi = max(c[1] for c in pat)
+        action = list(pat)
+        action_conf = conf[:1] if conf else _confirmation_candle()
+        action += action_conf
+        ax = candles(img, BOARD, action, min(lo, action_conf[0][2]),
+                     max(hi, action_conf[0][1]), grid=False,
+                     width_frac=0.58, pad=(80, 130, 80, 130))
         A = img.copy()
-        ring_pattern(img, ax, (148, 163, 184))
-        if conf:
-            cc = conf[0]
-            ring(img, ax.x(i1 + 1), (ax.y(cc[1]) + ax.y(cc[2])) / 2, 55, (ax.y(cc[2]) - ax.y(cc[1])) / 2 + 40,
-                 GREEN if (key != "confirmation") else RED)
-        x0, x1 = X0 + 30, X1 - 30
-        if key == "confirmation":
-            cross(img, ax.x(i1 + 1) + 70, ax.y(conf[0][2]) - 20, 36)
-            label(img, X0 + 60, Y0 + 50, "NO CONFIRM = NO TRADE", RED, 40)
-            dashed(img, x0, x1, ax.y(min(c[2] for c in pat)) + 6, SL_RED, "SL", label_side="left")
-        elif direction == "bull":
-            dashed(img, x0, x1, ax.y(min(c[2] for c in pat)) + 8, SL_RED, "SL", label_side="left")
-            if conf:
-                dashed(img, x0, x1, ax.y(conf[0][3]), TARGET_GREEN, "ENTRY", label_side="left")
+        ring(img, ax.x(len(pat) - 1),
+             (ax.y(pat[-1][1]) + ax.y(pat[-1][2])) / 2,
+             50, 70, (148, 163, 184))
+
+        if direction == "bull":
+            dashed(img, X0 + 35, X1 - 35,
+                   ax.y(lo) + 10, SL_RED, "SL", label_side="left")
+            ring(img, ax.x(len(pat)), 
+                 (ax.y(action_conf[0][1]) + ax.y(action_conf[0][2])) / 2,
+                 52, 70, GREEN)
+            label(img, X0 + 60, Y0 + 55,
+                  "WAIT FOR CONFIRMATION", YELLOW, 38)
+            label(img, X0 + 60, Y1 - 135,
+                  "ENTRY AFTER CONFIRMATION • SL BELOW PATTERN",
+                  GREEN, 30, bg=(6, 10, 20))
         elif direction == "bear":
-            dashed(img, x0, x1, ax.y(max(c[1] for c in pat)) - 8, SL_RED, "SL", label_side="left")
-            if conf:
-                dashed(img, x0, x1, ax.y(conf[0][3]), GREEN, "ENTRY", label_side="left")
+            dashed(img, X0 + 35, X1 - 35,
+                   ax.y(hi) - 10, SL_RED, "SL", label_side="left")
+            ring(img, ax.x(len(pat)),
+                 (ax.y(action_conf[0][1]) + ax.y(action_conf[0][2])) / 2,
+                 52, 70, RED)
+            label(img, X0 + 60, Y0 + 55,
+                  "WAIT FOR CONFIRMATION", YELLOW, 38)
+            label(img, X0 + 60, Y1 - 135,
+                  "ENTRY AFTER CONFIRMATION • SL ABOVE PATTERN",
+                  RED, 30, bg=(6, 10, 20))
         else:
-            label(img, X0 + 60, Y0 + 50, "NEXT CANDLE = DIRECTION", YELLOW, 40)
+            label(img, X0 + 60, Y0 + 55,
+                  "WAIT — NO CLEAR DIRECTION", YELLOW, 36)
+            label(img, X0 + 60, Y1 - 135,
+                  "CONFIRM FIRST • THEN PLAN RISK",
+                  YELLOW, 32, bg=(6, 10, 20))
         return A, img
+
     return beat
+
 
 
 
