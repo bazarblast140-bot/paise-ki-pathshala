@@ -7,7 +7,15 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+# Automatic trends are a small tie-break. One strong pattern weight is 2.0
+# (label value 1.0 × 2) and our own videos add up to 0.75, so 0.8 cannot
+# force a topic the rest of the score disagrees with.
+TREND_WEIGHT_CAP = 0.8
+TREND_CLUSTER_BONUS = 0.25
+TREND_MAX_AGE_DAYS = 8
 
 
 def _read_json(path: Path, default):
@@ -85,8 +93,104 @@ def _topic_labels(topic):
     return labels
 
 
-def score_topic(topic, weights, market_topics=None, own_performance=None, video_format=None):
-    """Rank a bank topic from signals, freshness and first-party outcomes."""
+def term_in_text(text, term):
+    """Word-boundary match. Underscores and hyphens count as spaces.
+
+    Hindi terms and multi-word terms use a substring check because Devanagari
+    has no case and phrases like "bank nifty" are not single tokens.
+    """
+    if not isinstance(text, str):
+        return False
+    term = str(term or "").strip().lower().replace("_", " ").replace("-", " ")
+    term = re.sub(r"\s+", " ", term)
+    if len(term) < 2:
+        return False
+    hay = re.sub(r"\s+", " ", str(text).lower().replace("_", " ").replace("-", " "))
+    if re.search(r"[\u0900-\u097f]", term) or any(ch in term for ch in " /&"):
+        return term in hay
+    return re.search(rf"(?<![\w\u0900-\u097f]){re.escape(term)}(?![\w\u0900-\u097f])", hay) is not None
+
+
+def _topic_blob(topic):
+    parts = [topic.get("topic"), topic.get("key"), topic.get("seo"), topic.get("cat")]
+    facts = topic.get("facts") or []
+    if isinstance(facts, list):
+        parts.extend(facts)
+    beats = topic.get("beats") or {}
+    if isinstance(beats, dict):
+        for group in beats.values():
+            if isinstance(group, list):
+                parts.extend(group)
+            elif isinstance(group, str):
+                parts.append(group)
+    tags = topic.get("research_tags") or []
+    if isinstance(tags, list):
+        parts.extend(tags)
+    return " ".join(str(p) for p in parts if p)
+
+
+def _trends_generated_at(trends):
+    if not isinstance(trends, dict):
+        return None
+    raw = trends.get("generated_at")
+    if not raw:
+        return None
+    try:
+        gen = datetime.fromisoformat(str(raw))
+    except ValueError:
+        return None
+    if gen.tzinfo is None:
+        gen = gen.replace(tzinfo=timezone.utc)
+    return gen.astimezone(timezone.utc)
+
+
+def trend_weight(topic, trends):
+    """Capped boost when a bank topic overlaps repeated trend clusters.
+
+    Missing, malformed, or stale trends (older than TREND_MAX_AGE_DAYS) add
+    nothing, so the normal rotation is unchanged. The same keyword does not
+    pay twice across clusters.
+    """
+    gen = _trends_generated_at(trends)
+    if gen is None:
+        return 0.0
+    if datetime.now(timezone.utc) - gen > timedelta(days=TREND_MAX_AGE_DAYS):
+        return 0.0
+    summary = trends.get("summary") if isinstance(trends.get("summary"), dict) else {}
+    clusters = summary.get("topic_clusters") or []
+    if not isinstance(clusters, list):
+        return 0.0
+    text = _topic_blob(topic if isinstance(topic, dict) else {})
+    bonus = 0.0
+    used = set()
+    for cluster in clusters:
+        if bonus >= TREND_WEIGHT_CAP or not isinstance(cluster, dict):
+            continue
+        try:
+            count = int(cluster.get("count") or 0)
+        except (TypeError, ValueError):
+            continue
+        if count < 2:
+            continue
+        keywords = []
+        for raw in cluster.get("keywords") or []:
+            word = str(raw or "").strip().lower()
+            if word:
+                keywords.append(word)
+        fresh = [word for word in keywords if word not in used and term_in_text(text, word)]
+        if not fresh:
+            continue
+        bonus += TREND_CLUSTER_BONUS
+        used.update(fresh)
+    return round(min(TREND_WEIGHT_CAP, bonus), 3)
+
+
+def score_topic(topic, weights, market_topics=None, own_performance=None, video_format=None, trends=None):
+    """Rank a bank topic from signals, freshness and first-party outcomes.
+
+    ``trends`` (data/trends.json) adds at most TREND_WEIGHT_CAP. It never
+    removes candidates; pick_topic.py drops placeholder topics before scoring.
+    """
     labels = _topic_labels(topic)
     if video_format in ("short", "long"):
         labels.add("fast_paced" if video_format == "short" else "deep_dive")
@@ -118,7 +222,14 @@ def score_topic(topic, weights, market_topics=None, own_performance=None, video_
         score += max(-1.0, min(1.0, float(outcomes.get(key, 0)))) * 0.75
     except (TypeError, ValueError):
         pass
+    score += trend_weight(topic, trends)
     return score
+
+
+def load_trends(root: Path):
+    """Latest automatic trend snapshot. Missing or broken file = no boost."""
+    data = _read_json(Path(root) / "data" / "trends.json", {})
+    return data if isinstance(data, dict) else {}
 
 
 def load_research(root: Path):

@@ -117,6 +117,23 @@
     "max_search_keywords": 3,
     "region_code": "IN",
     "relevance_language": "hi",
-    "include_own_channel": true
+    "include_own_channel": true,
+    "trends": {
+      "_note": "trend_research.py daily job. quota_budget_units is clamped to 1200 in code (search.list = 100). Do not raise it to chase more queries; uploads share the same 10,000-unit day.",
+      "lookback_days": 7,
+      "max_results_per_query": 10,
+      "max_shorts": 40,
+      "quota_budget_units": 1200,
+      "max_search_queries": 5,
+      "search_queries": [
+        "stock market hindi shorts",
+        "option trading hindi shorts",
+        "candlestick pattern hindi",
+        "personal finance hindi shorts",
+        "intraday trading hindi"
+      ],
+      "region_code": "IN",
+      "relevance_language": "hi"
+    }
   }
 }

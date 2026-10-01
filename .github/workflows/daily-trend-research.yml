@@ -1,0 +1,123 @@
+name: Daily trend research
+
+# Read-only. Finds Hindi finance Shorts and India finance headlines, writes
+# data/trends.json and reports/trends-YYYY-WW.md, and commits those files.
+# It must never publish, upload, or post. No push: trigger — a push used to
+# start a public upload from the production workflow.
+#
+# Schedule: 00:00 UTC = 05:30 IST, before the 08:30 IST publish slot.
+# GitHub cron can slip; 05:30 still leaves room before that slot.
+#
+# Auth (no new secrets): YT_DATA_API_KEY if present, else the upload OAuth
+# refresh token (YT_FIN_CLIENT_ID / YT_FIN_CLIENT_SECRET / YT_FIN_REFRESH_TOKEN).
+# Quota: hard cap 1,200 units in trend_research.py. Shared 10,000/day project
+# quota with uploads (~1,600 each). Low quota skips calls and still exits 0.
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Fetch and print only; do not commit"
+        type: boolean
+        default: false
+
+# contents: write is only for the trend commit. This job cannot dispatch
+# other workflows.
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-trend-research
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Trend research (read-only YouTube + public RSS)
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+          YT_DATA_API_KEY: ${{ secrets.YT_DATA_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YT_FIN_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
+          EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            python trend_research.py --dry-run
+          else
+            python trend_research.py
+          fi
+      - name: Commit trends (rebase/retry; no publish)
+        if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
+        run: |
+          set -eu
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -- data/trends.json
+          shopt -s nullglob
+          reports=(reports/trends-*.md)
+          if [ "${#reports[@]}" -gt 0 ]; then
+            git add -- "${reports[@]}"
+          fi
+          if git diff --cached --quiet; then
+            echo "No trend changes to commit"
+            exit 0
+          fi
+          git commit -m "chore: daily trend research [skip ci]"
+          branch="${GITHUB_REF_NAME:-main}"
+          keep_this_run() {
+            # Rebase: --theirs is the commit being replayed (this run's snapshot).
+            conflicted="$(git diff --name-only --diff-filter=U || true)"
+            if [ -z "$conflicted" ]; then
+              return 0
+            fi
+            while IFS= read -r f; do
+              [ -z "$f" ] && continue
+              case "$f" in
+                data/trends.json|reports/trends-*.md)
+                  git checkout --theirs -- "$f"
+                  git add -- "$f"
+                  ;;
+                *)
+                  echo "Refusing to resolve a conflict outside trend files: $f"
+                  return 1
+                  ;;
+              esac
+            done <<< "$conflicted"
+          }
+          rebase_onto() {
+            if git rebase "$1"; then
+              return 0
+            fi
+            if keep_this_run && GIT_EDITOR=true git rebase --continue; then
+              return 0
+            fi
+            git rebase --abort || true
+            return 1
+          }
+          git fetch origin "$branch"
+          rebase_onto "origin/$branch"
+          for i in 1 2 3 4 5; do
+            if git push origin "HEAD:${branch}"; then
+              exit 0
+            fi
+            echo "push rejected (attempt ${i}); rebasing onto latest ${branch}"
+            git fetch origin "$branch"
+            rebase_onto "origin/$branch"
+            sleep $((i * 5))
+          done
+          echo "Could not push trend commit"
+          exit 1
