@@ -237,11 +237,13 @@ def _offline_financial_agent(system, user):
 
     print(f"[fallback] No external LLM key configured — generating offline financial script for: '{topic}'")
 
-    if "GATE 1" in system or "verdict" in system:
+    if "GATE 1" in system or "verdict" in system.lower():
+        # No model is available. A missing review is not a pass.
         return json.dumps({
-            "verdict": "PASS",
-            "fails": [],
-            "notes": "Passed via offline financial verification engine."
+            "verdict": "FAIL",
+            "fails": ["AI reviewer unavailable"],
+            "notes": "no valid AI verdict — NOT READY",
+            "ai_verdict_valid": False,
         })
 
     return f"""TITLE: {topic}: The Smart Money Framework
@@ -313,6 +315,16 @@ def _claude_anthropic(system, user, model, max_tokens, retries):
 
     die(f"Anthropic call failed after {retries} attempts: {last}")
 
+# Returned when the model call fails or the body is not JSON. Callers must
+# treat this as NOT READY. It is never a publish pass.
+INVALID_AI_VERDICT = {
+    "verdict": "FAIL",
+    "fails": ["AI reviewer unavailable or returned invalid JSON"],
+    "notes": "no valid AI verdict — NOT READY",
+    "ai_verdict_valid": False,
+}
+
+
 def claude_json(system, user, model=None, max_tokens=4000, retries=3):
     """For agents that must return JSON. Strips fences, extracts JSON blocks, retries."""
     c = cfg()
@@ -326,8 +338,8 @@ def claude_json(system, user, model=None, max_tokens=4000, retries=3):
             if attempt < retries - 1:
                 time.sleep(2)
                 continue
-            print("[warn] LLM failed after retries; returning safe PASS fallback.")
-            return {"verdict": "PASS", "fails": [], "notes": "Passed via robust JSON fallback"}
+            print("[warn] LLM failed after retries; AI verdict is NOT READY.")
+            return dict(INVALID_AI_VERDICT)
         cleaned = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.I)
         cleaned = re.sub(r"\s*```$", "", cleaned).strip()
         cleaned = cleaned.replace("“", '"').replace("”", '"')
@@ -349,8 +361,8 @@ def claude_json(system, user, model=None, max_tokens=4000, retries=3):
         print(f"[retry] JSON parse failed (attempt {attempt + 1}/{retries}). Retrying LLM call...")
         time.sleep(2)
 
-    print("[warn] LLM did not return strict JSON after retries; returning safe PASS fallback.")
-    return {"verdict": "PASS", "fails": [], "notes": "Passed via robust JSON fallback"}
+    print("[warn] LLM did not return strict JSON after retries; AI verdict is NOT READY.")
+    return dict(INVALID_AI_VERDICT)
 
 # ---- prompt loading ----
 def load_prompt(name):

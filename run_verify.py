@@ -1,8 +1,15 @@
 """Stage 6: Final Verify Gate. Runs the verify agent over the finished pipeline outputs
-and writes a Hinglish report (run/report.md) for Rajesh. This is the report you read."""
+and writes a Hinglish report (run/report.md) for Rajesh. This is the report you read.
+
+A missing or invalid model verdict is NOT READY. The process exits 2 so the
+slot is skipped and nothing is uploaded. Deterministic self-review can block
+a video; it cannot by itself mark the video ready for a public upload.
+"""
 import json
 import hashlib
-from common import cfg, claude, read, save, ok, RUN
+import sys
+from common import cfg, claude, read, save, ok, RUN, video_format
+import review_gate
 
 FINAL_SYSTEM = """You are the Main Verify Agent doing the FINAL GATE on a finished faceless finance video, then writing a report for Rajesh in HINGLISH.
 
@@ -67,20 +74,90 @@ def reused_content_signals(c, shots):
     }
 
 
+def _self_review():
+    path = RUN / "self_review.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _write_meta(decision):
+    (RUN / "verify_meta.json").write_text(json.dumps({
+        "ai_verdict_valid": bool(decision["ai_verdict_valid"]),
+        "verdict": "READY" if decision["public_ready"] else "NEEDS_FIX",
+        "public_ready": bool(decision["public_ready"]),
+        "reasons": decision.get("reasons") or [],
+        "spoken_words": decision.get("spoken_words"),
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _blocked_report(decision, model_text):
+    """A report that cannot be mistaken for READY. The model text is kept only as a note."""
+    lines = [
+        decision["verdict_line"],
+        "",
+        "Public upload blocked. The slot is skipped (this step exits non-zero).",
+        "Nothing is uploaded as public, unlisted, or private from this failure.",
+        "",
+    ]
+    if decision.get("reasons"):
+        lines.append("Reasons:")
+        lines.extend(f"- {r}" for r in decision["reasons"])
+        lines.append("")
+    review = _self_review() or {}
+    if review.get("summary"):
+        lines.append("Deterministic self-review: " + review["summary"])
+    else:
+        lines.append("Deterministic self-review: not available.")
+    trend = (review.get("parts") or {}).get("trend")
+    if trend is None:
+        lines.append("Trend fit: skipped (data/trends.json absent or has no themes).")
+    lines.append("")
+    lines.append("A missing or invalid AI verdict is not a pass.")
+    if model_text and "READY TO PUBLISH" not in model_text.upper():
+        lines.extend(["", "Model text (not used as the verdict):", model_text.strip()[:1200]])
+    return "\n".join(lines).strip() + "\n"
+
+
+def _finish(report, decision, cache_file, cache_key, model_text):
+    save("report.md", report)
+    _write_meta(decision)
+    cache_file.write_text(json.dumps({
+        "key": cache_key,
+        "report": model_text or report,
+        "ai_verdict_valid": bool(decision["ai_verdict_valid"] and decision["public_ready"]),
+        "verdict": "READY" if decision["public_ready"] else "NEEDS_FIX",
+    }, ensure_ascii=False), encoding="utf-8")
+    print("\n" + "=" * 50 + "\n" + report + "\n" + "=" * 50)
+    if decision["exit_code"]:
+        print("[HOLD] not READY for public upload — skipping the slot. "
+              + "; ".join(decision.get("reasons") or ["review blocked"]))
+        sys.exit(decision["exit_code"])
+    ok("wrote run/report.md")
+
+
 def main():
     c = cfg()
     script = read("script.txt")
     shots = json.loads(read("shots.json"))
+    fmt = video_format()
+    review = _self_review()
     cache_key = hashlib.sha256((script + json.dumps(shots, sort_keys=True, ensure_ascii=False)).encode("utf-8")).hexdigest()
     cache_file = RUN / "verify_cache.json"
     if cache_file.exists() and (RUN / "report.md").exists():
         try:
             cached = json.loads(cache_file.read_text(encoding="utf-8"))
-            if cached.get("key") == cache_key and cached.get("report"):
-                save("report.md", cached["report"])
-                print("\n" + "=" * 50 + "\n" + cached["report"] + "\n" + "=" * 50)
-                ok("verify cache reused — no LLM credit")
-                return
+            if cached.get("key") == cache_key and cached.get("report") and cached.get("ai_verdict_valid"):
+                decision = review_gate.decide(cached["report"], True, script, review, fmt)
+                if decision["public_ready"]:
+                    _finish(cached["report"], decision, cache_file, cache_key, cached["report"])
+                    ok("verify cache reused — no LLM credit")
+                    return
+        except SystemExit:
+            raise
         except Exception:
             pass
     subs_made = (RUN / "subs.ass").exists()
@@ -96,13 +173,27 @@ def main():
 <subtitles_generated>{subs_made}</subtitles_generated>
 <video_built>{video_made}</video_built>
 </artifacts>
-Write the final Hinglish report."""
+Write the final Hinglish report. The first line must be exactly one of:
+VERDICT: [READY TO PUBLISH]
+VERDICT: [NEEDS FIX — <short reason>]
+Do not print both outcomes on the same line."""
 
-    report = claude(FINAL_SYSTEM, user, model=c["models"]["verify_model"], max_tokens=c["models"]["max_tokens"])
-    save("report.md", report)
-    cache_file.write_text(json.dumps({"key": cache_key, "report": report}, ensure_ascii=False), encoding="utf-8")
-    print("\n" + "=" * 50 + "\n" + report + "\n" + "=" * 50)
-    ok("wrote run/report.md")
+    ai_text = ""
+    ai_ok = False
+    try:
+        ai_text = claude(FINAL_SYSTEM, user, model=c["models"]["verify_model"], max_tokens=c["models"]["max_tokens"])
+        ai_ok = bool((ai_text or "").strip())
+    except SystemExit as exc:
+        print(f"[HOLD] AI reviewer stopped before a verdict: {exc}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[HOLD] AI reviewer failed: {type(exc).__name__}: {exc}")
+
+    decision = review_gate.decide(ai_text, ai_ok, script, review, fmt)
+    if decision["public_ready"] and decision.get("keep_model_report"):
+        report = ai_text.strip() + ("\n" if not ai_text.endswith("\n") else "")
+    else:
+        report = _blocked_report(decision, ai_text if ai_ok else "")
+    _finish(report, decision, cache_file, cache_key, ai_text if decision["public_ready"] else "")
 
 if __name__ == "__main__":
     main()

@@ -535,13 +535,15 @@ def _draw_finance_visual(img, kind, key, beat):
         elif beat == "karein":
             label(img, X0 + 85, Y0 + 650, "CHECK VOLUME / SPREAD / DILUTION", YELLOW, 32)
         return
-    # Market/history fallback: always show a real-looking index curve.
-    ys = [100, 103, 101, 108, 112, 109, 118, 123, 121, 130, 136]
-    ax = series_panel(img, box, [(ys, GREEN, 9)], lo=95, hi=140, pad=(70, 60, 70, 80))
-    label(img, X0 + 85, Y0 + 325, "INDEX / EVENT / RECOVERY", INK, 34)
-    ring(img, ax.x(7), ax.y(ys[7]), 42, 42, YELLOW)
-    if beat == "karein":
-        label(img, X0 + 85, Y0 + 650, "CHECK THE DATE / SOURCE / METHOD", YELLOW, 32)
+    # No fetched series for this card. Do not draw a fake index line.
+    from PIL import ImageDraw
+    d = ImageDraw.Draw(img)
+    for i, txt in enumerate(("EVENT", "CONTEXT", "LIMIT")):
+        y = Y0 + 340 + i * 200
+        d.rounded_rectangle([X0 + 120, y, X1 - 120, y + 150], 24,
+                            fill=(18, 28, 45), outline=YELLOW if i == 0 else MUTED, width=5)
+        label(img, (X0 + X1) / 2, y + 48, txt, INK, 40, anchor="ma")
+    label(img, X0 + 85, Y0 + 280, "NO PRICE DATA ON THIS CARD", YELLOW, 32)
 
 
 def finance_card_scene(key):

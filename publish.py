@@ -12,6 +12,9 @@ from pathlib import Path
 
 from common import ROOT, cfg, read, die, ok, RUN, need, video_format
 from ledger import record_publish
+import engagement
+import publish_guard
+import review_gate
 
 # The script is written with bare headings on their own line ("TITLE", then the
 # title underneath). Older drafts used "TITLE: ...". Both must parse, because
@@ -188,6 +191,12 @@ def build_description(sec, c):
     elif kw:
         parts.append(f"{kw} — आसान हिंदी में: पहचान, मतलब और traders इसे आमतौर पर कैसे इस्तेमाल करते हैं।")
 
+    cta = re.sub(r"\s+", " ", (sec.get("CTA") or "")).strip()
+    if not cta:
+        cta = engagement.engagement_question(topic)
+    if cta:
+        parts.append(cta if cta.startswith("💬") else f"💬 {cta}")
+
     disclaimer = sec.get("DISCLAIMER LINE", "").strip()
     parts.append(disclaimer or "यह वीडियो सिर्फ़ जानकारी के लिए है, निवेश सलाह नहीं।")
     parts.append("हम SEBI-रजिस्टर्ड सलाहकार नहीं हैं। किसी भी निवेश से पहले रजिस्टर्ड सलाहकार से बात करें।")
@@ -300,9 +309,8 @@ def set_thumbnail(yt, video_id):
 
 
 def verdict_is_ready():
-    if not (RUN / "report.md").exists():
-        return False
-    return "READY TO PUBLISH" in read("report.md")
+    """Public upload only with a parsed AI READY verdict plus a passing Short self-review."""
+    return review_gate.files_allow_public(RUN, video_format())
 
 def main():
     only_if_ready = "--only-if-ready" in sys.argv
@@ -330,6 +338,7 @@ def main():
             when += timedelta(days=1)
         publish_at = when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         visibility = "private"
+    visibility, publish_at = publish_guard.clamp_visibility(visibility, publish_at)
 
     print(f"\n  Title      : {title}")
     print(f"  Tags       : {', '.join(tags) or '(none)'}")

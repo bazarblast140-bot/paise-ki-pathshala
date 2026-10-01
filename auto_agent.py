@@ -156,12 +156,19 @@ def run_once(fmt, publish=True):
     return run_cmd(args, capture=True)
 
 
-def retry_same_topic(fmt, publish=True):
-    """Retry without consuming a new topic. TOPIC_KEY also prevents rotation."""
+def retry_same_topic(fmt, publish=True, mode="retry"):
+    """Retry without consuming a new topic. Never a public upload.
+
+    TOPIC_KEY keeps the same topic. PIPELINE_MODE and an unlisted visibility
+    stop publish.py from scheduling a public video, and stop the Instagram
+    Reel (a Reel is always public).
+    """
     key = topic_key()
     env = os.environ.copy()
     if key:
         env["TOPIC_KEY"] = key
+    env["PIPELINE_MODE"] = mode if mode in ("retry", "repair", "test", "qa") else "retry"
+    env["PUBLISH_VISIBILITY"] = "unlisted"
     args = [sys.executable, "run_pipeline.py", "--format", fmt]
     if publish:
         args.append("--publish")
@@ -241,7 +248,7 @@ def main():
         if not changed:
             break
 
-        rc2, out2 = retry_same_topic(fmt, publish)
+        rc2, out2 = retry_same_topic(fmt, publish, mode="repair")
         last_out = out2
         (RUN / ("auto_agent_repair_" + str(attempt) + ".log")).write_text(
             out2[-30000:], encoding="utf-8"
