@@ -3526,7 +3526,7 @@
   {
    "id": 95,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "option_expiry_risk",
    "cat": "OPTIONS",
    "topic": "Expiry day option trading — तेज़ theta और gamma का खेल",
@@ -3558,7 +3558,8 @@
     "position size छोटा रखने का educational framework",
     "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Expiry day option trading — तेज़ theta और gamma का खेल"
+   "seo": "Expiry day option trading — तेज़ theta और gamma का खेल",
+   "used_short_at": "2026-10-01T05:45:00Z"
   },
   {
    "id": 96,
