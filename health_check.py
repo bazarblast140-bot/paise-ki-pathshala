@@ -1109,6 +1109,30 @@ def _close_one(http, repo, headers, number, secrets, comment, title, body):
     return _patch_issue(http, repo, headers, number, payload, secrets)
 
 
+def format_deepseek_balance(check):
+    """One log line. sufficient=yes only when the shared balance judge says ok.
+
+    ok means is_available and every currency is at least BALANCE_WARN.
+    warn (balance above zero but under that bar) is sufficient=no.
+    """
+    sufficient = "yes" if check.status == "ok" else "no"
+    detail = " ".join(str(check.detail or "").split())
+    return f"[deepseek] status={check.status} sufficient={sufficient} {detail}"
+
+
+def log_deepseek_balance(http, env):
+    """Print the DeepSeek balance. Always returns 0 so a low balance is a log, not a new publish rule."""
+    secrets = secrets_from_env(env)
+    try:
+        check = check_deepseek(http, env, secrets, selected=True)
+    except Exception as e:  # noqa: BLE001
+        print(redact(f"[deepseek] status=fail sufficient=no balance check crashed: {type(e).__name__}", secrets),
+              flush=True)
+        return 0
+    print(redact(format_deepseek_balance(check), secrets), flush=True)
+    return 0
+
+
 def main(http=None, env=None, now=None):
     env = os.environ if env is None else env
     now = now or datetime.now(IST)
@@ -1146,4 +1170,7 @@ def main(http=None, env=None, now=None):
 
 
 if __name__ == "__main__":
+    if "--deepseek-balance" in sys.argv:
+        # Log only. Do not open a GitHub issue and do not upload.
+        sys.exit(log_deepseek_balance(RequestsHttp(), os.environ))
     sys.exit(main())

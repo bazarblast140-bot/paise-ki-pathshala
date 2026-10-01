@@ -87,11 +87,20 @@ def main():
         return
     hit = next((e for e in ents if e.get("date_ist") == date and e.get("slot") == slot), None)
     if hit and not hit.get("video_id"):
-        # Only the Instagram Reel went out (YouTube upload failed, usually a dead
-        # token). Don't fill: a re-run would post IG again and still fail on YouTube.
-        msg = (f"⚠️ Paise Ki Pathshala\n{date} {slot} IST: sirf Instagram Reel gaya, YouTube upload FAIL.\n"
-               "Sabse aam wajah: YouTube refresh token expire (OAuth app 'Testing' me). "
-               "README -> 'YouTube token permanent kaise karein'.")
+        # YouTube id missing. Do not fill: a re-run would post another public Reel.
+        # Do not blame the OAuth Testing expiry. The token health step can be
+        # green while Chart Board or the upload failed for a different reason.
+        # That reason, when we have it, is the ledger note.
+        note = " ".join(str(hit.get("note") or "").split())
+        msg = (f"⚠️ Paise Ki Pathshala\n{date} {slot} IST: YouTube video id missing"
+               f" (platform={hit.get('platform') or 'unknown'}).\n"
+               "Slot watch is not filling this slot, so a second Reel is not posted.\n")
+        if note:
+            msg += f"Recorded YouTube failure: {note}\n"
+        else:
+            msg += ("No failure note was stored. Read the pipeline log "
+                    "(Chart Board, verify, or the upload step). "
+                    "A healthy YouTube token check means this is not a refresh-token rejection.\n")
         print(msg)
         gha_output("missing", "false")
         try:

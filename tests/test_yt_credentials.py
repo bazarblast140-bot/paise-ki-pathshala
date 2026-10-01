@@ -30,6 +30,28 @@ class YtCredentialTests(unittest.TestCase):
                 Y.youtube_client_or_exit()
             self.assertEqual(cm.exception.code, Y.EXIT_TOKEN_DEAD)
 
+    def test_unit_tests_do_not_emit_a_workflow_error_annotation(self):
+        import io
+        out = io.StringIO()
+        with mock.patch.dict("os.environ", {"GITHUB_ACTIONS": "true", "SUPPRESS_GHA_COMMANDS": "1"}, clear=False), \
+             mock.patch.object(Y, "youtube_client", side_effect=Y.YouTubeAuthError("x", token_dead=True)), \
+             mock.patch("sys.stdout", out):
+            with self.assertRaises(SystemExit):
+                Y.youtube_client_or_exit()
+        self.assertNotIn("::error", out.getvalue())
+
+    def test_a_real_dead_token_still_annotates_the_job(self):
+        import io
+        import os
+        out = io.StringIO()
+        with mock.patch.dict("os.environ", {"GITHUB_ACTIONS": "true"}, clear=False), \
+             mock.patch.object(Y, "youtube_client", side_effect=Y.YouTubeAuthError("x", token_dead=True)), \
+             mock.patch("sys.stdout", out):
+            os.environ.pop("SUPPRESS_GHA_COMMANDS", None)
+            with self.assertRaises(SystemExit):
+                Y.youtube_client_or_exit()
+        self.assertIn("::error", out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

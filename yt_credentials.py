@@ -115,7 +115,10 @@ def youtube_client_or_exit(scopes=None):
         return youtube_client(scopes)
     except YouTubeAuthError as e:
         print(str(e), file=sys.stderr)
-        if os.environ.get("GITHUB_ACTIONS") == "true":
+        # Unit tests call this while GITHUB_ACTIONS=true (the preflight step).
+        # An annotation from a simulated failure shows up on the job even when
+        # the later token health check is healthy, and hides the real error.
+        if os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get("SUPPRESS_GHA_COMMANDS") != "1":
             title = "YouTube token expired/revoked" if e.token_dead else "YouTube auth failed"
             print(f"::error title={title}::See README 'YouTube token permanent kaise karein'")
         sys.exit(EXIT_TOKEN_DEAD if e.token_dead else 1)

@@ -34,6 +34,14 @@ class WorkflowTriggerTests(unittest.TestCase):
         self.assertIn("workflow_dispatch", on)
         self.assertNotIn("workflow_run", on)
 
+    def test_slot_crons_are_unchanged(self):
+        publish = (WF / "paise-ki-pathshala.yml").read_text(encoding="utf-8")
+        watch = (WF / "slot-watch.yml").read_text(encoding="utf-8")
+        for cron in ('"0 3 * * *"', '"30 10 * * *"', '"30 15 * * *"'):
+            self.assertIn(cron, publish)
+        for cron in ('"15 3 * * *"', '"45 10 * * *"', '"45 15 * * *"'):
+            self.assertIn(cron, watch)
+
     def test_no_one_shot_patch_workflows_left(self):
         for name in ("fix-finance-card", "fix-topic-bank-once", "fix-tts-retry",
                      "restore-board-short-duration", "restore-board-short", "restore-duration-board"):
@@ -77,13 +85,44 @@ class SlotLedgerTests(unittest.TestCase):
             out = Path(d) / "gha_out"
             env = {"SLOT_CHECK": "16:00", "GITHUB_OUTPUT": str(out)}
             now = slot_watch.datetime(2026, 10, 1, 16, 20, tzinfo=slot_watch.IST)
+            buf = __import__("io").StringIO()
             with mock.patch.object(slot_watch, "LEDGER", path), \
                  mock.patch.dict("os.environ", env), \
                  mock.patch.object(slot_watch, "send"), \
-                 mock.patch.object(slot_watch, "datetime", wraps=slot_watch.datetime) as dt:
+                 mock.patch.object(slot_watch, "datetime", wraps=slot_watch.datetime) as dt, \
+                 mock.patch("sys.stdout", buf):
                 dt.now.return_value = now
                 slot_watch.main()
             self.assertIn("missing=false", out.read_text(encoding="utf-8"))
+            text = buf.getvalue()
+            self.assertIn("YouTube video id missing", text)
+            self.assertNotIn("Testing", text)
+            self.assertNotIn("token expire", text.lower())
+
+    def test_instagram_only_message_quotes_the_recorded_failure(self):
+        import slot_watch
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "published.json"
+            path.write_text(json.dumps([
+                {"date_ist": "2026-09-01", "slot": "08:30", "video_id": "abc", "format": "short"},
+                {"date_ist": "2026-10-01", "slot": "16:00", "video_id": None, "platform": "instagram",
+                 "note": "Chart Board failed: fallback narration 159 words"},
+            ]), encoding="utf-8")
+            out = Path(d) / "gha_out"
+            env = {"SLOT_CHECK": "16:00", "GITHUB_OUTPUT": str(out)}
+            now = slot_watch.datetime(2026, 10, 1, 16, 20, tzinfo=slot_watch.IST)
+            buf = __import__("io").StringIO()
+            with mock.patch.object(slot_watch, "LEDGER", path), \
+                 mock.patch.dict("os.environ", env), \
+                 mock.patch.object(slot_watch, "send"), \
+                 mock.patch.object(slot_watch, "datetime", wraps=slot_watch.datetime) as dt, \
+                 mock.patch("sys.stdout", buf):
+                dt.now.return_value = now
+                slot_watch.main()
+            text = buf.getvalue()
+            self.assertIn("Chart Board failed: fallback narration 159 words", text)
+            self.assertIn("missing=false", out.read_text(encoding="utf-8"))
+            self.assertNotIn("Testing", text)
 
 
 if __name__ == "__main__":

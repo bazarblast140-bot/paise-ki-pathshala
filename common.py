@@ -93,6 +93,48 @@ def _with_deadline(fn, seconds):
     return box["ok"]
 
 
+def _message_text(value):
+    """String content, or the text parts of a structured content list."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts = []
+        for part in value:
+            if isinstance(part, str):
+                parts.append(part)
+            elif isinstance(part, dict):
+                parts.append(str(part.get("text") or ""))
+            else:
+                parts.append(str(getattr(part, "text", "") or ""))
+        return "".join(parts)
+    return str(value)
+
+
+def deepseek_message_text(message):
+    """Final answer. Thinking mode leaves content empty and puts CoT in reasoning_content.
+
+    deepseek-flash thinks by default. A short max_tokens budget can be spent
+    entirely on that chain of thought, so message.content is "" even though the
+    API returned a choice. Callers that only read content then report
+    'DeepSeek returned empty content' and retry the same request.
+    """
+    if isinstance(message, dict):
+        content = message.get("content")
+        reasoning = message.get("reasoning_content")
+    else:
+        content = getattr(message, "content", None)
+        reasoning = getattr(message, "reasoning_content", None)
+        extra = getattr(message, "model_extra", None) or {}
+        if not reasoning and isinstance(extra, dict):
+            reasoning = extra.get("reasoning_content")
+    text = _message_text(content)
+    if text.strip():
+        return text
+    return _message_text(reasoning)
+
+
 def claude(system, user, model=None, max_tokens=16000, retries=3):
     """One LLM call. Retries transient errors, handles truncation gracefully."""
     c = cfg()
@@ -119,10 +161,14 @@ def claude(system, user, model=None, max_tokens=16000, retries=3):
         client = openai.OpenAI(api_key=deepseek_key, base_url=base_url, timeout=180, max_retries=0)
         call_limit = int(os.environ.get("LLM_CALL_TIMEOUT", "180"))  # har try ki total time limit (sec)
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        # Thinking is on by default (effort high) and its tokens count against
+        # max_tokens. Narration asks for 2000, which the chain of thought can
+        # consume, leaving content empty. These calls need the answer, not CoT.
         kwargs = dict(
-            model=model or "deepseek-v4-flash",
+            model=model or "deepseek-flash",
             messages=messages,
             max_tokens=max_tokens,
+            extra_body={"thinking": {"type": "disabled"}},
         )
         last = None
         effective_retries = max(retries, 2)
@@ -130,10 +176,15 @@ def claude(system, user, model=None, max_tokens=16000, retries=3):
             try:
                 completion = _with_deadline(lambda: client.chat.completions.create(**kwargs), call_limit)
                 choices = getattr(completion, "choices", None)
-                content = (choices[0].message.content or "") if choices else ""
+                message = choices[0].message if choices else None
+                content = deepseek_message_text(message) if message is not None else ""
                 if not content.strip():
-                    last = RuntimeError("DeepSeek returned empty content" if choices else
-                                        f"DeepSeek returned no choices: {str(completion)[:200]}")
+                    finish = getattr(choices[0], "finish_reason", None) if choices else None
+                    last = RuntimeError(
+                        "DeepSeek returned empty content"
+                        f" (finish_reason={finish}, thinking=disabled)" if choices else
+                        f"DeepSeek returned no choices: {str(completion)[:200]}")
+                    print(f"[deepseek] {last}")
                     if attempt < effective_retries - 1:
                         wait = min(10, 5 * (2 ** attempt))
                         print(f"[retry] {last}; wait {wait}s ({attempt+1}/{effective_retries})")
@@ -141,6 +192,9 @@ def claude(system, user, model=None, max_tokens=16000, retries=3):
                         continue
                     # raise (not die) so callers like board_short.narration can fall back
                     raise last
+                if message is not None and not _message_text(getattr(message, "content", None) if not isinstance(message, dict) else message.get("content")).strip():
+                    finish = getattr(choices[0], "finish_reason", None) if choices else None
+                    print(f"[deepseek] content empty, using reasoning_content (finish_reason={finish}, chars={len(content)})")
                 return content
             except (openai.APIStatusError, openai.APIConnectionError, TimeoutError) as e:
                 status = getattr(e, "status_code", None)
