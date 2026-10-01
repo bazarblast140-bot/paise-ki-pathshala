@@ -161,16 +161,16 @@ def check_narration(n, topic):
             fails.append(f"beat '{b}' khaali")
     text = " ".join(str(beats.get(b) or "") for b in BEATS)
     words = len(text.split())
-    if not 100 <= words <= 125:
-        fails.append(f"{words} words (100-125 chahiye)")
+    if not 160 <= words <= 180:
+        fails.append(f"{words} words (160-180 chahiye)")
 
     # Every beat must carry enough information to teach one step. This prevents
     # a very short hook + generic filler from making the lesson feel disconnected.
     beat_ranges = {
-        "hook": (14, 22),
-        "pehchan": (24, 34),
-        "matlab": (28, 38),
-        "karein": (24, 34),
+        "hook": (22, 28),
+        "pehchan": (38, 46),
+        "matlab": (46, 54),
+        "karein": (42, 50),
     }
     for b, (lo, hi) in beat_ranges.items():
         bw = len(str(beats.get(b) or "").split())
@@ -250,8 +250,9 @@ CONTINUITY RULES:
   not four separate facts.
 - For pattern/strategy topics, use this order: setup → recognition rules → market meaning →
   confirmation/risk. Do not show or explain entry/SL before the setup and meaning are established.
-- Each beat: 2-3 short sentences, preferably under 14 words per sentence.
-- Total 100-125 words. Never stretch audio artificially just to hit a target duration.
+- Each beat: 3-4 short sentences, preferably under 14 words per sentence.
+- Total 160-180 words. The extra words must add concrete teaching detail, not filler.
+- Never stretch audio artificially just to hit a target duration.
 - Do not compress a beat into a slogan; each beat must teach its assigned step.
 - Use ONLY numbers that appear in the topic data given to you. Never invent prices, dates, returns.
 - Not a quiz. Do not ask the viewer to pick options.
@@ -300,10 +301,9 @@ def narration(topic, c):
         last = "; ".join(fails)
         print(f"[retry] narration attempt {attempt}: {last}")
     print("[warn] LLM narration 3 baar fail — on-screen text se narration bana raha hoon")
-    # Deterministic fallback must still be long enough for a real 55-60s Short.
-    # The old fallback only read headline + sub-line, producing ~10-15s audio and
-    # repeatedly failing Gate 2. Expand each beat using only existing topic text;
-    # no new prices, dates, returns, or trade calls are invented.
+    # Deterministic fallback must still be long enough for a real 45-60s Short.
+    # It expands the existing topic text into a coherent mini-lesson without
+    # inventing prices, dates, returns, or trade calls.
     src = topic["beats"]
     beats = {
         "hook": (
@@ -756,35 +756,12 @@ def main():
         ok("3rd picture at " + ", ".join(f"{b} {f:.0%}" for b, f in switch.items()))
     assemble(beat_pngs, beat_audio, beat_times, build_ass(topic, beat_times, spoken), switch=switch)
 
-    # Final-file hard gate: the QA gate measures final.mp4, not the pre-mux
-    # speech estimate.  If muxing/codec timestamps drift outside 45-62s,
-    # deterministically retime the already-rendered final file once.  This
-    # avoids spending LLM repair credits on a mechanical duration mismatch.
+    # Final-file hard gate: never retime the finished video.
+    # If duration is outside the publishing window, fail and regenerate narration.
     final_path = RUN / "final.mp4"
     final_dur = duration(final_path)
     if final_dur < 45.0 or final_dur > 62.0:
-        target = 56.0
-        tempo = final_dur / target
-        if tempo < 0.5:
-            tempo = 0.5
-        if tempo > 2.0:
-            tempo = 2.0
-        print(f"[final-duration-fix] final.mp4 {final_dur:.1f}s -> target {target:.1f}s, tempo={tempo:.4f}")
-        tmp = RUN / "final_duration_fix.mp4"
-        subprocess.run([
-            "ffmpeg", "-v", "error", "-y", "-i", str(final_path),
-            "-filter_complex",
-            f"[0:v]setpts=PTS/{tempo:.6f}[v];[0:a]atempo={tempo:.6f}[a]",
-            "-map", "[v]", "-map", "[a]",
-            "-c:v", "libx264", "-preset", "medium", "-crf", "20",
-            "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
-            str(tmp)
-        ], check=True)
-        tmp.replace(final_path)
-        final_dur = duration(final_path)
-        print(f"[final-duration-fix] verified final.mp4={final_dur:.1f}s")
-    if final_dur < 45.0 or final_dur > 62.0:
-        die(f"final.mp4 duration outside 45-62s after deterministic fix: {final_dur:.1f}s")
+        die(f"final.mp4 duration outside 45-62s; refusing post-render speed change: {final_dur:.1f}s")
 
     write_compat(topic, n, spoken, beat_times)
     ok(f"wrote run/final.mp4 ({final_dur:.1f}s) + thumbnail.jpg")
