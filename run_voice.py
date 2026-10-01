@@ -2,6 +2,7 @@
 Exits non-zero if Gate 2 fails (coverage, length band, or leftover markers)."""
 import os, asyncio, re, time, subprocess
 import requests
+import eleven_voice
 from common import cfg, claude, claude_json, read, save, need, ok, die, RUN
 
 VOICE_SYSTEM = """You are the Voice Prep Agent. Convert a finished HINDI script into clean spoken Hindi
@@ -95,12 +96,21 @@ def tts_request(text, c, key, prev=None, nxt=None, retries=3):
                           json=payload, timeout=300)
         if r.status_code == 200:
             return r.content
-        if r.status_code in (429, 500, 502, 503) and attempt < retries - 1:
+        body = eleven_voice.parse_response(r)
+        kind = eleven_voice.classify(r.status_code, body)
+        why = eleven_voice.describe(r.status_code, body)
+        if kind == "quota":
+            raise eleven_voice.QuotaFallback(why)
+        if kind == "auth":
+            die(f"ElevenLabs authentication failed ({why}); not falling back to Edge")
+        if kind == "permission":
+            die(f"ElevenLabs permission error ({why}); not falling back to Edge")
+        if kind == "retry" and attempt < retries - 1:
             wait = 5 * (2 ** attempt)
             print(f"[retry] ElevenLabs {r.status_code}; retrying in {wait}s")
             time.sleep(wait)
             continue
-        raise RuntimeError(f"ElevenLabs error {r.status_code}: {r.text[:300]}")
+        die(f"ElevenLabs paid TTS failed ({why}); not a credit error, so Edge was not used")
 
 
 def edge_request(text, c, path):
@@ -185,12 +195,14 @@ def synthesize(text, c):
 
     try:
         render_all(engine)
-    except RuntimeError as e:
-        if engine == "elevenlabs":
-            print(f"[warn] ElevenLabs failed ({e}); falling back to free Edge TTS.")
-            render_all("edge")
-        else:
-            die(str(e))
+    except eleven_voice.QuotaFallback as exc:
+        # Credit/payment only. Auth and permission already exited inside tts_request.
+        eleven_voice.log_fallback(exc.reason)
+        render_all("edge")
+        eleven_voice.write_voice_meta(RUN, "edge", exc.reason, elevenlabs_attempted=True)
+        return
+    eleven_voice.write_voice_meta(
+        RUN, engine, "", elevenlabs_attempted=(engine == "elevenlabs"))
 
 
 def main():

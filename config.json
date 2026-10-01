@@ -54,7 +54,9 @@
     "visual_model": "deepseek-flash",
     "max_tokens": 16000,
     "script_max_tokens": 12000,
-    "visual_max_tokens": 16000
+    "visual_max_tokens": 16000,
+    "verify_max_tokens": 16000,
+    "verify_retry_max_tokens": 32000
   },
   "voice": {
     "engine": "elevenlabs",

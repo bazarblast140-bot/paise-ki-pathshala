@@ -174,7 +174,7 @@ Edit `config.json`:
 - `channel.name`
 - keep `pipeline.auto_publish: false` for now
 
-**Voice:** uses the configured ElevenLabs voice ID when `ELEVENLABS_API_KEY` is available. If the key is missing or ElevenLabs fails, narration falls back to free Edge TTS. Set `voice.engine: "edge"` to force Edge.
+**Voice:** the default stays the configured ElevenLabs voice. A missing key, or a quota / credit / payment error, uses free Edge TTS for that run and logs a warning. An invalid key or a missing permission is a hard error (no silent Edge fallback). Set `voice.engine: "edge"` to force Edge.
 
 Check everything before spending credits:
 ```bash
@@ -308,7 +308,7 @@ Workflow: **Health check** (`.github/workflows/health-check.yml`). Actions cron 
 | DeepSeek | selected provider. Balance 0 / `is_available=false` → slot at risk. `< 1` currency unit → warning |
 | Kimi | sirf jab `KIMI_API_KEY` set ho. Suspended ya balance 0 → issue. Video tab tak nahi rukta jab tak ye selected provider na ho |
 | Anthropic | sirf jab `ANTHROPIC_API_KEY` set ho. Key invalid ya response me "credit balance too low" → issue. **Balance number measurable nahi** (standard key pe balance endpoint nahi; billed call nahi karte, number guess nahi) |
-| ElevenLabs | key missing → warning (Edge fallback, video ban sakta hai). Invalid key ya 0 characters → slot at risk. `< 3000` characters → warning. Fields missing hon to 0 guess nahi karte |
+| ElevenLabs | key missing → warning (Edge fallback, video ban sakta hai). Invalid key ya missing permission → slot at risk. `< 6000` characters (ek din ke 3 Shorts) ya payment status incomplete/past_due, ya 0 characters → warning; quota/payment par run Edge TTS use karta hai, slot block nahi hota. Fields missing hon to 0 guess nahi karte |
 | Instagram | missing / invalid / expired token → Reel at risk. **≤ 14 din** → warning. `debug_token` na chale aur cheap read chal jaye to expiry **not measurable** |
 | YouTube quota | hamesha **not measurable**. Refresh response me remainder nahi aata, Cloud Monitoring credential nahi hai, Data API probe nahi chalate |
 
