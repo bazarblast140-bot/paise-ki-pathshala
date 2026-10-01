@@ -37,6 +37,23 @@ TOPIC_SERIES = {
     "titan_vs_yes_2015": ["TITAN", "YES BANK"],
 }
 
+# Same year the chart scene passes to data_line / stock_line.
+TOPIC_YEAR = {
+    "nifty_2010": 2010,
+    "nifty_2015": 2015,
+    "nifty_cagr": 2010,
+    "sensex_2008": 2008,
+    "niftybank_2010": 2010,
+    "hdfcbank_2010": 2010,
+    "titan_2010": 2010,
+    "asianpaints_2010": 2010,
+    "infosys_2015": 2015,
+    "sbi_2015": 2015,
+    "tcs_2020": 2020,
+    "dmart_2020": 2020,
+    "yesbank_2015": 2015,
+}
+
 _CACHE = None
 
 NON_NUMERIC_LABELS = ("NO LIVE PRICE", "EDUCATIONAL CARD", "DATA NOT SHOWN")
@@ -270,6 +287,105 @@ def visual_mode(topic, spec=None, today=None):
     if spec.get("mode") == "non_numeric" or (topic or {}).get("cat") == "REAL DATA":
         return "non_numeric"
     return "schematic"
+
+
+def format_growth(start_close, end_close):
+    """The numbers the chart prints, from the raw start and end closes.
+
+    A start under 1,000 keeps two decimals. 71.07 → 4,231 is 59.53x.
+    Rounding the start to 71 first would print 59.59x, which is a different sum.
+    """
+    start_close = float(start_close)
+    end_close = float(end_close)
+    multiple = end_close / start_close
+    start_text = f"{start_close:,.2f}" if start_close < 1000 else f"{start_close:,.0f}"
+    end_text = f"{end_close:,.0f}"
+    multiple_text = f"{multiple:.2f}"
+    return {
+        "start_close": start_close,
+        "end_close": end_close,
+        "multiple": multiple,
+        "start_text": start_text,
+        "end_text": end_text,
+        "multiple_text": multiple_text,
+        "lakh_text": f"{multiple:.1f}",
+        "loss_pct": int(round((1 - multiple) * 100)),
+        "result_rupees": f"{round(multiple * 100000, -3):,.0f}",
+        "equation": f"{end_text}  /  {start_text}",
+        "multiple_label": f"= {multiple_text}x",
+        "result_label": (
+            f"Rs {round(multiple * 100000, -3):,.0f}" if multiple < 1
+            else f"Rs {multiple:.1f} LAKH"
+        ),
+    }
+
+
+def growth_figures(name, year, cache=None):
+    """Start, end, and multiple for one series, using the chart's year and last close."""
+    cache = load_cache() if cache is None else cache
+    series = (cache.get("series") or {}).get(name) or {}
+    start = (series.get("first_of_year") or {}).get(str(year)) or {}
+    last = series.get("last") or {}
+    figs = format_growth(start["close"], last["close"])
+    figs["start_date"] = str(start.get("date") or "")[:10]
+    figs["end_date"] = str(last.get("date") or "")[:10]
+    figs["name"] = name
+    figs["year"] = int(year)
+    return figs
+
+
+def sync_topic_numbers(topic, cache=None):
+    """Rewrite the on-screen and fact-ledger figures from the chart's closes.
+
+    The hook line is left alone, so a REAL DATA question still does not reveal
+    the answer. Returns the same topic dict.
+    """
+    import re
+    key = str((topic or {}).get("key") or "")
+    names = TOPIC_SERIES.get(key)
+    year = TOPIC_YEAR.get(key)
+    if not names or len(names) != 1 or not year:
+        return topic
+    try:
+        figs = growth_figures(names[0], year, cache)
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        return topic
+    span = re.compile(r"\d[\d,]*(?:\.\d+)?\s*से\s*\d[\d,]*(?:\.\d+)?")
+    guna = re.compile(r"\d[\d,]*(?:\.\d+)?(?=\s*गुना)")
+    result_lakh = re.compile(r"(करीब\s*)₹\s*\d[\d,]*(?:\.\d+)?\s*लाख")
+    result_rupee = re.compile(r"(करीब\s*)₹\s*\d[\d,]*(?:\.\d+)?(?!\s*लाख)")
+    date_price = re.compile(r"^(\d{4}-\d{2}-\d{2}) को \d[\d,]*(?:\.\d+)?")
+
+    def rewrite(text, allow_result=True):
+        text = span.sub(f"{figs['start_text']} से {figs['end_text']}", str(text), count=1)
+        if figs["multiple"] >= 1 and "गुना" in text:
+            text = guna.sub(figs["multiple_text"], text, count=1)
+        if allow_result and figs["multiple"] >= 1 and "लाख" in text:
+            text = result_lakh.sub(rf"\1₹{figs['lakh_text']} लाख", text, count=1)
+        if allow_result and figs["multiple"] < 1 and "नुकसान" in text:
+            text = re.sub(r"\d+(?=\s*%)", str(figs["loss_pct"]), text, count=1)
+        if allow_result and figs["multiple"] < 1 and "₹" in text:
+            text = result_rupee.sub(rf"\1₹{figs['result_rupees']}", text, count=1)
+        return text
+
+    beats = topic.get("beats") or {}
+    for beat, pair in list(beats.items()):
+        if beat == "hook" or not isinstance(pair, (list, tuple)) or len(pair) < 2:
+            continue
+        beats[beat] = [str(pair[0]), rewrite(pair[1])]
+    facts = []
+    for fact in topic.get("facts") or []:
+        text = str(fact)
+        matched = date_price.match(text)
+        if matched:
+            which = figs["start_text"] if matched.group(1) == figs["start_date"] else None
+            if matched.group(1) == figs["end_date"]:
+                which = figs["end_text"]
+            if which:
+                text = date_price.sub(rf"{matched.group(1)} को {which}", text, count=1)
+        facts.append(rewrite(text))
+    topic["facts"] = facts
+    return topic
 
 
 def provenance_line(spec):

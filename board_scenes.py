@@ -1359,7 +1359,9 @@ def data_line(series, year, cagr=False, balance=None):
         s = _data()["series"][series]
         start, last = s["first_of_year"][str(year)], s["last"]
         pts = [v for m, v in s["monthly"] if m >= f"{year}-01"]
-        mult = last["close"] / start["close"]
+        from market_data import format_growth
+        grown = format_growth(start["close"], last["close"])
+        mult = grown["multiple"]
         loser = mult < 1
         col = RED if loser else GREEN
         yrs = (date.fromisoformat(last["date"]) - date.fromisoformat(start["date"])).days / 365.25
@@ -1394,8 +1396,8 @@ def data_line(series, year, cagr=False, balance=None):
             n = len(pts) - 1
             ring(img, ax.x(0), ax.y(pts[0]), 30, 30, YELLOW)
             ring(img, ax.x(n), ax.y(pts[-1]), 30, 30, YELLOW)
-            label(img, ax.x(0) + 20, ax.y(pts[0]) - 110, f"{start['close']:,.0f}  ({year})", YELLOW, 36, bg=(6, 10, 20))
-            label(img, ax.x(n) - 20, ax.y(pts[-1]) + 50, f"{last['close']:,.0f}  (JUN 2026)", YELLOW, 36,
+            label(img, ax.x(0) + 20, ax.y(pts[0]) - 110, f"{grown['start_text']}  ({year})", YELLOW, 36, bg=(6, 10, 20))
+            label(img, ax.x(n) - 20, ax.y(pts[-1]) + 50, f"{grown['end_text']}  (JUN 2026)", YELLOW, 36,
                   bg=(6, 10, 20), anchor="ra")
             label(img, X1 - 50, Y1 - 50, "PRICE, DIVIDEND ALAG", MUTED, 24, anchor="ra")
             return A, img
@@ -1408,10 +1410,8 @@ def data_line(series, year, cagr=False, balance=None):
                          [(f"{mult:.2f}x  IN  {yrs:.0f} SAAL", 60, INK), (f"~ {c:.1f}% / SAAL", 96, YELLOW)])
             else:
                 big_text(img, (X0, Y0 + 60, X1, Y1 - 60),
-                         # start 2 decimal tak: "4,231 / 71 = 59.53" galat lagta tha (4231/71 = 59.59)
-                         [(f"{last['close']:,.0f}  /  {start['close']:,.2f}" if start["close"] < 1000
-                           else f"{last['close']:,.0f}  /  {start['close']:,.0f}", 60, INK),
-                          (f"= {mult:.2f}x", 120, RED if loser else YELLOW)])
+                         [(grown["equation"], 60, INK),
+                          (grown["multiple_label"], 120, RED if loser else YELLOW)])
             return A, img
         # karein / nateeja: result, then (when the voice gets there) the balance picture
         box = (X0, Y0 + 60, X1, Y1 - 60)
@@ -1427,7 +1427,7 @@ def data_line(series, year, cagr=False, balance=None):
                 return A, img, C
             return A, img
         else:
-            end_txt = (f"Rs {round(mult * 100000, -3):,.0f}" if loser else f"Rs {mult:.1f} LAKH")
+            end_txt = grown["result_label"]
             A = img.copy()
             big_text(A, box, [("Rs 1 LAKH  ->", 64, INK)])
             big_text(img, box, [("Rs 1 LAKH  ->", 64, INK), (end_txt, 120, col), ("(JUN 2026)", 44, MUTED)])

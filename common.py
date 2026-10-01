@@ -60,6 +60,14 @@ def die(msg, code=1):
     print(f"[FAIL] {msg}", file=sys.stderr)
     sys.exit(code)
 
+
+class TruncatedResponse(RuntimeError):
+    """The model stopped because it hit max_tokens. The partial text is not a verdict."""
+
+    def __init__(self, max_tokens):
+        self.max_tokens = int(max_tokens)
+        super().__init__(f"response truncated at max_tokens={self.max_tokens} (finish_reason=length)")
+
 def ok(msg):
     print(f"[OK] {msg}")
 
@@ -135,8 +143,13 @@ def deepseek_message_text(message):
     return _message_text(reasoning)
 
 
-def claude(system, user, model=None, max_tokens=16000, retries=3):
-    """One LLM call. Retries transient errors, handles truncation gracefully."""
+def claude(system, user, model=None, max_tokens=16000, retries=3, raise_on_truncate=False):
+    """One LLM call. Retries transient errors.
+
+    raise_on_truncate: a finish_reason of length is an error. The partial body
+    is not returned. The review call uses this so a cut-off report cannot
+    become a NEEDS FIX verdict.
+    """
     c = cfg()
     provider = c["models"].get("llm_provider", "anthropic")
     model = model or c["models"]["script_model"]
@@ -178,8 +191,12 @@ def claude(system, user, model=None, max_tokens=16000, retries=3):
                 choices = getattr(completion, "choices", None)
                 message = choices[0].message if choices else None
                 content = deepseek_message_text(message) if message is not None else ""
+                finish = getattr(choices[0], "finish_reason", None) if choices else None
+                if finish == "length" and raise_on_truncate:
+                    # Do not return the cut-off body, and do not spend the
+                    # same budget again. The caller retries once, larger.
+                    raise TruncatedResponse(max_tokens)
                 if not content.strip():
-                    finish = getattr(choices[0], "finish_reason", None) if choices else None
                     last = RuntimeError(
                         "DeepSeek returned empty content"
                         f" (finish_reason={finish}, thinking=disabled)" if choices else
@@ -247,6 +264,8 @@ def claude(system, user, model=None, max_tokens=16000, retries=3):
                     raise last
                 content = choices[0].message.content or ""
                 if choices[0].finish_reason == "length":
+                    if raise_on_truncate:
+                        raise TruncatedResponse(max_tokens)
                     print(f"[warn] Response reached {max_tokens}-token limit; proceeding with generated text.")
                 if not content.strip():
                     finish = choices[0].finish_reason
@@ -277,7 +296,7 @@ def claude(system, user, model=None, max_tokens=16000, retries=3):
         raise RuntimeError(f"Kimi call failed after {effective_retries} attempts: {last}")
 
     if anthropic_key:
-        return _claude_anthropic(system, user, model, max_tokens, retries)
+        return _claude_anthropic(system, user, model, max_tokens, retries, raise_on_truncate)
 
     return _offline_financial_agent(system, user)
 
@@ -334,7 +353,7 @@ FACT LEDGER:
 """
 
 
-def _claude_anthropic(system, user, model, max_tokens, retries):
+def _claude_anthropic(system, user, model, max_tokens, retries, raise_on_truncate=False):
     """The original Anthropic-only implementation. Streams response."""
     import anthropic
     client = anthropic.Anthropic(api_key=need("ANTHROPIC_API_KEY"))
@@ -363,6 +382,8 @@ def _claude_anthropic(system, user, model, max_tokens, retries):
             die(f"Model declined this request (category: "
                 f"{getattr(resp.stop_details, 'category', None)}). Rewrite the topic and re-run.")
         if resp.stop_reason == "max_tokens":
+            if raise_on_truncate:
+                raise TruncatedResponse(max_tokens)
             die(f"Response hit the {max_tokens}-token output cap and was cut off. "
                 f"Raise the relevant max_tokens in config.json -> models.")
         return "".join(b.text for b in resp.content if b.type == "text")

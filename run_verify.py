@@ -8,7 +8,7 @@ a video; it cannot by itself mark the video ready for a public upload.
 import json
 import hashlib
 import sys
-from common import cfg, claude, read, save, ok, RUN, video_format
+from common import cfg, claude, read, save, ok, RUN, video_format, TruncatedResponse
 import review_gate
 
 FINAL_SYSTEM = """You are the Main Verify Agent doing the FINAL GATE on a finished faceless finance video, then writing a report for Rajesh in HINGLISH.
@@ -139,6 +139,33 @@ def _finish(report, decision, cache_file, cache_key, model_text):
     ok("wrote run/report.md")
 
 
+def review_budgets(c):
+    """Output tokens for the verify call, then one larger retry. Thinking stays off."""
+    models = (c or {}).get("models") or {}
+    first = int(models.get("verify_max_tokens") or models.get("max_tokens") or 16000)
+    second = int(models.get("verify_retry_max_tokens") or first * 2)
+    if second <= first:
+        second = first * 2
+    return first, second
+
+
+def fetch_review(c, system, user):
+    """Ask the reviewer. A truncated reply is not a verdict; retry once, larger.
+
+    Thinking is disabled inside claude() for DeepSeek, so the budget is for
+    the report itself. finish_reason=length raises TruncatedResponse and the
+    partial text is thrown away.
+    """
+    first, second = review_budgets(c)
+    model = (c.get("models") or {}).get("verify_model")
+    try:
+        return claude(system, user, model=model, max_tokens=first, raise_on_truncate=True)
+    except TruncatedResponse:
+        print(f"[retry] reviewer response truncated (finish_reason=length, max_tokens={first}); "
+              f"retrying once at {second}. The partial text is not a verdict.")
+        return claude(system, user, model=model, max_tokens=second, raise_on_truncate=True)
+
+
 def main():
     c = cfg()
     script = read("script.txt")
@@ -181,8 +208,14 @@ Do not print both outcomes on the same line."""
     ai_text = ""
     ai_ok = False
     try:
-        ai_text = claude(FINAL_SYSTEM, user, model=c["models"]["verify_model"], max_tokens=c["models"]["max_tokens"])
+        ai_text = fetch_review(c, FINAL_SYSTEM, user)
         ai_ok = bool((ai_text or "").strip())
+    except TruncatedResponse as exc:
+        # Second attempt was cut off too. Do not parse the partial NEEDS FIX.
+        print(f"[HOLD] reviewer response truncated again (finish_reason=length, "
+              f"max_tokens={exc.max_tokens}); not using the partial text as a verdict")
+        ai_text = ""
+        ai_ok = False
     except SystemExit as exc:
         print(f"[HOLD] AI reviewer stopped before a verdict: {exc}")
     except Exception as exc:  # noqa: BLE001

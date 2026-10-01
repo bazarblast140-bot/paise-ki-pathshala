@@ -450,6 +450,7 @@ def _content_ok(topic, narration, spec):
 
 
 def narration(topic, c, spec=None):
+    market_data.sync_topic_numbers(topic)
     cache = RUN / "narration.json"
     if cache.exists():
         try:
@@ -956,6 +957,8 @@ def main():
     else:
         topic = load_topic()
     ok(f"template: {topic['key']} ({topic['cat']})")
+    # Script prices and the गुना line use the same closes the chart divides.
+    market_data.sync_topic_numbers(topic)
     spec = market_data.spec_for_topic(topic)
     topic["_chart_spec"] = spec
     if spec.get("mode") == "non_numeric":
