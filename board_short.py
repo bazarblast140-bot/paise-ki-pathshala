@@ -195,22 +195,36 @@ def check_narration(n, topic):
 
 
 NARR_SYSTEM = """You write the SPOKEN Hindi narration for a 55-60 second vertical Short for Indian traders
-(retail to pro). The video template is fixed — four beats, each showing a drawing and an on-screen
-headline + sub line. Your narration for each beat must explain exactly what that beat's on-screen
-text says, in simple spoken Hindi (Devanagari). Trading words stay as traders say them in Roman
-(RSI, MACD, VWAP, stop loss, SL, candle, wick, breakout, option, premium, theta, delta, OI).
+(retail to pro). The template is fixed at four teaching beats. The viewer must understand the topic
+in one continuous sequence — what it is, how to recognise it, why it matters, and what traders
+usually check next. Never jump backward, repeat the same explanation, or introduce a new concept
+before the previous one is understood.
 
 Return ONLY JSON:
 {"title": "<YouTube title, max 70 chars, Hindi + key English words, the hook itself>",
  "beats": {"hook": "...", "pehchan": "...", "matlab": "...", "karein": "..."}}
 
-Rules:
-- hook: 1 sentence, the surprising fact, costly mistake, or a clear question. No greeting.
-- pehchan: explain what the viewer is looking at in plain language.
-- matlab: explain the cause → effect and, where the topic allows, give ONE tiny concrete example.
-- karein: finish with one practical takeaway or limitation; never make a personalised trade call.
+MANDATORY TEACHING SEQUENCE:
+1) HOOK = "What are we learning and why should I care?" State the topic/problem/question only.
+2) PEHCHAN = "What exactly am I looking at?" Define the setup and point out the visible features.
+3) MATLAB = "What does it mean?" Explain the cause → effect, direction/logic, and ONE tiny example
+   when the topic allows. This beat must directly follow the features from PEHCHAN.
+4) KAREIN = "How is it normally used?" Explain confirmation, risk/limitation, or the next check.
+   It must refer to the same setup; do not introduce another strategy/topic.
+
+CONTINUITY RULES:
+- Each beat must answer the next question in the sequence. Never repeat the hook in later beats.
+- Use explicit bridge words where natural: "अब इसे पहचानें", "इसका मतलब", "अब आगे".
+- Narration must describe the exact visual shown in that beat. If the screen highlights
+  three candles, explain those three candles; if it shows SL, explain SL. Never talk about
+  a chart element that is not on screen.
+- Every beat should add new information. The four beats together should feel like one lesson,
+  not four separate facts.
+- For pattern/strategy topics, use this order: setup → recognition rules → market meaning →
+  confirmation/risk. Do not show or explain entry/SL before the setup and meaning are established.
 - Each beat: 1-2 short sentences, preferably under 12 words per sentence.
-- Total 85-105 words; aim for about 45-50 seconds of spoken explanation. CTA/disclaimer are visual-only so TTS credits are not wasted. The narration must add explanation beyond merely reading the on-screen text.
+- Total 85-105 words; aim for natural spoken pacing around 45-50 seconds. Never stretch audio
+  artificially just to hit a target duration.
 - Use ONLY numbers that appear in the topic data given to you. Never invent prices, dates, returns.
 - Not a quiz. Do not ask the viewer to pick options.
 - SEBI rules: never tell anyone to buy/sell/hold a specific stock, fund or product; no targets,
