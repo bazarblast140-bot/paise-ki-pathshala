@@ -109,8 +109,66 @@ def topic_hashtags(topic):
     return out[:10]
 
 
+REFERRALS_PATH = ROOT / "data" / "referrals.json"
+DEFAULT_DISCLOSURE = "यह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।"
+
+
+def load_referrals():
+    """data/referrals.json, or {} if it is missing or broken (never blocks an upload)."""
+    try:
+        return json.loads(REFERRALS_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        print(f"[warn] referral links skipped: {e}")
+        return {}
+
+
+def referral_links(cat, ref=None):
+    """[(label, url)] mapped to this topic category. Platforms marked bio_only
+    (Delta Exchange: crypto, not SEBI-regulated) are never auto-inserted."""
+    ref = load_referrals() if ref is None else ref
+    links = ref.get("platforms") or {}
+    out = []
+    for name in (ref.get("category_map") or {}).get(str(cat or ""), []):
+        p = links.get(name) or {}
+        url = str(p.get("url") or "").strip()
+        if p.get("bio_only") or not url.startswith("https://"):
+            continue
+        out.append((p.get("label") or name.replace("_", " ").title(), url))
+    return out
+
+
+def referral_parts(cat, fmt="short", ref=None):
+    """(top_line, block) for the description; (None, None) if the topic maps to no link.
+
+    The disclosure sits next to every link (ASCI: a referral/affiliate link is
+    advertising and must be disclosed upfront). URLs go on their own line.
+    """
+    ref = load_referrals() if ref is None else ref
+    links = referral_links(cat, ref)
+    if not links:
+        return None, None
+    names = " / ".join(label for label, _ in links)
+    short_disc = ref.get("disclosure_short_hi") or DEFAULT_DISCLOSURE
+    handle = str(ref.get("instagram_handle") or "").strip().lstrip("@")
+    bio = f"\n\nInstagram @{handle} की bio में भी यही links हैं।" if handle else ""
+    if fmt == "long":
+        top = (f"🔗 {names} demat account ({short_disc})\n"
+               + "\n".join(f"{label}: {url}" for label, url in links))
+        block = ("Account / referral links\n" + (ref.get("disclosure_hi") or DEFAULT_DISCLOSURE)
+                 + "\nयह किसी broker की सिफ़ारिश नहीं है।" + bio)
+    else:
+        where = ("channel page के link पर tap करें" if ref.get("youtube_channel_links_set")
+                 else "referral links नीचे हैं")
+        top = f"🔗 {names} demat account: {where}। ({short_disc})"
+        block = ("Account / referral links\n" + (ref.get("disclosure_hi") or DEFAULT_DISCLOSURE)
+                 + "\n\n" + "\n\n".join(f"{label}\n{url}" for label, url in links) + bio)
+    print(f"[OK] referral links in description ({fmt}): {names}")
+    return top, block
+
+
 def build_description(sec, c):
-    """SEO-first description: hook → value → disclaimer → referral URLs (one per line) → tags.
+    """SEO-first description: hook → value → referral CTA → disclaimer → referral URLs → tags.
+    (Long-form: the referral CTA + URLs sit right under the hook, above "...more".)
 
     YouTube makes https:// URLs clickable when they sit on their own line.
     """
@@ -134,33 +192,23 @@ def build_description(sec, c):
     parts.append(disclaimer or "यह वीडियो सिर्फ़ जानकारी के लिए है, निवेश सलाह नहीं।")
     parts.append("हम SEBI-रजिस्टर्ड सलाहकार नहीं हैं। किसी भी निवेश से पहले रजिस्टर्ड सलाहकार से बात करें।")
 
-    # Referral: label on one line, bare https URL on the next (best chance of blue link).
+    # Referral links. Long-form: right under the hook, because only the first
+    # ~2-3 lines show above "...more" and long-form URLs are clickable there.
+    # Shorts: YouTube never makes Shorts description/comment URLs clickable, so
+    # a short disclosed CTA goes after the keyword line (it points at the
+    # channel-page links once youtube_channel_links_set is true in
+    # data/referrals.json; those ARE clickable) and the copyable URL block
+    # stays further down.
     try:
-        ref_path = ROOT / "data" / "referrals.json"
-        ref = json.loads(ref_path.read_text(encoding="utf-8"))
-        names = ref.get("category_map", {}).get(cat, [])
-        links = ref.get("platforms", {})
-        blocks = []
-        for name in names:
-            p = links.get(name) or {}
-            url = (p.get("url") or "").strip()
-            if url.startswith("http"):
-                blocks.append(f"{name.title()}\n{url}")
-        if blocks:
-            disclosure = ref.get(
-                "disclosure_hi",
-                "यह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।",
-            )
-            parts.append(
-                "Account / referral links\n"
-                + disclosure
-                + "\n\n"
-                + "\n\n".join(blocks)
-                + "\n\nSame links Instagram bio me bhi hain (Zerodha · Upstox · Delta Exchange)."
-            )
-            print(f"[OK] referral links in description: {', '.join(names)}")
-    except (OSError, ValueError, TypeError, NameError) as e:
+        fmt = video_format()
+        ref_top, ref_block = referral_parts(cat, fmt)
+    except (TypeError, AttributeError, ValueError) as e:  # bad JSON shape must not block an upload
         print(f"[warn] referral links skipped: {e}")
+        fmt, ref_top, ref_block = None, None, None
+    if ref_top:
+        parts.insert((1 if hook else 0) if fmt == "long" else len(parts) - 2, ref_top)
+    if ref_block:
+        parts.append(ref_block)
 
     ledger = sec.get("FACT LEDGER", "").strip()
     if ledger:
