@@ -1,5 +1,10 @@
 {
   "disclosure_hi": "यह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।",
+  "disclosure_short_hi": "Referral link — account खोलने पर हमें commission मिल सकता है।",
+  "disclosure_en": "Referral link: we may earn a commission if you open an account. Education only, not SEBI-registered advice.",
+  "instagram_handle": "rajesh_technical_trader",
+  "youtube_channel_links_set": false,
+  "_youtube_channel_links_set": "Set true only after Zerodha/Upstox are added in YouTube Studio -> Customisation -> Basic info -> Links (Shorts description URLs are never clickable).",
   "platforms": {
     "zerodha": {
       "code": "KU3466",
@@ -11,7 +16,16 @@
     },
     "indmoney": {
       "code": "RAJ144A7IND",
-      "url": "https://indmoney.onelink.me/RmHC/615z6rm1"
+      "url": "https://indmoney.onelink.me/RmHC/615z6rm1",
+      "label": "INDmoney"
+    },
+    "delta_exchange": {
+      "code": "TPBYQA",
+      "url": "https://www.delta.exchange/?code=TPBYQA",
+      "bio_only": true,
+      "note": "Crypto derivatives (VDA, FIU-IND registered, not SEBI-regulated). Never auto-inserted into stock-topic descriptions/captions. If used anywhere, carry disclaimer_vda.",
+      "disclaimer_vda": "Crypto products and NFTs are unregulated and can be highly risky. There may be no regulatory recourse for any loss from such transactions.",
+      "label": "Delta Exchange"
     }
   },
   "usage": "Use only when relevant to the topic; prefer caption/description/bio and keep the educational video clean.",
@@ -43,7 +57,31 @@
     "MARKET FACT": [
       "indmoney",
       "zerodha"
+    ],
+    "INTRADAY": [
+      "zerodha",
+      "upstox"
+    ],
+    "FUNDAMENTAL": [
+      "indmoney",
+      "zerodha"
+    ],
+    "FUNDAMENTALS": [
+      "indmoney",
+      "zerodha"
+    ],
+    "STOCK CASE STUDY": [
+      "indmoney",
+      "zerodha"
+    ],
+    "BUSINESS": [
+      "indmoney",
+      "zerodha"
+    ],
+    "MARKET HISTORY": [
+      "indmoney",
+      "zerodha"
     ]
   },
-  "selection_note": "Only the mapped links are inserted for a topic; no unrelated broker promotion. Offer/fee/count claims are never hard-coded."
+  "selection_note": "Only the mapped links are inserted for a topic; no unrelated broker promotion. Offer/fee/count claims are never hard-coded. Platforms marked bio_only are never inserted by publish.py, even if mapped."
 }
