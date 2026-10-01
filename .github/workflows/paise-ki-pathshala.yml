@@ -179,3 +179,5 @@ jobs:
 # autonomous repair: deterministic syntax fix + 3-attempt bounded recovery
 # verify deterministic self-repair traceback regex
 # cancel stale production runs during recovery
+
+# recovery-v22: narration must teach in one continuous setup->recognition->meaning->risk sequence
