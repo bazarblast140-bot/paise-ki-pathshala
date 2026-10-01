@@ -1,0 +1,64 @@
+"""On-screen text plan: punchy hook for the first 2 seconds, key points on every beat, poll at the end."""
+from engagement import engagement_question
+
+BEATS = ("hook", "pehchan", "matlab", "karein")
+
+
+def overlay_plan(topic, beat_times, hook_line, cta=None):
+    """List of {role, beat, text, start, end}. Times are seconds."""
+    cta = cta or engagement_question(topic)
+    events = []
+    for beat in BEATS:
+        t0, t1 = beat_times[beat]
+        head, sub = topic["beats"][beat]
+        if beat == "hook":
+            # Spoken and shown from the first frame. The hook beat is longer than
+            # 2s; the opening line is on screen for that whole beat, including 0-2s.
+            events.append({
+                "role": "hook", "beat": beat, "text": hook_line,
+                "start": 0.0, "end": float(t1),
+            })
+            events.append({
+                "role": "key", "beat": beat, "text": sub,
+                "start": 0.0, "end": float(t1),
+            })
+        else:
+            start = float(t0)
+            events.append({
+                "role": "key", "beat": beat, "text": head,
+                "start": start, "end": float(t1),
+            })
+            events.append({
+                "role": "key", "beat": beat, "text": sub,
+                "start": start, "end": float(t1),
+            })
+    t0, t1 = beat_times["karein"]
+    events.append({
+        "role": "cta", "beat": "karein", "text": cta,
+        "start": max(float(t0), float(t1) - 2.8), "end": float(t1),
+    })
+    events.append({
+        "role": "disclaimer", "beat": "karein",
+        "text": "सिर्फ़ जानकारी, निवेश सलाह नहीं।",
+        "start": float(t0), "end": float(t1),
+    })
+    return events
+
+
+def hook_covers_first_two_seconds(events):
+    for event in events or []:
+        if event.get("role") != "hook":
+            continue
+        text = " ".join(str(event.get("text") or "").split())
+        if text and float(event.get("start", 9)) <= 0.05 and float(event.get("end", 0)) >= 2.0:
+            return True
+    return False
+
+
+def beats_have_key_text(events):
+    covered = set()
+    for event in events or []:
+        if event.get("role") in ("hook", "key") and str(event.get("text") or "").strip():
+            if float(event.get("end", 0)) > float(event.get("start", 0)):
+                covered.add(event.get("beat"))
+    return set(BEATS) <= covered

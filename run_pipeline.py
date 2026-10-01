@@ -78,6 +78,32 @@ def settle_topic(uploaded):
     bank_path.write_text(json.dumps(bank, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def resolve_publish_status(yt_rc, yt_uploaded, ig_published, ig_required, verdict_ready):
+    """Final pipeline status after the opt-in publish step.
+
+    A YouTube upload failure (invalid_grant is exit code 3) fails the job even
+    when an Instagram Reel was confirmed. A missing READY verdict with nothing
+    published also fails the job.
+    """
+    if yt_rc:
+        if yt_rc == 3:
+            return ("publish failed: YouTube invalid_grant (token rejected)",
+                    "[STOP] YouTube upload failed: invalid_grant. Job will exit non-zero.")
+        return (f"publish failed: YouTube upload rc={yt_rc}",
+                "[STOP] YouTube upload failed. Job will exit non-zero.")
+    published = bool(yt_uploaded or ig_published)
+    if not published and not verdict_ready:
+        return ("not published: verify verdict is not READY TO PUBLISH",
+                "[STOP] Verify verdict is not READY — nothing was published (YouTube or Instagram).")
+    if ig_required and not ig_published:
+        return ("publish failed: Instagram Reel not confirmed",
+                "[STOP] Instagram Reel publish was not confirmed; YouTube status is independent.")
+    if not published:
+        return ("publish failed: YouTube and Instagram both failed",
+                "[STOP] No platform confirmed a publish; topic was not marked used.")
+    return ("success", None)
+
+
 def main():
     global STAGES
     print(f"[info] format: {video_format()}")
@@ -136,16 +162,20 @@ def main():
         # is the production success gate. YouTube remains independent: a YouTube
         # failure must not prevent Instagram, but a YouTube-only success must not
         # make the run look fully healthy when the Reel was not confirmed.
+        from publish_guard import blocked_reason
+        import review_gate
         ig_required = (
             video_format() == "short"
             and os.environ.get("IG_CROSSPOST", "").strip().lower() in ("1", "true", "yes", "on")
+            and not blocked_reason()
         )
         published = yt_uploaded or ig_published
         settle_topic(published)
 
         # Instagram-only publish (YouTube failed) still fills the slot in the
         # ledger, so Slot watch doesn't start a second "fill" run that would post
-        # another Reel (and still fail on YouTube).
+        # another Reel (and still fail on YouTube). The job itself still fails
+        # when YouTube upload failed, including invalid_grant.
         if ig_published and not yt_uploaded:
             try:
                 from ledger import record_publish
@@ -156,17 +186,11 @@ def main():
             except Exception as e:  # noqa: BLE001
                 print(f"[warn] ledger IG-only entry skipped: {e}")
 
-        verdict_ready = "READY TO PUBLISH" in (
-            (RUN / "report.md").read_text(encoding="utf-8") if (RUN / "report.md").exists() else "")
-        if not published and not verdict_ready:
-            status = "not published: verify verdict is not READY TO PUBLISH"
-            print("[STOP] Verify verdict is not READY — nothing was published (YouTube or Instagram).")
-        elif ig_required and not ig_published:
-            status = "publish failed: Instagram Reel not confirmed"
-            print("[STOP] Instagram Reel publish was not confirmed; YouTube status is independent.")
-        elif not published:
-            status = "publish failed: YouTube and Instagram both failed"
-            print("[STOP] No platform confirmed a publish; topic was not marked used.")
+        verdict_ready = review_gate.files_allow_public(RUN, video_format())
+        status, stop = resolve_publish_status(
+            yt_rc, yt_uploaded, ig_published, ig_required, verdict_ready)
+        if stop:
+            print(stop)
 
     # always notify
     print("\n=== Notify ===")

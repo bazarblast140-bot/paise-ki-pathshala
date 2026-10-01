@@ -27,6 +27,8 @@ import urllib.request
 from pathlib import Path
 
 from common import RUN, cfg, ok, video_format
+import publish_guard
+import review_gate
 
 API = "https://api.github.com"
 UPLOADS = "https://uploads.github.com"
@@ -348,8 +350,11 @@ def main() -> None:
     # run_verify.py exits 0 even on "NEEDS FIX", and publish.py --only-if-ready
     # then refuses YouTube, so without this check a failed-review video was
     # still posted as a public Reel.
-    report = RUN / "report.md"
-    if not report.exists() or "READY TO PUBLISH" not in report.read_text(encoding="utf-8"):
+    reason = publish_guard.blocked_reason()
+    if reason:
+        skip(f"public Reel blocked ({reason}) — repair/test/retry never posts publicly")
+
+    if not review_gate.files_allow_public(RUN, "short"):
         skip("verify verdict is not READY TO PUBLISH — Reel not posted")
 
     if not (RUN / "uploaded.txt").exists() and env("IG_CROSSPOST_FORCE") not in ("1", "true"):

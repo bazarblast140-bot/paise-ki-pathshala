@@ -27,15 +27,19 @@ import numpy as np
 
 import board_kit as K
 import board_scenes as S
+import engagement
+import hook_check
+import market_data
+import self_review
+import short_layout
 from common import RUN, ROOT, cfg, claude_json, die, ok, save
 
 BEATS = S.BEATS
 STEP_CHIP = {"hook": "HOOK", "pehchan": "1  PEHCHAN", "matlab": "2  MATLAB", "karein": "3  KYA KAREIN"}
-# On-video CTA: ask for a useful comment instead of generic engagement bait.
-# The same Reel is cross-posted to YouTube + Instagram, so keep the wording
-# platform-neutral. Platform-specific subscribe/follow language belongs in the
-# post caption, not the educational content.
-CTA = "अगला कौन सा market topic समझना है? Comment में लिखो—ऐसी आसान सीख के लिए जुड़े रहो।"
+# On-video CTA: a poll-style question (engagement.engagement_question). The same
+# Reel is cross-posted, so the line stays platform-neutral. Referral links stay
+# in the description, not in this spoken/on-screen line.
+CTA = engagement.engagement_question({})
 DISCLAIMER = "सिर्फ़ जानकारी, निवेश सलाह नहीं।"
 FORBIDDEN = ["दोस्तों", "like", "subscribe", "सब्सक्राइब", "लाइक", "टारगेट", "target price", "टिप",
              "ज़रूर ख़रीद", "जरूर खरीद", "ख़रीद लो", "खरीद लो", "बेच दो", "गारंटी से", "पक्का मुनाफ़ा"]
@@ -73,7 +77,7 @@ CAT_CHIPS = {
 }
 
 
-def beat_images(topic, beat):
+def _scene_images(topic, beat):
     img = K.background()
     # The chart is the hook; no extra top chip row.
     key = topic["key"]
@@ -92,6 +96,19 @@ def beat_images(topic, beat):
         except Exception as e:
             print(f"[board_orb] fallback to topic scene: {e}")
     return S.render_beat(key, beat, img)
+
+
+def beat_images(topic, beat):
+    """Scene art, then a real-data stamp or a non-numeric card. Never a fake price line."""
+    spec = topic.get("_chart_spec") or market_data.spec_for_topic(topic)
+    mode = market_data.visual_mode(topic, spec)
+    if mode == "non_numeric":
+        return (market_data.non_numeric_frame(topic, beat, 0),
+                market_data.non_numeric_frame(topic, beat, 1))
+    pics = _scene_images(topic, beat)
+    if mode == "series":
+        pics = tuple(market_data.stamp(im, spec) for im in pics)
+    return pics
 
 
 def thumbnail(topic, out_path, hook_img=None):
@@ -148,9 +165,7 @@ def thumbnail(topic, out_path, hook_img=None):
 
 # ---------------------------------------------------------------- narration
 def allowed_numbers(topic):
-    blob = " ".join([topic["topic"], *topic["thumb"], *topic["facts"],
-                     *[x for pair in topic["beats"].values() for x in pair]])
-    return {n.replace(",", "") for n in re.findall(r"\d[\d,]*(?:\.\d+)?", blob)} | {"1", "2", "3"}
+    return hook_check.allowed_numbers(topic)
 
 
 def check_narration(n, topic):
@@ -208,6 +223,16 @@ def check_narration(n, topic):
                 fails.append(f"final value {f} sirf 'karein' me bolo")
         if "लगते" in text:
             fails.append("'लगते' galat hai — 'लगाते' likho")
+    limit = hook_check.hook_word_limit(topic)
+    hook_line = " ".join(str(n.get("hook_line") or "").split())
+    hook = str(beats.get("hook") or "")
+    if not hook_line:
+        hook_line = re.split(r"[।?!]", hook, maxsplit=1)[0].strip()
+        if hook_line:
+            n["hook_line"] = hook_line
+    fails.extend(hook_check.check_hook_line(hook_line, allowed_numbers(topic), max_words=limit))
+    if hook_line and not hook.startswith(hook_line.rstrip("।")):
+        fails.append("hook beat must open with the punchy hook line")
     return fails
 
 
@@ -226,11 +251,13 @@ TEACHING VOICE:
 
 Return ONLY JSON:
 {"title": "<YouTube title, max 70 chars, Hindi + key English words, the hook itself>",
+ "hook_line": "<FIRST sentence of the hook beat. 4-12 words, max 10 when category is REAL DATA. A question, a number copied from the topic, or a contrarian line. No guaranteed or 'पक्का' returns.>",
  "beats": {"hook": "...", "pehchan": "...", "matlab": "...", "karein": "..."}}
 
 MANDATORY TEACHING SEQUENCE — NEVER CHANGE THIS ORDER:
-1) HOOK — "आज क्या सीख रहे हैं?" Name the exact topic and give the one-line reason it matters.
-   Do NOT explain the answer yet.
+1) HOOK — Start with hook_line, the punchy first sentence (question, real topic number, or contrarian line).
+   Then name the topic and the one-line reason it matters. Do NOT explain the answer yet.
+   The hook beat still totals 22-28 words; only the opening sentence is short.
 2) PEHCHAN — "इसे chart पर पहचानेंगे कैसे?" Point to the exact visible structure/rules shown on screen.
    Use concrete features, not generic definitions.
 3) MATLAB — "इस pattern/strategy का मतलब क्या है?" Connect those exact features to buyer/seller force,
@@ -273,72 +300,46 @@ CONTINUITY RULES:
   not filler. Write "लगाते" (not "लगते")."""
 
 
-def narration(topic, c):
-    cache = RUN / "narration.json"
-    if cache.exists():
-        try:
-            n = json.loads(cache.read_text(encoding="utf-8"))
-            fails = check_narration(n, topic)
-            if not fails:
-                ok("narration cache reused — no LLM credit")
-                return n, "cache"
-        except Exception as e:
-            print(f"[cache] narration invalid, regenerating: {e}")
-    user = {"topic": topic["topic"], "category": topic["cat"],
-            "on_screen": {b: {"headline": h, "sub": s} for b, (h, s) in topic["beats"].items()},
-            "facts": topic["facts"]}
-    msg = json.dumps(user, ensure_ascii=False)
-    last = None
-    for attempt in range(1, 4):
-        try:
-            n = claude_json(NARR_SYSTEM, msg + ("" if not last else f"\n\nFIX THESE: {last}"),
-                            model=c["models"]["script_model"], max_tokens=2000)
-        except SystemExit:
-            raise
-        except Exception as e:  # noqa: BLE001
-            last = f"invalid JSON: {e}"
-            print(f"[retry] narration attempt {attempt}: {last}")
-            continue
-        fails = check_narration(n, topic)
-        if not fails:
-            ok(f"narration OK (attempt {attempt})")
-            cache.write_text(json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
-            return n, "llm"
-        last = "; ".join(fails)
-        print(f"[retry] narration attempt {attempt}: {last}")
-    print("[warn] LLM narration 3 baar fail — on-screen text se narration bana raha hoon")
-    # Deterministic fallback: never spend another repair-model credit just to
-    # manufacture missing narration. Build one coherent four-step lesson from
-    # the topic's own on-screen facts, then fit each beat into the same gate.
-    def _fit_words(seed, lo, hi, additions):
-        target = hi
-        words = str(seed).split()
-        for sentence in additions:
-            sw = sentence.split()
-            if len(words) + len(sw) <= target:
-                words.extend(sw)
-            if len(words) >= lo:
-                break
-        for sentence in additions:
-            sw = sentence.split()
-            if len(words) >= lo:
-                break
-            room = target - len(words)
-            words.extend(sw[:room])
-        return " ".join(words[:target])
+def _fit_words(seed, lo, hi, additions):
+    target = hi
+    words = str(seed).split()
+    for sentence in additions:
+        sw = sentence.split()
+        if len(words) + len(sw) <= target:
+            words.extend(sw)
+        if len(words) >= lo:
+            break
+    for sentence in additions:
+        sw = sentence.split()
+        if len(words) >= lo:
+            break
+        room = target - len(words)
+        words.extend(sw[:room])
+    return " ".join(words[:target])
 
-    src = topic["beats"]
+
+def _card_line(text):
+    """On-screen card text spoken aloud. 'like' is banned as bait, including inside 'profit-like'."""
+    out = re.sub(r"-like\b", "", str(text), flags=re.I)
+    for word in FORBIDDEN:
+        if word.lower() in out.lower():
+            out = re.sub(re.escape(word), "", out, flags=re.I)
+    return " ".join(out.split())
+
+
+def fallback_narration(topic):
+    """Four-step lesson from the topic card. The first sentence is the punchy hook."""
+    src = {b: (_card_line(pair[0]), _card_line(pair[1])) for b, pair in topic["beats"].items()}
+    hook_line = _card_line(hook_check.make_hook_line(topic))
+    if hook_check.check_hook_line(hook_line, hook_check.allowed_numbers(topic),
+                                  max_words=hook_check.hook_word_limit(topic)):
+        hook_line = hook_check.make_hook_line({"cat": topic.get("cat"), "topic": topic.get("topic"),
+                                               "beats": {"hook": ["यह बात", "जितनी आसान लगती है?"]},
+                                               "thumb": [], "facts": []})
     if topic.get("cat") == "REAL DATA":
-        hook_seed = (
-            "यह सवाल क्यों जरूरी है? "
-            "आज हम इसी तथ्य को आसान भाषा में समझेंगे और पहले उसके संदर्भ को देखेंगे।"
-        )
+        hook_seed = hook_line
     else:
-        hook_seed = (
-            f'{src["hook"][0]}। {src["hook"][1]}। '
-            "आज पहले इसी setup का मतलब साफ समझते हैं।"
-        )
-
+        hook_seed = f"{hook_line} आज पहले इसी setup का मतलब साफ समझते हैं।"
     beats = {
         "hook": _fit_words(
             hook_seed, 22, 28,
@@ -380,7 +381,87 @@ def narration(topic, c):
             ],
         ),
     }
-    n = {"title": f"{topic['thumb'][0]} {topic['thumb'][1]}", "beats": beats}
+    # Beat ranges can all sit near their floor and leave the lesson under 160 words.
+    # Top up with number-free sentences, never past a beat's own cap or 180 total.
+    caps = {"hook": 28, "pehchan": 46, "matlab": 54, "karein": 50}
+    fillers = (
+        ("karein", "यह सीमा याद रखने लायक है।"),
+        ("matlab", "इसीलिए संदर्भ के साथ पढ़ें।"),
+        ("pehchan", "यही पहचान का आधार है।"),
+        ("hook", "इसी सवाल को आगे खोलते हैं।"),
+    )
+    guard = 0
+    while sum(len(beats[b].split()) for b in BEATS) < 160 and guard < 8:
+        guard += 1
+        added = False
+        for beat, sentence in fillers:
+            extra = sentence.split()
+            words = beats[beat].split()
+            if len(words) + len(extra) <= caps[beat] and sum(len(beats[b].split()) for b in BEATS) + len(extra) <= 180:
+                beats[beat] = " ".join(words + extra)
+                added = True
+                break
+        if not added:
+            break
+    title = f"{topic['thumb'][0]} {topic['thumb'][1]}".strip()
+    if len(title) < 8:
+        title = (title + " " + topic["topic"]).strip()[:90]
+    return {"title": title[:90], "hook_line": hook_line, "beats": beats}
+
+
+def _content_ok(topic, narration, spec):
+    # Trend is scored at the end when data/trends.json exists. Regeneration
+    # here is only for the hook and the number check, which a rewrite can fix.
+    return self_review.score_content(topic, narration, spec, trends={})
+
+
+def narration(topic, c, spec=None):
+    cache = RUN / "narration.json"
+    if cache.exists():
+        try:
+            n = json.loads(cache.read_text(encoding="utf-8"))
+            fails = check_narration(n, topic)
+            content = _content_ok(topic, n, spec)
+            if not fails and content["passed"]:
+                ok("narration cache reused — no LLM credit")
+                return n, "cache"
+        except Exception as e:
+            print(f"[cache] narration invalid, regenerating: {e}")
+    user = {"topic": topic["topic"], "category": topic["cat"],
+            "on_screen": {b: {"headline": h, "sub": s} for b, (h, s) in topic["beats"].items()},
+            "facts": topic["facts"]}
+    msg = json.dumps(user, ensure_ascii=False)
+    last = None
+    for attempt in range(1, self_review.MAX_ATTEMPTS + 1):
+        try:
+            n = claude_json(NARR_SYSTEM, msg + ("" if not last else f"\n\nFIX THESE: {last}"),
+                            model=c["models"]["script_model"], max_tokens=2000)
+        except SystemExit:
+            raise
+        except Exception as e:  # noqa: BLE001
+            last = f"invalid JSON: {e}"
+            print(f"[retry] narration attempt {attempt}: {last}")
+            if self_review.next_action(False, attempt) == "retry":
+                continue
+            break
+        if not isinstance(n, dict):
+            n = {}
+        fails = check_narration(n, topic)
+        content = _content_ok(topic, n, spec) if not fails else None
+        if content and not content["passed"]:
+            fails.append("self-review below bar: " + content["summary"])
+        if not fails:
+            ok(f"narration OK (attempt {attempt})")
+            n["review_attempts"] = attempt
+            cache.write_text(json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
+            return n, "llm"
+        last = "; ".join(fails)
+        print(f"[retry] narration attempt {attempt}: {last}")
+        if self_review.next_action(False, attempt) != "retry":
+            break
+    print("[warn] LLM narration failed the hook/teaching gate — building narration from the topic card")
+    n = fallback_narration(topic)
+    n["review_attempts"] = self_review.MAX_ATTEMPTS
     fallback_fails = check_narration(n, topic)
     if fallback_fails:
         die("fallback narration failed the same universal teaching gate: " + "; ".join(fallback_fails))
@@ -568,13 +649,17 @@ def cue_frac(key, text):
     return 0.58
 
 
-def build_ass(topic, beat_times, spoken):
+def build_ass(topic, beat_times, spoken, hook_line, cta):
     ev = []
     for b in BEATS:
         t0, t1 = beat_times[b]
         head, sub = topic["beats"][b]
+        if b == "hook":
+            # Punchy line from the first frame through the hook beat (covers 0-2s).
+            head = hook_line
+            t0 = 0.0
         ev.append(K.ass_text(t0 + (0 if b == "hook" else 0.05), t1, 540, 1170, fit_size(head, 980, 84),
-                             K.YEL, head, 8, fade=(b != "hook")))
+                             K.YEL, head, 8, fade=(b != "hook"), wrap=(b == "hook")))
         ev.append(K.ass_text(t0 + (0 if b == "hook" else 0.05), t1, 540, 1240, fit_size(sub, 980, 54, 34),
                              K.WHITE, sub, 8, fade=(b != "hook"), wrap=True))
         parts = chunks(spoken[b])
@@ -587,11 +672,11 @@ def build_ass(topic, beat_times, spoken):
             t += dt
     t0, t1 = beat_times["karein"]
     ev.append(K.ass_text(t0, t1, 540, 1325, 30, "&H00B8A394&", DISCLAIMER, 8))
-    # Platform-neutral visual CTA: the same final.mp4 is cross-posted to YouTube + Instagram.
-    # Keep it below the educational content and inside the Shorts/Reels safe area.
+    # Poll question, not a like/follow/subscribe bait line. Referral disclosure
+    # stays in the description (publish.py), not on this card.
     cta_start = max(t0, t1 - 2.8)
-    ev.append(K.ass_text(cta_start, t1, 540, 1510, 48, K.WHITE,
-                         "LIKE  •  FOLLOW  •  SUBSCRIBE", 10, fade=True))
+    ev.append(K.ass_text(cta_start, t1, 540, 1480, fit_size(cta, 980, 42, 28), K.WHITE,
+                         cta, 8, fade=True, wrap=True))
     return K.ASS_HEAD + "\n".join(ev) + "\n"
 
 
@@ -677,19 +762,29 @@ def write_compat(topic, n, spoken, beat_times):
                   f"last close {yl['date']} — 3 mahine purana data, live nahi."
                   f"\n- SOURCE Yes Bank: {y0['date']} close {y0['close']:,.0f} -> {yl['date']} close "
                   f"{yl['close']:,.0f} = -{(1 - yl['close'] / y0['close']) * 100:.0f}% (Yahoo Finance).")
+    spec = topic.get("_chart_spec") or {}
+    if spec.get("mode") == "series" and spec.get("source") and spec.get("as_of"):
+        facts += (f"\n- SOURCE: {spec.get('source')} as of {spec.get('as_of')} "
+                  f"(monthly closes, no interpolated points).")
+    cta = engagement.engagement_question(topic)
     script = (f"TITLE:\n{n['title']}\n\nHOOK (0-3 sec):\n{b['hook']}\n\nBODY:\n"
               f"[SEGMENT 1: PEHCHAN]\n{b['pehchan']}\n\n[SEGMENT 2: MATLAB]\n{b['matlab']}\n\n"
-              f"[SEGMENT 3: KYA KAREIN]\n{b['karein']}\n\nCTA:\n{CTA}\n\nDISCLAIMER LINE:\n{DISCLAIMER}\n\n"
+              f"[SEGMENT 3: KYA KAREIN]\n{b['karein']}\n\nCTA:\n{cta}\n\nDISCLAIMER LINE:\n{DISCLAIMER}\n\n"
               f"FACT LEDGER:\n{facts}\n")
     save("script.txt", script)
     save("spoken.txt", " ".join(spoken[x] for x in BEATS))
     shots = []
+    hook_line = n.get("hook_line") or ""
     for i, x in enumerate(BEATS, 1):
         t0, t1 = beat_times[x]
+        on_screen = hook_line if x == "hook" else topic["beats"][x][0]
         shots.append({"shot_id": i, "start_sec": round(t0, 2), "end_sec": round(t1, 2), "visual_type": "chart",
-                      "on_screen_text": topic["beats"][x][0], "sub_text": topic["beats"][x][1],
-                      "spoken_line": spoken[x], "chart_data": {"template": topic["key"]},
-                      "source_asset_query": None, "emphasis": "neutral"})
+                      "on_screen_text": on_screen, "sub_text": topic["beats"][x][1],
+                      "spoken_line": spoken[x],
+                      "chart_data": {"template": topic["key"], "mode": spec.get("mode"),
+                                     "source": spec.get("source"), "as_of": spec.get("as_of")},
+                      "source_asset_query": None, "emphasis": "neutral",
+                      "hook_line": hook_line if x == "hook" else None})
     (RUN / "shots.json").write_text(json.dumps({"shots": shots}, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
@@ -739,6 +834,12 @@ def main():
     else:
         topic = load_topic()
     ok(f"template: {topic['key']} ({topic['cat']})")
+    spec = market_data.spec_for_topic(topic)
+    topic["_chart_spec"] = spec
+    if spec.get("mode") == "non_numeric":
+        print(f"[market_data] non-numeric card: {spec.get('reason')}")
+    elif spec.get("mode") == "series":
+        print(f"[market_data] {spec.get('source')} as of {spec.get('as_of')}")
 
     beat_pngs = {}
     for b in BEATS:
@@ -753,7 +854,7 @@ def main():
     if args.qa:
         return
 
-    n, source = narration(topic, c)
+    n, source = narration(topic, c, spec)
     # CTA/disclaimer stay on-screen; do not spend TTS credits speaking them.
     spoken = dict(n["beats"])
     # Generate each beat voice, then trim only the *outer* TTS silence.
@@ -807,7 +908,20 @@ def main():
     switch = {b: cue_frac(topic["key"], spoken[b]) for b in BEATS if len(beat_pngs[b]) == 3}
     if switch:
         ok("3rd picture at " + ", ".join(f"{b} {f:.0%}" for b, f in switch.items()))
-    assemble(beat_pngs, beat_audio, beat_times, build_ass(topic, beat_times, spoken), switch=switch)
+    cta = engagement.engagement_question(topic)
+    hook_line = n.get("hook_line") or ""
+    overlays = short_layout.overlay_plan(topic, beat_times, hook_line, cta)
+    review = self_review.full_review(topic, n, spec, overlays)
+    review["narration_source"] = source
+    review["attempts"] = n.get("review_attempts") or self_review.MAX_ATTEMPTS
+    (RUN / "self_review.json").write_text(
+        json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
+    if review["public_ok"]:
+        ok("self-review passed: " + review["summary"])
+    else:
+        print("[HOLD] self-review below the bar — public upload blocked. " + review["summary"])
+    assemble(beat_pngs, beat_audio, beat_times,
+             build_ass(topic, beat_times, spoken, hook_line, cta), switch=switch)
 
     # Final-file hard gate: never retime the finished video.
     # If duration is outside the publishing window, fail and regenerate narration.
