@@ -27,9 +27,81 @@ visuals → video → verify → upload. Sirf isi channel ke liye — quiz chann
 | `DEEPSEEK_API_KEY` | Script/visual/verify LLM (config: `models.llm_provider = deepseek`) |
 | `PEXELS_API_KEY` | Kabhi-kabhi stock clip (max 8%) |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Har run ka report |
-| `YT_FIN_CLIENT_ID`, `YT_FIN_CLIENT_SECRET`, `YT_FIN_REFRESH_TOKEN` | Channel ka OAuth — `yt_token_to_github.py --prefix YT_FIN` se |
-| variable `YT_FIN_CHANNEL_ID` | Upload guard — wahi script set karti hai |
+| `YT_FIN_CLIENT_ID`, `YT_FIN_CLIENT_SECRET`, `YT_FIN_REFRESH_TOKEN` | Channel ka OAuth — `python youtube_auth.py --set-github-secret` se (neeche dekho) |
+| variable `YT_FIN_CHANNEL_ID` | Upload guard — token ka channel isi ID se match hona chahiye |
+| `YT_DATA_API_KEY` *(optional, naya)* | Competitor research (read-only). Na ho to OAuth token se chalega, woh bhi na chale to step skip |
+| `IG_ACCESS_TOKEN`, variable `IG_USER_ID` | Instagram Reel cross-post |
 | `KIMI_API_KEY`, `ANTHROPIC_API_KEY` | Optional backup LLM |
+| variable `SELF_REPAIR` *(optional)* | `1` = CI ke andar code self-repair (LLM / deterministic patch, phir `main` par push). Default **band**; "Autonomous Repair Watchdog" ab sirf manual (Run workflow) |
+
+## YouTube token permanent kaise karein (ek baar, ~10 min)
+
+**Kya hua tha:** `YT_FIN_REFRESH_TOKEN` 21-Sep-2026 ko bana aur 28-Sep ko (theek 7 din baad)
+Google ne `invalid_grant: Token has been expired or revoked` de diya. Iska matlab lagbhag
+hamesha yahi hota hai ki Google Cloud project ka **OAuth consent screen "Testing" status me hai** —
+Testing me Google har refresh token ko 7 din me khatam kar deta hai. "In production" me token
+tab tak chalta hai jab tak aap khud revoke na karo / password badlo / 6 mahine use na ho
+(pipeline roz chalti hai, to 6 mahine wala issue nahi aayega).
+
+Code ab har run me refresh token se naya access token leta hai (`yt_credentials.py`); access
+token ka 1 ghante me expire hona normal hai aur apne aap handle hota hai. Token mar jaaye to
+run me saaf error aata hai (`::error::YouTube token expired or revoked`, Telegram par bhi), aur
+Instagram Reel phir bhi jaati hai.
+
+**Steps:**
+1. <https://console.cloud.google.com/> kholo → wahi project chuno jiska OAuth client
+   `YT_FIN_CLIENT_ID` me hai (APIs & Services → Credentials me client ID match karo).
+2. **APIs & Services → OAuth consent screen** (naye UI me: **Google Auth Platform → Audience**).
+3. "Publishing status: Testing" dikhe to **PUBLISH APP** → **Confirm**. Status ab
+   **"In production"** dikhna chahiye. User type "External" hi rehne do.
+   - Google "verification" maang sakta hai (YouTube scopes sensitive hain). Apne khud ke
+     channel ke liye verification zaroori nahi: unverified app bhi production me chalta hai,
+     bas login par "Google hasn't verified this app" warning aati hai (100 users tak limit) —
+     **Advanced → Go to … (unsafe)** dabao. Production me token 7 din wala expiry nahi hota.
+4. Laptop par (browser wala computer), is repo me:
+   ```bash
+   pip install google-auth-oauthlib google-api-python-client
+   # Credentials page se OAuth client (Desktop app) ka JSON download karo: client_secret.json
+   python youtube_auth.py --client-secret-file client_secret.json --set-github-secret
+   ```
+   Browser me **Paise Ki Pathshala** channel wala account chuno, saare permission tick karo
+   (agar "time-limited access" ka option aaye to time limit **mat** chuno). Script channel ka
+   naam dikhayegi, `y` dabao. `--set-github-secret` token ko seedha GitHub secret
+   `YT_FIN_REFRESH_TOKEN` me daal deta hai (`gh` CLI login chahiye) — token screen par print
+   nahi hota. `gh` na ho to script manual command bata degi.
+   - Naya OAuth client banaya ho to `YT_FIN_CLIENT_ID` / `YT_FIN_CLIENT_SECRET` secrets bhi
+     usi client ke daalne honge (client aur token ek hi app ke hone chahiye).
+5. Check (upload nahi karta, sirf channel ka naam dikhata hai):
+   Actions → "Paise Ki Pathshala" → Run workflow (privacy **unlisted**) → step
+   "YouTube token health check" hara hona chahiye. Ya laptop par `python yt_credentials.py`.
+
+**Tip:** Quiz Pathshala (`finance-english-youtube-auto`) ke uploads roz chal rahe hain, yaani
+uska OAuth project shayad pehle se production me hai. Chaaho to usi project ka client
+ID/secret use karke Paise wala token bana sakte ho — bas login Paise Ki Pathshala channel se
+karna. (Ye maine verify nahi kiya — Cloud Console me status dekh lena.)
+
+## Competitor research → self-improvement (naya, optional)
+
+`competitor_research.py` har din ek baar (pipeline ke andar, `--max-age-hours 20`) read-only
+YouTube Data API calls karta hai:
+- `data/research_sources.json` ke competitor channels (Deepu Maurya, Stock Menthol — aur
+  `config.json → research.extra_channel_ids`) ke pichhle 30 din ke uploads,
+- `config.json → research.search_keywords` (max 3) ke top Hindi Shorts,
+- apne channel ke uploads (ledger `data/published.json` ke `topic_key` se).
+
+Har video ko uske **apne channel ke median** se compare karta hai (bada channel sirf bada hone
+se nahi jeetta) aur likhta hai:
+- `data/competitor_insights.json` — top videos (title, views/day, duration, IST upload time,
+  tags), jeetne wale title patterns (sawaal / number / warning …), keywords, best upload hours.
+  **Ye aapke padhne ke liye hai.**
+- `data/competitor_performance.json` — auto rows (sirf labels, koi title nahi) jinse
+  `pick_topic.py` topic chunta hai.
+- `data/own_topic_performance.json` — apne kaunse topics chale; wahi type zyada chuna jaata hai.
+
+`prompt_hint()` ek aggregate hint deta hai ("sawaal wale title, ye keywords…") — competitor ka
+title/script kabhi copy ke liye nahi. Ye hint abhi narration prompt me **wired nahi hai** (board_short.py
+ki narration logic jaisi hai waisi chhodi hai); chaaho to baad me jod sakte ho. Secret na ho / quota khatam /
+error — step skip hota hai, video phir bhi banta hai. Quota: ~350 units/run (10,000/din free).
 
 ---
 
@@ -158,3 +230,25 @@ defaults die with `malloc of size N failed` partway through a render.
 
 **Footage cache:** `assets/cache/` fills up (~120MB per video) and is gitignored.
 Delete it any time — clips are re-fetched from each shot's `source_asset_query`.
+
+## Instagram Reel — kya aur kyun (30-Sep-2026)
+
+`publish_instagram.py` wahi `run/final.mp4` Reel ki tarah daalta hai — sirf **public** run par
+(`IG_CROSSPOST`) aur sirf jab `run/report.md` me `READY TO PUBLISH` ho. "Instagram Reel Publish
+Watchdog" bhi sirf tab retry karta hai jab fail hone wala step khud Instagram tha aur us run ne
+Reel pehle se nahi daali.
+
+- **Caption:** keyword wala title sabse upar (pehle ~125 char "more" se pehle dikhte hain, aur
+  Instagram search caption padhta hai) → hook → "📌 याद रखो" 2 bullet (FACT LEDGER se, save-worthy)
+  → comment + save CTA → disclaimer → bio referral line + `data/referrals.json` ki disclosure.
+  Caption me URL nahi (clickable nahi hota).
+- **Hashtags:** `hashtags_for()` = main wala topic-specific set (base 4 + category 2 + seo tag).
+  Instagram app Dec-2025 se 5 tag ki limit batata hai; API se 6-7 tag wali Reels abhi tak chali
+  gayi hain. Reject hone lage to `hashtags_for()` ko 5 par kaat do.
+- **Cover:** profile grid Reel cover ko beech se 3:4 crop karta hai (y 240–1680) — hamara
+  thumbnail title y≈150 par tha, grid me kat jaata tha. Ab IG-only `run/ig_cover.jpg`: poora
+  design 3:4 box me, peeche blur. YouTube thumbnail nahi badalta. Band karna ho:
+  `config.json` → `"instagram": {"grid_safe_cover": false}`.
+- Token: `IG_ACCESS_TOKEN` ~60 din ka hai (24-Sep set → ~23-Nov expire). Refresh manual.
+
+Monetization thresholds + checklist: `MONETIZATION.md`.
