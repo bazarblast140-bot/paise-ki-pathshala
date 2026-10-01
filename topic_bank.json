@@ -2080,7 +2080,7 @@
   {
    "id": 56,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "three_white_soldiers",
    "cat": "CANDLESTICK",
    "topic": "Three White Soldiers — लगातार तीन बड़ी हरी कैंडल",
@@ -2111,7 +2111,8 @@
     "तीन लगातार बड़ी हरी कैंडल",
     "हर कैंडल पिछली से ऊपर बंद"
    ],
-   "seo": "Three White Soldiers Pattern"
+   "seo": "Three White Soldiers Pattern",
+   "used_short_at": "2026-10-01T01:04:07Z"
   },
   {
    "id": 57,
