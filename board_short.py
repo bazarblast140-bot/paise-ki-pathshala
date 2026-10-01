@@ -195,8 +195,12 @@ def check_narration(n, topic):
         hook_nums = {x.replace(",", "") for x in re.findall(r"\d[\d,]*(?:\.\d+)?", hook)} - set(year) - {"1"}
         if hook_nums:
             fails.append(f"hook me jawab/number mat batao ({sorted(hook_nums)}) — sirf sawal")
-        if len(hook.split()) > 12:
-            fails.append("hook 10 words se chhota rakho")
+        # The universal gate needs a 22-28 word teaching hook. For REAL DATA,
+        # only the opening question is restricted to <=10 words; the remaining
+        # context can explain what is being investigated without revealing the answer.
+        first_sentence = re.split(r"[।?!]", hook, maxsplit=1)[0].strip()
+        if len(first_sentence.split()) > 10:
+            fails.append("REAL DATA hook ka opening question 10 words se chhota rakho")
         final = re.findall(r"₹[\d,.]+", topic["beats"]["karein"][1])
         for f in final:
             early = " ".join(str(beats.get(b) or "") for b in ("hook", "pehchan", "matlab"))
@@ -261,11 +265,12 @@ CONTINUITY RULES:
 - Describe, don't command: for SL / entry / confirmation say how traders usually do it
   ("आमतौर पर traders SL ... रखते हैं", "कई traders ... का इंतज़ार करते हैं"), never "ऐसा करो" as an order.
 - Do not add a CTA or disclaimer inside the narration — the template adds them.
-- If category is "REAL DATA": hook = ONLY the question (year, ₹1 लाख, name), max 10 words —
-  NEVER the answer. pehchan = the two prices with years. matlab = the multiple (गुना) once.
-  karein = the final value once, then the balance line from facts. Say the final value only in
-  karein, never earlier. Keep the same 160-180 total-word requirement and the same beat ranges;
-  use the extra words for concrete explanation, not filler. Write "लगाते" (not "लगते")."""
+- If category is "REAL DATA": the first sentence of hook is ONLY the question (max 10 words);
+  the rest of the 22-28 word hook may give neutral context but must not reveal the answer. pehchan =
+  the two prices with years. matlab = the multiple (गुना) once. karein = the final value once, then
+  the balance line from facts. Say the final value only in karein, never earlier. Keep the same
+  160-180 total-word requirement and the same beat ranges; use the extra words for concrete explanation,
+  not filler. Write "लगाते" (not "लगते")."""
 
 
 def narration(topic, c):
@@ -302,33 +307,77 @@ def narration(topic, c):
         last = "; ".join(fails)
         print(f"[retry] narration attempt {attempt}: {last}")
     print("[warn] LLM narration 3 baar fail — on-screen text se narration bana raha hoon")
-    # Deterministic fallback must still be long enough for a real 45-60s Short.
-    # It expands the existing topic text into a coherent mini-lesson without
-    # inventing prices, dates, returns, or trade calls.
+    # Deterministic fallback: never spend another repair-model credit just to
+    # manufacture missing narration. Build one coherent four-step lesson from
+    # the topic's own on-screen facts, then fit each beat into the same gate.
+    def _fit_words(seed, lo, hi, additions):
+        target = hi
+        words = str(seed).split()
+        for sentence in additions:
+            sw = sentence.split()
+            if len(words) + len(sw) <= target:
+                words.extend(sw)
+            if len(words) >= lo:
+                break
+        for sentence in additions:
+            sw = sentence.split()
+            if len(words) >= lo:
+                break
+            room = target - len(words)
+            words.extend(sw[:room])
+        return " ".join(words[:target])
+
     src = topic["beats"]
-    beats = {
-        "hook": (
+    if topic.get("cat") == "REAL DATA":
+        hook_seed = (
+            "यह सवाल क्यों जरूरी है? "
+            "आज हम इसी तथ्य को आसान भाषा में समझेंगे और पहले उसके संदर्भ को देखेंगे।"
+        )
+    else:
+        hook_seed = (
             f'{src["hook"][0]}। {src["hook"][1]}। '
-            "इस हिस्से में पहले सवाल और उसके संदर्भ को समझते हैं। "
-            "आगे की जानकारी इसी दिए गए तथ्य को आसान भाषा में समझाती है।"
+            "आज पहले इसी setup का मतलब साफ समझते हैं।"
+        )
+
+    beats = {
+        "hook": _fit_words(
+            hook_seed, 22, 28,
+            [
+                "अब इसे chart पर पहचानने का तरीका समझिए।",
+                "आगे की जानकारी इसी topic के संदर्भ में रहेगी।",
+            ],
         ),
-        "pehchan": (
-            f'{src["pehchan"][0]}। {src["pehchan"][1]}। '
-            "यहां दिख रही जानकारी को ध्यान से पढ़ना जरूरी है। "
-            "पहचान का मतलब है कि पहले स्क्रीन पर मौजूद तथ्य को साफ समझें। "
-            "इसके बाद ही अगले हिस्से का मतलब समझ आता है।"
+        "pehchan": _fit_words(
+            f'{src["pehchan"][0]}। {src["pehchan"][1]}।',
+            38, 46,
+            [
+                "अब इसे chart पर पहचानें।",
+                "स्क्रीन पर दिख रहे feature को एक साथ देखें।",
+                "पहचान का मतलब है कि पहले वही structure साफ समझें।",
+                "इसके बाद ही उसका market meaning पढ़ना आसान होता है।",
+            ],
         ),
-        "matlab": (
-            f'{src["matlab"][0]}। {src["matlab"][1]}। '
-            "इसका सीधा मतलब यही है कि दिए गए तथ्य को उसके संदर्भ में देखें। "
-            "यहां किसी अतिरिक्त कीमत, तारीख या रिटर्न का अनुमान नहीं लगाया जा रहा है। "
-            "सिर्फ उपलब्ध जानकारी से कारण और असर को समझें।"
+        "matlab": _fit_words(
+            f'{src["matlab"][0]}। {src["matlab"][1]}।',
+            46, 54,
+            [
+                "इन features का मतलब समझिए।",
+                "अब setup के कारण और असर को जोड़कर देखें।",
+                "यह explanation इसी दिए गए तथ्य तक सीमित है।",
+                "किसी अतिरिक्त price, date या return का अनुमान नहीं लगाया जा रहा।",
+                "इसलिए meaning को context के साथ पढ़ना जरूरी है।",
+            ],
         ),
-        "karein": (
-            f'{src["karein"][0]}। {src["karein"][1]}। '
-            "आखिर में इस जानकारी की सीमा भी याद रखें। "
-            "स्क्रीन पर दिए गए तथ्य को समझना पहला कदम है। "
-            "किसी भी निवेश फैसले के लिए अलग से पूरी जानकारी और जोखिम देखना जरूरी है।"
+        "karein": _fit_words(
+            f'{src["karein"][0]}। {src["karein"][1]}।',
+            42, 50,
+            [
+                "अब आगे traders क्या check करते हैं।",
+                "पहले confirmation और risk की सीमा समझी जाती है।",
+                "किसी setup को अकेले देखकर फैसला तय नहीं होता।",
+                "स्क्रीन पर मौजूद जानकारी इसकी practical सीमा भी दिखाती है।",
+                "अलग से पूरी जानकारी और जोखिम देखना जरूरी है।",
+            ],
         ),
     }
     n = {"title": f"{topic['thumb'][0]} {topic['thumb'][1]}", "beats": beats}
