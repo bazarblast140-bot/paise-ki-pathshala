@@ -31,6 +31,8 @@ import credit_log
 import eleven_voice
 import engagement
 import hook_check
+import hook_motion
+import hook_sfx
 import market_data
 import self_review
 import short_layout
@@ -254,11 +256,11 @@ TEACHING VOICE:
 
 Return ONLY JSON:
 {"title": "<YouTube title, max 70 chars, Hindi + key English words, the hook itself>",
- "hook_line": "<FIRST sentence of the hook beat. 4-12 words, max 10 when category is REAL DATA. A question, a number copied from the topic, or a contrarian line. No guaranteed or 'पक्का' returns.>",
+ "hook_line": "<FIRST sentence of the hook beat. 4-12 words, max 10 when category is REAL DATA. Prefer a real number copied from the topic facts, or a curiosity-gap question that adds no new number. No guaranteed or 'पक्का' returns.>",
  "beats": {"hook": "...", "pehchan": "...", "matlab": "...", "karein": "..."}}
 
 MANDATORY TEACHING SEQUENCE — NEVER CHANGE THIS ORDER:
-1) HOOK — Start with hook_line, the punchy first sentence (question, real topic number, or contrarian line).
+1) HOOK — Start with hook_line, the punchy first sentence (a number copied from the topic facts, or a curiosity-gap question with no new number).
    Then name the topic and the one-line reason it matters. Do NOT explain the answer yet.
    The hook beat still totals 22-28 words; only the opening sentence is short.
 2) PEHCHAN — "इसे chart पर पहचानेंगे कैसे?" Point to the exact visible structure/rules shown on screen.
@@ -875,11 +877,14 @@ def build_ass(topic, beat_times, spoken, hook_line, cta):
         t0, t1 = beat_times[b]
         head, sub = topic["beats"][b]
         if b == "hook":
-            # Punchy line from the first frame through the hook beat (covers 0-2s).
+            # Solid gold typewriter from the first frame. The full line is on
+            # screen by 1.4s and stays through the hook beat (covers 0-2s).
             head = hook_line
             t0 = 0.0
-        ev.append(K.ass_text(t0 + (0 if b == "hook" else 0.05), t1, 540, 1170, fit_size(head, 980, 84),
-                             K.YEL, head, 8, fade=(b != "hook"), wrap=(b == "hook")))
+            ev.extend(hook_motion.dialogues(head, t1, 540, 1170, fit_size(head, 980, 84)))
+        else:
+            ev.append(K.ass_text(t0 + 0.05, t1, 540, 1170, fit_size(head, 980, 84),
+                                 K.YEL, head, 8, fade=True))
         ev.append(K.ass_text(t0 + (0 if b == "hook" else 0.05), t1, 540, 1240, fit_size(sub, 980, 54, 34),
                              K.WHITE, sub, 8, fade=(b != "hook"), wrap=True))
         parts = chunks(spoken[b])
@@ -931,7 +936,7 @@ def beat_clip(pngs, dur, out, fps=30, switch=0.58):
                     "-map", "[v]", "-t", f"{dur:.3f}", "-r", str(fps), *X264, str(out)], check=True)
 
 
-def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None):
+def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, hook_line=""):
     clips = []
     switch = switch or {}
     for b in BEATS:
@@ -953,6 +958,10 @@ def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None):
     (RUN / "voice_list.txt").write_text("\n".join(f"file '{p}'" for p in parts), encoding="utf-8")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", "voice_list.txt",
                     "-c", "copy", "voice.wav"], cwd=RUN, check=True)
+    # Clicks sit under the voice. The wav length does not change, so narration
+    # is not delayed, and the music mix below still starts from this same file.
+    if str(hook_line or "").strip():
+        hook_sfx.mix_file(RUN / "voice.wav", hook_motion.click_times(hook_line))
     music = ROOT / "assets" / "music.mp3"
     if music.exists():
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "voice.wav", "-stream_loop", "-1", "-i", str(music),
@@ -1147,7 +1156,8 @@ def main():
     else:
         print("[HOLD] self-review below the bar — public upload blocked. " + review["summary"])
     assemble(beat_pngs, beat_audio, beat_times,
-             build_ass(topic, beat_times, spoken, hook_line, cta), switch=switch)
+             build_ass(topic, beat_times, spoken, hook_line, cta), switch=switch,
+             hook_line=hook_line)
 
     # Final-file hard gate: never retime the finished video.
     # If duration is outside the publishing window, fail and regenerate narration.
