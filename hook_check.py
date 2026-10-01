@@ -105,6 +105,61 @@ def _clip_question(text, max_words):
     return " ".join(line.split())
 
 
+def _clip_around_number(text, max_words):
+    """Keep a window that still contains the fact's number."""
+    words = " ".join(str(text or "").split()).split()
+    if not words:
+        return ""
+    idx = next((i for i, word in enumerate(words) if NUMBER_RE.search(word)), None)
+    if idx is None or len(words) <= max_words:
+        return " ".join(words[:max_words])
+    start = max(0, min(idx, len(words) - max_words))
+    return " ".join(words[start:start + max_words])
+
+
+def _fact_number_hook(topic, limit):
+    """Short line whose number is copied from the facts. None when nothing fits."""
+    facts = [str(x) for x in (topic or {}).get("facts") or []]
+    allowed = allowed_numbers(topic)
+    ranked = []
+    for fact in facts:
+        nums = extract_numbers(fact)
+        if not nums:
+            continue
+        line = _clip_around_number(fact, limit)
+        kept = extract_numbers(line)
+        if not (kept & nums):
+            continue
+        if check_hook_line(line, allowed, max_words=limit):
+            continue
+        interesting = kept - {"1", "2", "3"}
+        ranked.append((0 if interesting else 1, len(line.split()), len(line), line))
+    if not ranked:
+        return None
+    ranked.sort()
+    return ranked[0][3]
+
+
+def number_provenance(line, topic):
+    """Where each number in the line was copied from. None means it was invented."""
+    topic = topic or {}
+    sources = (
+        ("facts", " ".join(str(x) for x in (topic.get("facts") or []))),
+        ("topic", str(topic.get("topic") or "")),
+        ("beats", " ".join(str(x) for pair in (topic.get("beats") or {}).values() for x in pair)),
+        ("thumb", " ".join(str(x) for x in (topic.get("thumb") or []))),
+    )
+    found = {}
+    for number in extract_numbers(line):
+        source = None
+        for name, blob in sources:
+            if number in extract_numbers(blob):
+                source = name
+                break
+        found[number] = source
+    return found
+
+
 def _real_data_hook(topic, limit):
     """Question only. REAL DATA hooks may keep the year and '1', not the answer."""
     topic_text = str((topic or {}).get("topic") or "")
@@ -125,6 +180,9 @@ def make_hook_line(topic):
     limit = hook_word_limit(topic)
     if (topic or {}).get("cat") == "REAL DATA":
         return _real_data_hook(topic, limit)
+    numbered = _fact_number_hook(topic, limit)
+    if numbered:
+        return numbered
     beats = (topic.get("beats") or {}).get("hook") or ["", ""]
     h0, h1 = str(beats[0]), str(beats[1] if len(beats) > 1 else "")
     candidates = []
