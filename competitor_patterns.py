@@ -185,11 +185,83 @@ def trend_weight(topic, trends):
     return round(min(TREND_WEIGHT_CAP, bonus), 3)
 
 
-def score_topic(topic, weights, market_topics=None, own_performance=None, video_format=None, trends=None):
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def _as_utc(now):
+    if now is None:
+        now = datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return now.astimezone(timezone.utc)
+
+
+def market_valid_until(item):
+    """UTC instant when a current_market_topics entry expires, or None.
+
+    ``YYYY-MM-DD`` includes that whole IST calendar day (expires at the next
+    midnight IST). A timestamp expires at that instant. Timezone-naive
+    timestamps are read as IST. Unparseable values do not expire.
+    """
+    if not isinstance(item, dict):
+        return None
+    raw = item.get("valid_until")
+    if raw is None or raw == "":
+        return None
+    text = str(raw).strip()
+    try:
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+            year, month, day = (int(part) for part in text.split("-"))
+            start = datetime(year, month, day, tzinfo=IST)
+            return (start + timedelta(days=1)).astimezone(timezone.utc)
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=IST)
+    return parsed.astimezone(timezone.utc)
+
+
+def market_entry_expired(item, now=None):
+    """True at and after valid_until. Entries with no deadline stay active."""
+    deadline = market_valid_until(item)
+    if deadline is None:
+        return False
+    return _as_utc(now) >= deadline
+
+
+def market_priority(item, now=None):
+    """Priority 0–2, or 0 once the entry has expired."""
+    if not isinstance(item, dict) or market_entry_expired(item, now):
+        return 0.0
+    try:
+        return max(0.0, min(2.0, float(item.get("priority", 0))))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def blocked_topic_keys(market_topics, now=None):
+    """Keys that must not be picked once their dated entry has expired."""
+    market = market_topics.get("topics", []) if isinstance(market_topics, dict) else []
+    if not isinstance(market, list):
+        return set()
+    blocked = set()
+    for item in market:
+        if not isinstance(item, dict) or not market_entry_expired(item, now):
+            continue
+        key = str(item.get("topic_key") or "").strip()
+        if key:
+            blocked.add(key)
+    return blocked
+
+
+def score_topic(topic, weights, market_topics=None, own_performance=None, video_format=None, trends=None, *, now=None):
     """Rank a bank topic from signals, freshness and first-party outcomes.
 
     ``trends`` (data/trends.json) adds at most TREND_WEIGHT_CAP. It never
     removes candidates; pick_topic.py drops placeholder topics before scoring.
+    A current_market_topics entry past ``valid_until`` adds nothing. Passing
+    ``now`` freezes that check; the default is the current UTC time.
     """
     labels = _topic_labels(topic)
     if video_format in ("short", "long"):
@@ -207,11 +279,7 @@ def score_topic(topic, weights, market_topics=None, own_performance=None, video_
         market = []
     for item in market:
         if isinstance(item, dict) and item.get("topic_key") == key:
-            try:
-                priority = max(0, min(2, float(item.get("priority", 0))))
-            except (TypeError, ValueError):
-                priority = 0
-            score += priority * 0.5
+            score += market_priority(item, now) * 0.5
             break
 
     outcomes = own_performance.get("topics", {}) if isinstance(own_performance, dict) else {}

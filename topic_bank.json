@@ -1,5 +1,5 @@
 {
- "_comment": "Chart Board Shorts — har topic ka on-screen Hindi yahin likha hai (drawing se match). key = board_scenes.SCENES. LLM sirf bolne wali lines likhta hai aur sirf yahan ke numbers use kar sakta hai. | Expanded with original fundamental, intraday, options, quality-stock and historical case-study topics; penny-stock topics are educational and non-promotional.",
+ "_comment": "Chart Board Shorts — har topic ka on-screen Hindi yahin likha hai (drawing se match). key = board_scenes.SCENES. LLM sirf bolne wali lines likhta hai aur sirf yahan ke numbers use kar sakta hai. | Expanded with original fundamental, intraday, options, quality-stock and historical case-study topics; penny-stock topics are educational and non-promotional. | Oct 2026: placeholder/templated topics rewritten with distinct angles and sourced numbers; personal-finance, tax, IPO and dated market lessons added. Sources and staleness: data/topic_bank_sources.json. ipo_lot_size and ipo_gmp were not kept: their named share prices were under 3 months old.",
  "topics": [
   {
    "id": 1,
@@ -1710,33 +1710,36 @@
    "used_short": false,
    "key": "atr_sl",
    "cat": "INDICATOR",
-   "topic": "ATR से stop loss — भाव रोज़ कितना हिलता है",
+   "topic": "ATR से SL की दूरी — ATR 20 हो तो SL 30 पॉइंट क्यों",
    "thumb": [
-    "Stop loss",
-    "कहाँ लगाएँ?"
+    "SL बार-बार हिट?",
+    "ATR से दूरी तय करो"
    ],
    "sticker": "ज़रूर जानो",
    "beats": {
     "hook": [
-     "ATR से SL",
-     "अंदाज़े से नहीं"
+     "ATR 20",
+     "भाव रोज़ औसतन 20 हिलता है"
     ],
     "pehchan": [
      "पहचान",
-     "ATR = रोज़ की औसत range"
+     "ATR = पिछले 14 दिन की औसत range"
     ],
     "matlab": [
-     "मतलब",
-     "ज़्यादा ATR, ज़्यादा हिलता भाव"
+     "हिसाब",
+     "1.5 × 20 = 30 पॉइंट की दूरी"
     ],
     "karein": [
      "क्या करें",
-     "मिसाल: SL entry से 2 ATR नीचे"
+     "दूरी बढ़ी तो quantity घटाओ"
     ]
    },
    "facts": [
-    "ATR = average true range, default 14",
-    "2 ATR सिर्फ़ मिसाल है, नियम नहीं"
+    "ATR आम तौर पर 14 candles पर निकलता है",
+    "ATR 20 और 1.5 गुना = 30 पॉइंट",
+    "ज़्यादा दूरी = कम quantity, risk वही",
+    "ATR दिशा नहीं बताता, सिर्फ़ हलचल",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
    "seo": "ATR Stop Loss"
   },
@@ -2374,36 +2377,38 @@
    "used_short": false,
    "key": "peg_ratio",
    "cat": "FUNDAMENTAL",
-   "topic": "PEG ratio — growth के मुकाबले valuation कैसे देखें",
+   "topic": "PEG ratio — P/E 30 और growth 30% = PEG 1",
    "thumb": [
-    "PEG ratio",
-    "आसान भाषा में समझो"
+    "P/E 30 महँगा?",
+    "growth भी देखो"
    ],
    "sticker": "सीखो",
    "beats": {
     "hook": [
-     "PEG ratio",
-     "इसे आसान तरीके से समझो"
+     "P/E 30",
+     "महँगा या ठीक?"
     ],
     "pehchan": [
-     "पहचान",
-     "P/E को expected earnings growth के संदर्भ में समझना"
+     "फ़ॉर्मूला",
+     "PEG = P/E ÷ EPS growth %"
     ],
     "matlab": [
-     "मतलब",
-     "P/E को expected earnings growth के संदर्भ में समझना"
+     "हिसाब",
+     "30 ÷ 30 = 1, 30 ÷ 10 = 3"
     ],
     "karein": [
-     "क्या करें",
-     "PEG = P/E ÷ growth rate"
+     "क्या देखें",
+     "growth टिकाऊ है या एक साल की?"
     ]
    },
    "facts": [
-    "P/E को expected earnings growth के संदर्भ में समझना",
-    "PEG = P/E ÷ growth rate",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "PEG = P/E ÷ सालाना EPS growth %",
+    "P/E 30, growth 30% → PEG 1",
+    "P/E 30, growth 10% → PEG 3",
+    "growth का अनुमान ग़लत तो PEG भी ग़लत",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "PEG ratio — growth के मुकाबले valuation कैसे देखें"
+   "seo": "PEG Ratio"
   },
   {
    "id": 65,
@@ -2411,36 +2416,38 @@
    "used_short": false,
    "key": "roe_roce",
    "cat": "FUNDAMENTAL",
-   "topic": "ROE बनाम ROCE — कंपनी पूँजी का इस्तेमाल कितना अच्छा करती है",
+   "topic": "ROE 25% पर ROCE 10% — कर्ज़ से फूला हुआ return?",
    "thumb": [
-    "ROE बनाम ROCE",
-    "आसान भाषा में समझो"
+    "ROE 25%",
+    "असली या कर्ज़ का कमाल?"
    ],
-   "sticker": "सीखो",
+   "sticker": "चेतावनी",
    "beats": {
     "hook": [
-     "ROE बनाम ROCE",
-     "इसे आसान तरीके से समझो"
+     "ROE 25%",
+     "पर ROCE सिर्फ़ 10%"
     ],
     "pehchan": [
      "पहचान",
-     "ROE equity पर return और ROCE operating capital पर return समझाता है"
+     "ROE सिर्फ़ equity पर, ROCE पूरी पूँजी पर"
     ],
     "matlab": [
      "मतलब",
-     "ROE equity पर return और ROCE operating capital पर return समझाता है"
+     "equity कम, कर्ज़ ज़्यादा = ROE फूलता है"
     ],
     "karein": [
-     "क्या करें",
-     "दोनों को अकेले नहीं, sector context में पढ़ें"
+     "क्या देखें",
+     "ROE के साथ debt-to-equity भी देखो"
     ]
    },
    "facts": [
-    "ROE equity पर return और ROCE operating capital पर return समझाता है",
-    "दोनों को अकेले नहीं, sector context में पढ़ें",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "ROE = net profit ÷ shareholders' equity",
+    "ROCE = EBIT ÷ (equity + debt)",
+    "ROE 25% और ROCE 10% का बड़ा फ़र्क कर्ज़ की ओर इशारा",
+    "कर्ज़ से बढ़ा return मंदी में उल्टा पड़ सकता है",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "ROE बनाम ROCE — कंपनी पूँजी का इस्तेमाल कितना अच्छा करती है"
+   "seo": "ROE vs ROCE"
   },
   {
    "id": 66,
@@ -2486,36 +2493,38 @@
    "used_short": false,
    "key": "cashflow_profit",
    "cat": "FUNDAMENTAL",
-   "topic": "Profit है लेकिन cash नहीं — cash flow statement क्यों देखें",
+   "topic": "Profit ₹100 करोड़, cash सिर्फ़ ₹20 करोड़ — debtors का खेल",
    "thumb": [
-    "Profit है लेकिन cash नहीं",
-    "आसान भाषा में समझो"
+    "Profit ₹100 करोड़",
+    "cash कहाँ गया?"
    ],
-   "sticker": "सीखो",
+   "sticker": "राज़",
    "beats": {
     "hook": [
-     "Profit है लेकिन cash नहीं",
-     "इसे आसान तरीके से समझो"
+     "Profit 100",
+     "cash सिर्फ़ 20"
     ],
     "pehchan": [
      "पहचान",
-     "accounting profit और operating cash flow अलग हो सकते हैं"
+     "बिक्री उधार पर, पैसा debtors में फँसा"
     ],
     "matlab": [
      "मतलब",
-     "accounting profit और operating cash flow अलग हो सकते हैं"
+     "काग़ज़ पर कमाई, बैंक में नहीं"
     ],
     "karein": [
-     "क्या करें",
-     "profit के साथ cash flow भी पढ़ें"
+     "क्या देखें",
+     "operating cash flow को profit से मिलाओ"
     ]
    },
    "facts": [
-    "accounting profit और operating cash flow अलग हो सकते हैं",
-    "profit के साथ cash flow भी पढ़ें",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "net profit ₹100 करोड़",
+    "operating cash flow ₹20 करोड़",
+    "receivables (debtors) बढ़ें तो cash कम आता है",
+    "ये सालों तक चले तो सावधान",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Profit है लेकिन cash नहीं — cash flow statement क्यों देखें"
+   "seo": "Cash Flow vs Profit"
   },
   {
    "id": 68,
@@ -2523,36 +2532,38 @@
    "used_short": false,
    "key": "operating_margin",
    "cat": "FUNDAMENTAL",
-   "topic": "Operating margin बढ़ना क्यों महत्वपूर्ण है",
+   "topic": "Operating leverage — sales 10% बढ़ी, profit 25% क्यों बढ़ा",
    "thumb": [
-    "Operating margin बढ़ना क्यों महत्वपूर्ण है",
-    "आसान भाषा में समझो"
+    "sales 10% ऊपर",
+    "profit 25% ऊपर?"
    ],
-   "sticker": "सीखो",
+   "sticker": "राज़",
    "beats": {
     "hook": [
-     "Operating margin बढ़ना क्यों महत्वपूर्ण है",
-     "इसे आसान तरीके से समझो"
+     "sales 10%",
+     "profit 25% — कैसे?"
     ],
     "pehchan": [
      "पहचान",
-     "margin expansion pricing power या efficiency का संकेत हो सकता है"
+     "fixed ख़र्च वही रहे, बिक्री बढ़े"
     ],
     "matlab": [
-     "मतलब",
-     "margin expansion pricing power या efficiency का संकेत हो सकता है"
+     "हिसाब",
+     "sales 100 से 110, profit 20 से 25"
     ],
     "karein": [
-     "क्या करें",
-     "एक quarter नहीं, trend देखें"
+     "क्या देखें",
+     "उल्टा भी होता है — sales गिरे तो profit ज़्यादा गिरता है"
     ]
    },
    "facts": [
-    "margin expansion pricing power या efficiency का संकेत हो सकता है",
-    "एक quarter नहीं, trend देखें",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "sales 100, variable ख़र्च 50, fixed ख़र्च 30 → profit 20",
+    "sales 110, variable 55, fixed 30 → profit 25 यानी 25% ज़्यादा",
+    "operating margin = operating profit ÷ sales",
+    "fixed cost वाला business दोनों तरफ़ तेज़ चलता है",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Operating margin बढ़ना क्यों महत्वपूर्ण है"
+   "seo": "Operating Leverage"
   },
   {
    "id": 69,
@@ -2560,36 +2571,38 @@
    "used_short": false,
    "key": "eps_growth",
    "cat": "FUNDAMENTAL",
-   "topic": "EPS growth — सिर्फ़ profit नहीं, per-share profit क्यों",
+   "topic": "Profit 20% बढ़ा, EPS सिर्फ़ 9% — नए shares का असर",
    "thumb": [
-    "EPS growth",
-    "आसान भाषा में समझो"
+    "Profit 20% ऊपर",
+    "आपका हिस्सा कितना?"
    ],
-   "sticker": "सीखो",
+   "sticker": "सच",
    "beats": {
     "hook": [
-     "EPS growth",
-     "इसे आसान तरीके से समझो"
+     "Profit +20%",
+     "EPS सिर्फ़ +9%"
     ],
     "pehchan": [
      "पहचान",
-     "share count बदलने पर total profit misleading हो सकता है"
+     "shares 100 से 110 करोड़ हुए"
     ],
     "matlab": [
-     "मतलब",
-     "share count बदलने पर total profit misleading हो सकता है"
+     "हिसाब",
+     "120 ÷ 110 = 1.09 — EPS 9% ऊपर"
     ],
     "karein": [
-     "क्या करें",
-     "EPS trend देखें"
+     "क्या देखें",
+     "कुल profit नहीं, per-share profit देखो"
     ]
    },
    "facts": [
-    "share count बदलने पर total profit misleading हो सकता है",
-    "EPS trend देखें",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "profit ₹100 करोड़ से ₹120 करोड़",
+    "shares 100 करोड़ से 110 करोड़",
+    "EPS ₹1 से ₹1.09",
+    "नए shares (dilution) आपका हिस्सा घटाते हैं",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "EPS growth — सिर्फ़ profit नहीं, per-share profit क्यों"
+   "seo": "EPS Growth"
   },
   {
    "id": 70,
@@ -2635,36 +2648,37 @@
    "used_short": false,
    "key": "shareholding",
    "cat": "FUNDAMENTAL",
-   "topic": "Promoter holding घट रही हो तो क्या देखें",
+   "topic": "Shareholding pattern — promoter, FII, DII, public: 4 हिस्से कैसे पढ़ें",
    "thumb": [
-    "Promoter holding घट रही हो तो क्या देखें",
-    "आसान भाषा में समझो"
+    "कंपनी का मालिक",
+    "कौन-कौन?"
    ],
    "sticker": "सीखो",
    "beats": {
     "hook": [
-     "Promoter holding घट रही हो तो क्या देखें",
-     "इसे आसान तरीके से समझो"
+     "4 हिस्से",
+     "promoter, FII, DII, public"
     ],
     "pehchan": [
      "पहचान",
-     "holding change के पीछे dilution, sale या corporate action हो सकता है"
+     "हर तिमाही exchange पर छपता है"
     ],
     "matlab": [
      "मतलब",
-     "holding change के पीछे dilution, sale या corporate action हो सकता है"
+     "promoter लगातार घटाए तो सवाल पूछो"
     ],
     "karein": [
-     "क्या करें",
-     "एक quarter से conclusion न निकालें"
+     "क्या देखें",
+     "एक तिमाही नहीं, 8 तिमाही का trend"
     ]
    },
    "facts": [
-    "holding change के पीछे dilution, sale या corporate action हो सकता है",
-    "एक quarter से conclusion न निकालें",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "shareholding pattern हर तिमाही exchange website पर आता है",
+    "FII = विदेशी संस्थान, DII = घरेलू संस्थान",
+    "promoter की हिस्सेदारी घटने के अच्छे-बुरे दोनों कारण हो सकते हैं",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Promoter holding घट रही हो तो क्या देखें"
+   "seo": "Shareholding Pattern"
   },
   {
    "id": 72,
@@ -2672,36 +2686,38 @@
    "used_short": false,
    "key": "fcf",
    "cat": "FUNDAMENTAL",
-   "topic": "Free Cash Flow — असली cash generation कैसे समझें",
+   "topic": "Free Cash Flow — operating cash 500 − capex 300 = 200",
    "thumb": [
-    "Free Cash Flow",
-    "आसान भाषा में समझो"
+    "कमाई के बाद",
+    "असल में कितना बचा?"
    ],
    "sticker": "सीखो",
    "beats": {
     "hook": [
-     "Free Cash Flow",
-     "इसे आसान तरीके से समझो"
+     "FCF",
+     "असली बचत"
     ],
     "pehchan": [
-     "पहचान",
-     "operating cash flow minus capital expenditure का basic idea"
+     "फ़ॉर्मूला",
+     "FCF = operating cash flow − capex"
     ],
     "matlab": [
-     "मतलब",
-     "operating cash flow minus capital expenditure का basic idea"
+     "हिसाब",
+     "500 − 300 = 200"
     ],
     "karein": [
-     "क्या करें",
-     "FCF trend और business reinvestment साथ देखें"
+     "क्या देखें",
+     "कई साल negative FCF तो कर्ज़ से चल रहा?"
     ]
    },
    "facts": [
-    "operating cash flow minus capital expenditure का basic idea",
-    "FCF trend और business reinvestment साथ देखें",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "operating cash flow ₹500 करोड़",
+    "capex ₹300 करोड़",
+    "free cash flow ₹200 करोड़",
+    "growth के दौर में FCF कुछ साल कम हो सकता है",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Free Cash Flow — असली cash generation कैसे समझें"
+   "seo": "Free Cash Flow"
   },
   {
    "id": 73,
@@ -2747,36 +2763,37 @@
    "used_short": false,
    "key": "intraday_vwap_reclaim",
    "cat": "INTRADAY",
-   "topic": "VWAP reclaim strategy — price वापस VWAP के ऊपर आए तो क्या देखें",
+   "topic": "VWAP reclaim — नीचे खुला, फिर VWAP के ऊपर 2 candle close",
    "thumb": [
-    "VWAP reclaim strategy",
-    "आसान भाषा में समझो"
+    "VWAP के ऊपर लौटा",
+    "अब क्या?"
    ],
-   "sticker": "सीखो",
+   "sticker": "समझो",
    "beats": {
     "hook": [
-     "VWAP reclaim strategy",
-     "इसे आसान तरीके से समझो"
+     "VWAP reclaim",
+     "नीचे से ऊपर वापसी"
     ],
     "pehchan": [
      "पहचान",
-     "VWAP के ऊपर टिकना और volume confirmation"
+     "VWAP के ऊपर 2 candle close"
     ],
     "matlab": [
      "मतलब",
-     "VWAP के ऊपर टिकना और volume confirmation"
+     "दिन का औसत ख़रीदार अब फ़ायदे में"
     ],
     "karein": [
-     "क्या करें",
-     "VWAP अकेला buy signal नहीं"
+     "क्या देखें",
+     "वापस VWAP के नीचे close = setup रद्द"
     ]
    },
    "facts": [
-    "VWAP के ऊपर टिकना और volume confirmation",
-    "VWAP अकेला buy signal नहीं",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "VWAP = volume-weighted औसत भाव",
+    "2 candle close ऊपर = एक नियम, गारंटी नहीं",
+    "VWAP के नीचे वापसी पर setup ख़त्म",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "VWAP reclaim strategy — price वापस VWAP के ऊपर आए तो क्या देखें"
+   "seo": "VWAP Reclaim"
   },
   {
    "id": 75,
@@ -2784,36 +2801,37 @@
    "used_short": false,
    "key": "intraday_gap",
    "cat": "INTRADAY",
-   "topic": "Gap-up और gap-down के बाद पहला setup कैसे पढ़ें",
+   "topic": "Gap-up के बाद पहले 15 मिनट — gap भरेगा या चलेगा?",
    "thumb": [
-    "Gap-up और gap-down के बाद पहला setup कैसे पढ़ें",
-    "आसान भाषा में समझो"
+    "1% gap-up",
+    "पीछा करें?"
    ],
-   "sticker": "सीखो",
+   "sticker": "सावधान",
    "beats": {
     "hook": [
-     "Gap-up और gap-down के बाद पहला setup कैसे पढ़ें",
-     "इसे आसान तरीके से समझो"
+     "Gap-up 1%",
+     "पहले 15 मिनट रुको"
     ],
     "pehchan": [
      "पहचान",
-     "gap size, previous close और opening range को साथ देखें"
+     "पिछले close से 1% ऊपर open"
     ],
     "matlab": [
      "मतलब",
-     "gap size, previous close और opening range को साथ देखें"
+     "15 मिनट का low टूटे तो gap भरने का ख़तरा"
     ],
     "karein": [
-     "क्या करें",
-     "gap को chase न करें"
+     "क्या देखें",
+     "gap दिशा में चले तभी सोचो"
     ]
    },
    "facts": [
-    "gap size, previous close और opening range को साथ देखें",
-    "gap को chase न करें",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "gap = आज का open पिछले close से अलग",
+    "हर gap भरता नहीं, हर gap चलता भी नहीं",
+    "पहले 15 मिनट spread और हलचल ज़्यादा",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Gap-up और gap-down के बाद पहला setup कैसे पढ़ें"
+   "seo": "Gap Up Gap Down"
   },
   {
    "id": 76,
@@ -2821,36 +2839,37 @@
    "used_short": false,
    "key": "intraday_first_hour",
    "cat": "INTRADAY",
-   "topic": "पहले 1 घंटे का high-low intraday में कैसे उपयोग करें",
+   "topic": "पहले 1 घंटे का high-low — 10:15 के बाद ही फ़ैसला",
    "thumb": [
-    "पहले 1 घंटे का high-low intraday में कैसे उपयोग करें",
-    "आसान भाषा में समझो"
+    "9:15 से 10:15",
+    "धैर्य का घंटा"
    ],
-   "sticker": "सीखो",
+   "sticker": "समझो",
    "beats": {
     "hook": [
-     "पहले 1 घंटे का high-low intraday में कैसे उपयोग करें",
-     "इसे आसान तरीके से समझो"
+     "पहला घंटा",
+     "9:15 से 10:15"
     ],
     "pehchan": [
      "पहचान",
-     "first-hour range breakout/breakdown का framework"
+     "इस घंटे का high और low मार्क करो"
     ],
     "matlab": [
      "मतलब",
-     "first-hour range breakout/breakdown का framework"
+     "15 मिनट की range से बड़ी, कम झूठे break"
     ],
     "karein": [
-     "क्या करें",
-     "false breakout के लिए volume देखें"
+     "क्या देखें",
+     "range बहुत चौड़ी हो तो risk भी चौड़ा"
     ]
    },
    "facts": [
-    "first-hour range breakout/breakdown का framework",
-    "false breakout के लिए volume देखें",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "बाज़ार 9:15 पर खुलता है",
+    "पहला घंटा 9:15 से 10:15",
+    "बड़ी range = दूर का SL = कम quantity",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "पहले 1 घंटे का high-low intraday में कैसे उपयोग करें"
+   "seo": "First Hour High Low"
   },
   {
    "id": 77,
@@ -2858,36 +2877,37 @@
    "used_short": false,
    "key": "intraday_volume_price",
    "cat": "INTRADAY",
-   "topic": "Price बढ़े लेकिन volume घटे — intraday में क्या संकेत",
+   "topic": "Price ऊपर, volume घटता — तेज़ी थक रही है?",
    "thumb": [
-    "Price बढ़े लेकिन volume घटे",
-    "आसान भाषा में समझो"
+    "भाव ऊपर",
+    "पर volume कम?"
    ],
-   "sticker": "सीखो",
+   "sticker": "सावधान",
    "beats": {
     "hook": [
-     "Price बढ़े लेकिन volume घटे",
-     "इसे आसान तरीके से समझो"
+     "Price ऊपर",
+     "volume नीचे"
     ],
     "pehchan": [
      "पहचान",
-     "price-volume divergence को context के साथ समझें"
+     "हर नई ऊँचाई पर कम volume"
     ],
     "matlab": [
      "मतलब",
-     "price-volume divergence को context के साथ समझें"
+     "नए ख़रीदार कम हो रहे"
     ],
     "karein": [
-     "क्या करें",
-     "अकेले volume पर trade नहीं"
+     "क्या देखें",
+     "नया long सोच-समझकर, पुराने में बचाव"
     ]
    },
    "facts": [
-    "price-volume divergence को context के साथ समझें",
-    "अकेले volume पर trade नहीं",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "volume = कितने शेयर बदले",
+    "तेज़ी में volume घटना कमज़ोरी का संकेत हो सकता है",
+    "ये अकेला संकेत है, पुष्टि ज़रूरी",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Price बढ़े लेकिन volume घटे — intraday में क्या संकेत"
+   "seo": "Volume Price Divergence"
   },
   {
    "id": 78,
@@ -2933,36 +2953,38 @@
    "used_short": false,
    "key": "intraday_risk_reward",
    "cat": "INTRADAY",
-   "topic": "Intraday में position size — stop loss से quantity कैसे तय करें",
+   "topic": "छोटा target, बड़ा ख़र्च — charges intraday 1:2 को कैसे खाते हैं",
    "thumb": [
-    "Intraday में position size",
-    "आसान भाषा में समझो"
+    "1:2 का setup",
+    "फिर भी घाटा?"
    ],
-   "sticker": "सीखो",
+   "sticker": "सच",
    "beats": {
     "hook": [
-     "Intraday में position size",
-     "इसे आसान तरीके से समझो"
+     "Entry 200",
+     "SL 198, target 204"
     ],
     "pehchan": [
-     "पहचान",
-     "fixed rupee risk से quantity calculation"
+     "हिसाब",
+     "risk 2, reward 4 प्रति शेयर"
     ],
     "matlab": [
      "मतलब",
-     "fixed rupee risk से quantity calculation"
+     "brokerage, STT, slippage reward घटाते हैं"
     ],
     "karein": [
      "क्या करें",
-     "पहले SL, फिर quantity"
+     "ट्रेड से पहले charges जोड़कर हिसाब"
     ]
    },
    "facts": [
-    "fixed rupee risk से quantity calculation",
-    "पहले SL, फिर quantity",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "entry 200, SL 198, target 204",
+    "100 शेयर पर risk 200, reward 400",
+    "हर ट्रेड पर charges और slippage लगते हैं",
+    "बहुत छोटे target पर charges का हिस्सा बड़ा",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Intraday में position size — stop loss से quantity कैसे तय करें"
+   "seo": "Intraday Risk Reward"
   },
   {
    "id": 80,
@@ -2970,36 +2992,37 @@
    "used_short": false,
    "key": "intraday_no_trade",
    "cat": "INTRADAY",
-   "topic": "No-trade zone — कब trade न करना भी strategy है",
+   "topic": "No-trade zone — 3 हालात जब ट्रेड न करना ही strategy है",
    "thumb": [
-    "No-trade zone",
-    "आसान भाषा में समझो"
+    "आज ट्रेड",
+    "न करें तो?"
    ],
-   "sticker": "सीखो",
+   "sticker": "ज़रूर जानो",
    "beats": {
     "hook": [
-     "No-trade zone",
-     "इसे आसान तरीके से समझो"
+     "No-trade",
+     "भी एक फ़ैसला"
     ],
     "pehchan": [
-     "पहचान",
-     "low liquidity, choppy price और unclear setup पहचानना"
+     "3 हालात",
+     "बड़ी ख़बर से पहले, छोटी range, थकान/गुस्सा"
     ],
     "matlab": [
      "मतलब",
-     "low liquidity, choppy price और unclear setup पहचानना"
+     "बिना edge का ट्रेड = सिर्फ़ ख़र्च"
     ],
     "karein": [
      "क्या करें",
-     "capital बचाना भी outcome है"
+     "दिन की 2 हार के बाद रुक जाओ"
     ]
    },
    "facts": [
-    "low liquidity, choppy price और unclear setup पहचानना",
-    "capital बचाना भी outcome है",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "RBI policy या बड़े result के समय भाव अचानक उछलता है",
+    "बहुत छोटी range में breakout बार-बार फेल",
+    "2 हार के बाद रुकना एक नियम का उदाहरण है",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "No-trade zone — कब trade न करना भी strategy है"
+   "seo": "No Trade Zone"
   },
   {
    "id": 81,
@@ -3007,36 +3030,37 @@
    "used_short": false,
    "key": "option_delta",
    "cat": "OPTIONS",
-   "topic": "Option Delta — premium underlying के साथ कितना बदलता है",
+   "topic": "OTM option का delta 0.3 — Nifty 100 चले तो premium करीब 30",
    "thumb": [
-    "Option Delta",
-    "आसान भाषा में समझो"
+    "Nifty 100 ऊपर",
+    "premium कितना?"
    ],
-   "sticker": "सीखो",
+   "sticker": "OPTIONS",
    "beats": {
     "hook": [
-     "Option Delta",
-     "इसे आसान तरीके से समझो"
+     "Delta 0.3",
+     "Nifty 100 चले तो?"
     ],
     "pehchan": [
      "पहचान",
-     "delta को directional sensitivity की तरह समझें"
+     "delta = underlying के 1 पॉइंट पर premium का बदलाव"
     ],
     "matlab": [
-     "मतलब",
-     "delta को directional sensitivity की तरह समझें"
+     "हिसाब",
+     "100 × 0.3 = करीब 30"
     ],
     "karein": [
-     "क्या करें",
-     "delta स्थिर नहीं रहता"
+     "याद रखो",
+     "delta ख़ुद बदलता रहता है (gamma)"
     ]
    },
    "facts": [
-    "delta को directional sensitivity की तरह समझें",
-    "delta स्थिर नहीं रहता",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "ATM delta करीब 0.5, OTM कम, ITM ज़्यादा",
+    "delta 0.3 पर 100 पॉइंट ≈ 30 premium",
+    "IV और time भी premium बदलते हैं",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Option Delta — premium underlying के साथ कितना बदलता है"
+   "seo": "Option Delta"
   },
   {
    "id": 82,
@@ -3082,36 +3106,37 @@
    "used_short": false,
    "key": "option_vega",
    "cat": "OPTIONS",
-   "topic": "Vega — IV बदलने से option premium पर असर",
+   "topic": "Vega 8 — IV 1 point गिरे तो premium 8 कम",
    "thumb": [
-    "Vega",
-    "आसान भाषा में समझो"
+    "Nifty वहीं",
+    "premium क्यों गिरा?"
    ],
-   "sticker": "सीखो",
+   "sticker": "OPTIONS",
    "beats": {
     "hook": [
-     "Vega",
-     "इसे आसान तरीके से समझो"
+     "Vega 8",
+     "IV 1 point = 8 रुपये"
     ],
     "pehchan": [
      "पहचान",
-     "vega implied volatility sensitivity समझाता है"
+     "vega = IV के 1 point पर premium का बदलाव"
     ],
     "matlab": [
-     "मतलब",
-     "vega implied volatility sensitivity समझाता है"
+     "हिसाब",
+     "IV 20 से 15 = 5 × 8 = 40 कम"
     ],
     "karein": [
-     "क्या करें",
-     "event के बाद IV crush समझें"
+     "क्या देखें",
+     "ख़बर से पहले महँगी IV पर ख़रीदना जोखिम"
     ]
    },
    "facts": [
-    "vega implied volatility sensitivity समझाता है",
-    "event के बाद IV crush समझें",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "vega 8 मान लो",
+    "IV 20 से 15 → premium करीब 40 कम",
+    "दूर की expiry में vega ज़्यादा",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Vega — IV बदलने से option premium पर असर"
+   "seo": "Option Vega"
   },
   {
    "id": 84,
@@ -3119,36 +3144,37 @@
    "used_short": false,
    "key": "option_theta",
    "cat": "OPTIONS",
-   "topic": "Theta decay — weekend और expiry के पास premium क्यों घटता है",
+   "topic": "Theta −5 — 3 दिन में 15 रुपये time value कम",
    "thumb": [
-    "Theta decay",
-    "आसान भाषा में समझो"
+    "कुछ नहीं बदला",
+    "फिर भी घाटा?"
    ],
-   "sticker": "सीखो",
+   "sticker": "चेतावनी",
    "beats": {
     "hook": [
-     "Theta decay",
-     "इसे आसान तरीके से समझो"
+     "Theta −5",
+     "रोज़ 5 रुपये कम"
     ],
     "pehchan": [
      "पहचान",
-     "time value decay का concept"
+     "theta = एक दिन में time value की कमी"
     ],
     "matlab": [
-     "मतलब",
-     "time value decay का concept"
+     "हिसाब",
+     "3 दिन × 5 = 15"
     ],
     "karein": [
-     "क्या करें",
-     "बाकी factors constant नहीं रहते"
+     "याद रखो",
+     "expiry पास आते theta और तेज़"
     ]
    },
    "facts": [
-    "time value decay का concept",
-    "बाकी factors constant नहीं रहते",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "theta −5 का मतलब बाकी सब वही तो रोज़ करीब 5 कम",
+    "3 दिन में करीब 15",
+    "buyer के लिए theta ख़र्च, seller के लिए कमाई — पर risk अलग",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Theta decay — weekend और expiry के पास premium क्यों घटता है"
+   "seo": "Option Theta"
   },
   {
    "id": 85,
@@ -3156,36 +3182,37 @@
    "used_short": false,
    "key": "option_itm_otm_atm",
    "cat": "OPTIONS",
-   "topic": "ITM, ATM, OTM — तीनों option में फर्क क्या है",
+   "topic": "ITM, ATM, OTM — Nifty 22,600 पर 22,500, 22,600, 22,700 Call",
    "thumb": [
-    "ITM, ATM, OTM",
-    "आसान भाषा में समझो"
+    "3 strike",
+    "फ़र्क क्या?"
    ],
    "sticker": "सीखो",
    "beats": {
     "hook": [
-     "ITM, ATM, OTM",
-     "इसे आसान तरीके से समझो"
+     "Nifty 22,600",
+     "3 Call strikes"
     ],
     "pehchan": [
-     "पहचान",
-     "moneyness को simple example से समझें"
+     "ITM",
+     "22,500 Call — 100 पॉइंट अंदर"
     ],
     "matlab": [
-     "मतलब",
-     "moneyness को simple example से समझें"
+     "ATM / OTM",
+     "22,600 बराबर, 22,700 बाहर"
     ],
     "karein": [
-     "क्या करें",
-     "premium और probability अलग concepts हैं"
+     "याद रखो",
+     "OTM सस्ता है, पर ज़ीरो होने की संभावना ज़्यादा"
     ]
    },
    "facts": [
-    "moneyness को simple example से समझें",
-    "premium और probability अलग concepts हैं",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "मान लो Nifty 22,600",
+    "22,500 CE = ITM, 22,600 CE = ATM, 22,700 CE = OTM",
+    "Put में उल्टा: ऊँची strike ITM",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "ITM, ATM, OTM — तीनों option में फर्क क्या है"
+   "seo": "ITM ATM OTM"
   },
   {
    "id": 86,
@@ -3193,36 +3220,38 @@
    "used_short": false,
    "key": "option_intrinsic_time",
    "cat": "OPTIONS",
-   "topic": "Intrinsic value और time value — premium बना कैसे",
+   "topic": "Premium 180 = intrinsic 100 + time value 80",
    "thumb": [
-    "Intrinsic value और time value",
-    "आसान भाषा में समझो"
+    "Premium 180",
+    "अंदर क्या है?"
    ],
-   "sticker": "सीखो",
+   "sticker": "राज़",
    "beats": {
     "hook": [
-     "Intrinsic value और time value",
-     "इसे आसान तरीके से समझो"
+     "Premium 180",
+     "दो हिस्से"
     ],
     "pehchan": [
-     "पहचान",
-     "option premium को दो हिस्सों में समझना"
+     "Intrinsic",
+     "Nifty 22,600 − strike 22,500 = 100"
     ],
     "matlab": [
-     "मतलब",
-     "option premium को दो हिस्सों में समझना"
+     "Time value",
+     "180 − 100 = 80"
     ],
     "karein": [
-     "क्या करें",
-     "expiry पर time value zero की ओर जाती है"
+     "याद रखो",
+     "expiry तक time value ज़ीरो"
     ]
    },
    "facts": [
-    "option premium को दो हिस्सों में समझना",
-    "expiry पर time value zero की ओर जाती है",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "Nifty 22,600, strike 22,500 CE, premium 180",
+    "intrinsic value 100",
+    "time value 80",
+    "OTM option में सिर्फ़ time value",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Intrinsic value और time value — premium बना कैसे"
+   "seo": "Intrinsic Value Time Value"
   },
   {
    "id": 87,
@@ -3230,36 +3259,38 @@
    "used_short": false,
    "key": "option_breakeven",
    "cat": "OPTIONS",
-   "topic": "Option buyer का breakeven — strike plus premium कैसे निकले",
+   "topic": "Option buyer का breakeven — 22,600 + 120 = 22,720",
    "thumb": [
-    "Option buyer का breakeven",
-    "आसान भाषा में समझो"
+    "Nifty ऊपर गया",
+    "फिर भी घाटा?"
    ],
-   "sticker": "सीखो",
+   "sticker": "सच",
    "beats": {
     "hook": [
-     "Option buyer का breakeven",
-     "इसे आसान तरीके से समझो"
+     "Call 22,600",
+     "premium 120"
     ],
     "pehchan": [
-     "पहचान",
-     "call और put breakeven का basic math"
+     "फ़ॉर्मूला",
+     "breakeven = strike + premium"
     ],
     "matlab": [
-     "मतलब",
-     "call और put breakeven का basic math"
+     "हिसाब",
+     "22,600 + 120 = 22,720"
     ],
     "karein": [
-     "क्या करें",
-     "charges और expiry payoff अलग रखें"
+     "याद रखो",
+     "expiry पर 22,720 से ऊपर ही मुनाफ़ा"
     ]
    },
    "facts": [
-    "call और put breakeven का basic math",
-    "charges और expiry payoff अलग रखें",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "22,600 CE, premium 120",
+    "expiry breakeven 22,720",
+    "Put में breakeven = strike − premium",
+    "charges अलग से",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Option buyer का breakeven — strike plus premium कैसे निकले"
+   "seo": "Option Breakeven"
   },
   {
    "id": 88,
@@ -3343,36 +3374,37 @@
    "used_short": false,
    "key": "option_covered_call",
    "cat": "OPTIONS",
-   "topic": "Covered Call — stock holding पर premium income का basic idea",
+   "topic": "Covered call — शेयर 1,000, 1,050 Call बेचकर premium 15",
    "thumb": [
-    "Covered Call",
-    "आसान भाषा में समझो"
+    "शेयर रखे हैं",
+    "उन पर कमाई?"
    ],
    "sticker": "सीखो",
    "beats": {
     "hook": [
-     "Covered Call",
-     "इसे आसान तरीके से समझो"
+     "Covered call",
+     "शेयर + Call बेचना"
     ],
     "pehchan": [
-     "पहचान",
-     "long stock plus call selling structure"
+     "मिसाल",
+     "शेयर 1,000, 1,050 CE पर 15 मिला"
     ],
     "matlab": [
      "मतलब",
-     "long stock plus call selling structure"
+     "1,065 के ऊपर का फ़ायदा छूटता है"
     ],
     "karein": [
-     "क्या करें",
-     "upside capped हो सकता है"
+     "याद रखो",
+     "शेयर गिरे तो premium सिर्फ़ थोड़ा बचाता है"
     ]
    },
    "facts": [
-    "long stock plus call selling structure",
-    "upside capped हो सकता है",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "शेयर 1,000 पर, 1,050 CE बेचा, premium 15",
+    "ऊपर का फ़ायदा 1,050 + 15 = 1,065 तक सीमित",
+    "गिरावट का पूरा risk शेयर पर बाकी",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Covered Call — stock holding पर premium income का basic idea"
+   "seo": "Covered Call"
   },
   {
    "id": 91,
@@ -3380,36 +3412,37 @@
    "used_short": false,
    "key": "option_protective_put",
    "cat": "OPTIONS",
-   "topic": "Protective Put — शेयर portfolio को downside से hedge कैसे करें",
+   "topic": "Protective put — शेयर 1,000, Put 950 पर 20 — max loss 70",
    "thumb": [
-    "Protective Put",
-    "आसान भाषा में समझो"
+    "शेयर गिरे तो",
+    "बीमा कैसे?"
    ],
    "sticker": "सीखो",
    "beats": {
     "hook": [
-     "Protective Put",
-     "इसे आसान तरीके से समझो"
+     "Protective put",
+     "शेयर का बीमा"
     ],
     "pehchan": [
-     "पहचान",
-     "stock plus put का insurance-like structure"
+     "मिसाल",
+     "शेयर 1,000, 950 PE पर 20"
     ],
     "matlab": [
-     "मतलब",
-     "stock plus put का insurance-like structure"
+     "हिसाब",
+     "50 गिरावट + 20 premium = 70 max loss"
     ],
     "karein": [
-     "क्या करें",
-     "hedge की cost premium है"
+     "याद रखो",
+     "बीमे का ख़र्च हर बार लगता है"
     ]
    },
    "facts": [
-    "stock plus put का insurance-like structure",
-    "hedge की cost premium है",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "शेयर 1,000, 950 PE ख़रीदा, premium 20",
+    "expiry तक max loss 70 प्रति शेयर",
+    "ऊपर का फ़ायदा खुला, premium जितना कम",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Protective Put — शेयर portfolio को downside से hedge कैसे करें"
+   "seo": "Protective Put"
   },
   {
    "id": 92,
@@ -3417,36 +3450,37 @@
    "used_short": false,
    "key": "option_straddle",
    "cat": "OPTIONS",
-   "topic": "Long Straddle — बड़ा move चाहिए, direction नहीं",
+   "topic": "Short straddle — premium दिखता है, risk छिपा रहता है",
    "thumb": [
-    "Long Straddle",
-    "आसान भाषा में समझो"
+    "Call+Put बेचो",
+    "आसान कमाई?"
    ],
-   "sticker": "सीखो",
+   "sticker": "चेतावनी",
    "beats": {
     "hook": [
-     "Long Straddle",
-     "इसे आसान तरीके से समझो"
+     "Short straddle",
+     "दोनों तरफ़ बेचना"
     ],
     "pehchan": [
      "पहचान",
-     "same strike call और put खरीदने का concept"
+     "ATM Call और Put दोनों बेचे"
     ],
     "matlab": [
      "मतलब",
-     "same strike call और put खरीदने का concept"
+     "बाज़ार किसी भी तरफ़ भागे तो नुकसान बढ़ता जाए"
     ],
     "karein": [
-     "क्या करें",
-     "दो premiums की cost महत्वपूर्ण"
+     "याद रखो",
+     "naked selling में भारी margin और असीमित risk"
     ]
    },
    "facts": [
-    "same strike call और put खरीदने का concept",
-    "दो premiums की cost महत्वपूर्ण",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "short straddle = ATM CE + ATM PE बेचना",
+    "कमाई premium तक सीमित",
+    "बड़े move में नुकसान की कोई सीमा नहीं",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Long Straddle — बड़ा move चाहिए, direction नहीं"
+   "seo": "Short Straddle Risk"
   },
   {
    "id": 93,
@@ -3454,36 +3488,37 @@
    "used_short": false,
    "key": "option_strangle",
    "cat": "OPTIONS",
-   "topic": "Long Strangle — बड़ा move, अलग strikes",
+   "topic": "Long strangle — 22,800 CE 60 + 22,400 PE 55 = 115",
    "thumb": [
-    "Long Strangle",
-    "आसान भाषा में समझो"
+    "सस्ता straddle?",
+    "strangle समझो"
    ],
-   "sticker": "सीखो",
+   "sticker": "OPTIONS",
    "beats": {
     "hook": [
-     "Long Strangle",
-     "इसे आसान तरीके से समझो"
+     "Strangle",
+     "दो OTM strikes"
     ],
     "pehchan": [
-     "पहचान",
-     "OTM call और put structure"
+     "मिसाल",
+     "22,800 CE 60 + 22,400 PE 55"
     ],
     "matlab": [
-     "मतलब",
-     "OTM call और put structure"
+     "हिसाब",
+     "breakeven 22,285 और 22,915"
     ],
     "karein": [
-     "क्या करें",
-     "breakevens और IV को समझें"
+     "याद रखो",
+     "सस्ता है, पर बड़ा move चाहिए"
     ]
    },
    "facts": [
-    "OTM call और put structure",
-    "breakevens और IV को समझें",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "कुल premium 115",
+    "breakevens 22,400 − 115 = 22,285 और 22,800 + 115 = 22,915",
+    "बीच में रहा तो पूरा 115 जा सकता है",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Long Strangle — बड़ा move, अलग strikes"
+   "seo": "Long Strangle"
   },
   {
    "id": 94,
@@ -3567,414 +3602,416 @@
    "used_short": false,
    "key": "quality_stock_checklist",
    "cat": "FUNDAMENTAL",
-   "topic": "Quality stock checklist — 7 चीज़ें खरीदने से पहले देखें",
+   "topic": "Quality stock checklist — 7 चीज़ें, एक भी कमज़ोर तो रुको",
    "thumb": [
-    "Quality stock checklist",
-    "आसान भाषा में समझो"
+    "7 सवाल",
+    "शेयर से पहले"
    ],
    "sticker": "सीखो",
    "beats": {
     "hook": [
-     "Quality stock checklist",
-     "इसे आसान तरीके से समझो"
+     "7 सवाल",
+     "ख़रीदने से पहले"
     ],
     "pehchan": [
-     "पहचान",
-     "growth, margins, ROE/ROCE, debt, cash flow, governance, valuation"
+     "1-4",
+     "growth, margin, ROCE, कर्ज़"
     ],
     "matlab": [
-     "मतलब",
-     "growth, margins, ROE/ROCE, debt, cash flow, governance, valuation"
+     "5-7",
+     "cash flow, management, valuation"
     ],
     "karein": [
-     "क्या करें",
-     "कोई checklist guarantee नहीं"
+     "याद रखो",
+     "checklist सोचने का तरीका है, गारंटी नहीं"
     ]
    },
    "facts": [
-    "growth, margins, ROE/ROCE, debt, cash flow, governance, valuation",
-    "कोई checklist guarantee नहीं",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "7 बिंदु: growth, margin, ROCE, debt, cash flow, governance, valuation",
+    "एक साल नहीं, 5 साल का डेटा देखो",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Quality stock checklist — 7 चीज़ें खरीदने से पहले देखें"
+   "seo": "Quality Stock Checklist"
   },
   {
    "id": 97,
    "used": false,
    "used_short": false,
    "key": "multibagger_case_eicher",
-   "cat": "REAL DATA",
-   "topic": "Eicher Motors — long-term multibagger बनने के पीछे business growth की कहानी",
+   "cat": "STOCK CASE STUDY",
+   "topic": "Eicher Motors — बाकी धंधे छोड़कर Royal Enfield पर फ़ोकस की कहानी",
    "thumb": [
-    "Eicher Motors",
-    "आसान भाषा में समझो"
+    "एक brand पर",
+    "पूरा दांव?"
    ],
-   "sticker": "सीखो",
+   "sticker": "केस स्टडी",
    "beats": {
     "hook": [
      "Eicher Motors",
-     "इसे आसान तरीके से समझो"
+     "फ़ोकस की ताक़त"
     ],
     "pehchan": [
      "पहचान",
-     "historical case study: price से पहले earnings और business change समझें"
+     "Royal Enfield पर ज़्यादा ध्यान"
     ],
     "matlab": [
      "मतलब",
-     "historical case study: price से पहले earnings और business change समझें"
+     "मज़बूत brand + कम कर्ज़ = compounding"
     ],
     "karein": [
-     "क्या करें",
-     "historical return को future guarantee न मानें"
+     "सबक",
+     "कहानी पीछे से साफ़ दिखती है, आगे से नहीं"
     ]
    },
    "facts": [
-    "historical case study: price से पहले earnings और business change समझें",
-    "historical return को future guarantee न मानें",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "Eicher Motors Royal Enfield motorcycles बनाती है",
+    "case study सोचने का तरीका सिखाती है",
+    "पिछला रिटर्न आगे की गारंटी नहीं",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Eicher Motors — long-term multibagger बनने के पीछे business growth की कहानी"
+   "seo": "Eicher Motors Case Study"
   },
   {
    "id": 98,
    "used": false,
    "used_short": false,
    "key": "multibagger_case_bajajfinance",
-   "cat": "REAL DATA",
-   "topic": "Bajaj Finance — एक historical high-return stock ने growth कैसे बनाई",
+   "cat": "STOCK CASE STUDY",
+   "topic": "Bajaj Finance — consumer EMI से बड़ी lending company बनने की कहानी",
    "thumb": [
-    "Bajaj Finance",
-    "आसान भाषा में समझो"
+    "EMI पर फ़्रिज",
+    "और बड़ा business?"
    ],
-   "sticker": "सीखो",
+   "sticker": "केस स्टडी",
    "beats": {
     "hook": [
      "Bajaj Finance",
-     "इसे आसान तरीके से समझो"
+     "EMI की ताक़त"
     ],
     "pehchan": [
      "पहचान",
-     "historical case study: loan book, earnings और valuation"
+     "दुकान पर छोटे consumer loans"
     ],
     "matlab": [
      "मतलब",
-     "historical case study: loan book, earnings और valuation"
+     "बड़े customer base से कई products"
     ],
     "karein": [
-     "क्या करें",
-     "पुराना return future recommendation नहीं"
+     "सबक",
+     "lending में credit risk भी उतना ही बड़ा"
     ]
    },
    "facts": [
-    "historical case study: loan book, earnings और valuation",
-    "पुराना return future recommendation नहीं",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "Bajaj Finance consumer durable loans के लिए जानी जाती है",
+    "NBFC का मुनाफ़ा loan quality पर टिका",
+    "पिछला रिटर्न आगे की गारंटी नहीं",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Bajaj Finance — एक historical high-return stock ने growth कैसे बनाई"
+   "seo": "Bajaj Finance Case Study"
   },
   {
    "id": 99,
    "used": false,
    "used_short": false,
    "key": "multibagger_case_trent",
-   "cat": "REAL DATA",
-   "topic": "Trent — retail expansion और long-term compounding का historical case study",
+   "cat": "STOCK CASE STUDY",
+   "topic": "Trent — Westside से Zudio तक: सस्ते fashion का बड़ा दांव",
    "thumb": [
-    "Trent",
-    "आसान भाषा में समझो"
+    "सस्ते कपड़े",
+    "बड़ा business?"
    ],
-   "sticker": "सीखो",
+   "sticker": "केस स्टडी",
    "beats": {
     "hook": [
      "Trent",
-     "इसे आसान तरीके से समझो"
+     "Westside और Zudio"
     ],
     "pehchan": [
      "पहचान",
-     "store growth, sales growth और valuation का संबंध"
+     "value fashion stores का तेज़ विस्तार"
     ],
     "matlab": [
      "मतलब",
-     "store growth, sales growth और valuation का संबंध"
+     "store बढ़े + हर store मुनाफ़े में = growth"
     ],
     "karein": [
-     "क्या करें",
-     "historical data को verified source से लें"
+     "सबक",
+     "तेज़ growth की कीमत भी ऊँची लगती है"
     ]
    },
    "facts": [
-    "store growth, sales growth और valuation का संबंध",
-    "historical data को verified source से लें",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "Trent Tata group की retail company है",
+    "Westside और Zudio इसके brands हैं",
+    "valuation ऊँचा हो तो छोटी चूक पर बड़ी गिरावट",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Trent — retail expansion और long-term compounding का historical case study"
+   "seo": "Trent Case Study"
   },
   {
    "id": 100,
    "used": false,
    "used_short": false,
    "key": "smallcap_multibagger",
-   "cat": "REAL DATA",
-   "topic": "Small-cap multibagger case study — ₹1 लाख से कई गुना कैसे हुआ?",
+   "cat": "STOCK CASE STUDY",
+   "topic": "अगला multibagger ढूँढने से पहले — small-cap के 4 filter",
    "thumb": [
-    "Small-cap multibagger case study",
-    "आसान भाषा में समझो"
+    "अगला 10x?",
+    "पहले 4 सवाल"
    ],
-   "sticker": "सीखो",
+   "sticker": "सावधान",
    "beats": {
     "hook": [
-     "Small-cap multibagger case study",
-     "इसे आसान तरीके से समझो"
+     "Small-cap",
+     "बड़ा सपना, बड़ा risk"
     ],
     "pehchan": [
-     "पहचान",
-     "एक historical winner का journey: business growth, earnings और valuation"
+     "4 filter",
+     "market cap, volume, कर्ज़, promoter"
     ],
     "matlab": [
      "मतलब",
-     "एक historical winner का journey: business growth, earnings और valuation"
+     "कम volume = बेचते वक़्त ख़रीदार नहीं"
     ],
     "karein": [
-     "क्या करें",
-     "winner देखकर penny stocks खरीदना strategy नहीं"
+     "याद रखो",
+     "small-cap 50% तक भी गिर सकते हैं"
     ]
    },
    "facts": [
-    "एक historical winner का journey: business growth, earnings और valuation",
-    "winner देखकर penny stocks खरीदना strategy नहीं",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "4 filter: market cap, रोज़ का volume, कर्ज़, promoter की साख",
+    "small-cap में उतार-चढ़ाव बहुत ज़्यादा",
+    "ज़्यादातर छोटे शेयर multibagger नहीं बनते",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Small-cap multibagger case study — ₹1 लाख से कई गुना कैसे हुआ?"
+   "seo": "Smallcap Multibagger"
   },
   {
    "id": 101,
    "used": false,
    "used_short": false,
    "key": "penny_stock_filter",
-   "cat": "FUNDAMENTAL",
-   "topic": "Penny stock में सिर्फ़ कम price देखकर entry क्यों खतरनाक है",
+   "cat": "PENNY STOCK",
+   "topic": "₹5 का शेयर सस्ता नहीं — 200 करोड़ shares = ₹1,000 करोड़ की कंपनी",
    "thumb": [
-    "Penny stock में सिर्फ़ कम price देखकर entry क्यों खतरनाक है",
-    "आसान भाषा में समझो"
+    "₹5 का शेयर",
+    "सस्ता है?"
    ],
-   "sticker": "सीखो",
+   "sticker": "चेतावनी",
    "beats": {
     "hook": [
-     "Penny stock में सिर्फ़ कम price देखकर entry क्यों खतरनाक है",
-     "इसे आसान तरीके से समझो"
+     "₹5",
+     "सस्ता लगता है"
     ],
     "pehchan": [
-     "पहचान",
-     "low price ≠ cheap valuation; liquidity, debt, governance और dilution देखें"
+     "हिसाब",
+     "₹5 × 200 करोड़ shares = ₹1,000 करोड़"
     ],
     "matlab": [
      "मतलब",
-     "low price ≠ cheap valuation; liquidity, debt, governance और dilution देखें"
+     "भाव नहीं, market cap देखो"
     ],
     "karein": [
-     "क्या करें",
-     "historical winners और losers दोनों compare करें"
+     "क्या देखें",
+     "कंपनी कितना कमाती है? मुनाफ़ा ₹10 करोड़ तो P/E 100"
     ]
    },
    "facts": [
-    "low price ≠ cheap valuation; liquidity, debt, governance और dilution देखें",
-    "historical winners और losers दोनों compare करें",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "market cap = भाव × कुल shares",
+    "₹5 × 200 करोड़ = ₹1,000 करोड़",
+    "मुनाफ़ा ₹10 करोड़ तो P/E 100",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Penny stock में सिर्फ़ कम price देखकर entry क्यों खतरनाक है"
+   "seo": "Penny Stock Market Cap"
   },
   {
    "id": 102,
    "used": false,
    "used_short": false,
    "key": "penny_to_multibagger",
-   "cat": "REAL DATA",
-   "topic": "Penny से multibagger तक — historical winner को पहले कैसे पहचानते?",
+   "cat": "PENNY STOCK",
+   "topic": "'ये penny अगला multibagger' — pump-and-dump के 4 संकेत",
    "thumb": [
-    "Penny से multibagger तक",
-    "आसान भाषा में समझो"
+    "Telegram पर",
+    "'अगला 10x'?"
    ],
-   "sticker": "सीखो",
+   "sticker": "चेतावनी",
    "beats": {
     "hook": [
-     "Penny से multibagger तक",
-     "इसे आसान तरीके से समझो"
+     "अगला 10x?",
+     "संदेश पर भरोसा?"
     ],
     "pehchan": [
-     "पहचान",
-     "case-study framework: revenue, profit, cash flow, debt और market size"
+     "4 संकेत",
+     "अनजान group, जल्दी करो, छोटा शेयर, बिना ख़बर उछाल"
     ],
     "matlab": [
      "मतलब",
-     "case-study framework: revenue, profit, cash flow, debt और market size"
+     "पहले वाले बेचते हैं, बाद वाले फँसते हैं"
     ],
     "karein": [
      "क्या करें",
-     "केवल पिछला return देखकर stock चुनना गलत हो सकता है"
+     "SEBI-registered सलाहकार है या नहीं, जाँचो"
     ]
    },
    "facts": [
-    "case-study framework: revenue, profit, cash flow, debt और market size",
-    "केवल पिछला return देखकर stock चुनना गलत हो सकता है",
-    "यह educational framework है, किसी शेयर/ट्रेड की खरीद-बिक्री सलाह नहीं"
+    "pump-and-dump: भाव चढ़ाकर ऊपर बेच देना",
+    "SEBI ऐसे मामलों पर कार्रवाई करता है",
+    "अनजान संदेश पर पैसा मत लगाओ",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Penny से multibagger तक — historical winner को पहले कैसे पहचानते?"
+   "seo": "Pump and Dump"
   },
   {
    "id": 103,
    "used": false,
    "used_short": false,
    "key": "fund_eps_quality",
-   "cat": "FUNDAMENTALS",
-   "topic": "Earnings quality — profit बढ़े लेकिन cash flow न बढ़े",
+   "cat": "FUNDAMENTAL",
+   "topic": "Other income से फूला profit — core business बढ़ा या नहीं?",
    "thumb": [
-    "EPS बढ़ना काफी नहीं — cash कहाँ है?",
-    "Earnings quality"
+    "Profit 30% ऊपर",
+    "पर कहाँ से?"
    ],
-   "sticker": "समझो",
+   "sticker": "राज़",
    "beats": {
     "hook": [
-     "EPS बढ़ना काफी नहीं — cash कहाँ है?",
-     "EPS बढ़ना काफी नहीं — cash कहाँ है?"
+     "Profit +30%",
+     "असली कमाई या एक बार की?"
     ],
     "pehchan": [
      "पहचान",
-     "Operating cash flow को profit के साथ देखो"
+     "ब्याज़, ज़मीन बिक्री = other income"
     ],
     "matlab": [
      "मतलब",
-     "Profit और cash अलग दिशा में हों तो quality check करो"
+     "एक बार की कमाई अगली तिमाही में नहीं"
     ],
     "karein": [
      "क्या देखें",
-     "Annual report में cash flow statement देखना सीखो"
+     "operating profit अलग से देखो"
     ]
    },
    "facts": [
-    "Earnings quality — profit बढ़े लेकिन cash flow न बढ़े",
-    "Operating cash flow को profit के साथ देखो",
-    "Profit और cash अलग दिशा में हों तो quality check करो",
-    "Annual report में cash flow statement देखना सीखो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "other income = मुख्य धंधे के बाहर की कमाई",
+    "one-time gain से profit ऊपर दिख सकता है",
+    "operating profit असली धंधे का हाल बताता है",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Earnings quality — profit बढ़े लेकिन cash flow न बढ़े"
+   "seo": "Earnings Quality"
   },
   {
    "id": 104,
    "used": false,
    "used_short": false,
    "key": "fund_roce",
-   "cat": "FUNDAMENTALS",
-   "topic": "ROCE — कंपनी पूँजी से कितना operating profit बनाती है",
+   "cat": "FUNDAMENTAL",
+   "topic": "ROCE 18% — ₹100 पूँजी पर ₹18 operating profit",
    "thumb": [
-    "सिर्फ़ profit नहीं, capital efficiency भी देखो",
-    "ROCE"
+    "₹100 लगाए",
+    "कितना कमाया?"
    ],
-   "sticker": "समझो",
+   "sticker": "सीखो",
    "beats": {
     "hook": [
-     "सिर्फ़ profit नहीं, capital efficiency भी देखो",
-     "सिर्फ़ profit नहीं, capital efficiency भी देखो"
+     "ROCE 18%",
+     "₹100 पर ₹18"
     ],
     "pehchan": [
-     "पहचान",
-     "ROCE = operating profit के मुकाबले capital employed"
+     "फ़ॉर्मूला",
+     "ROCE = EBIT ÷ capital employed"
     ],
     "matlab": [
      "मतलब",
-     "Asset-heavy business में capital need बड़ी हो सकती है"
+     "कर्ज़ के ब्याज़ से ज़्यादा कमाए तो अच्छा"
     ],
     "karein": [
      "क्या देखें",
-     "ROCE को अपने historical trend और peers के साथ पढ़ो"
+     "एक साल नहीं, 5 साल का औसत"
     ]
    },
    "facts": [
-    "ROCE — कंपनी पूँजी से कितना operating profit बनाती है",
-    "ROCE = operating profit के मुकाबले capital employed",
-    "Asset-heavy business में capital need बड़ी हो सकती है",
-    "ROCE को अपने historical trend और peers के साथ पढ़ो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "EBIT ₹18, capital employed ₹100 → ROCE 18%",
+    "capital employed = equity + debt",
+    "ROCE कर्ज़ की लागत से कम हो तो growth भी नुकसान",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "ROCE — कंपनी पूँजी से कितना operating profit बनाती है"
+   "seo": "ROCE"
   },
   {
    "id": 105,
    "used": false,
    "used_short": false,
    "key": "fund_margin",
-   "cat": "FUNDAMENTALS",
-   "topic": "Gross margin बनाम net margin — फर्क कहाँ दिखता है",
+   "cat": "FUNDAMENTAL",
+   "topic": "Gross margin 40%, net margin 8% — ₹100 बिक्री में बीच का ₹32 कहाँ गया",
    "thumb": [
-    "Sales बढ़ीं, फिर भी margin क्यों घटा?",
-    "Gross margin बनाम net margin"
+    "₹100 की बिक्री",
+    "हाथ में ₹8?"
    ],
-   "sticker": "समझो",
+   "sticker": "सीखो",
    "beats": {
     "hook": [
-     "Sales बढ़ीं, फिर भी margin क्यों घटा?",
-     "Sales बढ़ीं, फिर भी margin क्यों घटा?"
+     "Sales 100",
+     "net profit 8"
     ],
     "pehchan": [
-     "पहचान",
-     "Gross margin product economics दिखाता है"
+     "Gross",
+     "माल की लागत के बाद 40"
     ],
     "matlab": [
-     "मतलब",
-     "Interest, tax और other costs के बाद net margin बचता है"
+     "बीच में",
+     "salary, किराया, ब्याज़, टैक्स = 32"
     ],
     "karein": [
      "क्या देखें",
-     "दोनों margins की direction साथ देखो"
+     "margin का trend, एक साल का नंबर नहीं"
     ]
    },
    "facts": [
-    "Gross margin बनाम net margin — फर्क कहाँ दिखता है",
-    "Gross margin product economics दिखाता है",
-    "Interest, tax और other costs के बाद net margin बचता है",
-    "दोनों margins की direction साथ देखो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "sales 100, gross profit 40 → gross margin 40%",
+    "net profit 8 → net margin 8%",
+    "बीच के 32 में ख़र्च, ब्याज़, टैक्स",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Gross margin बनाम net margin — फर्क कहाँ दिखता है"
+   "seo": "Gross Margin vs Net Margin"
   },
   {
    "id": 106,
    "used": false,
    "used_short": false,
    "key": "fund_fcf",
-   "cat": "FUNDAMENTALS",
-   "topic": "Free cash flow — profit के बाद वास्तव में कितना cash बचा",
+   "cat": "FUNDAMENTAL",
+   "topic": "FCF yield — market cap 10,000, FCF 500 = 5%",
    "thumb": [
-    "Profit दिख रहा है, cash कितना बचा?",
-    "Free cash flow"
+    "कंपनी ख़रीदो तो",
+    "cash कितना?"
    ],
-   "sticker": "समझो",
+   "sticker": "सीखो",
    "beats": {
     "hook": [
-     "Profit दिख रहा है, cash कितना बचा?",
-     "Profit दिख रहा है, cash कितना बचा?"
+     "FCF yield",
+     "5%"
     ],
     "pehchan": [
-     "पहचान",
-     "Operating cash flow से capital expenditure घटाने का concept"
+     "फ़ॉर्मूला",
+     "FCF ÷ market cap"
     ],
     "matlab": [
-     "मतलब",
-     "Growth के लिए capex ज्यादा हो तो FCF दब सकता है"
+     "हिसाब",
+     "500 ÷ 10,000 = 5%"
     ],
     "karein": [
      "क्या देखें",
-     "कई साल का FCF trend पढ़ो, एक quarter नहीं"
+     "एक साल का FCF धोखा दे सकता है"
     ]
    },
    "facts": [
-    "Free cash flow — profit के बाद वास्तव में कितना cash बचा",
-    "Operating cash flow से capital expenditure घटाने का concept",
-    "Growth के लिए capex ज्यादा हो तो FCF दब सकता है",
-    "कई साल का FCF trend पढ़ो, एक quarter नहीं",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "market cap ₹10,000 करोड़, FCF ₹500 करोड़",
+    "FCF yield 5%",
+    "कई साल का औसत देखो",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Free cash flow — profit के बाद वास्तव में कितना cash बचा"
+   "seo": "FCF Yield"
   },
   {
    "id": 107,
@@ -4062,38 +4099,37 @@
    "used_short": false,
    "key": "opt_iv_crush",
    "cat": "OPTIONS",
-   "topic": "IV Crush — result के बाद option premium क्यों गिर सकता है",
+   "topic": "IV crush — result के बाद IV 40 से 25, शेयर ऊपर फिर भी premium नीचे",
    "thumb": [
-    "सही direction के बावजूद option buyer हार सकता है",
-    "IV Crush"
+    "सही अंदाज़ा",
+    "फिर भी घाटा?"
    ],
-   "sticker": "OPTIONS",
+   "sticker": "चेतावनी",
    "beats": {
     "hook": [
-     "सही direction के बावजूद option buyer हार सकता है",
-     "सही direction के बावजूद option buyer हार सकता है"
+     "Result day",
+     "शेयर ऊपर, premium नीचे"
     ],
     "pehchan": [
      "पहचान",
-     "Implied volatility premium को प्रभावित करती है"
+     "result से पहले IV 40"
     ],
     "matlab": [
      "मतलब",
-     "Event खत्म होते ही IV गिर सकती है"
+     "result के बाद IV 25 — vega का झटका"
     ],
     "karein": [
      "क्या देखें",
-     "Direction के साथ IV और expiry भी समझो"
+     "ख़बर से पहले IV कितनी फूली है"
     ]
    },
    "facts": [
-    "IV Crush — result के बाद option premium क्यों गिर सकता है",
-    "Implied volatility premium को प्रभावित करती है",
-    "Event खत्म होते ही IV गिर सकती है",
-    "Direction के साथ IV और expiry भी समझो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "result से पहले IV 40, बाद में 25",
+    "IV गिरने से premium घटता है",
+    "direction सही होने पर भी नुकसान संभव",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "IV Crush — result के बाद option premium क्यों गिर सकता है"
+   "seo": "IV Crush"
   },
   {
    "id": 110,
@@ -4101,38 +4137,37 @@
    "used_short": false,
    "key": "opt_bull_call_spread",
    "cat": "OPTIONS",
-   "topic": "Bull Call Spread — limited risk वाला bullish option setup",
+   "topic": "Bull call spread का हिसाब — net 80, max profit 120, breakeven 22,680",
    "thumb": [
-    "Bullish view है, पर premium कम रखना है?",
-    "Bull Call Spread"
+    "Spread का",
+    "पूरा हिसाब"
    ],
    "sticker": "OPTIONS",
    "beats": {
     "hook": [
-     "Bullish view है, पर premium कम रखना है?",
-     "Bullish view है, पर premium कम रखना है?"
+     "Buy 22,600 CE 150",
+     "Sell 22,800 CE 70"
     ],
     "pehchan": [
-     "पहचान",
-     "एक call खरीदकर higher-strike call बेचने का structure"
+     "Net ख़र्च",
+     "150 − 70 = 80"
     ],
     "matlab": [
-     "मतलब",
-     "Upside और maximum loss दोनों defined होते हैं"
+     "Max profit",
+     "200 − 80 = 120"
     ],
     "karein": [
-     "क्या देखें",
-     "Expiry payoff पहले से calculate करो"
+     "Breakeven",
+     "22,600 + 80 = 22,680"
     ]
    },
    "facts": [
-    "Bull Call Spread — limited risk वाला bullish option setup",
-    "एक call खरीदकर higher-strike call बेचने का structure",
-    "Upside और maximum loss दोनों defined होते हैं",
-    "Expiry payoff पहले से calculate करो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "22,600 CE 150 ख़रीदा, 22,800 CE 70 बेचा",
+    "max loss 80, max profit 120",
+    "breakeven 22,680",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Bull Call Spread — limited risk वाला bullish option setup"
+   "seo": "Bull Call Spread"
   },
   {
    "id": 111,
@@ -4140,38 +4175,37 @@
    "used_short": false,
    "key": "opt_bear_put_spread",
    "cat": "OPTIONS",
-   "topic": "Bear Put Spread — bearish view को defined risk में समझो",
+   "topic": "Bear put spread का हिसाब — net 75, max profit 125, breakeven 22,525",
    "thumb": [
-    "Bearish trade में risk कैसे सीमित करें?",
-    "Bear Put Spread"
+    "गिरावट का अंदाज़ा",
+    "limited risk में"
    ],
    "sticker": "OPTIONS",
    "beats": {
     "hook": [
-     "Bearish trade में risk कैसे सीमित करें?",
-     "Bearish trade में risk कैसे सीमित करें?"
+     "Buy 22,600 PE 140",
+     "Sell 22,400 PE 65"
     ],
     "pehchan": [
-     "पहचान",
-     "Put खरीदकर lower-strike put बेचने का structure"
+     "Net ख़र्च",
+     "140 − 65 = 75"
     ],
     "matlab": [
-     "मतलब",
-     "Maximum loss और maximum profit पहले से defined होते हैं"
+     "Max profit",
+     "200 − 75 = 125"
     ],
     "karein": [
-     "क्या देखें",
-     "Payoff और breakeven expiry से पहले calculate करो"
+     "Breakeven",
+     "22,600 − 75 = 22,525"
     ]
    },
    "facts": [
-    "Bear Put Spread — bearish view को defined risk में समझो",
-    "Put खरीदकर lower-strike put बेचने का structure",
-    "Maximum loss और maximum profit पहले से defined होते हैं",
-    "Payoff और breakeven expiry से पहले calculate करो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "22,600 PE 140 ख़रीदा, 22,400 PE 65 बेचा",
+    "max loss 75, max profit 125",
+    "breakeven 22,525",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Bear Put Spread — bearish view को defined risk में समझो"
+   "seo": "Bear Put Spread"
   },
   {
    "id": 112,
@@ -4179,38 +4213,37 @@
    "used_short": false,
    "key": "opt_protective_put",
    "cat": "OPTIONS",
-   "topic": "Protective Put — stock holding के साथ downside protection",
+   "topic": "Portfolio का बीमा — Nifty Put से hedge कब काम करता है",
    "thumb": [
-    "Share रखकर downside insurance कैसे समझें?",
-    "Protective Put"
+    "पूरा portfolio",
+    "एक Put से?"
    ],
-   "sticker": "OPTIONS",
+   "sticker": "समझो",
    "beats": {
     "hook": [
-     "Share रखकर downside insurance कैसे समझें?",
-     "Share रखकर downside insurance कैसे समझें?"
+     "Nifty Put",
+     "portfolio का बीमा"
     ],
     "pehchan": [
      "पहचान",
-     "Stock के साथ put खरीदने का basic structure"
+     "आपका portfolio Nifty जैसा चलता है?"
     ],
     "matlab": [
      "मतलब",
-     "Premium protection की cost है"
+     "अलग चलने वाले शेयर पर hedge अधूरा"
     ],
     "karein": [
-     "क्या देखें",
-     "Protection की cost और expiry दोनों compare करो"
+     "याद रखो",
+     "बीमे का premium हर महीने ख़र्च"
     ]
    },
    "facts": [
-    "Protective Put — stock holding के साथ downside protection",
-    "Stock के साथ put खरीदने का basic structure",
-    "Premium protection की cost है",
-    "Protection की cost और expiry दोनों compare करो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "index put पूरे बाज़ार की गिरावट से बचाता है",
+    "portfolio index से अलग चले तो hedge अधूरा",
+    "hedge की लागत return घटाती है",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Protective Put — stock holding के साथ downside protection"
+   "seo": "Portfolio Hedge Put"
   },
   {
    "id": 113,
@@ -4218,38 +4251,37 @@
    "used_short": false,
    "key": "opt_straddle",
    "cat": "OPTIONS",
-   "topic": "Long Straddle — direction नहीं, बड़ा move चाहिए",
+   "topic": "Long straddle — premium 290 तो Nifty को 1.28% चलना ही होगा",
    "thumb": [
-    "Market किस direction जाएगा पता नहीं — फिर भी strategy?",
-    "Long Straddle"
+    "Direction नहीं",
+    "बस बड़ा move?"
    ],
    "sticker": "OPTIONS",
    "beats": {
     "hook": [
-     "Market किस direction जाएगा पता नहीं — फिर भी strategy?",
-     "Market किस direction जाएगा पता नहीं — फिर भी strategy?"
+     "22,600 CE 150",
+     "22,600 PE 140"
     ],
     "pehchan": [
-     "पहचान",
-     "Same strike call और put खरीदने का structure"
+     "कुल",
+     "150 + 140 = 290"
     ],
     "matlab": [
-     "मतलब",
-     "दोनों premiums की वजह से बड़ा move चाहिए"
+     "Breakevens",
+     "22,310 और 22,890"
     ],
     "karein": [
-     "क्या देखें",
-     "IV और breakeven दोनों समझकर ही payoff पढ़ो"
+     "याद रखो",
+     "290 ÷ 22,600 = करीब 1.28% move चाहिए"
     ]
    },
    "facts": [
-    "Long Straddle — direction नहीं, बड़ा move चाहिए",
-    "Same strike call और put खरीदने का structure",
-    "दोनों premiums की वजह से बड़ा move चाहिए",
-    "IV और breakeven दोनों समझकर ही payoff पढ़ो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "22,600 CE 150 + 22,600 PE 140 = 290",
+    "breakevens 22,310 और 22,890",
+    "IV गिरी तो move के बाद भी नुकसान संभव",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Long Straddle — direction नहीं, बड़ा move चाहिए"
+   "seo": "Long Straddle"
   },
   {
    "id": 114,
@@ -4257,38 +4289,37 @@
    "used_short": false,
    "key": "opt_theta_decay",
    "cat": "OPTIONS",
-   "topic": "Theta — expiry पास आते ही time value क्यों घटती है",
+   "topic": "Theta decay seller को आसान कमाई लगती है — gamma का छिपा ख़तरा",
    "thumb": [
-    "Option खरीदा और समय आपके खिलाफ क्यों है?",
-    "Theta"
+    "रोज़ premium कमाओ",
+    "इतना आसान?"
    ],
-   "sticker": "OPTIONS",
+   "sticker": "चेतावनी",
    "beats": {
     "hook": [
-     "Option खरीदा और समय आपके खिलाफ क्यों है?",
-     "Option खरीदा और समय आपके खिलाफ क्यों है?"
+     "Theta decay",
+     "seller के पक्ष में"
     ],
     "pehchan": [
      "पहचान",
-     "Theta time value decay को describe करता है"
+     "हर दिन time value घटती है"
     ],
     "matlab": [
      "मतलब",
-     "बाकी factors समान हों तो expiry पास decay तेज़ हो सकता है"
+     "expiry पास, gamma ऊँचा — एक झटका सब ले जाता है"
     ],
     "karein": [
-     "क्या देखें",
-     "Option buyer को time decay समझना जरूरी है"
+     "याद रखो",
+     "छोटी कमाई, बड़ा tail risk"
     ]
    },
    "facts": [
-    "Theta — expiry पास आते ही time value क्यों घटती है",
-    "Theta time value decay को describe करता है",
-    "बाकी factors समान हों तो expiry पास decay तेज़ हो सकता है",
-    "Option buyer को time decay समझना जरूरी है",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "theta seller को रोज़ थोड़ा देता है",
+    "gamma बड़े move में नुकसान तेज़ी से बढ़ाता है",
+    "SEBI ने expiry day पर short options पर extra 2% ELM लगाया है",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Theta — expiry पास आते ही time value क्यों घटती है"
+   "seo": "Theta Decay"
   },
   {
    "id": 115,
@@ -4296,38 +4327,37 @@
    "used_short": false,
    "key": "intraday_orb",
    "cat": "INTRADAY",
-   "topic": "Opening Range Breakout — पहला range क्यों महत्वपूर्ण",
+   "topic": "ORB fake-out — breakout के बाद range में वापसी = बाहर निकलने का संकेत",
    "thumb": [
-    "पहले कुछ मिनट का range बाद में reference बन सकता है",
-    "Opening Range Breakout"
+    "Breakout हुआ",
+    "फिर वापस अंदर?"
    ],
-   "sticker": "INTRADAY",
+   "sticker": "सावधान",
    "beats": {
     "hook": [
-     "पहले कुछ मिनट का range बाद में reference बन सकता है",
-     "पहले कुछ मिनट का range बाद में reference बन सकता है"
+     "ORB",
+     "15 मिनट की range"
     ],
     "pehchan": [
      "पहचान",
-     "High और low से opening range define होती है"
+     "range के ऊपर निकला, फिर अंदर close"
     ],
     "matlab": [
      "मतलब",
-     "Breakout को volume और close से confirm करना useful हो सकता है"
+     "breakout फेल, ख़रीदार फँसे"
     ],
     "karein": [
-     "क्या देखें",
-     "False breakout के लिए invalidation पहले तय करो"
+     "क्या करें",
+     "पहले से तय करो — अंदर close = exit"
     ]
    },
    "facts": [
-    "Opening Range Breakout — पहला range क्यों महत्वपूर्ण",
-    "High और low से opening range define होती है",
-    "Breakout को volume और close से confirm करना useful हो सकता है",
-    "False breakout के लिए invalidation पहले तय करो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "opening range = पहले 15 मिनट का high-low",
+    "breakout के बाद range में वापसी = fake-out",
+    "exit नियम पहले से तय",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Opening Range Breakout — पहला range क्यों महत्वपूर्ण"
+   "seo": "Opening Range Breakout"
   },
   {
    "id": 116,
@@ -4335,38 +4365,37 @@
    "used_short": false,
    "key": "intraday_vwap",
    "cat": "INTRADAY",
-   "topic": "VWAP reclaim और rejection — intraday context कैसे पढ़ें",
+   "topic": "VWAP rejection — VWAP के नीचे बार-बार रुकना क्या बताता है",
    "thumb": [
-    "Price VWAP के ऊपर गया, क्या trend बदल गया?",
-    "VWAP reclaim और rejection"
+    "VWAP छूकर",
+    "वापस नीचे?"
    ],
-   "sticker": "INTRADAY",
+   "sticker": "समझो",
    "beats": {
     "hook": [
-     "Price VWAP के ऊपर गया, क्या trend बदल गया?",
-     "Price VWAP के ऊपर गया, क्या trend बदल गया?"
+     "VWAP",
+     "छत बन गया"
     ],
     "pehchan": [
      "पहचान",
-     "VWAP session का volume-weighted average price है"
+     "VWAP तक आकर 2-3 बार नीचे"
     ],
     "matlab": [
      "मतलब",
-     "Reclaim, rejection और volume context साथ पढ़े जाते हैं"
+     "दिन के औसत भाव पर sellers हावी"
     ],
     "karein": [
      "क्या देखें",
-     "VWAP अकेला buy/sell signal नहीं है"
+     "VWAP के ऊपर मज़बूत close तो तस्वीर बदली"
     ]
    },
    "facts": [
-    "VWAP reclaim और rejection — intraday context कैसे पढ़ें",
-    "VWAP session का volume-weighted average price है",
-    "Reclaim, rejection और volume context साथ पढ़े जाते हैं",
-    "VWAP अकेला buy/sell signal नहीं है",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "VWAP = दिन का volume-weighted औसत",
+    "बार-बार VWAP से लौटना कमज़ोरी का संकेत",
+    "ऊपर साफ़ close से संकेत रद्द",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "VWAP reclaim और rejection — intraday context कैसे पढ़ें"
+   "seo": "VWAP Rejection"
   },
   {
    "id": 117,
@@ -4374,38 +4403,37 @@
    "used_short": false,
    "key": "intraday_trend_range",
    "cat": "INTRADAY",
-   "topic": "Trend day बनाम range day — strategy क्यों बदलती है",
+   "topic": "Trend day बनाम range day — 11 बजे तक कैसे पहचानें",
    "thumb": [
-    "हर दिन breakout वाला दिन नहीं होता",
-    "Trend day बनाम range day"
+    "एक ही strategy",
+    "हर दिन?"
    ],
-   "sticker": "INTRADAY",
+   "sticker": "समझो",
    "beats": {
     "hook": [
-     "हर दिन breakout वाला दिन नहीं होता",
-     "हर दिन breakout वाला दिन नहीं होता"
+     "Trend day",
+     "या range day?"
     ],
     "pehchan": [
-     "पहचान",
-     "Trend day में directional movement टिक सकता है"
+     "Trend",
+     "ऊँचे high, ऊँचे low, VWAP से दूर"
     ],
     "matlab": [
-     "मतलब",
-     "Range day में price boundaries के बीच घूम सकता है"
+     "Range",
+     "VWAP के आस-पास ऊपर-नीचे"
     ],
     "karein": [
-     "क्या देखें",
-     "Day type बदलते ही setup selection भी बदलो"
+     "क्या करें",
+     "range day पर breakout से सावधान"
     ]
    },
    "facts": [
-    "Trend day बनाम range day — strategy क्यों बदलती है",
-    "Trend day में directional movement टिक सकता है",
-    "Range day में price boundaries के बीच घूम सकता है",
-    "Day type बदलते ही setup selection भी बदलो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "trend day में भाव एक तरफ़ चलता है",
+    "range day में breakout बार-बार फेल",
+    "11 बजे तक structure देखना एक तरीका है",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Trend day बनाम range day — strategy क्यों बदलती है"
+   "seo": "Trend Day vs Range Day"
   },
   {
    "id": 118,
@@ -4453,38 +4481,37 @@
    "used_short": false,
    "key": "intraday_volume",
    "cat": "INTRADAY",
-   "topic": "Volume spike और price stall — demand सच में है?",
+   "topic": "Volume 3 गुना, पर भाव वहीं — कोई चुपचाप बेच रहा है?",
    "thumb": [
-    "Volume बहुत आया, price फिर भी नहीं भागा",
-    "Volume spike और price stall"
+    "भारी volume",
+    "भाव हिला नहीं?"
    ],
-   "sticker": "INTRADAY",
+   "sticker": "राज़",
    "beats": {
     "hook": [
-     "Volume बहुत आया, price फिर भी नहीं भागा",
-     "Volume बहुत आया, price फिर भी नहीं भागा"
+     "Volume 3x",
+     "price रुका"
     ],
     "pehchan": [
      "पहचान",
-     "High volume activity दिखाता है, direction अकेले नहीं"
+     "बड़ी candle नहीं, सिर्फ़ भारी volume"
     ],
     "matlab": [
      "मतलब",
-     "Price stall supply-demand balance का clue हो सकता है"
+     "बड़ा seller ख़रीदारी सोख रहा हो सकता है"
     ],
     "karein": [
      "क्या देखें",
-     "Volume को price structure के साथ पढ़ो"
+     "उस level के ऊपर साफ़ close का इंतज़ार"
     ]
    },
    "facts": [
-    "Volume spike और price stall — demand सच में है?",
-    "High volume activity दिखाता है, direction अकेले नहीं",
-    "Price stall supply-demand balance का clue हो सकता है",
-    "Volume को price structure के साथ पढ़ो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "volume औसत से 3 गुना",
+    "भाव आगे न बढ़े तो absorption हो सकता है",
+    "ये संभावना है, पक्का संकेत नहीं",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Volume spike और price stall — demand सच में है?"
+   "seo": "Volume Spike"
   },
   {
    "id": 120,
@@ -4492,38 +4519,37 @@
    "used_short": false,
    "key": "stock_earnings",
    "cat": "STOCK CASE STUDY",
-   "topic": "Strong quarterly result को पढ़ने के 5 सवाल",
+   "topic": "Result पढ़ते समय YoY या QoQ — किससे तुलना सही?",
    "thumb": [
-    "Profit बढ़ा — क्या result सच में मजबूत है?",
-    "Strong quarterly result को पढ़ने के 5 सवाल"
+    "Profit 20% नीचे",
+    "डरें या नहीं?"
    ],
    "sticker": "समझो",
    "beats": {
     "hook": [
-     "Profit बढ़ा — क्या result सच में मजबूत है?",
-     "Profit बढ़ा — क्या result सच में मजबूत है?"
+     "QoQ −20%",
+     "पर YoY +15%"
     ],
     "pehchan": [
-     "पहचान",
-     "Revenue, margin, EPS और cash flow की direction देखो"
+     "YoY",
+     "पिछले साल की उसी तिमाही से"
     ],
     "matlab": [
-     "मतलब",
-     "One-off income recurring business को बेहतर दिखा सकती है"
+     "QoQ",
+     "पिछली तिमाही से — मौसम का असर"
     ],
     "karein": [
      "क्या देखें",
-     "Headline profit से आगे notes और cash flow पढ़ो"
+     "मौसमी धंधे में YoY ज़्यादा साफ़"
     ]
    },
    "facts": [
-    "Strong quarterly result को पढ़ने के 5 सवाल",
-    "Revenue, margin, EPS और cash flow की direction देखो",
-    "One-off income recurring business को बेहतर दिखा सकती है",
-    "Headline profit से आगे notes और cash flow पढ़ो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "YoY = पिछले साल की उसी तिमाही से तुलना",
+    "QoQ = ठीक पिछली तिमाही से",
+    "त्योहार/मौसम वाले धंधे में QoQ भ्रम पैदा कर सकता है",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Strong quarterly result को पढ़ने के 5 सवाल"
+   "seo": "Quarterly Results YoY QoQ"
   },
   {
    "id": 121,
@@ -4531,38 +4557,36 @@
    "used_short": false,
    "key": "stock_turnaround",
    "cat": "STOCK CASE STUDY",
-   "topic": "Turnaround stock — recovery से पहले कौन से संकेत दिखते हैं",
+   "topic": "Turnaround stock — 3 संकेत: कर्ज़ घटा, margin सुधरा, cash positive",
    "thumb": [
-    "Turnaround सिर्फ़ share price की कहानी नहीं है",
-    "Turnaround stock"
+    "डूबती कंपनी",
+    "वापसी करेगी?"
    ],
    "sticker": "समझो",
    "beats": {
     "hook": [
-     "Turnaround सिर्फ़ share price की कहानी नहीं है",
-     "Turnaround सिर्फ़ share price की कहानी नहीं है"
+     "Turnaround",
+     "3 संकेत"
     ],
     "pehchan": [
-     "पहचान",
-     "Revenue stabilization, margin recovery और debt trend देखें"
+     "संकेत 1-2",
+     "कर्ज़ घटा, margin सुधरा"
     ],
     "matlab": [
-     "मतलब",
-     "Low price अपने आप turnaround साबित नहीं करता"
+     "संकेत 3",
+     "operating cash flow positive"
     ],
     "karein": [
-     "क्या देखें",
-     "Business metrics को price से पहले track करो"
+     "याद रखो",
+     "कई turnaround अधूरे रह जाते हैं"
     ]
    },
    "facts": [
-    "Turnaround stock — recovery से पहले कौन से संकेत दिखते हैं",
-    "Revenue stabilization, margin recovery और debt trend देखें",
-    "Low price अपने आप turnaround साबित नहीं करता",
-    "Business metrics को price से पहले track करो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "3 संकेत: debt कम, margin बेहतर, cash flow positive",
+    "एक तिमाही नहीं, कई तिमाही की पुष्टि",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Turnaround stock — recovery से पहले कौन से संकेत दिखते हैं"
+   "seo": "Turnaround Stock"
   },
   {
    "id": 122,
@@ -4610,38 +4634,37 @@
    "used_short": false,
    "key": "penny_dilution",
    "cat": "PENNY STOCK",
-   "topic": "Penny stock में share dilution का छिपा असर",
+   "topic": "Penny stock में warrants — shares 10 करोड़ से 20 करोड़, EPS आधा",
    "thumb": [
-    "कम share price देखकर पूरी कहानी मत समझो",
-    "Penny stock में share dilution का छिपा असर"
+    "Shares दोगुने",
+    "आपका हिस्सा?"
    ],
-   "sticker": "सावधान",
+   "sticker": "चेतावनी",
    "beats": {
     "hook": [
-     "कम share price देखकर पूरी कहानी मत समझो",
-     "कम share price देखकर पूरी कहानी मत समझो"
+     "Warrants",
+     "नए shares"
     ],
     "pehchan": [
-     "पहचान",
-     "New shares issue होने पर ownership dilute हो सकती है"
+     "हिसाब",
+     "10 करोड़ से 20 करोड़ shares"
     ],
     "matlab": [
      "मतलब",
-     "Per-share economics बदल सकती है भले business वही दिखे"
+     "वही profit, EPS आधा"
     ],
     "karein": [
      "क्या देखें",
-     "Share count trend और filings check करो"
+     "preferential issue और warrants की ख़बर"
     ]
    },
    "facts": [
-    "Penny stock में share dilution का छिपा असर",
-    "New shares issue होने पर ownership dilute हो सकती है",
-    "Per-share economics बदल सकती है भले business वही दिखे",
-    "Share count trend और filings check करो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "shares 10 करोड़ से 20 करोड़",
+    "profit वही तो EPS आधा",
+    "बार-बार नए shares छोटे निवेशक का हिस्सा घटाते हैं",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Penny stock में share dilution का छिपा असर"
+   "seo": "Share Dilution"
   },
   {
    "id": 124,
@@ -4689,38 +4712,36 @@
    "used_short": false,
    "key": "penny_history",
    "cat": "PENNY STOCK",
-   "topic": "पुराने penny multibagger को देखकर आज की खरीद क्यों तय नहीं होती",
+   "topic": "पुराने penny multibagger — survivorship bias: डूबे हुए दिखते ही नहीं",
    "thumb": [
-    "Past multibagger की कहानी अधूरी क्यों हो सकती है?",
-    "पुराने penny multibagger को देखकर आज की खरीद क्यों तय नहीं होती"
+    "10 में 1 चमका",
+    "9 कहाँ गए?"
    ],
-   "sticker": "सावधान",
+   "sticker": "सच",
    "beats": {
     "hook": [
-     "Past multibagger की कहानी अधूरी क्यों हो सकती है?",
-     "Past multibagger की कहानी अधूरी क्यों हो सकती है?"
+     "Survivorship bias",
+     "सिर्फ़ जीते हुए दिखते हैं"
     ],
     "pehchan": [
      "पहचान",
-     "Corporate actions, dilution और business changes return बदलते हैं"
+     "list में डूबे शेयर नहीं होते"
     ],
     "matlab": [
      "मतलब",
-     "Survivorship bias सिर्फ़ सफल examples दिखाता है"
+     "'ये भी ₹2 का था' अधूरी कहानी"
     ],
     "karein": [
-     "क्या देखें",
-     "पूरे historical dataset को देखकर lesson निकालो"
+     "याद रखो",
+     "पुराना winner आज की ख़रीद की वजह नहीं"
     ]
    },
    "facts": [
-    "पुराने penny multibagger को देखकर आज की खरीद क्यों तय नहीं होती",
-    "Corporate actions, dilution और business changes return बदलते हैं",
-    "Survivorship bias सिर्फ़ सफल examples दिखाता है",
-    "पूरे historical dataset को देखकर lesson निकालो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "survivorship bias = सिर्फ़ बचे हुए उदाहरण गिनना",
+    "कई penny stocks delist या डूब जाते हैं",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "पुराने penny multibagger को देखकर आज की खरीद क्यों तय नहीं होती"
+   "seo": "Survivorship Bias"
   },
   {
    "id": 126,
@@ -4808,38 +4829,37 @@
    "used_short": false,
    "key": "risk_leverage",
    "cat": "RISK",
-   "topic": "Leverage में छोटा price move capital पर बड़ा असर क्यों डालता है",
+   "topic": "MTF — उधार के पैसे से शेयर: ब्याज़ रोज़ लगता है",
    "thumb": [
-    "Leverage return ही नहीं, loss भी amplify करता है",
-    "Leverage में छोटा price move capital पर बड़ा असर क्यों डालता है"
+    "Broker से उधार",
+    "मुफ़्त है?"
    ],
-   "sticker": "समझो",
+   "sticker": "चेतावनी",
    "beats": {
     "hook": [
-     "Leverage return ही नहीं, loss भी amplify करता है",
-     "Leverage return ही नहीं, loss भी amplify करता है"
+     "MTF",
+     "Margin Trading Facility"
     ],
     "pehchan": [
      "पहचान",
-     "कम capital से बड़ी exposure बनती है"
+     "broker बाकी पैसा उधार देता है"
     ],
     "matlab": [
      "मतलब",
-     "Adverse move margin पर तेजी से असर डाल सकता है"
+     "शेयर गिरे तो नुकसान बड़ा, ऊपर से ब्याज़"
     ],
     "karein": [
-     "क्या देखें",
-     "Leverage से पहले maximum loss calculate करो"
+     "क्या करें",
+     "ब्याज़ दर और margin call नियम पहले पढ़ो"
     ]
    },
    "facts": [
-    "Leverage में छोटा price move capital पर बड़ा असर क्यों डालता है",
-    "कम capital से बड़ी exposure बनती है",
-    "Adverse move margin पर तेजी से असर डाल सकता है",
-    "Leverage से पहले maximum loss calculate करो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "MTF में broker उधार देता है और उस पर ब्याज़ लेता है",
+    "leverage नुकसान को भी बढ़ाता है",
+    "margin कम पड़े तो position कट सकती है",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Leverage में छोटा price move capital पर बड़ा असर क्यों डालता है"
+   "seo": "Margin Trading Facility"
   },
   {
    "id": 129,
@@ -4847,38 +4867,37 @@
    "used_short": false,
    "key": "risk_journal",
    "cat": "RISK",
-   "topic": "Trading journal में कौन से numbers track करें",
+   "topic": "Journal से expectancy — win rate 40%, औसत जीत 2R, हार 1R = +0.2R",
    "thumb": [
-    "सिर्फ़ profit-loss लिखना काफी नहीं",
-    "Trading journal में कौन से numbers track करें"
+    "40% जीत",
+    "फिर भी फ़ायदा?"
    ],
-   "sticker": "समझो",
+   "sticker": "सीखो",
    "beats": {
     "hook": [
-     "सिर्फ़ profit-loss लिखना काफी नहीं",
-     "सिर्फ़ profit-loss लिखना काफी नहीं"
+     "Win rate 40%",
+     "पर जीत बड़ी"
     ],
     "pehchan": [
-     "पहचान",
-     "Setup, risk, exit reason और mistake category track करो"
+     "फ़ॉर्मूला",
+     "0.4 × 2 − 0.6 × 1"
     ],
     "matlab": [
-     "मतलब",
-     "Data से repeat mistakes दिख सकती हैं"
+     "हिसाब",
+     "0.8 − 0.6 = +0.2R प्रति ट्रेड"
     ],
     "karein": [
-     "क्या देखें",
-     "हर week journal review करो"
+     "क्या करें",
+     "journal के बिना ये नंबर पता ही नहीं"
     ]
    },
    "facts": [
-    "Trading journal में कौन से numbers track करें",
-    "Setup, risk, exit reason और mistake category track करो",
-    "Data से repeat mistakes दिख सकती हैं",
-    "हर week journal review करो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "win rate 40%, औसत जीत 2R, औसत हार 1R",
+    "expectancy = +0.2R प्रति ट्रेड",
+    "charges घटाकर हिसाब करो",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Trading journal में कौन से numbers track करें"
+   "seo": "Trading Expectancy"
   },
   {
    "id": 130,
@@ -4886,38 +4905,37 @@
    "used_short": false,
    "key": "business_unit_economics",
    "cat": "BUSINESS",
-   "topic": "Unit economics — customer लाने की cost और value का रिश्ता",
+   "topic": "Unit economics — customer लाने का ख़र्च ₹500, कमाई ₹50/महीना = 10 महीने",
    "thumb": [
-    "Revenue बढ़ रहा है, पर हर customer profitable है?",
-    "Unit economics"
+    "Customer लाए",
+    "मुनाफ़ा कब?"
    ],
    "sticker": "समझो",
    "beats": {
     "hook": [
-     "Revenue बढ़ रहा है, पर हर customer profitable है?",
-     "Revenue बढ़ रहा है, पर हर customer profitable है?"
+     "CAC ₹500",
+     "एक customer लाने का ख़र्च"
     ],
     "pehchan": [
-     "पहचान",
-     "CAC acquisition cost बताता है"
+     "कमाई",
+     "हर महीने ₹50 मुनाफ़ा"
     ],
     "matlab": [
-     "मतलब",
-     "LTV customer से long-term value का concept है"
+     "हिसाब",
+     "500 ÷ 50 = 10 महीने"
     ],
     "karein": [
      "क्या देखें",
-     "Growth के साथ unit economics improve हो रहे हैं या नहीं देखो"
+     "customer 10 महीने से पहले छोड़ दे तो घाटा"
     ]
    },
    "facts": [
-    "Unit economics — customer लाने की cost और value का रिश्ता",
-    "CAC acquisition cost बताता है",
-    "LTV customer से long-term value का concept है",
-    "Growth के साथ unit economics improve हो रहे हैं या नहीं देखो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "CAC ₹500",
+    "हर customer से ₹50 महीने का मुनाफ़ा",
+    "payback 10 महीने",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Unit economics — customer लाने की cost और value का रिश्ता"
+   "seo": "Unit Economics"
   },
   {
    "id": 131,
@@ -4925,38 +4943,37 @@
    "used_short": false,
    "key": "business_cash",
    "cat": "BUSINESS",
-   "topic": "EBITDA और operating cash flow — एक जैसे क्यों नहीं",
+   "topic": "EBITDA 100, operating cash 40 — बाकी 60 कहाँ गया?",
    "thumb": [
-    "EBITDA profit-like metric है, cash नहीं",
-    "EBITDA और operating cash flow"
+    "EBITDA 100",
+    "cash 40?"
    ],
-   "sticker": "समझो",
+   "sticker": "राज़",
    "beats": {
     "hook": [
-     "EBITDA profit-like metric है, cash नहीं",
-     "EBITDA profit-like metric है, cash नहीं"
+     "EBITDA 100",
+     "cash सिर्फ़ 40"
     ],
     "pehchan": [
      "पहचान",
-     "Working capital और other cash items फर्क पैदा कर सकते हैं"
+     "EBITDA में ब्याज़, टैक्स, working capital नहीं"
     ],
     "matlab": [
      "मतलब",
-     "High EBITDA के बावजूद cash pressure हो सकता है"
+     "60 टैक्स, ब्याज़ और फँसे पैसे में"
     ],
     "karein": [
      "क्या देखें",
-     "Cash flow statement को ignore मत करो"
+     "EBITDA नहीं, cash flow statement"
     ]
    },
    "facts": [
-    "EBITDA और operating cash flow — एक जैसे क्यों नहीं",
-    "Working capital और other cash items फर्क पैदा कर सकते हैं",
-    "High EBITDA के बावजूद cash pressure हो सकता है",
-    "Cash flow statement को ignore मत करो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "EBITDA ₹100 करोड़",
+    "operating cash flow ₹40 करोड़",
+    "बाकी 60 टैक्स, ब्याज़, working capital में",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "EBITDA और operating cash flow — एक जैसे क्यों नहीं"
+   "seo": "EBITDA vs Cash Flow"
   },
   {
    "id": 132,
@@ -5004,38 +5021,1621 @@
    "used_short": false,
    "key": "market_index_base",
    "cat": "MARKET HISTORY",
-   "topic": "Index base value का असली मतलब",
+   "topic": "Sensex base 100, Nifty base 1000 — दोनों के level की तुलना बेकार क्यों",
    "thumb": [
-    "Index 100 से 1000 कैसे बनता है?",
-    "Index base value का असली मतलब"
+    "Sensex बड़ा",
+    "Nifty छोटा?"
+   ],
+   "sticker": "सच",
+   "beats": {
+    "hook": [
+     "Base value",
+     "शुरुआत का नंबर"
+    ],
+    "pehchan": [
+     "Sensex",
+     "base 100, base year 1978-79"
+    ],
+    "matlab": [
+     "Nifty",
+     "base 1000, 3 नवंबर 1995"
+    ],
+    "karein": [
+     "याद रखो",
+     "level नहीं, % बदलाव की तुलना करो"
+    ]
+   },
+   "facts": [
+    "Sensex base 100 (1978-79)",
+    "Nifty 50 base 1000 (3 नवंबर 1995)",
+    "अलग base = level की सीधी तुलना बेमानी"
+   ],
+   "seo": "Index Base Value"
+  },
+  {
+   "id": 134,
+   "used": false,
+   "used_short": false,
+   "key": "opt_stt_hike_2026",
+   "cat": "OPTIONS",
+   "topic": "STT बढ़ा — 1 अप्रैल 2026 से futures 0.05%, options premium 0.15%",
+   "thumb": [
+    "F&O का टैक्स",
+    "ढाई गुना?"
+   ],
+   "sticker": "नया नियम",
+   "beats": {
+    "hook": [
+     "STT",
+     "F&O पर बढ़ा"
+    ],
+    "pehchan": [
+     "Futures",
+     "0.02% से 0.05%"
+    ],
+    "matlab": [
+     "Options",
+     "premium पर 0.1% से 0.15%"
+    ],
+    "karein": [
+     "हिसाब",
+     "₹10 लाख futures बेचा: ₹200 से ₹500"
+    ]
+   },
+   "facts": [
+    "Budget 2026-27 में घोषणा, 1 अप्रैल 2026 से लागू",
+    "futures STT 0.02% से 0.05%",
+    "options premium पर 0.1% से 0.15%",
+    "exercise पर 0.125% से 0.15%",
+    "₹10 लाख futures पर ₹200 से ₹500"
+   ],
+   "seo": "STT on F&O"
+  },
+  {
+   "id": 135,
+   "used": false,
+   "used_short": false,
+   "key": "opt_sebi_fy25_study",
+   "cat": "OPTIONS",
+   "topic": "SEBI स्टडी FY25 — 91% individual F&O traders घाटे में",
+   "thumb": [
+    "100 में 91",
+    "घाटे में"
+   ],
+   "sticker": "सच",
+   "beats": {
+    "hook": [
+     "91%",
+     "F&O traders घाटे में"
+    ],
+    "pehchan": [
+     "स्रोत",
+     "SEBI स्टडी, FY25"
+    ],
+    "matlab": [
+     "कुल नुकसान",
+     "करीब ₹1.06 लाख करोड़"
+    ],
+    "karein": [
+     "क्या करें",
+     "पहले risk समझो, फिर ट्रेड"
+    ]
+   },
+   "facts": [
+    "SEBI की FY25 स्टडी",
+    "91% individual traders को net loss",
+    "कुल नुकसान करीब ₹1.06 लाख करोड़",
+    "FY24 के ₹74,812 करोड़ से 41% ज़्यादा",
+    "औसत नुकसान करीब ₹1.1 लाख"
+   ],
+   "seo": "SEBI F&O Study FY25"
+  },
+  {
+   "id": 136,
+   "used": false,
+   "used_short": false,
+   "key": "opt_weekly_expiry_days",
+   "cat": "OPTIONS",
+   "topic": "Nifty की weekly expiry मंगलवार, Sensex की गुरुवार — Bank Nifty अब सिर्फ़ monthly",
+   "thumb": [
+    "Bank Nifty",
+    "weekly कहाँ गई?"
+   ],
+   "sticker": "नया नियम",
+   "beats": {
+    "hook": [
+     "Weekly expiry",
+     "अब सिर्फ़ 2"
+    ],
+    "pehchan": [
+     "NSE",
+     "Nifty 50 — हर मंगलवार"
+    ],
+    "matlab": [
+     "BSE",
+     "Sensex — हर गुरुवार"
+    ],
+    "karein": [
+     "याद रखो",
+     "छुट्टी हो तो एक दिन पहले"
+    ]
+   },
+   "facts": [
+    "हर exchange पर सिर्फ़ एक benchmark index की weekly expiry",
+    "Nifty 50 weekly: मंगलवार",
+    "Sensex weekly: गुरुवार",
+    "Bank Nifty, FinNifty सिर्फ़ monthly",
+    "SEBI नियम 20 नवंबर 2024 से"
+   ],
+   "seo": "Weekly Expiry Day"
+  },
+  {
+   "id": 137,
+   "used": false,
+   "used_short": false,
+   "key": "opt_settlement_price",
+   "cat": "OPTIONS",
+   "topic": "Expiry का final भाव — आख़िरी 30 मिनट (3:00-3:30) का औसत",
+   "thumb": [
+    "3:29 का भाव",
+    "final नहीं?"
+   ],
+   "sticker": "राज़",
+   "beats": {
+    "hook": [
+     "Settlement",
+     "आख़िरी भाव नहीं"
+    ],
+    "pehchan": [
+     "पहचान",
+     "3:00 से 3:30 का औसत"
+    ],
+    "matlab": [
+     "मतलब",
+     "आख़िरी मिनट की छलांग का असर कम"
+    ],
+    "karein": [
+     "याद रखो",
+     "index options cash settled"
+    ]
+   },
+   "facts": [
+    "index derivatives का final settlement = आख़िरी 30 मिनट का औसत",
+    "3:00 से 3:30",
+    "index F&O cash settled, stock F&O physical delivery"
+   ],
+   "seo": "Expiry Settlement Price"
+  },
+  {
+   "id": 138,
+   "used": false,
+   "used_short": false,
+   "key": "opt_fo_ban_mwpl",
+   "cat": "OPTIONS",
+   "topic": "F&O ban — MWPL 95% पार तो नई position नहीं, 80% पर बाहर",
+   "thumb": [
+    "शेयर ban में",
+    "मतलब क्या?"
+   ],
+   "sticker": "नया नियम",
+   "beats": {
+    "hook": [
+     "F&O ban",
+     "95% का नियम"
+    ],
+    "pehchan": [
+     "पहचान",
+     "open interest MWPL के 95% पार"
+    ],
+    "matlab": [
+     "मतलब",
+     "सिर्फ़ position घटा सकते हो"
+    ],
+    "karein": [
+     "Exit",
+     "80% से नीचे आने पर ban हटता है"
+    ]
+   },
+   "facts": [
+    "ban तब लगता है जब open interest MWPL के 95% से ऊपर",
+    "80% से नीचे आने पर ban हटता है",
+    "दिसंबर 2025 से गिनती delta-adjusted FutEq OI पर"
+   ],
+   "seo": "F&O Ban Period"
+  },
+  {
+   "id": 139,
+   "used": false,
+   "used_short": false,
+   "key": "opt_expiry_elm",
+   "cat": "OPTIONS",
+   "topic": "Expiry day पर option बेचने वालों से extra 2% margin — क्यों?",
+   "thumb": [
+    "Expiry पर",
+    "margin ज़्यादा?"
+   ],
+   "sticker": "नया नियम",
+   "beats": {
+    "hook": [
+     "2% ELM",
+     "expiry day पर"
+    ],
+    "pehchan": [
+     "किस पर",
+     "short options पर"
+    ],
+    "matlab": [
+     "मतलब",
+     "आख़िरी दिन gamma risk सबसे ज़्यादा"
+    ],
+    "karein": [
+     "याद रखो",
+     "margin कम पड़े तो position कट सकती है"
+    ]
+   },
+   "facts": [
+    "SEBI ने expiry day पर short options के लिए 2% extra ELM लगाया",
+    "नवंबर 2024 से लागू",
+    "expiry day पर भाव तेज़ी से बदलते हैं"
+   ],
+   "seo": "Extreme Loss Margin Expiry"
+  },
+  {
+   "id": 140,
+   "used": false,
+   "used_short": false,
+   "key": "market_rbi_policy_oct2026",
+   "cat": "MARKET FACT",
+   "topic": "RBI policy 7 अक्टूबर 2026 — repo 5.25%, 0.25% बढ़ा तो EMI पर क्या असर",
+   "thumb": [
+    "7 अक्टूबर",
+    "EMI बढ़ेगी?"
+   ],
+   "sticker": "ताज़ा ख़बर",
+   "beats": {
+    "hook": [
+     "Repo 5.25%",
+     "फ़ैसला 7 अक्टूबर"
+    ],
+    "pehchan": [
+     "Repo",
+     "RBI बैंकों को इसी दर पर उधार देता है"
+    ],
+    "matlab": [
+     "असर",
+     "repo ऊपर तो loan महँगे हो सकते हैं"
+    ],
+    "karein": [
+     "हिसाब",
+     "₹50 लाख, 20 साल: 8.5% से 8.75% = करीब ₹794 ज़्यादा EMI"
+    ]
+   },
+   "facts": [
+    "RBI MPC बैठक 5-7 अक्टूबर 2026",
+    "अगस्त 2026 में repo 5.25% पर बिना बदलाव",
+    "₹50 लाख, 20 साल: 8.5% पर EMI करीब ₹43,391",
+    "8.75% पर करीब ₹44,186",
+    "फ़र्क करीब ₹794 हर महीने"
+   ],
+   "seo": "RBI Repo Rate"
+  },
+  {
+   "id": 141,
+   "used": false,
+   "used_short": false,
+   "key": "market_sept2026_fall",
+   "cat": "MARKET HISTORY",
+   "topic": "सितंबर 2026 — Nifty 6.1% गिरा, 2018 के बाद सबसे बुरा महीना",
+   "thumb": [
+    "Nifty −6.1%",
+    "सितंबर में क्या हुआ?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "सितंबर 2026",
+     "Nifty 6.1% नीचे"
+    ],
+    "pehchan": [
+     "वजह",
+     "crude $100 पार, ऊँचे bond yields, विदेशी बिकवाली"
+    ],
+    "matlab": [
+     "Close",
+     "30 सितंबर को 22,620"
+    ],
+    "karein": [
+     "सबक",
+     "गिरावट बाज़ार का हिस्सा है, पहले से तैयारी"
+    ]
+   },
+   "facts": [
+    "Nifty 50 सितंबर 2026 में 6.1% गिरा",
+    "30 सितंबर close 22,620.45",
+    "2018 के बाद सबसे कमज़ोर महीना",
+    "Nifty IT करीब 12% गिरा",
+    "पिछला प्रदर्शन आगे की गारंटी नहीं"
+   ],
+   "seo": "Nifty September 2026 Fall"
+  },
+  {
+   "id": 142,
+   "used": false,
+   "used_short": false,
+   "key": "market_fii_dii_flows",
+   "cat": "MARKET FACT",
+   "topic": "FPI बेचें, DII ख़रीदें — सितंबर 2026: −₹25,662 करोड़ बनाम +₹52,617 करोड़",
+   "thumb": [
+    "विदेशी बेच रहे",
+    "बाज़ार कौन संभाल रहा?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "FPI बनाम DII",
+     "सितंबर 2026"
+    ],
+    "pehchan": [
+     "FPI",
+     "secondary market में ₹25,662 करोड़ निकाले"
+    ],
+    "matlab": [
+     "DII",
+     "₹52,617 करोड़ लगाए"
+    ],
+    "karein": [
+     "मतलब",
+     "SIP का पैसा DII के ज़रिए बाज़ार में आता है"
+    ]
+   },
+   "facts": [
+    "FPI = विदेशी निवेशक, DII = म्यूचुअल फ़ंड, बीमा कंपनियाँ आदि",
+    "सितंबर 2026 FPI secondary market −₹25,662 करोड़",
+    "DII +₹52,617 करोड़",
+    "अलग स्रोत अलग आँकड़े दे सकते हैं"
+   ],
+   "seo": "FII DII Data"
+  },
+  {
+   "id": 143,
+   "used": false,
+   "used_short": false,
+   "key": "market_crude_rupee",
+   "cat": "MARKET FACT",
+   "topic": "Crude $100 पार, रुपया करीब 96/$ — आपकी जेब और बाज़ार पर असर",
+   "thumb": [
+    "Crude $100",
+    "पेट्रोल से आगे असर?"
+   ],
+   "sticker": "ताज़ा ख़बर",
+   "beats": {
+    "hook": [
+     "Crude $100+",
+     "रुपया करीब 96"
+    ],
+    "pehchan": [
+     "असर 1",
+     "import महँगा, महँगाई का दबाव"
+    ],
+    "matlab": [
+     "असर 2",
+     "कंपनियों के margin, विदेशी बिकवाली"
+    ],
+    "karein": [
+     "सबक",
+     "macro ख़बरें sector पर अलग असर डालती हैं"
+    ]
+   },
+   "facts": [
+    "सितंबर 2026 में crude $100 प्रति barrel के ऊपर गया",
+    "30 सितंबर को रुपया करीब ₹95.92 प्रति डॉलर",
+    "कमज़ोर रुपया import को महँगा करता है"
+   ],
+   "seo": "Crude Oil Rupee Impact"
+  },
+  {
+   "id": 144,
+   "used": false,
+   "used_short": false,
+   "key": "market_fed_hike_india",
+   "cat": "MARKET FACT",
+   "topic": "US Fed ने rate बढ़ाया — भारत से विदेशी पैसा क्यों निकलता है",
+   "thumb": [
+    "अमेरिका में फ़ैसला",
+    "भारत में गिरावट?"
    ],
    "sticker": "समझो",
    "beats": {
     "hook": [
-     "Index 100 से 1000 कैसे बनता है?",
-     "Index 100 से 1000 कैसे बनता है?"
+     "Fed hike",
+     "सितंबर 2026"
     ],
     "pehchan": [
      "पहचान",
-     "Base date और base value calculation की शुरुआत तय करते हैं"
+     "US bond पर ज़्यादा ब्याज़"
     ],
     "matlab": [
      "मतलब",
-     "Index level किसी एक stock की price नहीं है"
+     "विदेशी निवेशक सुरक्षित US bonds की ओर"
     ],
     "karein": [
-     "क्या देखें",
-     "Index methodology समझे बिना level compare मत करो"
+     "सबक",
+     "global ब्याज़ दरें Indian बाज़ार को भी हिलाती हैं"
     ]
    },
    "facts": [
-    "Index base value का असली मतलब",
-    "Base date और base value calculation की शुरुआत तय करते हैं",
-    "Index level किसी एक stock की price नहीं है",
-    "Index methodology समझे बिना level compare मत करो",
-    "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
+    "US Fed ने सितंबर 2026 में rate बढ़ाया",
+    "US 10-year yield करीब 5.25%",
+    "ऊँचे yield पर emerging markets से पैसा निकल सकता है"
    ],
-   "seo": "Index base value का असली मतलब"
+   "seo": "Fed Rate Hike Impact India"
+  },
+  {
+   "id": 145,
+   "used": false,
+   "used_short": false,
+   "key": "market_200_week_average",
+   "cat": "INDICATOR",
+   "topic": "200-week moving average — Nifty 6 साल बाद इस level पर",
+   "thumb": [
+    "6 साल बाद",
+    "ये level?"
+   ],
+   "sticker": "असली डेटा",
+   "beats": {
+    "hook": [
+     "200-week average",
+     "करीब 4 साल का औसत"
+    ],
+    "pehchan": [
+     "पहचान",
+     "200 हफ़्तों के close का औसत"
+    ],
+    "matlab": [
+     "सितंबर 2026",
+     "Nifty करीब 22,600 पर इसे test कर रहा"
+    ],
+    "karein": [
+     "याद रखो",
+     "level टूट भी सकता है, सिर्फ़ reference"
+    ]
+   },
+   "facts": [
+    "200 हफ़्ते ≈ करीब 4 साल",
+    "analysts के मुताबिक Nifty ने 6 साल बाद इसे test किया",
+    "22,600 का इलाका",
+    "moving average भविष्य नहीं बताता"
+   ],
+   "seo": "200 Week Moving Average"
+  },
+  {
+   "id": 146,
+   "used": false,
+   "used_short": false,
+   "key": "market_gold_150k",
+   "cat": "MARKET FACT",
+   "topic": "सोना ₹1.5 लाख/10 ग्राम के पास — कमज़ोर रुपया भी वजह",
+   "thumb": [
+    "सोना ₹1.5 लाख",
+    "इतना महँगा क्यों?"
+   ],
+   "sticker": "ताज़ा ख़बर",
+   "beats": {
+    "hook": [
+     "MCX gold",
+     "₹1,50,177 / 10 ग्राम"
+    ],
+    "pehchan": [
+     "वजह 1",
+     "दुनिया में सोने का भाव"
+    ],
+    "matlab": [
+     "वजह 2",
+     "रुपया करीब 96/$ — import महँगा"
+    ],
+    "karein": [
+     "याद रखो",
+     "सितंबर में 24K करीब 3.61% गिरा भी"
+    ]
+   },
+   "facts": [
+    "30 सितंबर 2026 MCX gold ₹1,50,177 प्रति 10 ग्राम",
+    "international gold करीब $4,185 प्रति ounce",
+    "रुपया करीब ₹95.92/$",
+    "सितंबर में 24K retail करीब 3.61% नीचे"
+   ],
+   "seo": "Gold Price India"
+  },
+  {
+   "id": 147,
+   "used": false,
+   "used_short": false,
+   "key": "market_silver_volatility",
+   "cat": "MARKET FACT",
+   "topic": "चाँदी सोने से ज़्यादा उछलती-गिरती है — सितंबर में ₹15,000/kg की गिरावट",
+   "thumb": [
+    "चाँदी",
+    "सोने से तेज़?"
+   ],
+   "sticker": "सावधान",
+   "beats": {
+    "hook": [
+     "Silver",
+     "₹2,26,270 / kg"
+    ],
+    "pehchan": [
+     "पहचान",
+     "industrial माँग + निवेश माँग"
+    ],
+    "matlab": [
+     "मतलब",
+     "दोनों तरफ़ बड़े झटके"
+    ],
+    "karein": [
+     "याद रखो",
+     "सितंबर में करीब ₹15,000 गिरी"
+    ]
+   },
+   "facts": [
+    "30 सितंबर 2026 MCX silver ₹2,26,270 प्रति kg",
+    "सितंबर में करीब ₹15,000 की गिरावट",
+    "चाँदी में उतार-चढ़ाव सोने से ज़्यादा रहता है"
+   ],
+   "seo": "Silver Price Volatility"
+  },
+  {
+   "id": 148,
+   "used": false,
+   "used_short": false,
+   "key": "pf_gold_ways",
+   "cat": "PERSONAL FINANCE",
+   "topic": "सोना ख़रीदने के 4 तरीके — गहना, coin, Gold ETF, gold fund",
+   "thumb": [
+    "Dhanteras पर",
+    "कौन सा सोना?"
+   ],
+   "sticker": "सीखो",
+   "beats": {
+    "hook": [
+     "4 तरीके",
+     "सोने में पैसा"
+    ],
+    "pehchan": [
+     "Physical",
+     "गहना/coin — making charge और 3% GST"
+    ],
+    "matlab": [
+     "Paper",
+     "Gold ETF और gold mutual fund"
+    ],
+    "karein": [
+     "क्या देखें",
+     "शुद्धता, ख़र्च, बेचने की आसानी"
+    ]
+   },
+   "facts": [
+    "गहने में making charges अलग से लगते हैं",
+    "सोने पर 3% GST",
+    "Gold ETF demat में, gold fund बिना demat",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Gold ETF vs Physical Gold"
+  },
+  {
+   "id": 149,
+   "used": false,
+   "used_short": false,
+   "key": "tax_crypto_30",
+   "cat": "TAX",
+   "topic": "Crypto पर 30% टैक्स + 1% TDS — loss set-off भी नहीं",
+   "thumb": [
+    "Crypto में मुनाफ़ा",
+    "कितना टैक्स?"
+   ],
+   "sticker": "टैक्स",
+   "beats": {
+    "hook": [
+     "30% टैक्स",
+     "+ 4% cess"
+    ],
+    "pehchan": [
+     "TDS",
+     "बिक्री पर 1%"
+    ],
+    "matlab": [
+     "Loss",
+     "दूसरी कमाई से set-off नहीं"
+    ],
+    "karein": [
+     "क्या करें",
+     "हर ट्रेड का रिकॉर्ड रखो"
+    ]
+   },
+   "facts": [
+    "VDA (crypto) gains पर flat 30% + 4% cess",
+    "सिर्फ़ ख़रीद लागत घटा सकते हो",
+    "loss set-off या carry forward नहीं",
+    "1% TDS — नए Income-tax Act 2025 में भी जारी"
+   ],
+   "seo": "Crypto Tax India"
+  },
+  {
+   "id": 150,
+   "used": false,
+   "used_short": false,
+   "key": "tax_ltcg_equity",
+   "cat": "TAX",
+   "topic": "शेयर पर LTCG 12.5% — ₹1.25 लाख तक छूट, ₹2 लाख gain पर टैक्स ₹9,375",
+   "thumb": [
+    "₹2 लाख मुनाफ़ा",
+    "टैक्स कितना?"
+   ],
+   "sticker": "टैक्स",
+   "beats": {
+    "hook": [
+     "LTCG",
+     "1 साल से ज़्यादा रखा"
+    ],
+    "pehchan": [
+     "छूट",
+     "₹1.25 लाख तक gain पर टैक्स नहीं"
+    ],
+    "matlab": [
+     "हिसाब",
+     "2,00,000 − 1,25,000 = 75,000"
+    ],
+    "karein": [
+     "टैक्स",
+     "75,000 × 12.5% = ₹9,375 + cess"
+    ]
+   },
+   "facts": [
+    "listed शेयर/equity fund 12 महीने से ज़्यादा = long term",
+    "LTCG 12.5%, ₹1.25 लाख सालाना छूट",
+    "indexation नहीं",
+    "₹2 लाख gain → ₹9,375 + cess"
+   ],
+   "seo": "LTCG Tax on Shares"
+  },
+  {
+   "id": 151,
+   "used": false,
+   "used_short": false,
+   "key": "tax_stcg_equity",
+   "cat": "TAX",
+   "topic": "1 साल से पहले बेचा — STCG 20%: ₹50,000 मुनाफ़े पर ₹10,000",
+   "thumb": [
+    "जल्दी बेचा",
+    "टैक्स ज़्यादा?"
+   ],
+   "sticker": "टैक्स",
+   "beats": {
+    "hook": [
+     "STCG",
+     "12 महीने से कम"
+    ],
+    "pehchan": [
+     "दर",
+     "20% + cess"
+    ],
+    "matlab": [
+     "हिसाब",
+     "50,000 × 20% = 10,000"
+    ],
+    "karein": [
+     "याद रखो",
+     "intraday और F&O की कमाई अलग तरह से"
+    ]
+   },
+   "facts": [
+    "12 महीने या कम रखे listed शेयर = short term",
+    "STCG 20% + cess",
+    "₹50,000 gain → ₹10,000",
+    "intraday = speculative, F&O = business income"
+   ],
+   "seo": "STCG Tax on Shares"
+  },
+  {
+   "id": 152,
+   "used": false,
+   "used_short": false,
+   "key": "tax_ltcg_harvesting",
+   "cat": "TAX",
+   "topic": "Tax harvesting — हर साल ₹1.25 लाख तक LTCG बुक करके छूट का इस्तेमाल",
+   "thumb": [
+    "हर साल",
+    "₹1.25 लाख की छूट"
+   ],
+   "sticker": "राज़",
+   "beats": {
+    "hook": [
+     "Harvesting",
+     "छूट बेकार न जाए"
+    ],
+    "pehchan": [
+     "तरीका",
+     "₹1.25 लाख तक gain बेचकर फिर ख़रीदो"
+    ],
+    "matlab": [
+     "मतलब",
+     "ख़रीद भाव ऊँचा हो गया, आगे टैक्स कम"
+    ],
+    "karein": [
+     "याद रखो",
+     "charges और नियम देखकर, CA से पूछकर"
+    ]
+   },
+   "facts": [
+    "LTCG छूट ₹1.25 लाख प्रति साल",
+    "छूट अगले साल carry नहीं होती",
+    "बेचने-ख़रीदने में charges लगते हैं",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Tax Harvesting"
+  },
+  {
+   "id": 153,
+   "used": false,
+   "used_short": false,
+   "key": "tax_new_regime_12l",
+   "cat": "TAX",
+   "topic": "नया regime — ₹12 लाख तक टैक्स ज़ीरो, salaried को ₹12.75 लाख तक",
+   "thumb": [
+    "₹12 लाख कमाई",
+    "टैक्स ज़ीरो?"
+   ],
+   "sticker": "टैक्स",
+   "beats": {
+    "hook": [
+     "₹12 लाख",
+     "टैक्स ज़ीरो"
+    ],
+    "pehchan": [
+     "वजह",
+     "₹60,000 तक rebate"
+    ],
+    "matlab": [
+     "Salaried",
+     "₹75,000 standard deduction = ₹12.75 लाख"
+    ],
+    "karein": [
+     "याद रखो",
+     "₹1 ज़्यादा भी हुआ तो slab का हिसाब"
+    ]
+   },
+   "facts": [
+    "FY 2026-27 नया regime: 4 लाख तक 0, 4-8 लाख 5%, 8-12 लाख 10%",
+    "rebate ₹60,000 तक → ₹12 लाख taxable तक टैक्स ज़ीरो",
+    "salaried: ₹75,000 standard deduction"
+   ],
+   "seo": "New Tax Regime 12 Lakh"
+  },
+  {
+   "id": 156,
+   "used": false,
+   "used_short": false,
+   "key": "ipo_timeline",
+   "cat": "IPO",
+   "topic": "IPO बंद से listing तक — बंद 5 अक्टूबर, allotment 6, listing 8",
+   "thumb": [
+    "IPO भरा",
+    "शेयर कब आएँगे?"
+   ],
+   "sticker": "सीखो",
+   "beats": {
+    "hook": [
+     "Timeline",
+     "3 working days"
+    ],
+    "pehchan": [
+     "T",
+     "IPO बंद — 5 अक्टूबर"
+    ],
+    "matlab": [
+     "T+1 / T+3",
+     "allotment 6, listing 8 अक्टूबर"
+    ],
+    "karein": [
+     "याद रखो",
+     "allotment नहीं तो UPI block पैसा वापस"
+    ]
+   },
+   "facts": [
+    "Vishal Nirmiti IPO: 30 सितंबर से 5 अक्टूबर 2026",
+    "allotment 6 अक्टूबर, listing 8 अक्टूबर",
+    "listing आम तौर पर बंद होने के 3 working days में",
+    "UPI mandate से पैसा block होता है"
+   ],
+   "seo": "IPO Allotment Listing Date"
+  },
+  {
+   "id": 157,
+   "used": false,
+   "used_short": false,
+   "key": "ipo_fresh_vs_ofs",
+   "cat": "IPO",
+   "topic": "Fresh issue बनाम OFS — ₹1,000 करोड़ IPO में कंपनी को मिलेंगे ₹550 करोड़",
+   "thumb": [
+    "₹1,000 करोड़ IPO",
+    "कंपनी को कितना?"
+   ],
+   "sticker": "राज़",
+   "beats": {
+    "hook": [
+     "दो हिस्से",
+     "fresh issue + OFS"
+    ],
+    "pehchan": [
+     "Fresh",
+     "₹550 करोड़ — कंपनी को"
+    ],
+    "matlab": [
+     "OFS",
+     "₹450 करोड़ — बेचने वाले पुराने shareholders को"
+    ],
+    "karein": [
+     "क्या देखें",
+     "पैसा किस काम में लगेगा"
+    ]
+   },
+   "facts": [
+    "Anarock DRHP: fresh issue ₹550 करोड़ तक + OFS ₹450 करोड़ तक",
+    "fresh issue का पैसा कंपनी में जाता है",
+    "OFS का पैसा बेचने वालों को",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Fresh Issue vs OFS"
+  },
+  {
+   "id": 158,
+   "used": false,
+   "used_short": false,
+   "key": "ipo_drhp",
+   "cat": "IPO",
+   "topic": "DRHP क्या है — IPO से पहले कंपनी की पूरी कुंडली",
+   "thumb": [
+    "IPO से पहले",
+    "क्या पढ़ें?"
+   ],
+   "sticker": "सीखो",
+   "beats": {
+    "hook": [
+     "DRHP",
+     "Draft Red Herring Prospectus"
+    ],
+    "pehchan": [
+     "पहचान",
+     "SEBI के पास जमा होने वाला draft"
+    ],
+    "matlab": [
+     "अंदर",
+     "business, risk, कर्ज़, पैसे का इस्तेमाल"
+    ],
+    "karein": [
+     "क्या देखें",
+     "'Risk Factors' और 'Objects of the Issue'"
+    ]
+   },
+   "facts": [
+    "DRHP SEBI के पास जमा होता है",
+    "उसमें business, financials, risk factors",
+    "Objects of the Issue बताता है पैसा कहाँ लगेगा",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "DRHP Meaning"
+  },
+  {
+   "id": 159,
+   "used": false,
+   "used_short": false,
+   "key": "pf_credit_report_reporting",
+   "cat": "PERSONAL FINANCE",
+   "topic": "Loan चुकाया, credit report में कब दिखेगा? — अब महीने में 4 बार reporting",
+   "thumb": [
+    "EMI भरी",
+    "score कब सुधरेगा?"
+   ],
+   "sticker": "नया नियम",
+   "beats": {
+    "hook": [
+     "4 बार",
+     "हर महीने reporting"
+    ],
+    "pehchan": [
+     "तारीख़ें",
+     "9, 16, 23 और महीने का आख़िरी दिन"
+    ],
+    "matlab": [
+     "मतलब",
+     "भुगतान जल्दी report में दिख सकता है"
+    ],
+    "karein": [
+     "याद रखो",
+     "score का फ़ॉर्मूला bureau का अपना"
+    ]
+   },
+   "facts": [
+    "RBI नियम: 1 जुलाई 2026 से",
+    "बैंक/NBFC 9, 16, 23 और आख़िरी दिन credit bureau को data भेजते हैं",
+    "interim data 4 दिन में जमा"
+   ],
+   "seo": "Credit Score Update"
+  },
+  {
+   "id": 160,
+   "used": false,
+   "used_short": false,
+   "key": "market_muhurat_2026",
+   "cat": "MARKET FACT",
+   "topic": "Muhurat trading 2026 — रविवार 8 नवंबर, समय NSE बाद में बताएगा",
+   "thumb": [
+    "Diwali पर",
+    "बाज़ार खुलेगा?"
+   ],
+   "sticker": "ताज़ा ख़बर",
+   "beats": {
+    "hook": [
+     "Muhurat 2026",
+     "रविवार 8 नवंबर"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Diwali लक्ष्मी पूजन पर ख़ास session"
+    ],
+    "matlab": [
+     "समय",
+     "करीब 1 घंटा — NSE circular से पक्का"
+    ],
+    "karein": [
+     "याद रखो",
+     "trades की settlement सामान्य नियम से"
+    ]
+   },
+   "facts": [
+    "NSE: Muhurat trading रविवार 8 नवंबर 2026",
+    "समय बाद में notify होगा",
+    "session करीब 1 घंटे का होता है"
+   ],
+   "seo": "Muhurat Trading 2026"
+  },
+  {
+   "id": 161,
+   "used": false,
+   "used_short": false,
+   "key": "pf_sip_power",
+   "cat": "PERSONAL FINANCE",
+   "topic": "SIP ₹5,000 × 20 साल — 12% मानें तो करीब ₹50 लाख",
+   "thumb": [
+    "₹5,000 महीना",
+    "20 साल में?"
+   ],
+   "sticker": "असली हिसाब",
+   "beats": {
+    "hook": [
+     "₹5,000 SIP",
+     "20 साल"
+    ],
+    "pehchan": [
+     "लगाया",
+     "5,000 × 240 = ₹12 लाख"
+    ],
+    "matlab": [
+     "12% मानकर",
+     "करीब ₹49.96 लाख"
+    ],
+    "karein": [
+     "याद रखो",
+     "12% मान्यता है, गारंटी नहीं"
+    ]
+   },
+   "facts": [
+    "₹5,000 हर महीने, 240 महीने",
+    "कुल निवेश ₹12 लाख",
+    "12% सालाना मानकर करीब ₹49.96 लाख",
+    "बाज़ार में रिटर्न ऊपर-नीचे होता है",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "SIP Calculator"
+  },
+  {
+   "id": 162,
+   "used": false,
+   "used_short": false,
+   "key": "pf_step_up_sip",
+   "cat": "PERSONAL FINANCE",
+   "topic": "Step-up SIP — हर साल 10% बढ़ाओ तो ₹50 लाख की जगह करीब ₹99 लाख",
+   "thumb": [
+    "हर साल 10%",
+    "इतना फ़र्क?"
+   ],
+   "sticker": "राज़",
+   "beats": {
+    "hook": [
+     "Step-up",
+     "हर साल SIP 10% ऊपर"
+    ],
+    "pehchan": [
+     "Flat",
+     "₹5,000 × 20 साल ≈ ₹49.96 लाख"
+    ],
+    "matlab": [
+     "Step-up",
+     "करीब ₹99.4 लाख, निवेश ₹34.4 लाख"
+    ],
+    "karein": [
+     "याद रखो",
+     "salary के साथ SIP बढ़ाओ"
+    ]
+   },
+   "facts": [
+    "₹5,000 से शुरू, हर साल 10% बढ़ोतरी",
+    "20 साल में निवेश करीब ₹34.4 लाख",
+    "12% मानकर करीब ₹99.4 लाख",
+    "flat SIP: करीब ₹49.96 लाख",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Step Up SIP"
+  },
+  {
+   "id": 163,
+   "used": false,
+   "used_short": false,
+   "key": "pf_emergency_fund",
+   "cat": "PERSONAL FINANCE",
+   "topic": "Emergency fund — ₹30,000 महीने का ख़र्च × 6 = ₹1.8 लाख पहले",
+   "thumb": [
+    "Job गई तो",
+    "कितने महीने?"
+   ],
+   "sticker": "ज़रूर जानो",
+   "beats": {
+    "hook": [
+     "Emergency fund",
+     "पहली सीढ़ी"
+    ],
+    "pehchan": [
+     "हिसाब",
+     "30,000 × 6 = 1,80,000"
+    ],
+    "matlab": [
+     "कहाँ रखें",
+     "जल्दी निकलने वाली सुरक्षित जगह"
+    ],
+    "karein": [
+     "याद रखो",
+     "trading का पैसा ये नहीं"
+    ]
+   },
+   "facts": [
+    "आम सलाह: 6 महीने का ख़र्च",
+    "₹30,000 × 6 = ₹1.8 लाख",
+    "savings/sweep FD/liquid fund जैसे विकल्प",
+    "इसे शेयर या F&O में मत लगाओ"
+   ],
+   "seo": "Emergency Fund"
+  },
+  {
+   "id": 164,
+   "used": false,
+   "used_short": false,
+   "key": "pf_rule_of_72",
+   "cat": "PERSONAL FINANCE",
+   "topic": "Rule of 72 — 12% पर पैसा करीब 6 साल में दोगुना",
+   "thumb": [
+    "पैसा दोगुना",
+    "कितने साल में?"
+   ],
+   "sticker": "राज़",
+   "beats": {
+    "hook": [
+     "Rule of 72",
+     "72 ÷ दर"
+    ],
+    "pehchan": [
+     "12%",
+     "72 ÷ 12 = 6 साल"
+    ],
+    "matlab": [
+     "7%",
+     "72 ÷ 7 ≈ 10 साल"
+    ],
+    "karein": [
+     "याद रखो",
+     "ये अंदाज़ा है, सटीक हिसाब नहीं"
+    ]
+   },
+   "facts": [
+    "दोगुना होने के साल ≈ 72 ÷ सालाना दर",
+    "12% → 6 साल, सटीक 6.1 साल",
+    "महँगाई पर भी लागू: 6% महँगाई → 12 साल में आधी कीमत"
+   ],
+   "seo": "Rule of 72"
+  },
+  {
+   "id": 165,
+   "used": false,
+   "used_short": false,
+   "key": "pf_inflation",
+   "cat": "PERSONAL FINANCE",
+   "topic": "6% महँगाई — आज के ₹1 लाख की ताक़त 12 साल में करीब आधी",
+   "thumb": [
+    "₹1 लाख",
+    "12 साल बाद?"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "महँगाई 6%",
+     "चुपचाप चोरी"
+    ],
+    "pehchan": [
+     "हिसाब",
+     "1,00,000 ÷ 1.06^12 ≈ 49,697"
+    ],
+    "matlab": [
+     "मतलब",
+     "FD 6% से कम दे तो असल में घाटा"
+    ],
+    "karein": [
+     "क्या करें",
+     "real return = रिटर्न − महँगाई देखो"
+    ]
+   },
+   "facts": [
+    "6% महँगाई पर 12 साल में ख़रीद-ताक़त करीब आधी",
+    "₹1 लाख ≈ ₹49,697 के बराबर",
+    "real return = nominal return − inflation (लगभग)"
+   ],
+   "seo": "Inflation Effect"
+  },
+  {
+   "id": 166,
+   "used": false,
+   "used_short": false,
+   "key": "pf_expense_ratio",
+   "cat": "PERSONAL FINANCE",
+   "topic": "Expense ratio 1% ज़्यादा = 20 साल में ₹10 लाख पर करीब ₹16 लाख कम",
+   "thumb": [
+    "1% का फ़र्क",
+    "इतना बड़ा?"
+   ],
+   "sticker": "राज़",
+   "beats": {
+    "hook": [
+     "Expense ratio",
+     "हर साल का ख़र्च"
+    ],
+    "pehchan": [
+     "12% पर",
+     "₹10 लाख → करीब ₹96.5 लाख"
+    ],
+    "matlab": [
+     "11% पर",
+     "करीब ₹80.6 लाख"
+    ],
+    "karein": [
+     "क्या देखें",
+     "direct plan और index fund का ख़र्च"
+    ]
+   },
+   "facts": [
+    "₹10 लाख, 20 साल",
+    "12% → करीब ₹96.5 लाख, 11% → करीब ₹80.6 लाख",
+    "फ़र्क करीब ₹16 लाख",
+    "रिटर्न मान्यता है, गारंटी नहीं"
+   ],
+   "seo": "Expense Ratio"
+  },
+  {
+   "id": 167,
+   "used": false,
+   "used_short": false,
+   "key": "pf_credit_utilization",
+   "cat": "PERSONAL FINANCE",
+   "topic": "Credit utilization — ₹1 लाख limit पर ₹30,000 से कम ख़र्च क्यों",
+   "thumb": [
+    "Card limit पूरी",
+    "score पर असर?"
+   ],
+   "sticker": "ज़रूर जानो",
+   "beats": {
+    "hook": [
+     "Utilization",
+     "limit का कितना इस्तेमाल"
+    ],
+    "pehchan": [
+     "हिसाब",
+     "₹30,000 ÷ ₹1,00,000 = 30%"
+    ],
+    "matlab": [
+     "मतलब",
+     "ज़्यादा इस्तेमाल = उधार पर निर्भरता का संकेत"
+    ],
+    "karein": [
+     "क्या करें",
+     "बिल समय पर, पूरा भरो"
+    ]
+   },
+   "facts": [
+    "आम सलाह: utilization 30% से कम",
+    "₹1 लाख limit पर ₹30,000",
+    "समय पर भुगतान score का सबसे बड़ा हिस्सा माना जाता है"
+   ],
+   "seo": "Credit Utilization"
+  },
+  {
+   "id": 168,
+   "used": false,
+   "used_short": false,
+   "key": "pf_minimum_due_trap",
+   "cat": "PERSONAL FINANCE",
+   "topic": "Credit card का minimum due — बाकी बिल पर भारी ब्याज़ चलता रहता है",
+   "thumb": [
+    "Minimum भरा",
+    "छुटकारा?"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "Minimum due",
+     "आधा सच"
+    ],
+    "pehchan": [
+     "पहचान",
+     "सिर्फ़ 5% जैसा छोटा हिस्सा"
+    ],
+    "matlab": [
+     "मतलब",
+     "बाकी रकम पर ब्याज़, कई cards पर सालाना 36% से ऊपर"
+    ],
+    "karein": [
+     "क्या करें",
+     "हमेशा पूरा बिल भरो"
+    ]
+   },
+   "facts": [
+    "minimum due भरने से late fee बचती है, ब्याज़ नहीं",
+    "कई cards पर ब्याज़ 3% प्रति माह से ज़्यादा",
+    "interest-free period ख़त्म हो जाता है"
+   ],
+   "seo": "Credit Card Minimum Due"
+  },
+  {
+   "id": 169,
+   "used": false,
+   "used_short": false,
+   "key": "pf_term_insurance",
+   "cat": "PERSONAL FINANCE",
+   "topic": "Term insurance — income का 10-15 गुना cover, investment नहीं",
+   "thumb": [
+    "बीमा + निवेश",
+    "एक साथ?"
+   ],
+   "sticker": "सच",
+   "beats": {
+    "hook": [
+     "Term plan",
+     "सिर्फ़ सुरक्षा"
+    ],
+    "pehchan": [
+     "हिसाब",
+     "₹10 लाख income → ₹1-1.5 करोड़ cover"
+    ],
+    "matlab": [
+     "मतलब",
+     "कम premium, बड़ा cover"
+    ],
+    "karein": [
+     "याद रखो",
+     "बीमा और निवेश अलग रखो"
+    ]
+   },
+   "facts": [
+    "आम सलाह: सालाना income का 10-15 गुना cover",
+    "term plan में maturity पर पैसा वापस नहीं",
+    "जल्दी लेने पर premium कम"
+   ],
+   "seo": "Term Insurance"
+  },
+  {
+   "id": 170,
+   "used": false,
+   "used_short": false,
+   "key": "pf_emi_rule",
+   "cat": "PERSONAL FINANCE",
+   "topic": "सारी EMI मिलाकर income के 40% से कम — ₹60,000 salary पर ₹24,000",
+   "thumb": [
+    "EMI ही EMI",
+    "हद कितनी?"
+   ],
+   "sticker": "सावधान",
+   "beats": {
+    "hook": [
+     "40% नियम",
+     "कुल EMI की हद"
+    ],
+    "pehchan": [
+     "हिसाब",
+     "60,000 × 40% = 24,000"
+    ],
+    "matlab": [
+     "मतलब",
+     "बाकी में ख़र्च, बचत, emergency"
+    ],
+    "karein": [
+     "क्या करें",
+     "नया loan लेने से पहले ये जोड़ो"
+    ]
+   },
+   "facts": [
+    "आम सलाह: कुल EMI income के 40% से कम",
+    "₹60,000 पर ₹24,000",
+    "बैंक भी इसी तरह का अनुपात देखते हैं"
+   ],
+   "seo": "EMI to Income Ratio"
+  },
+  {
+   "id": 171,
+   "used": false,
+   "used_short": false,
+   "key": "pf_ppf_basics",
+   "cat": "PERSONAL FINANCE",
+   "topic": "PPF — 15 साल lock-in, साल में ₹1.5 लाख तक",
+   "thumb": [
+    "सरकारी बचत",
+    "PPF समझो"
+   ],
+   "sticker": "सीखो",
+   "beats": {
+    "hook": [
+     "PPF",
+     "15 साल"
+    ],
+    "pehchan": [
+     "सीमा",
+     "साल में ₹500 से ₹1.5 लाख"
+    ],
+    "matlab": [
+     "ब्याज़",
+     "सरकार हर तिमाही दर तय करती है"
+    ],
+    "karein": [
+     "याद रखो",
+     "लंबा lock-in — emergency के लिए नहीं"
+    ]
+   },
+   "facts": [
+    "PPF की अवधि 15 साल",
+    "सालाना ₹500 से ₹1.5 लाख",
+    "ब्याज़ दर हर तिमाही सरकार तय करती है"
+   ],
+   "seo": "PPF Basics"
+  },
+  {
+   "id": 172,
+   "used": false,
+   "used_short": false,
+   "key": "pf_index_fund",
+   "cat": "PERSONAL FINANCE",
+   "topic": "Index fund — Nifty 50 के 50 शेयर एक साथ, कम ख़र्च",
+   "thumb": [
+    "कौन सा शेयर?",
+    "सब एक साथ!"
+   ],
+   "sticker": "सीखो",
+   "beats": {
+    "hook": [
+     "Index fund",
+     "पूरा index ख़रीदो"
+    ],
+    "pehchan": [
+     "पहचान",
+     "Nifty 50 = 50 बड़ी कंपनियाँ"
+    ],
+    "matlab": [
+     "मतलब",
+     "fund manager का चुनाव नहीं, ख़र्च कम"
+    ],
+    "karein": [
+     "याद रखो",
+     "index गिरेगा तो fund भी गिरेगा"
+    ]
+   },
+   "facts": [
+    "Nifty 50 index fund उन्हीं 50 शेयरों को उसी अनुपात में रखता है",
+    "आम तौर पर expense ratio कम",
+    "tracking error भी देखो",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Index Fund"
+  },
+  {
+   "id": 173,
+   "used": false,
+   "used_short": false,
+   "key": "risk_daily_loss_limit",
+   "cat": "RISK",
+   "topic": "Daily loss limit — ₹2 लाख पूँजी पर दिन का 2% = ₹4,000, फिर बंद",
+   "thumb": [
+    "आज का घाटा",
+    "कहाँ रुकें?"
+   ],
+   "sticker": "ज़रूर जानो",
+   "beats": {
+    "hook": [
+     "2% नियम",
+     "दिन की हद"
+    ],
+    "pehchan": [
+     "हिसाब",
+     "2,00,000 × 2% = 4,000"
+    ],
+    "matlab": [
+     "मतलब",
+     "बुरा दिन पूरा महीना न बिगाड़े"
+    ],
+    "karein": [
+     "क्या करें",
+     "हद पहले लिखो, हिट हुई तो terminal बंद"
+    ]
+   },
+   "facts": [
+    "पूँजी ₹2 लाख, daily limit 2% = ₹4,000",
+    "ये उदाहरण है, हद अपनी क्षमता से तय करो",
+    "revenge trading से बचने का तरीका"
+   ],
+   "seo": "Daily Loss Limit"
+  },
+  {
+   "id": 174,
+   "used": false,
+   "used_short": false,
+   "key": "risk_overtrading",
+   "cat": "RISK",
+   "topic": "Overtrading — रोज़ 20 ट्रेड, हर ट्रेड पर ₹40 ख़र्च = ₹800 रोज़",
+   "thumb": [
+    "ज़्यादा ट्रेड",
+    "ज़्यादा कमाई?"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "20 ट्रेड",
+     "रोज़"
+    ],
+    "pehchan": [
+     "हिसाब",
+     "20 × 40 = ₹800 रोज़"
+    ],
+    "matlab": [
+     "महीना",
+     "800 × 20 दिन = ₹16,000"
+    ],
+    "karein": [
+     "क्या करें",
+     "कम, चुने हुए ट्रेड"
+    ]
+   },
+   "facts": [
+    "मान लो हर ट्रेड पर कुल ख़र्च ₹40",
+    "20 ट्रेड = ₹800 रोज़",
+    "20 trading days = ₹16,000 महीना",
+    "ख़र्च हर हाल में लगता है"
+   ],
+   "seo": "Overtrading"
+  },
+  {
+   "id": 175,
+   "used": false,
+   "used_short": false,
+   "key": "intraday_multi_timeframe",
+   "cat": "INTRADAY",
+   "topic": "Multi-timeframe — daily से दिशा, 15 मिनट से entry",
+   "thumb": [
+    "5 मिनट chart",
+    "उल्टा फँस गए?"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "2 timeframe",
+     "दिशा + entry"
+    ],
+    "pehchan": [
+     "Daily",
+     "बड़ा trend ऊपर या नीचे"
+    ],
+    "matlab": [
+     "15 मिनट",
+     "उसी दिशा में entry"
+    ],
+    "karein": [
+     "याद रखो",
+     "छोटे chart पर बड़े trend से लड़ना महँगा"
+    ]
+   },
+   "facts": [
+    "बड़ा timeframe दिशा, छोटा timeframe entry",
+    "daily ऊपर तो 15 मिनट पर सिर्फ़ long सोचो (एक नियम)",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Multi Timeframe Analysis"
+  },
+  {
+   "id": 176,
+   "used": false,
+   "used_short": false,
+   "key": "penny_asm_gsm",
+   "cat": "PENNY STOCK",
+   "topic": "ASM / GSM list — exchange की निगरानी में शेयर का मतलब",
+   "thumb": [
+    "शेयर पर",
+    "ASM का ठप्पा?"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "ASM / GSM",
+     "निगरानी list"
+    ],
+    "pehchan": [
+     "पहचान",
+     "असामान्य उछाल या कमज़ोर fundamentals"
+    ],
+    "matlab": [
+     "असर",
+     "100% margin, trade-for-trade जैसे नियम"
+    ],
+    "karein": [
+     "क्या करें",
+     "ख़रीदने से पहले NSE/BSE पर status देखो"
+    ]
+   },
+   "facts": [
+    "ASM = Additional Surveillance Measure",
+    "GSM = Graded Surveillance Measure",
+    "निगरानी में शेयरों पर ज़्यादा margin जैसी पाबंदियाँ",
+    "list में होना धोखाधड़ी का सबूत नहीं, पर सावधानी का संकेत"
+   ],
+   "seo": "ASM GSM List"
+  },
+  {
+   "id": 177,
+   "used": false,
+   "used_short": false,
+   "key": "fund_q2_results_checklist",
+   "cat": "FUNDAMENTAL",
+   "topic": "Q2 results season — 3 नंबर: revenue growth, operating margin, cash",
+   "thumb": [
+    "Results season",
+    "क्या देखें?"
+   ],
+   "sticker": "समझो",
+   "beats": {
+    "hook": [
+     "Q2 results",
+     "अक्टूबर-नवंबर"
+    ],
+    "pehchan": [
+     "3 नंबर",
+     "revenue, operating margin, cash"
+    ],
+    "matlab": [
+     "मतलब",
+     "headline profit से आगे"
+    ],
+    "karein": [
+     "याद रखो",
+     "result पर भाव का react अनुमान से अलग हो सकता है"
+    ]
+   },
+   "facts": [
+    "जुलाई-सितंबर तिमाही (Q2) के नतीजे अक्टूबर-नवंबर में आते हैं",
+    "revenue growth, operating margin, cash flow",
+    "result के दिन IV ऊँची रहती है",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
+   ],
+   "seo": "Q2 Results"
   }
  ]
 }
