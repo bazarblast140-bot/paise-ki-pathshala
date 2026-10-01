@@ -78,8 +78,20 @@ class HookCheckTests(unittest.TestCase):
         for topic in bank:
             narration = board_short.fallback_narration(topic)
             fails = board_short.check_narration(narration, topic)
+            words = len(" ".join(narration["beats"][b] for b in ("hook", "pehchan", "matlab", "karein")).split())
+            self.assertGreaterEqual(words, 160, topic["key"])
+            self.assertLessEqual(words, 180, topic["key"])
+            self.assertGreaterEqual(len(narration["title"]), 8, topic["key"])
+            self.assertLessEqual(len(narration["title"]), 90, topic["key"])
             self.assertEqual(fails, [], f"{topic['key']}: {fails}")
             self.assertTrue(narration["beats"]["hook"].startswith(narration["hook_line"].rstrip("।")))
+
+    def test_oversized_thumb_title_is_clipped_inside_the_title_rule(self):
+        topic = _topic()
+        topic["thumb"] = ["T" * 80, "U" * 80]
+        title = board_short._fallback_title(topic)
+        self.assertGreaterEqual(len(title), 8)
+        self.assertLessEqual(len(title), 90)
 
 
 class ChartProvenanceTests(unittest.TestCase):

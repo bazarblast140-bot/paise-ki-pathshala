@@ -130,8 +130,9 @@ def main():
             print(f"[WARN] YouTube publish failed (rc={yt_rc}); continuing to Instagram.")
             if yt_rc == 3:   # yt_credentials.EXIT_TOKEN_DEAD
                 note = "YouTube TOKEN EXPIRED/REVOKED — README: 'YouTube token permanent kaise karein'"
-                print("::error title=YouTube token expired or revoked::Regenerate YT_FIN_REFRESH_TOKEN "
-                      "(README: 'YouTube token permanent kaise karein').")
+                if os.environ.get("SUPPRESS_GHA_COMMANDS") != "1":
+                    print("::error title=YouTube token expired or revoked::Regenerate YT_FIN_REFRESH_TOKEN "
+                          "(README: 'YouTube token permanent kaise karein').")
             else:
                 note = f"YouTube upload nahi hua (publish.py rc={yt_rc})"
             (RUN / "youtube_status.txt").write_text(note + "\n", encoding="utf-8")
@@ -181,8 +182,12 @@ def main():
                 from ledger import record_publish
                 from slot_guard import target_date
                 slot = os.environ.get("PUBLISH_SLOT_IST", "").strip()
+                note = ""
+                status_path = RUN / "youtube_status.txt"
+                if status_path.exists():
+                    note = status_path.read_text(encoding="utf-8")
                 record_publish(None, None, slot or None, platform="instagram",
-                               date_ist=target_date(slot) if slot else None)
+                               date_ist=target_date(slot) if slot else None, note=note or None)
             except Exception as e:  # noqa: BLE001
                 print(f"[warn] ledger IG-only entry skipped: {e}")
 

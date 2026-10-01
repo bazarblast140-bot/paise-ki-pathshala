@@ -213,6 +213,23 @@ class DeepSeekTests(unittest.TestCase):
         self.assertIn("not measurable", check.detail)
         self.assertNotIn("USD 0", check.detail)
 
+    def test_publish_log_says_whether_the_balance_is_sufficient_and_hides_the_key(self):
+        import io
+        env = secrets_env(DEEPSEEK_API_KEY=DS_KEY)
+        http = FakeHttp([route("GET", "/user/balance", resp(200, {
+            "is_available": True,
+            "balance_infos": [{"currency": "USD", "total_balance": "12.50"}],
+        }))])
+        buf = io.StringIO()
+        with unittest.mock.patch("sys.stdout", buf):
+            self.assertEqual(H.log_deepseek_balance(http, env), 0)
+        line = buf.getvalue()
+        self.assertIn("sufficient=yes", line)
+        self.assertIn("USD 12.5", line)
+        self.assertNotIn(DS_KEY, line)
+        low = H.format_deepseek_balance(H.Check("DeepSeek", "warn", "is_available=true, balance USD 0.4"))
+        self.assertIn("sufficient=no", low)
+
 
 class KimiTests(unittest.TestCase):
     def test_skipped_when_unset(self):

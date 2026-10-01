@@ -382,7 +382,9 @@ def fallback_narration(topic):
         ),
     }
     # Beat ranges can all sit near their floor and leave the lesson under 160 words.
-    # Top up with number-free sentences, never past a beat's own cap or 180 total.
+    # A whole sentence often does not fit the last 1–2 words of room, which is
+    # how a lesson stopped at 159. After the sentences, add one Hindi word at a
+    # time into whichever beat still has room. Never past a beat cap or 180.
     caps = {"hook": 28, "pehchan": 46, "matlab": 54, "karein": 50}
     fillers = (
         ("karein", "यह सीमा याद रखने लायक है।"),
@@ -403,10 +405,41 @@ def fallback_narration(topic):
                 break
         if not added:
             break
-    title = f"{topic['thumb'][0]} {topic['thumb'][1]}".strip()
+    pad = "यही आगे स्पष्ट सीमा संदर्भ सवाल पहचान मतलब जाँच".split()
+    pad_i = 0
+    guard = 0
+    while sum(len(beats[b].split()) for b in BEATS) < 160 and guard < 40:
+        guard += 1
+        placed = False
+        for beat in ("karein", "matlab", "pehchan", "hook"):
+            words = beats[beat].split()
+            total = sum(len(beats[b].split()) for b in BEATS)
+            if len(words) >= caps[beat] or total >= 180:
+                continue
+            words.append(pad[pad_i % len(pad)])
+            pad_i += 1
+            beats[beat] = " ".join(words)
+            placed = True
+            break
+        if not placed:
+            break
+    title = _fallback_title(topic)
+    return {"title": title, "hook_line": hook_line, "beats": beats}
+
+
+def _fallback_title(topic):
+    """8–90 characters. A long thumb line used to fail the title rule after the word gate."""
+    thumb = topic.get("thumb") or []
+    parts = [str(x).strip() for x in list(thumb)[:2] if str(x).strip()]
+    title = " ".join(parts)
     if len(title) < 8:
-        title = (title + " " + topic["topic"]).strip()[:90]
-    return {"title": title[:90], "hook_line": hook_line, "beats": beats}
+        title = (title + " " + str(topic.get("topic") or "")).strip()
+    title = " ".join(title.split())
+    if len(title) > 90:
+        title = title[:90].rstrip()
+    if len(title) < 8:
+        title = "Paise Ki Pathshala"
+    return title
 
 
 def _content_ok(topic, narration, spec):
