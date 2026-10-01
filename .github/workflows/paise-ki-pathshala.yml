@@ -5,10 +5,20 @@ name: Paise Ki Pathshala
 # ELEVENLABS_*, IG_ACCESS_TOKEN, optional YT_DATA_API_KEY (competitor research).
 # Variables: YT_FIN_CHANNEL_ID, IG_USER_ID, optional SELF_REPAIR.
 on:
+  # Build AHEAD of the slot. YouTube publishAt is the public time.
+  # Odd minutes only — GitHub sheds :00 and :30. Three triggers per slot
+  # (~3–4h before, ~2–3h before, backup). Still 3 public slots a day.
+  # 08:30 IST = 03:00 UTC. 16:00 IST = 10:30 UTC. 21:00 IST = 15:30 UTC.
   schedule:
-    - cron: "0 3 * * *"
-    - cron: "30 10 * * *"
-    - cron: "30 15 * * *"
+    - cron: "47 23 * * *"   # 05:17 IST -> 08:30
+    - cron: "17 0 * * *"    # 05:47 IST -> 08:30
+    - cron: "23 1 * * *"    # 06:53 IST -> 08:30 backup
+    - cron: "41 6 * * *"    # 12:11 IST -> 16:00
+    - cron: "47 7 * * *"    # 13:17 IST -> 16:00
+    - cron: "53 8 * * *"    # 14:23 IST -> 16:00 backup
+    - cron: "47 11 * * *"   # 17:17 IST -> 21:00
+    - cron: "13 13 * * *"   # 18:43 IST -> 21:00
+    - cron: "7 14 * * *"    # 19:37 IST -> 21:00 backup
   # NOTE: no `push:` trigger on purpose. A push that touched this file used to
   # start a PUBLIC upload with no slot and no slot guard (inputs are empty on
   # push, so the format step falls back to short + public). Between 30-Sep and
@@ -42,8 +52,10 @@ on:
         required: false
         default: ""
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # One group for every early trigger. The backup waits; it does not cancel
+  # the run already building the slot. slot_guard then sees the ledger and skips.
+  group: paise-ki-pathshala-publish
+  cancel-in-progress: false
 permissions:
   contents: write
 jobs:
@@ -66,34 +78,36 @@ jobs:
         run: |
           F="${{ inputs.format }}"
           VIS="${{ inputs.privacy }}"
-          SLOT=""
           if [ -z "$F" ]; then
-            F=short; VIS=public
-            case "${{ github.event.schedule }}" in
-              "0 3 * * *") SLOT="08:30" ;;
-              "30 10 * * *") SLOT="16:00" ;;
-              "30 15 * * *") SLOT="21:00" ;;
-            esac
-          elif [ "$VIS" = "now" ]; then
-            VIS=public; SLOT=""
-          elif [ "$VIS" = "public" ]; then
-            H=$(TZ=Asia/Kolkata date +%H%M)
-            if [ "$H" -lt 0810 ]; then SLOT="08:30"
-            elif [ "$H" -lt 1540 ]; then SLOT="16:00"
-            elif [ "$H" -lt 2040 ]; then SLOT="21:00"
-            else SLOT="08:30"; fi
+            F=short
+            VIS=public
+          fi
+          IMMEDIATE=0
+          if [ "$VIS" = "now" ]; then
+            VIS=public
+            IMMEDIATE=1
           fi
           echo "format=$F" >> "$GITHUB_OUTPUT"
           echo "visibility=$VIS" >> "$GITHUB_OUTPUT"
-          echo "slot=$SLOT" >> "$GITHUB_OUTPUT"
+          if [ "$IMMEDIATE" = "1" ]; then
+            echo "slot=" >> "$GITHUB_OUTPUT"
+            echo "date_ist=" >> "$GITHUB_OUTPUT"
+            echo "publish_at=" >> "$GITHUB_OUTPUT"
+            echo "taken=false" >> "$GITHUB_OUTPUT"
+          elif [ "$VIS" = "public" ]; then
+            # Next unfilled slot still far enough ahead. Skip if the ledger has it.
+            python slot_guard.py --next >> "$GITHUB_OUTPUT"
+          else
+            echo "slot=" >> "$GITHUB_OUTPUT"
+            echo "date_ist=" >> "$GITHUB_OUTPUT"
+            echo "publish_at=" >> "$GITHUB_OUTPUT"
+            echo "taken=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Slot pehle se bhara hai kya
         id: guard
         run: |
-          if [ -n "${{ steps.fmt.outputs.slot }}" ]; then
-            python slot_guard.py "${{ steps.fmt.outputs.slot }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "taken=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "taken=${{ steps.fmt.outputs.taken }}" >> "$GITHUB_OUTPUT"
+          echo "slot=${{ steps.fmt.outputs.slot }} date=${{ steps.fmt.outputs.date_ist }} publish_at=${{ steps.fmt.outputs.publish_at }} taken=${{ steps.fmt.outputs.taken }}"
       - name: Preflight (compile + unit tests, no network)
         run: |
           python -m py_compile *.py
@@ -151,6 +165,8 @@ jobs:
           PUBLISH_VISIBILITY: ${{ steps.fmt.outputs.visibility }}
           TOPIC_KEY: ${{ inputs.topic_key }}
           PUBLISH_SLOT_IST: ${{ steps.fmt.outputs.slot }}
+          PUBLISH_DATE_IST: ${{ steps.fmt.outputs.date_ist }}
+          PUBLISH_AT_UTC: ${{ steps.fmt.outputs.publish_at }}
           # Reel only for PUBLIC runs: an unlisted test must not post a public Reel.
           IG_CROSSPOST: ${{ steps.fmt.outputs.format == 'short' && steps.fmt.outputs.visibility == 'public' && '1' || '0' }}
           IG_USER_ID: ${{ vars.IG_USER_ID }}
@@ -158,6 +174,9 @@ jobs:
           IG_SURFACE: ${{ vars.IG_SURFACE || 'facebook' }}
           MEDIA_REPO: ${{ vars.MEDIA_REPO || 'bazarblast140-bot/HEYGEN--INSTAGRAM-' }}
           MEDIA_REPO_TOKEN: ${{ secrets.MEDIA_REPO_TOKEN || secrets.GITHUB_TOKEN }}
+          # Compared to MEDIA_REPO_TOKEN so a GITHUB_TOKEN fallback is logged
+          # by name. The value is never printed.
+          ACTIONS_TOKEN_FOR_COMPARE: ${{ secrets.GITHUB_TOKEN }}
         run: python auto_agent.py --format ${{ steps.fmt.outputs.format }} --publish
       - name: Commit topic_bank (prevent topic repeats)
         if: success() && steps.guard.outputs.taken != 'true'
@@ -187,6 +206,8 @@ jobs:
             run/final.mp4
             run/thumbnail.jpg
             run/report.md
+            run/verify_meta.json
+            run/self_review.json
             run/script.txt
             run/spoken.txt
             run/tts_text.txt

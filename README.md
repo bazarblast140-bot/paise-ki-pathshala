@@ -290,15 +290,27 @@ Reel pehle se nahi daali.
 
 Monetization thresholds + checklist: `MONETIZATION.md`.
 
-## Health check (slot se ~90 min pehle)
+## Schedule (build ahead, 3 slots)
 
-Workflow: **Health check** (`.github/workflows/health-check.yml`). Actions cron UTC hai; IST = UTC+5:30. Lead **90 min** hai (60–90 ki early edge) taaki runner late chale to bhi window ke andar rahe:
+GitHub cron late hota hai aur `:00` / `:30` minutes gira deta hai. Isliye har slot **pehle** banta hai (odd minute) aur YouTube `publishAt` usi slot par public karta hai. Ek run agla **khali** slot leta hai jiska time abhi kaafi door ho; ledger me bhara ho to skip. Din me public posts 3 hi rehte hain.
+
+| Slot (IST) | UTC publish | Early crons (UTC) |
+|---|---|---|
+| 08:30 | 03:00 | `47 23`, `17 0`, `23 1` (05:17, 05:47, 06:53 IST) |
+| 16:00 | 10:30 | `41 6`, `47 7`, `53 8` (12:11, 13:17, 14:23 IST) |
+| 21:00 | 15:30 | `47 11`, `13 13`, `7 14` (17:17, 18:43, 19:37 IST) |
+
+Slot watch (alert): `19 3` (08:49 IST), `19 11` (16:49 IST), `19 16` (21:49 IST). Khali slot par extra instant-public video nahi.
+
+## Health check (build se pehle)
+
+Workflow: **Health check** (`.github/workflows/health-check.yml`). Actions cron UTC hai; IST = UTC+5:30. Check us slot ke sabse pehle build se pehle chalti hai, odd minute par:
 
 | Check (IST) | UTC cron | Slot |
 |---|---|---|
-| 07:00 | `30 1 * * *` | 08:30 |
-| 14:30 | `0 9 * * *` | 16:00 |
-| 19:30 | `0 14 * * *` | 21:00 |
+| 04:47 | `17 23 * * *` | 08:30 |
+| 11:41 | `11 6 * * *` | 16:00 |
+| 16:47 | `17 11 * * *` | 21:00 |
 
 `workflow_dispatch` bhi hai (slot = auto / 08:30 / 16:00 / 21:00). Sirf read: YouTube **refresh** (access token discard, koi Data API call nahi), DeepSeek `GET /user/balance`, Kimi balance **agar key set ho**, Anthropic `GET /v1/models` **agar key set ho**, ElevenLabs `GET /v1/user/subscription`, Instagram `debug_token` (warna ek `fields=id` read). Koi upload / publish / Reel post nahi.
 

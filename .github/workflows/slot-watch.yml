@@ -1,15 +1,14 @@
 name: Slot watch
 
-# Har slot ke ~45 min baad dekhta hai ki us slot ka video sach me gaya ya nahi.
-# Khali mile to: Telegram par khabar + turant naya Short bana ke agle slot par laga deta hai
-# (fill job neeche build workflow ko hi call karta hai).
-# Kyun: GitHub kabhi cron drop kar deta hai aur DeepSeek kabhi fail hota hai — 14 aur
-# 15 Sep ko ek-ek slot aise hi khali chala gaya tha.
+# Har slot ke baad dekhta hai ki us slot ka video sach me gaya ya nahi.
+# Khali mile to: Telegram. Fill tabhi jab agla slot abhi bhi aane wala ho —
+# wahi ahead-of-slot publishAt, koi extra turant-public video nahi.
+# Odd minutes: GitHub :00 aur :30 cron gira deta hai.
 on:
   schedule:
-    - cron: "15 3 * * *"     # 08:45 IST -> 08:30 slot
-    - cron: "45 10 * * *"    # 16:15 IST -> 16:00 slot
-    - cron: "45 15 * * *"    # 21:15 IST -> 21:00 slot
+    - cron: "19 3 * * *"     # 08:49 IST -> 08:30 slot
+    - cron: "19 11 * * *"    # 16:49 IST -> 16:00 slot
+    - cron: "19 16 * * *"    # 21:49 IST -> 21:00 slot
   workflow_dispatch:
     inputs:
       slot:
@@ -31,6 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       missing: ${{ steps.check.outputs.missing }}
+      fill: ${{ steps.check.outputs.fill }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -46,21 +46,21 @@ jobs:
         run: |
           if [ -z "$SLOT_CHECK" ]; then
             case "${{ github.event.schedule }}" in
-              "15 3 * * *")  SLOT_CHECK="08:30" ;;
-              "45 10 * * *") SLOT_CHECK="16:00" ;;
-              "45 15 * * *") SLOT_CHECK="21:00" ;;
+              "19 3 * * *")  SLOT_CHECK="08:30" ;;
+              "19 11 * * *") SLOT_CHECK="16:00" ;;
+              "19 16 * * *") SLOT_CHECK="21:00" ;;
             esac
           fi
           SLOT_CHECK="$SLOT_CHECK" python slot_watch.py
 
-  # Khali slot: naya Short bana ke TURANT public (privacy=now). Agle slot par lagane
-  # se fayda nahi hota — wo slot to apne cron se waise bhi banta; is din ka teesra
-  # video tabhi milega jab ye abhi chala jaye (slot se ~45 min late, par gaya to sahi).
+  # Khali slot ka alert alag hai. Fill sirf tab jab next unfilled slot
+  # abhi bhi window me ho. privacy=public -> private + publishAt. Instant
+  # public (privacy=now) yahan nahi — usse din ka extra post ban jaata tha.
   fill:
     needs: check
-    if: needs.check.outputs.missing == 'true' && (github.event_name == 'schedule' || inputs.fill == true)
+    if: needs.check.outputs.fill == 'true' && (github.event_name == 'schedule' || inputs.fill == true)
     uses: ./.github/workflows/paise-ki-pathshala.yml
     with:
       format: short
-      privacy: now
+      privacy: public
     secrets: inherit

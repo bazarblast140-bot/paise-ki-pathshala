@@ -1,5 +1,5 @@
 """Shared helpers for the finance pipeline. Import this everywhere."""
-import os, json, sys, time, pathlib, re, threading
+import os, json, sys, time, pathlib, re, threading, contextvars, random
 import openai
 from datetime import datetime
 
@@ -79,6 +79,74 @@ def read(name):
     return (RUN / name).read_text(encoding="utf-8")
 
 # ---- LLM calls (Anthropic or Kimi) ----
+# One DeepSeek request. 60–90s: long enough for a real answer, short enough that
+# a hung socket cannot sit for 3 minutes. Connect is separate from read so a
+# dead route fails fast. The thread deadline still fires when the server keeps
+# the connection open (the 14-Sep hang).
+LLM_ATTEMPT_TIMEOUT = 75
+# Wall clock for one nested retry ladder (claude inside claude_json), not
+# 3 outer × 3 inner × 180s. A second full ladder does not fit.
+LLM_TOTAL_BUDGET = 240
+_llm_deadline = contextvars.ContextVar("llm_deadline", default=None)
+
+
+def _attempt_timeout():
+    raw = (os.environ.get("LLM_CALL_TIMEOUT") or "").strip()
+    if raw:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            pass
+    return LLM_ATTEMPT_TIMEOUT
+
+
+def _total_budget():
+    raw = (os.environ.get("LLM_TOTAL_BUDGET") or "").strip()
+    if raw:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            pass
+    return LLM_TOTAL_BUDGET
+
+
+def _deepseek_timeout(seconds):
+    """Connect/read split. Falls back to a single float if httpx is missing."""
+    try:
+        import httpx
+        return httpx.Timeout(connect=10.0, read=float(seconds), write=30.0, pool=10.0)
+    except Exception:
+        return float(seconds)
+
+
+def _retry_delay(attempt, cap=20.0):
+    """Exponential backoff with equal jitter. attempt 0 -> about 1–2s, then 2–4s, 4–8s."""
+    raw = min(cap, 2.0 * (2 ** attempt))
+    return (raw / 2.0) + random.uniform(0, raw / 2.0)
+
+
+def _begin_deadline():
+    """Outermost call owns the budget. Nested claude/claude_json share it."""
+    current = _llm_deadline.get()
+    if current is not None:
+        return current, None
+    deadline = time.monotonic() + _total_budget()
+    return deadline, _llm_deadline.set(deadline)
+
+
+def _end_deadline(token):
+    if token is not None:
+        _llm_deadline.reset(token)
+
+
+def _bounded_wait(attempt, deadline):
+    """Seconds to sleep, or None when the shared budget is spent."""
+    remaining = deadline - time.monotonic()
+    if remaining <= 5:
+        return None
+    return min(_retry_delay(attempt), max(0.0, remaining - 5))
+
+
 def _with_deadline(fn, seconds):
     """fn() ko daemon thread me chalao; `seconds` me jawab na aaye to TimeoutError.
     14-Sep-2026: DeepSeek ek call par ~15 min latka aur phir choices=None bheja —
@@ -171,8 +239,11 @@ def claude(system, user, model=None, max_tokens=16000, retries=3, raise_on_trunc
     if provider == "deepseek":
         base_url = os.environ.get("DEEPSEEK_BASE_URL") or "https://api.deepseek.com"
         # max_retries=0: retry neeche wala loop karta hai (SDK ke chupe retries latkan badhate the)
-        client = openai.OpenAI(api_key=deepseek_key, base_url=base_url, timeout=180, max_retries=0)
-        call_limit = int(os.environ.get("LLM_CALL_TIMEOUT", "180"))  # har try ki total time limit (sec)
+        attempt_timeout = _attempt_timeout()
+        client = openai.OpenAI(
+            api_key=deepseek_key, base_url=base_url,
+            timeout=_deepseek_timeout(attempt_timeout), max_retries=0,
+        )
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         # Thinking is on by default (effort high) and its tokens count against
         # max_tokens. Narration asks for 2000, which the chain of thought can
@@ -185,46 +256,63 @@ def claude(system, user, model=None, max_tokens=16000, retries=3, raise_on_trunc
         )
         last = None
         effective_retries = max(retries, 2)
-        for attempt in range(effective_retries):
-            try:
-                completion = _with_deadline(lambda: client.chat.completions.create(**kwargs), call_limit)
-                choices = getattr(completion, "choices", None)
-                message = choices[0].message if choices else None
-                content = deepseek_message_text(message) if message is not None else ""
-                finish = getattr(choices[0], "finish_reason", None) if choices else None
-                if finish == "length" and raise_on_truncate:
-                    # Do not return the cut-off body, and do not spend the
-                    # same budget again. The caller retries once, larger.
-                    raise TruncatedResponse(max_tokens)
-                if not content.strip():
-                    last = RuntimeError(
-                        "DeepSeek returned empty content"
-                        f" (finish_reason={finish}, thinking=disabled)" if choices else
-                        f"DeepSeek returned no choices: {str(completion)[:200]}")
-                    print(f"[deepseek] {last}")
-                    if attempt < effective_retries - 1:
-                        wait = min(10, 5 * (2 ** attempt))
-                        print(f"[retry] {last}; wait {wait}s ({attempt+1}/{effective_retries})")
-                        time.sleep(wait)
-                        continue
-                    # raise (not die) so callers like board_short.narration can fall back
-                    raise last
-                if message is not None and not _message_text(getattr(message, "content", None) if not isinstance(message, dict) else message.get("content")).strip():
+        deadline, deadline_token = _begin_deadline()
+        try:
+            for attempt in range(effective_retries):
+                remaining = deadline - time.monotonic()
+                if remaining <= 5:
+                    last = TimeoutError(
+                        f"DeepSeek wall-time budget exhausted after {_total_budget()}s "
+                        "across nested retries"
+                    )
+                    print(f"[retry] {last}")
+                    break
+                call_limit = max(1, min(attempt_timeout, int(remaining)))
+                try:
+                    completion = _with_deadline(
+                        lambda: client.chat.completions.create(**kwargs), call_limit)
+                    choices = getattr(completion, "choices", None)
+                    message = choices[0].message if choices else None
+                    content = deepseek_message_text(message) if message is not None else ""
                     finish = getattr(choices[0], "finish_reason", None) if choices else None
-                    print(f"[deepseek] content empty, using reasoning_content (finish_reason={finish}, chars={len(content)})")
-                return content
-            except (openai.APIStatusError, openai.APIConnectionError, TimeoutError) as e:
-                status = getattr(e, "status_code", None)
-                if status is not None and status not in (429, 500, 502, 503, 529):
-                    die(f"DeepSeek API error {status}: {e}")
-                last = e
-                if attempt < effective_retries - 1:
-                    wait = min(20, 5 * (2 ** attempt))
-                    print(f"[retry] DeepSeek {status or type(e).__name__}; wait {wait}s "
-                          f"({attempt+1}/{effective_retries})")
-                    time.sleep(wait)
-                continue
-        raise RuntimeError(f"DeepSeek call failed after {effective_retries} attempts: {last}")
+                    if finish == "length" and raise_on_truncate:
+                        # Do not return the cut-off body, and do not spend the
+                        # same budget again. The caller retries once, larger.
+                        raise TruncatedResponse(max_tokens)
+                    if not content.strip():
+                        last = RuntimeError(
+                            "DeepSeek returned empty content"
+                            f" (finish_reason={finish}, thinking=disabled)" if choices else
+                            f"DeepSeek returned no choices: {str(completion)[:200]}")
+                        print(f"[deepseek] {last}")
+                        wait = _bounded_wait(attempt, deadline) if attempt < effective_retries - 1 else None
+                        if wait is not None:
+                            print(f"[retry] {last}; wait {wait:.1f}s ({attempt+1}/{effective_retries})")
+                            if wait > 0:
+                                time.sleep(wait)
+                            continue
+                        # raise (not die) so callers like board_short.narration can fall back
+                        raise last
+                    if message is not None and not _message_text(getattr(message, "content", None) if not isinstance(message, dict) else message.get("content")).strip():
+                        finish = getattr(choices[0], "finish_reason", None) if choices else None
+                        print(f"[deepseek] content empty, using reasoning_content (finish_reason={finish}, chars={len(content)})")
+                    return content
+                except (openai.APIStatusError, openai.APIConnectionError, TimeoutError) as e:
+                    status = getattr(e, "status_code", None)
+                    if status is not None and status not in (429, 500, 502, 503, 529):
+                        die(f"DeepSeek API error {status}: {e}")
+                    last = e
+                    wait = _bounded_wait(attempt, deadline) if attempt < effective_retries - 1 else None
+                    if wait is not None:
+                        print(f"[retry] DeepSeek {status or type(e).__name__}; wait {wait:.1f}s "
+                              f"({attempt+1}/{effective_retries})")
+                        if wait > 0:
+                            time.sleep(wait)
+                        continue
+                    break
+            raise RuntimeError(f"DeepSeek call failed after {effective_retries} attempts: {last}")
+        finally:
+            _end_deadline(deadline_token)
 
     if provider == "kimi" or (kimi_key and not anthropic_key and provider != "deepseek"):
         base_url = os.environ.get("KIMI_BASE_URL") or "https://api.moonshot.ai/v1"
@@ -401,18 +489,33 @@ INVALID_AI_VERDICT = {
 
 
 def claude_json(system, user, model=None, max_tokens=4000, retries=3):
-    """For agents that must return JSON. Strips fences, extracts JSON blocks, retries."""
+    """For agents that must return JSON. Strips fences, extracts JSON blocks, retries.
+
+    A transport failure already used claude()'s own attempts inside the shared
+    wall-time budget. This loop does not start that ladder again. Bad JSON may
+    retry until the same budget is spent. Unavailable reviewer -> NOT READY.
+    """
     c = cfg()
     model = model or c["models"]["script_model"]
+    deadline, deadline_token = _begin_deadline()
+    try:
+        return _claude_json_loop(system, user, model, max_tokens, retries, deadline)
+    finally:
+        _end_deadline(deadline_token)
 
+
+def _claude_json_loop(system, user, model, max_tokens, retries, deadline):
     for attempt in range(retries):
+        if time.monotonic() >= deadline - 5:
+            print("[warn] LLM wall-time budget exhausted; AI verdict is NOT READY.")
+            return dict(INVALID_AI_VERDICT)
         try:
             raw = claude(system, user, model=model, max_tokens=max_tokens).strip()
+        except TruncatedResponse:
+            raise
         except RuntimeError as e:
+            # Inner claude() already retried timeouts. Do not multiply 3x180s.
             print(f"[retry] LLM RuntimeError (attempt {attempt + 1}/{retries}): {e}")
-            if attempt < retries - 1:
-                time.sleep(2)
-                continue
             print("[warn] LLM failed after retries; AI verdict is NOT READY.")
             return dict(INVALID_AI_VERDICT)
         cleaned = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.I)
@@ -434,7 +537,9 @@ def claude_json(system, user, model=None, max_tokens=4000, retries=3):
                 pass
 
         print(f"[retry] JSON parse failed (attempt {attempt + 1}/{retries}). Retrying LLM call...")
-        time.sleep(2)
+        if time.monotonic() >= deadline - 5:
+            break
+        time.sleep(min(2, max(0.0, deadline - time.monotonic())))
 
     print("[warn] LLM did not return strict JSON after retries; AI verdict is NOT READY.")
     return dict(INVALID_AI_VERDICT)

@@ -1,6 +1,6 @@
 """Read-only pre-slot health check. Never uploads, publishes, or posts media.
 
-Runs ~90 minutes before each YouTube Shorts slot (08:30, 16:00, 21:00 IST)
+Runs before the early build for each YouTube Shorts slot (08:30, 16:00, 21:00 IST)
 and, on any warn/fail, opens or updates one GitHub issue labelled `health-alert`.
 When every check is ok, skip, or note, that issue is closed.
 
@@ -25,6 +25,7 @@ import re
 import sys
 
 import eleven_voice
+import slot_guard
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -38,15 +39,9 @@ for _stream in (sys.stdout, sys.stderr):
 ROOT = Path(__file__).resolve().parent
 IST = timezone(timedelta(hours=5, minutes=30))
 
-# Nominal lead is 90 minutes (the early edge of the 60–90 window). Actions cron
-# slips later, not earlier, so a late runner still lands inside that window.
-# cron is UTC. IST = UTC+5:30.
-SCHEDULE = (
-    # cron, check_ist, slot_ist, lead_min
-    ("30 1 * * *", "07:00", "08:30", 90),
-    ("0 9 * * *", "14:30", "16:00", 90),
-    ("0 14 * * *", "19:30", "21:00", 90),
-)
+# Before the earliest build cron for that slot, odd minutes (GitHub sheds :00/:30).
+# cron is UTC. IST = UTC+5:30. Lead is minutes before the slot, not a fixed 90.
+SCHEDULE = slot_guard.HEALTH_SCHEDULE
 SLOT_NAMES = tuple(row[2] for row in SCHEDULE)
 
 LABEL = "health-alert"
