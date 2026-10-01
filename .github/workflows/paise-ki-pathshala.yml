@@ -20,6 +20,7 @@ name: Paise Ki Pathshala
 # recovery-v19: remove artificial 56s speech stretching
 # recovery-v20: fresh production run + unique option-spread payoff visuals
 # recovery-v21: candle-pattern beats must explain one idea per scene, no repeated full chart
+# recovery-v22: enforce one continuous teaching sequence in narration (topic -> identify -> meaning -> action)
 on:
   schedule:
     - cron: "0 3 * * *"
