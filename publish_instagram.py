@@ -149,67 +149,33 @@ def ig_call(path: str, *, method: str = "GET", params: dict | None = None) -> di
     return http_json(base, method="POST", form=params)
 
 
-def build_caption() -> str:
-    """Short IG caption — no raw URLs (Instagram does not make caption links clickable)."""
-    parts = []
-    script = (RUN / "script.txt").read_text(encoding="utf-8") if (RUN / "script.txt").exists() else ""
-    title = ""
-    hook = ""
-    current = None
-    buf = []
+def script_sections(script: str) -> dict:
+    """script.txt ke 'TITLE:' / 'HOOK (0-3 sec):' / 'CTA:' / 'FACT LEDGER:' blocks."""
+    out, cur, buf = {}, None, []
+    head = re.compile(r"^(TITLE|HOOK|BODY|CTA|DISCLAIMER(?: LINE)?|FACT LEDGER)\b[^:]*:?\s*(.*)$", re.I)
     for line in script.splitlines():
-        s = line.strip()
-        if re.match(r"^(TITLE|HOOK)\b", s, re.I):
-            if current == "TITLE":
-                title = "\n".join(buf).strip()
-            elif current == "HOOK":
-                hook = "\n".join(buf).strip()
-            current = s.split()[0].upper()
-            rest = re.sub(r"^(TITLE|HOOK)\b[^:]*:?\s*", "", s, flags=re.I)
-            buf = [rest] if rest.strip() else []
-        elif current in ("TITLE", "HOOK"):
-            if re.match(r"^(BODY|CTA|DISCLAIMER|FACT)\b", s, re.I):
-                if current == "TITLE":
-                    title = "\n".join(buf).strip()
-                elif current == "HOOK":
-                    hook = "\n".join(buf).strip()
-                current = None
-                buf = []
-            else:
-                buf.append(line)
-    if current == "TITLE":
-        title = "\n".join(buf).strip()
-    elif current == "HOOK":
-        hook = "\n".join(buf).strip()
+        m = head.match(line.strip())
+        if m:
+            if cur:
+                out[cur] = "\n".join(buf).strip()
+            cur = m.group(1).upper().split()[0]
+            buf = [m.group(2)] if m.group(2).strip() else []
+        elif cur:
+            buf.append(line)
+    if cur:
+        out[cur] = "\n".join(buf).strip()
+    return out
 
-    if hook:
-        parts.append(re.sub(r"\s+", " ", hook).strip()[:300])
-    elif title:
-        parts.append(title[:120])
 
-    parts.append("यह सिर्फ़ शिक्षा के लिए है — निवेश सलाह नहीं।")
-
-    # Instagram caption URLs are not tappable — point to bio instead.
-    # Full referral URLs stay on YouTube description only.
-    topic = {}
-    if (RUN / "topic.json").exists():
-        try:
-            topic = json.loads((RUN / "topic.json").read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
-            pass
+def load_topic() -> dict:
     try:
-        ref_path = Path(__file__).parent / "data" / "referrals.json"
-        ref = json.loads(ref_path.read_text(encoding="utf-8"))
-        cat = str(topic.get("cat") or "")
-        names = ref.get("category_map", {}).get(cat, [])
-        if names:
-            parts.append(
-                "Demat / invest account chahiye ho to profile bio me link dekho."
-            )
-            print(f"[OK] IG bio CTA (topic refs: {', '.join(names)})")
-    except (OSError, ValueError, TypeError):
-        pass
+        return json.loads((RUN / "topic.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
 
+
+def hashtags_for(topic: dict) -> list[str]:
+    """Topic-specific hashtags (main's selection logic, unchanged)."""
     cat = str(topic.get("cat") or "")
     cat_tags = {
         "CANDLESTICK": ["#CandlestickPatterns", "#CandlestickTrading"],
@@ -229,9 +195,90 @@ def build_caption() -> str:
         t = "#" + "".join(w[:1].upper() + w[1:] for w in words)
         if 2 < len(t) <= 40:
             tags.insert(1, t)
-    parts.append(" ".join(dict.fromkeys(tags))[:900])
+    return list(dict.fromkeys(tags))
 
+
+def build_caption() -> str:
+    """Reel caption. The first ~125 characters show before "more" and Instagram
+    search reads caption words, so the keyword title goes first, then the hook,
+    2 save-worthy takeaways (FACT LEDGER), comment + save CTA, disclaimer, bio
+    CTA (with referral disclosure), hashtags. No URLs (not tappable in captions)."""
+    script = (RUN / "script.txt").read_text(encoding="utf-8") if (RUN / "script.txt").exists() else ""
+    sec = script_sections(script)
+    topic = load_topic()
+    one = lambda s: re.sub(r"\s+", " ", s or "").strip()  # noqa: E731
+    title = one((sec.get("TITLE") or "").splitlines()[0] if sec.get("TITLE") else "")
+    title = title or one((topic.get("thumb") or [""])[0])
+    hook = one(sec.get("HOOK"))
+    parts = []
+    if title:
+        parts.append(title[:120])
+    if hook and hook.lower() != title.lower():
+        parts.append(hook[:300])
+
+    facts = [one(re.sub(r"^[-•*]\s*", "", f)) for f in (sec.get("FACT") or "").splitlines() if f.strip()]
+    facts = facts or [one(str(f)) for f in topic.get("facts") or []]
+    facts = [f for f in facts if f and "सलाह नहीं" not in f and "advice" not in f.lower()][:2]
+    if facts:
+        parts.append("📌 याद रखो:\n" + "\n".join(f"• {f}" for f in facts))
+
+    cta = one(sec.get("CTA"))
+    ask = cta.split("—")[0].split("?")[0].strip() + "?" if "?" in cta else "अगला कौन सा topic समझना है?"
+    parts.append(f"💬 {ask} Comment में लिखो।\n💾 Save करो — अगली बार काम आएगा।")
+    parts.append("यह सिर्फ़ शिक्षा के लिए है — निवेश सलाह नहीं।")
+
+    # Referral link only in bio (caption URLs are not clickable). ASCI influencer
+    # guidelines: a commission link must be disclosed.
+    try:
+        ref = json.loads((Path(__file__).parent / "data" / "referrals.json").read_text(encoding="utf-8"))
+        names = ref.get("category_map", {}).get(str(topic.get("cat") or ""), [])
+        if names:
+            disc = ref.get("disclosure_hi") or "यह referral link है।"
+            parts.append(f"Demat / invest account chahiye ho to profile bio me link dekho. {disc}")
+            print(f"[OK] IG bio CTA (topic refs: {', '.join(names)})")
+    except (OSError, ValueError, TypeError):
+        pass
+
+    parts.append(" ".join(hashtags_for(topic))[:900])
     return "\n\n".join(parts)[:2200]
+
+
+# ---------------------------------------------------------------- IG cover
+def ig_settings() -> dict:
+    return {"grid_safe_cover": True, **(cfg().get("instagram") or {})}
+
+
+def grid_safe_cover(src: Path, out: Path) -> Path:
+    """The profile grid crops a Reel cover to the centre 3:4 (1080x1440, y 240..1680).
+    Our thumbnail puts the title at y~150, so it was cut off in the grid. Shrink the
+    whole design into a centred 3:4 box over a blurred copy of itself. Still looks
+    fine full-screen (9:16)."""
+    from PIL import Image, ImageEnhance, ImageFilter
+    im = Image.open(src).convert("RGB")
+    W, H = 1080, 1920
+    if im.size != (W, H):
+        im = im.resize((W, H))
+    box_h = 1440
+    inner = im.resize((int(W * box_h / H), box_h), Image.LANCZOS)
+    bg = im.filter(ImageFilter.GaussianBlur(48))
+    bg = ImageEnhance.Brightness(bg).enhance(0.55)
+    bg.paste(inner, ((W - inner.width) // 2, (H - box_h) // 2))
+    bg.save(out, quality=92)
+    return out
+
+
+def prepare_cover(thumb: Path | None) -> Path | None:
+    """IG-only cover copy (YouTube thumbnail.jpg is not changed). On any error use
+    the original thumbnail so a Reel is never blocked by this."""
+    if thumb is None or not ig_settings().get("grid_safe_cover"):
+        return thumb
+    try:
+        cover = grid_safe_cover(thumb, RUN / "ig_cover.jpg")
+        print("  cover: grid-safe ig_cover.jpg")
+        return cover
+    except Exception as e:  # noqa: BLE001
+        print(f"[warn] grid-safe cover skipped ({type(e).__name__}) — original thumbnail")
+        return thumb
 
 
 def publish_reel(video_url: str, caption: str, cover_url: str = "") -> str:
@@ -296,14 +343,24 @@ def main() -> None:
     if not mp4.exists():
         die("run/final.mp4 missing")
 
+    # Same quality bar as YouTube: IG_CROSSPOST_FORCE only bypasses "YouTube
+    # upload missing" (e.g. dead token), never a NOT-READY verify verdict.
+    # run_verify.py exits 0 even on "NEEDS FIX", and publish.py --only-if-ready
+    # then refuses YouTube, so without this check a failed-review video was
+    # still posted as a public Reel.
+    report = RUN / "report.md"
+    if not report.exists() or "READY TO PUBLISH" not in report.read_text(encoding="utf-8"):
+        skip("verify verdict is not READY TO PUBLISH — Reel not posted")
+
     if not (RUN / "uploaded.txt").exists() and env("IG_CROSSPOST_FORCE") not in ("1", "true"):
         skip("YouTube upload not recorded (uploaded.txt missing) — set IG_CROSSPOST_FORCE=1 to post anyway")
 
     print("\n=== Instagram Reel cross-post ===")
+    thumb = RUN / "thumbnail.jpg"
+    cover = prepare_cover(thumb if thumb.exists() else None)
     url = host_mp4(mp4)
     cover_url = ""
-    cover = RUN / "thumbnail.jpg"
-    if cover.exists():
+    if cover is not None and cover.exists():
         cover_url = host_cover(cover)
         print(f"  cover: {cover_url}")
     caption = build_caption()

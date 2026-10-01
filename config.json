@@ -100,6 +100,10 @@
       }
     }
   },
+  "instagram": {
+    "_note": "grid_safe_cover: IG-only cover copy (run/ig_cover.jpg) that keeps the thumbnail title inside the 3:4 profile-grid crop. YouTube thumbnail unchanged.",
+    "grid_safe_cover": true
+  },
   "research": {
     "_note": "competitor_research.py (optional, read-only). Needs secret YT_DATA_API_KEY, or falls back to the channel OAuth token. Missing creds = step skipped, pipeline unaffected.",
     "enabled": true,
