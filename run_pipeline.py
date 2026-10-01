@@ -179,6 +179,7 @@ def main():
         # when YouTube upload failed, including invalid_grant.
         if ig_published and not yt_uploaded:
             try:
+                from eleven_voice import ledger_voice_kwargs
                 from ledger import record_publish
                 from slot_guard import target_date
                 slot = os.environ.get("PUBLISH_SLOT_IST", "").strip()
@@ -187,7 +188,8 @@ def main():
                 if status_path.exists():
                     note = status_path.read_text(encoding="utf-8")
                 record_publish(None, None, slot or None, platform="instagram",
-                               date_ist=target_date(slot) if slot else None, note=note or None)
+                               date_ist=target_date(slot) if slot else None, note=note or None,
+                               **ledger_voice_kwargs(RUN))
             except Exception as e:  # noqa: BLE001
                 print(f"[warn] ledger IG-only entry skipped: {e}")
 

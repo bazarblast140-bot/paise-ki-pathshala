@@ -23,6 +23,8 @@ import json
 import os
 import re
 import sys
+
+import eleven_voice
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -51,8 +53,12 @@ LABEL = "health-alert"
 LABEL_COLOR = "b60205"
 LABEL_DESC = "Pre-slot health check found a token, credit, or expiry problem."
 
-# One Short narration is roughly 1–2k characters. Warn while two Shorts remain.
-ELEVEN_WARN_CHARS = 3000
+# One Short narration is about 1–2k characters. Warn when the balance cannot
+# cover a full day of 3 Shorts. A quota or payment error falls back to Edge
+# TTS, so low credits warn without blocking the slot. An invalid key still fails.
+CHARS_PER_SHORT = 2000
+SHORTS_PER_DAY = 3
+ELEVEN_WARN_CHARS = CHARS_PER_SHORT * SHORTS_PER_DAY
 # DeepSeek/Kimi report USD or CNY. Below 1 unit the next scripts are at risk.
 BALANCE_WARN = 1.0
 IG_WARN_DAYS = 14
@@ -630,11 +636,26 @@ def check_elevenlabs(http, env, secrets, engine="elevenlabs"):
     if resp.status == 0:
         return _network_fail(name, secrets, blocks)
     message = redact(_error_message(resp), secrets)
-    low = message.lower()
-    if resp.status in (401, 403) or "invalid_api_key" in low or "invalid api key" in low:
+    parsed = resp.body if isinstance(resp.body, dict) else eleven_voice.parse_body(resp.text or "")
+    if resp.status == 200 and isinstance(resp.body, dict):
+        return _elevenlabs_subscription(name, resp.body, secrets)
+
+    kind = eleven_voice.classify(resp.status, parsed)
+    if kind == "quota":
+        return _check(
+            name, "warn",
+            f"HTTP {resp.status} — {message}. Credits or payment block paid TTS; "
+            "this run falls back to free Edge TTS.",
+            secrets,
+            summary_hi=(
+                "ElevenLabs ne credit ya payment error diya. "
+                "Is run me free Edge TTS chalega; slot credit ki wajah se nahi ruke ga."
+            ),
+        )
+    if kind == "auth":
         summary = (
-            "ElevenLabs key invalid hai. Key set ho to pipeline Edge fallback band kar deti hai, "
-            "isliye paid voice fail hone pe slot miss ho sakta hai. Secret `ELEVENLABS_API_KEY` update karo."
+            "ElevenLabs key invalid hai. Galat key pe Edge pe nahi jaate, "
+            "isliye slot miss ho sakta hai. Secret `ELEVENLABS_API_KEY` update karo."
             if in_use else
             "ElevenLabs key reject ho gayi. voice.engine abhi elevenlabs nahi hai, lekin secret galat hai."
         )
@@ -642,19 +663,29 @@ def check_elevenlabs(http, env, secrets, engine="elevenlabs"):
             name, "fail", f"HTTP {resp.status} — {message}", secrets,
             summary_hi=summary, blocks=blocks,
         )
-    if resp.status >= 500 or resp.status == 429:
+    if kind == "permission":
+        return _check(
+            name, "fail", f"HTTP {resp.status} — {message}", secrets,
+            summary_hi=(
+                "ElevenLabs key ko permission nahi hai. Ye misconfiguration hai — "
+                "Edge pe chupke nahi jaate. Secret ya voice access theek karo."
+            ),
+            blocks=blocks,
+        )
+    if kind == "retry" or resp.status >= 500 or resp.status == 429:
         return _check(
             name, "warn", f"HTTP {resp.status} — subscription check inconclusive. {message}", secrets,
             summary_hi=f"ElevenLabs subscription endpoint ne HTTP {resp.status} diya. Credits confirm nahi hue.",
         )
-    if resp.status != 200 or not isinstance(resp.body, dict):
-        return _check(
-            name, "fail", f"HTTP {resp.status} — {message}", secrets,
-            summary_hi=f"ElevenLabs subscription check fail (HTTP {resp.status}).",
-            blocks=blocks,
-        )
+    return _check(
+        name, "fail", f"HTTP {resp.status} — {message}", secrets,
+        summary_hi=f"ElevenLabs subscription check fail (HTTP {resp.status}).",
+        blocks=blocks,
+    )
 
-    body = resp.body
+
+def _elevenlabs_subscription(name, body, secrets):
+    """Judge a 200 subscription payload. Low credits and a bad payment status warn."""
     limit = _num(body.get("character_limit"))
     used = _num(body.get("character_count"))
     status = str(body.get("status") or "")
@@ -670,26 +701,25 @@ def check_elevenlabs(http, env, secrets, engine="elevenlabs"):
     remaining = int(limit - used)
     meta = f"tier={tier or '?'} status={status or '?'}"
     bad_status = status.lower() in {"past_due", "canceled", "cancelled", "incomplete", "unpaid", "payment_failed"}
-    if bad_status or remaining <= 0:
-        return _check(
-            name, "fail",
-            f"remaining={remaining} (limit={int(limit)} used={int(used)}) {meta}",
-            secrets,
-            summary_hi=(
-                f"ElevenLabs character credit khatam ya subscription {status or 'inactive'} "
-                f"({remaining} characters left). Voice nahi banegi, slot miss ho sakta hai."
-            ),
-            blocks=blocks,
+    reasons = []
+    if bad_status:
+        reasons.append(f"payment status {status}")
+    if remaining <= 0:
+        reasons.append("no characters left")
+    elif remaining < ELEVEN_WARN_CHARS:
+        reasons.append(
+            f"remaining {remaining} is below {ELEVEN_WARN_CHARS} "
+            f"({SHORTS_PER_DAY} Shorts x {CHARS_PER_SHORT})"
         )
-    if remaining < ELEVEN_WARN_CHARS:
+    if reasons:
         return _check(
             name, "warn",
-            f"remaining={remaining} (limit={int(limit)} used={int(used)}) {meta} "
-            f"(warn below {ELEVEN_WARN_CHARS})",
+            f"remaining={remaining} (limit={int(limit)} used={int(used)}) {meta} — " + "; ".join(reasons),
             secrets,
             summary_hi=(
-                f"ElevenLabs characters kam hain ({remaining} left). "
-                f"Ek Short ~1–2k characters leta hai; {ELEVEN_WARN_CHARS} se neeche warning hai."
+                f"ElevenLabs: {remaining} characters, status {status or '?'}. "
+                f"Ek din = {SHORTS_PER_DAY} Shorts (~{ELEVEN_WARN_CHARS} characters). "
+                "Quota, credit, ya payment error par pipeline free Edge TTS pe chali jayegi."
             ),
         )
     return _check(

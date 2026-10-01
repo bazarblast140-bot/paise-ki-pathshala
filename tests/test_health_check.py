@@ -336,10 +336,66 @@ class ElevenLabsTests(unittest.TestCase):
         self.assertEqual(check.blocks, "")
         self.assertIn("1000", check.detail)
 
-    def test_zero_remaining_fails_and_blocks(self):
+    def test_zero_remaining_warns_and_names_edge_fallback(self):
         check, _ = self._check(resp(200, {
             "character_count": 10000, "character_limit": 10000, "status": "active",
         }))
+        self.assertEqual(check.status, "warn")
+        self.assertEqual(check.blocks, "")
+        self.assertIn("remaining=0", check.detail)
+        self.assertIn("Edge", check.summary_hi)
+
+    def test_day_budget_is_three_shorts(self):
+        self.assertEqual(H.CHARS_PER_SHORT, 2000)
+        self.assertEqual(H.SHORTS_PER_DAY, 3)
+        self.assertEqual(H.ELEVEN_WARN_CHARS, 6000)
+
+    def test_exactly_one_day_of_credits_is_ok(self):
+        check, _ = self._check(resp(200, {
+            "character_count": 4000, "character_limit": 10000, "status": "active",
+        }))
+        self.assertEqual(check.status, "ok")
+        self.assertIn("remaining=6000", check.detail)
+
+    def test_below_one_day_warns_about_three_shorts(self):
+        check, _ = self._check(resp(200, {
+            "character_count": 4001, "character_limit": 10000, "status": "active",
+        }))
+        self.assertEqual(check.status, "warn")
+        self.assertEqual(check.blocks, "")
+        self.assertIn("5999", check.detail)
+        self.assertIn("3 Shorts", check.detail)
+        self.assertIn("6000", check.detail)
+        self.assertIn("Edge", check.summary_hi)
+
+    def test_incomplete_payment_warns_without_blocking(self):
+        check, _ = self._check(resp(200, {
+            "character_count": 9300, "character_limit": 20000, "status": "incomplete",
+        }))
+        self.assertEqual(check.status, "warn")
+        self.assertEqual(check.blocks, "")
+        self.assertIn("payment status incomplete", check.detail)
+        self.assertIn("remaining=10700", check.detail)
+        self.assertIn("Edge", check.summary_hi)
+
+    def test_payment_required_body_warns_even_on_http_401(self):
+        check, _ = self._check(resp(401, {"detail": {
+            "type": "payment_required",
+            "code": "insufficient_credits",
+            "status": "quota_exceeded",
+            "message": f"You have insufficient credits {EL_KEY}",
+        }}))
+        self.assertEqual(check.status, "warn")
+        self.assertEqual(check.blocks, "")
+        self.assertIn("Edge", check.detail + check.summary_hi)
+        assert_clean(self, check.detail + check.summary_hi)
+
+    def test_missing_permission_still_fails(self):
+        check, _ = self._check(resp(403, {"detail": {
+            "type": "authorization_error",
+            "code": "insufficient_permissions",
+            "message": "missing the text_to_speech permission",
+        }}))
         self.assertEqual(check.status, "fail")
         self.assertEqual(check.blocks, "youtube")
 

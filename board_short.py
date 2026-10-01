@@ -27,6 +27,7 @@ import numpy as np
 
 import board_kit as K
 import board_scenes as S
+import eleven_voice
 import engagement
 import hook_check
 import market_data
@@ -508,9 +509,70 @@ async def _edge(text, voice, rate, path):
     await edge_tts.Communicate(text, voice, rate=rate).save(str(path))
 
 
+ENGINES = []
+ELEVEN_EXHAUSTED = False
+ELEVEN_REMAINING = None
+VOICE_FALLBACK_REASON = ""
+
+
+def _reset_voice_state():
+    global ENGINES, ELEVEN_EXHAUSTED, ELEVEN_REMAINING, VOICE_FALLBACK_REASON
+    ENGINES = []
+    ELEVEN_EXHAUSTED = False
+    ELEVEN_REMAINING = None
+    VOICE_FALLBACK_REASON = ""
+
+
+def _switch_to_edge(reason):
+    """One warning, then every remaining beat uses Edge. Paid and free audio are not mixed."""
+    global ELEVEN_EXHAUSTED, VOICE_FALLBACK_REASON
+    ELEVEN_EXHAUSTED = True
+    if not VOICE_FALLBACK_REASON:
+        VOICE_FALLBACK_REASON = str(reason)
+        eleven_voice.log_fallback(VOICE_FALLBACK_REASON)
+
+
+def preflight_eleven_credits(texts):
+    """Fall back before synthesis when this Short's characters will not fit.
+
+    GET /v1/user/subscription is not an auth check. A scoped key may be unable
+    to read it, so 401/403 here does not fail the run. A quota-shaped body does
+    switch to Edge. The TTS request remains the authority for a bad key.
+    """
+    global ELEVEN_REMAINING
+    key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+    if not key or ELEVEN_EXHAUSTED:
+        return
+    import requests
+    try:
+        response = requests.get(
+            "https://api.elevenlabs.io/v1/user/subscription",
+            headers={"xi-api-key": key, "Accept": "application/json"},
+            timeout=20,
+        )
+    except Exception as exc:  # noqa: BLE001 — network must not kill the slot
+        print(f"[note] ElevenLabs subscription pre-check skipped ({exc}); TTS will decide")
+        return
+    body = eleven_voice.parse_response(response)
+    status = getattr(response, "status_code", 0)
+    if eleven_voice.classify(status, body) == "quota":
+        _switch_to_edge(eleven_voice.describe(status, body))
+        return
+    if status != 200:
+        print(f"[note] ElevenLabs subscription pre-check HTTP {status}; TTS remains the auth check")
+        return
+    remaining = eleven_voice.subscription_remaining(body)
+    if remaining is None:
+        return
+    ELEVEN_REMAINING = remaining
+    import speak
+    need = sum(len(speak.speakable(text or "")) for text in texts)
+    if need > 0 and remaining < need:
+        _switch_to_edge(f"pre-check remaining={remaining} characters, this Short needs {need}")
+
+
 def _eleven(text, path, c):
-    """Paid ElevenLabs is a hard requirement when configured; never mix paid and free voices."""
-    import os
+    """Call ElevenLabs. Quota raises QuotaFallback. Auth and permission die."""
     import time
     import requests
 
@@ -519,18 +581,13 @@ def _eleven(text, path, c):
     if not key:
         return False
 
-    global ELEVEN_EXHAUSTED
+    global ELEVEN_EXHAUSTED, ELEVEN_REMAINING
     if ELEVEN_EXHAUSTED:
         return False
     if not voice:
         die("ELEVENLABS_API_KEY is set but ELEVENLABS_VOICE_ID/config voice_id is missing")
 
-    # Do not preflight /v1/user/subscription here. API keys can be endpoint-scoped,
-    # so a valid TTS key may legitimately be unable to read subscription details.
-    # The real TTS request is the authoritative credential/quota check.
-    global ELEVEN_REMAINING
     need_chars = len(text)
-
     model = os.environ.get("ELEVENLABS_MODEL") or c["voice"].get("model", "eleven_multilingual_v2")
     payload = {
         "text": text,
@@ -545,99 +602,131 @@ def _eleven(text, path, c):
 
     for attempt in range(3):
         try:
-            r = requests.post(
+            response = requests.post(
                 f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
                 headers={"xi-api-key": key, "accept": "audio/mpeg"},
                 json=payload,
                 timeout=90,
             )
-            if r.status_code == 200 and len(r.content) >= 2000:
-                path.write_bytes(r.content)
-                cost = int(r.headers.get("character-cost", str(need_chars)) or need_chars)
+            if response.status_code == 200 and len(response.content) >= 2000:
+                path.write_bytes(response.content)
+                cost = int(response.headers.get("character-cost", str(need_chars)) or need_chars)
                 if ELEVEN_REMAINING is not None:
                     ELEVEN_REMAINING = max(0, ELEVEN_REMAINING - cost)
                 return True
 
-            body = (r.text or "")[:1000]
-            try:
-                detail = r.json().get("detail", {})
-                code = str(detail.get("code") or detail.get("status") or "").lower()
-            except Exception:
-                code = ""
-            combined = f"{code} {body}".lower()
-
-            if r.status_code in (400, 402) and any(x in combined for x in (
-                "quota_exceeded", "insufficient_credits", "payment_required",
-                "max_character_limit_exceeded", "quota",
-            )):
-                die("ElevenLabs paid TTS quota/credit limit reached; refusing free Edge fallback")
-
-            if r.status_code == 401:
-                die("ElevenLabs authentication failed; refusing silent free-TTS fallback")
-            if r.status_code in (403, 404, 422):
-                die(f"ElevenLabs request/config error {r.status_code}; refusing silent free-TTS fallback: {body[:300]}")
-
-            if r.status_code in (408, 429, 500, 502, 503, 504) and attempt < 2:
+            body = eleven_voice.parse_response(response)
+            kind = eleven_voice.classify(response.status_code, body)
+            why = eleven_voice.describe(response.status_code, body)
+            if kind == "quota":
+                raise eleven_voice.QuotaFallback(why)
+            if kind == "auth":
+                die(f"ElevenLabs authentication failed ({why}); not falling back to Edge")
+            if kind == "permission":
+                die(f"ElevenLabs permission error ({why}); not falling back to Edge")
+            if kind == "retry" and attempt < 2:
                 wait = 2 ** attempt
-                print(f"[retry] ElevenLabs {r.status_code}; retrying in {wait}s")
+                print(f"[retry] ElevenLabs {response.status_code}; retrying in {wait}s")
                 time.sleep(wait)
                 continue
-
-            die(f"ElevenLabs paid TTS failed ({r.status_code}); refusing silent free-TTS fallback")
+            if response.status_code == 200:
+                die("ElevenLabs returned an empty or tiny audio file; not a credit error, so Edge was not used")
+            die(f"ElevenLabs paid TTS failed ({why}); not a credit error, so Edge was not used")
+        except eleven_voice.QuotaFallback:
+            raise
         except SystemExit:
             raise
-        except Exception as e:
+        except Exception as exc:  # noqa: BLE001
             if attempt < 2:
                 time.sleep(2 ** attempt)
                 continue
-            die(f"ElevenLabs paid TTS error: {e}")
+            die(f"ElevenLabs paid TTS error: {exc}")
 
-    return False
-
-ENGINES = []
-ELEVEN_EXHAUSTED = False
-ELEVEN_REMAINING = None
+    die("ElevenLabs paid TTS failed after retries; not a credit error, so Edge was not used")
 
 
 def tts(text, path, c):
-    # Reuse only when the cached engine still matches the current priority.
-    # If ElevenLabs is configured now, an old Edge file is regenerated with paid TTS.
+    """ElevenLabs when a key is set. Quota uses the configured Edge voice. Auth still fails.
+
+    Voice text is speak.speakable() (₹ -> रुपये). Captions keep the original text.
+    """
     engine_file = path.with_suffix(".engine")
     cached_engine = engine_file.read_text(encoding="utf-8").strip().lower() if engine_file.exists() else ""
     eleven_key = bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
-    if path.exists() and path.stat().st_size > 1000 and (
-        cached_engine == "elevenlabs" or (cached_engine == "edge" and not eleven_key)
-    ):
-        ok(f"voice cache reused: {path.name} ({cached_engine or 'unknown'})")
-        ENGINES.append(cached_engine or "cached")
+    fresh = path.exists() and path.stat().st_size > 1000
+    # Reuse paid audio only while this run is still on ElevenLabs.
+    # After a credit fallback, an old paid file is discarded and Edge is used.
+    reuse = None
+    if fresh and cached_engine == "elevenlabs" and eleven_key and not ELEVEN_EXHAUSTED:
+        reuse = cached_engine
+    elif fresh and cached_engine == "edge" and (not eleven_key or ELEVEN_EXHAUSTED):
+        reuse = cached_engine
+    if reuse:
+        ok(f"voice cache reused: {path.name} ({reuse})")
+        ENGINES.append(reuse)
         return
-    """ElevenLabs agar secrets hain, warna / fail hone par Edge Swara — video kabhi nahi rukta.
-    Voice ko speak.speakable() wala text jaata hai (₹ -> रुपये, 4,231 -> चार हज़ार...);
-    ElevenLabs "₹1 लाख" ko "Rs 1 लाख" bolta tha. Captions original text dikhate hain."""
     import speak
     text = speak.speakable(text)
     left = speak.leftovers(text)
     if left:
         print(f"[warn] voice text me ab bhi: {sorted(set(left))} — speak.py me jodo")
-    with open(RUN / "tts_text.txt", "a", encoding="utf-8") as f:
-        f.write(f"{path.stem}: {text}\n")
-    if eleven_key:
+    with open(RUN / "tts_text.txt", "a", encoding="utf-8") as handle:
+        handle.write(f"{path.stem}: {text}\n")
+    if eleven_key and not ELEVEN_EXHAUSTED:
         if not _eleven(text, path, c):
-            die(f"ElevenLabs TTS did not produce paid audio: {path.name}; refusing free-voice fallback")
+            die(f"ElevenLabs TTS did not produce paid audio: {path.name}; not a credit error, so Edge was not used")
         ENGINES.append("elevenlabs")
         engine_file.write_text("elevenlabs", encoding="utf-8")
         return
-    v = c["voice"]
+    voice = c["voice"]
     ENGINES.append("edge")
     for attempt in range(3):
         try:
-            asyncio.run(_edge(text, v.get("edge_voice", "hi-IN-SwaraNeural"), v.get("edge_rate", "+10%"), path))
+            asyncio.run(_edge(
+                text,
+                voice.get("edge_voice", "hi-IN-SwaraNeural"),
+                voice.get("edge_rate", "+10%"),
+                path,
+            ))
             if path.exists() and path.stat().st_size > 1000:
                 engine_file.write_text("edge", encoding="utf-8")
                 return
-        except Exception as e:  # noqa: BLE001
-            print(f"[retry] tts {attempt + 1}: {e}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[retry] tts {attempt + 1}: {exc}")
     die(f"TTS fail: {path.name}")
+
+
+def synthesize_short_voices(spoken, c):
+    """Speak every beat on one engine. A quota error redoes the whole run on Edge."""
+    global ENGINES
+    _reset_voice_state()
+    preflight_eleven_credits([spoken[b] for b in BEATS])
+
+    def once():
+        global ENGINES
+        ENGINES = []
+        for beat in BEATS:
+            tts(spoken[beat], RUN / f"tts_{beat}.mp3", c)
+
+    try:
+        once()
+    except eleven_voice.QuotaFallback as exc:
+        _switch_to_edge(exc.reason)
+        for beat in BEATS:
+            audio = RUN / f"tts_{beat}.mp3"
+            audio.unlink(missing_ok=True)
+            audio.with_suffix(".engine").unlink(missing_ok=True)
+        once()
+    engine = "edge" if "edge" in ENGINES else "elevenlabs"
+    key_set = bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
+    eleven_voice.write_voice_meta(
+        RUN,
+        engine,
+        VOICE_FALLBACK_REASON,
+        elevenlabs_attempted=key_set,
+    )
+    ok(f"voice engine: {engine}" + (f" ({VOICE_FALLBACK_REASON})" if VOICE_FALLBACK_REASON else ""))
+    return engine
 
 
 def duration(path):
@@ -897,9 +986,9 @@ def main():
     # artificial silence at beat boundaries. No artificial 50s padding.
     beat_audio, raw_durations = {}, {}
     (RUN / "tts_text.txt").unlink(missing_ok=True)
+    synthesize_short_voices(spoken, c)
     for b in BEATS:
         mp3 = RUN / f"tts_{b}.mp3"
-        tts(spoken[b], mp3, c)
         clean = RUN / f"voice_clean_{b}.wav"
         subprocess.run([
             "ffmpeg", "-v", "error", "-y", "-i", str(mp3),
@@ -936,8 +1025,6 @@ def main():
         die(f"voice duration outside 42-62s; refusing artificial speed change: {t:.1f}s — {detail}")
 
     ok(f"voice: trimmed speech {raw_total:.1f}s -> final {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
-    # verify config ka "edge" padh ke ElevenLabs video ko bhi "robotic" maanta tha
-    save("voice_engine.txt", "edge" if "edge" in ENGINES else "elevenlabs")
     switch = {b: cue_frac(topic["key"], spoken[b]) for b in BEATS if len(beat_pngs[b]) == 3}
     if switch:
         ok("3rd picture at " + ", ".join(f"{b} {f:.0%}" for b, f in switch.items()))
