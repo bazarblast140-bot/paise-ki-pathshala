@@ -4960,7 +4960,7 @@
   {
    "id": 132,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "market_crash_math",
    "cat": "MARKET HISTORY",
    "topic": "Market crash में drawdown को percentage से कैसे मापें",
@@ -4994,7 +4994,8 @@
     "Historical charts में peak और trough दोनों mark करो",
     "ये शिक्षा है, किसी specific stock/strategy की खरीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Market crash में drawdown को percentage से कैसे मापें"
+   "seo": "Market crash में drawdown को percentage से कैसे मापें",
+   "used_short_at": "2026-10-01T01:47:16Z"
   },
   {
    "id": 133,
