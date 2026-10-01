@@ -161,8 +161,21 @@ def check_narration(n, topic):
             fails.append(f"beat '{b}' khaali")
     text = " ".join(str(beats.get(b) or "") for b in BEATS)
     words = len(text.split())
-    if not 85 <= words <= 105:
-        fails.append(f"{words} words (85-105 chahiye)")
+    if not 100 <= words <= 125:
+        fails.append(f"{words} words (100-125 chahiye)")
+
+    # Every beat must carry enough information to teach one step. This prevents
+    # a very short hook + generic filler from making the lesson feel disconnected.
+    beat_ranges = {
+        "hook": (14, 22),
+        "pehchan": (24, 34),
+        "matlab": (28, 38),
+        "karein": (24, 34),
+    }
+    for b, (lo, hi) in beat_ranges.items():
+        bw = len(str(beats.get(b) or "").split())
+        if not lo <= bw <= hi:
+            fails.append(f"{b} beat {bw} words ({lo}-{hi} chahiye)")
     extra = {x.replace(",", "") for x in re.findall(r"\d[\d,]*(?:\.\d+)?", text)} - allowed_numbers(topic)
     if extra:
         fails.append(f"ye numbers topic me nahi hain: {sorted(extra)} — sirf diye gaye numbers use karo")
@@ -194,23 +207,38 @@ def check_narration(n, topic):
     return fails
 
 
-NARR_SYSTEM = """You write the SPOKEN Hindi narration for a 55-60 second vertical Short for Indian traders
-(retail to pro). The template is fixed at four teaching beats. The viewer must understand the topic
-in one continuous sequence — what it is, how to recognise it, why it matters, and what traders
-usually check next. Never jump backward, repeat the same explanation, or introduce a new concept
-before the previous one is understood.
+NARR_SYSTEM = """You write the SPOKEN Hindi narration for a vertical finance Short for Indian traders
+(retail to pro). This is ONE MINI-LESSON, not four separate facts. The viewer should be able to
+answer these four questions in order: "आज क्या सीख रहा हूँ?", "इसे पहचानूँ कैसे?", "इसका मतलब क्या है?",
+और "आगे traders क्या check करते हैं?" Never jump backward, repeat an explanation, or introduce a
+new concept before the previous one is understood.
+
+TEACHING VOICE:
+- Start by naming the exact topic in simple Hindi + the key English term.
+- Explain like a teacher pointing at the screen: first show it, then identify it, then explain its meaning,
+  then explain the normal confirmation/risk check.
+- Every sentence must connect to the current screen. If a visual changes, the narration must explain why.
+- Do not use vague filler such as "यह बहुत important है" unless immediately followed by the specific reason.
 
 Return ONLY JSON:
 {"title": "<YouTube title, max 70 chars, Hindi + key English words, the hook itself>",
  "beats": {"hook": "...", "pehchan": "...", "matlab": "...", "karein": "..."}}
 
-MANDATORY TEACHING SEQUENCE:
-1) HOOK = "What are we learning and why should I care?" State the topic/problem/question only.
-2) PEHCHAN = "What exactly am I looking at?" Define the setup and point out the visible features.
-3) MATLAB = "What does it mean?" Explain the cause → effect, direction/logic, and ONE tiny example
-   when the topic allows. This beat must directly follow the features from PEHCHAN.
-4) KAREIN = "How is it normally used?" Explain confirmation, risk/limitation, or the next check.
-   It must refer to the same setup; do not introduce another strategy/topic.
+MANDATORY TEACHING SEQUENCE — NEVER CHANGE THIS ORDER:
+1) HOOK — "आज क्या सीख रहे हैं?" Name the exact topic and give the one-line reason it matters.
+   Do NOT explain the answer yet.
+2) PEHCHAN — "इसे chart पर पहचानेंगे कैसे?" Point to the exact visible structure/rules shown on screen.
+   Use concrete features, not generic definitions.
+3) MATLAB — "इस pattern/strategy का मतलब क्या है?" Connect those exact features to buyer/seller force,
+   payoff, or market logic. Explain cause → effect. Do not introduce a second setup.
+4) KAREIN — "अब traders आमतौर पर क्या check करते हैं?" Show confirmation, entry context, SL/risk,
+   or limitation only after the meaning is established. Refer back to the SAME setup.
+
+BRIDGE WORDS:
+- Hook → Pehchan: "अब इसे chart पर पहचानें।"
+- Pehchan → Matlab: "इन features का मतलब समझिए।"
+- Matlab → Karein: "अब आगे traders क्या check करते हैं।"
+Use these naturally so the lesson sounds continuous, not robotic.
 
 CONTINUITY RULES:
 - Each beat must answer the next question in the sequence. Never repeat the hook in later beats.
@@ -222,9 +250,9 @@ CONTINUITY RULES:
   not four separate facts.
 - For pattern/strategy topics, use this order: setup → recognition rules → market meaning →
   confirmation/risk. Do not show or explain entry/SL before the setup and meaning are established.
-- Each beat: 1-2 short sentences, preferably under 12 words per sentence.
-- Total 85-105 words; aim for natural spoken pacing around 45-50 seconds. Never stretch audio
-  artificially just to hit a target duration.
+- Each beat: 2-3 short sentences, preferably under 14 words per sentence.
+- Total 100-125 words. Never stretch audio artificially just to hit a target duration.
+- Do not compress a beat into a slogan; each beat must teach its assigned step.
 - Use ONLY numbers that appear in the topic data given to you. Never invent prices, dates, returns.
 - Not a quiz. Do not ask the viewer to pick options.
 - SEBI rules: never tell anyone to buy/sell/hold a specific stock, fund or product; no targets,
