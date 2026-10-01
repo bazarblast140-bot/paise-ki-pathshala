@@ -1,0 +1,437 @@
+{
+ "_about": "Sidecar for topic_bank.json. trending = dated/news topic; stale_risk = how fast the facts may go out of date. Re-verify every HIGH item on publish day. Picker expiry (valid_until) lives in data/current_market_topics.json: after that instant the topic is not boosted and not picked. A YYYY-MM-DD value includes that whole IST day.",
+ "rewritten_ids": [
+  46,
+  64,
+  65,
+  67,
+  68,
+  69,
+  71,
+  72,
+  74,
+  75,
+  76,
+  77,
+  79,
+  80,
+  81,
+  83,
+  84,
+  85,
+  86,
+  87,
+  90,
+  91,
+  92,
+  93,
+  96,
+  97,
+  98,
+  99,
+  100,
+  101,
+  102,
+  103,
+  104,
+  105,
+  106,
+  109,
+  110,
+  111,
+  112,
+  113,
+  114,
+  115,
+  116,
+  117,
+  119,
+  120,
+  121,
+  123,
+  125,
+  128,
+  129,
+  130,
+  131,
+  133
+ ],
+ "new_ids": [
+  134,
+  135,
+  136,
+  137,
+  138,
+  139,
+  140,
+  141,
+  142,
+  143,
+  144,
+  145,
+  146,
+  147,
+  148,
+  149,
+  150,
+  151,
+  152,
+  153,
+  156,
+  157,
+  158,
+  159,
+  160,
+  161,
+  162,
+  163,
+  164,
+  165,
+  166,
+  167,
+  168,
+  169,
+  170,
+  171,
+  172,
+  173,
+  174,
+  175,
+  176,
+  177
+ ],
+ "price_review": {
+  "as_of": "2026-10-01",
+  "rule": "Any named company's share price must be at least 3 months old. Numbers were not rewritten. Index, currency and commodity prints are not share prices.",
+  "dropped_keys": [
+   "ipo_lot_size",
+   "ipo_gmp"
+  ],
+  "kept_recent_non_share_prints": [
+   "market_sept2026_fall",
+   "market_fii_dii_flows",
+   "market_crude_rupee",
+   "market_fed_hike_india",
+   "market_200_week_average",
+   "market_gold_150k",
+   "market_silver_volatility"
+  ]
+ },
+ "dropped": [
+  {
+   "id": 154,
+   "key": "ipo_lot_size",
+   "cat": "IPO",
+   "reason": "Named IPO share prices from the week of 30 Sep 2026: SRIT India upper band ₹130 (lot 115 = ₹14,950) and Vishal Nirmiti upper band ₹220 (lot 68 = ₹14,960). A named share price must be at least 3 months old. Dropped instead of rewriting the numbers.",
+   "topic": "IPO में 1 lot कितने का? — 115 shares × ₹130 = ₹14,950",
+   "seo": "IPO Lot Size",
+   "thumb": [
+    "IPO में",
+    "कम से कम कितना?"
+   ],
+   "sticker": "सीखो",
+   "beats": {
+    "hook": [
+     "1 lot",
+     "करीब ₹15,000"
+    ],
+    "pehchan": [
+     "मिसाल",
+     "115 shares × ₹130 = ₹14,950"
+    ],
+    "matlab": [
+     "दूसरी मिसाल",
+     "68 shares × ₹220 = ₹14,960"
+    ],
+    "karein": [
+     "याद रखो",
+     "upper price band पर हिसाब करो"
+    ]
+   },
+   "facts": [
+    "SRIT India IPO: lot 115, upper band ₹130 → ₹14,950",
+    "Vishal Nirmiti IPO: lot 68, upper band ₹220 → ₹14,960",
+    "दोनों उदाहरणों में 1 lot करीब ₹15,000",
+    "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
+   ],
+   "sources_note": {
+    "note": "SRIT India / Vishal Nirmiti IPO details (Sept-Oct 2026)",
+    "sources": [
+     "https://www.zeebiz.com/markets/ipo/news-upcoming-ipos-4-mainboard-ipos-to-open-next-week-check-dates-price-bands-402899"
+    ],
+    "stale_risk": "MEDIUM — examples age; concept evergreen",
+    "id": 154
+   }
+  },
+  {
+   "id": 155,
+   "key": "ipo_gmp",
+   "cat": "IPO",
+   "reason": "Named IPO quote from the week of 1 Oct 2026: Nityas Gems price band ₹70-75 and GMP about ₹9 (9/75 = 12%). A named share price must be at least 3 months old. The listing on 8 Oct 2026 would also have made the row stale. Dropped instead of rewriting the numbers.",
+   "topic": "IPO GMP क्या है — ₹75 के शेयर पर ₹9 GMP = 12%, पर गारंटी नहीं",
+   "seo": "IPO GMP",
+   "thumb": [
+    "GMP 12%",
+    "पक्की कमाई?"
+   ],
+   "sticker": "चेतावनी",
+   "beats": {
+    "hook": [
+     "GMP",
+     "grey market premium"
+    ],
+    "pehchan": [
+     "मिसाल",
+     "₹75 पर ₹9 = 12%"
+    ],
+    "matlab": [
+     "मतलब",
+     "अनौपचारिक अंदाज़ा, regulated नहीं"
+    ],
+    "karein": [
+     "याद रखो",
+     "listing पर GMP उल्टा भी हो सकता है"
+    ]
+   },
+   "facts": [
+    "GMP = listing से पहले अनौपचारिक बाज़ार का अंदाज़ा",
+    "Nityas Gems IPO: price band ₹70-75, GMP करीब ₹9",
+    "9 ÷ 75 = 12%",
+    "GMP regulated नहीं, बदलता रहता है"
+   ],
+   "sources_note": {
+    "note": "Nityas Gems IPO GMP ~Rs 9 on Rs 70-75 band",
+    "sources": [
+     "https://www.moneycontrol.com/news/business/ipo/nityas-gems-and-jewellery-mainboard-ipo-to-open-tomorrow-for-subscription-check-price-band-gmp-other-key-details-14040606.html"
+    ],
+    "stale_risk": "HIGH — GMP changes daily; the IPO lists 8 Oct 2026",
+    "id": 155
+   }
+  }
+ ],
+ "trending": {
+  "opt_stt_hike_2026": {
+   "note": "Budget 2026-27 STT hike on F&O, effective 1 Apr 2026",
+   "sources": [
+    "https://www.business-standard.com/markets/news/markets-fm-hikes-stt-on-fo-trades-surprise-move-126020100888_1.html",
+    "https://www.cnbctv18.com/market/budget-2026-securities-transaction-tax-stt-rasied-futures-options-fm-nirmala-sitharaman-impact-19838207.htm"
+   ],
+   "stale_risk": "MEDIUM — rates can change in Budget 2027 (Feb 2027)",
+   "id": 134
+  },
+  "opt_sebi_fy25_study": {
+   "note": "SEBI FY25 F&O study (published Jul 2025)",
+   "sources": [
+    "https://economictimes.indiatimes.com/markets/stocks/news/91-of-individual-fo-traders-lost-money-in-fy25-despite-sebi-curbs-study/articleshow/122302956.cms",
+    "https://indianexpress.com/article/business/net-losses-of-individual-traders-in-fo-widen-by-41-to-rs-1-06-lakh-crore-in-fy25-sebi-study-10112417/",
+    "https://www.sebi.gov.in/sebi_data/attachdocs/jul-2025/1751900271726.pdf"
+   ],
+   "stale_risk": "LOW — historical; a newer SEBI study (FY26) may supersede it",
+   "id": 135
+  },
+  "opt_weekly_expiry_days": {
+   "note": "One weekly benchmark per exchange; Nifty Tue / Sensex Thu",
+   "sources": [
+    "https://www.share.market/buzz/insights/weekly-expiry-days-in-indian-fo-markets/",
+    "https://www.sebi.gov.in/sebi_data/attachdocs/oct-2024/1727786261636.pdf"
+   ],
+   "stale_risk": "MEDIUM — exchanges/SEBI can change expiry days",
+   "id": 136
+  },
+  "opt_settlement_price": {
+   "note": "Final settlement = avg of last 30 min",
+   "sources": [
+    "https://www.share.market/buzz/insights/weekly-expiry-days-in-indian-fo-markets/"
+   ],
+   "stale_risk": "LOW — verify on NSE contract specs before publishing",
+   "id": 137
+  },
+  "opt_fo_ban_mwpl": {
+   "note": "MWPL / ban-period changes (Oct-Dec 2025)",
+   "sources": [
+    "https://www.moneycontrol.com/news/business/markets/sebi-s-f-o-ban-rules-traders-pay-the-price-14038072.html",
+    "https://www.sebi.gov.in/sebi_data/attachdocs/may-2025/1748521484014.pdf"
+   ],
+   "stale_risk": "MEDIUM — SEBI keeps revising derivative rules",
+   "id": 138
+  },
+  "opt_expiry_elm": {
+   "note": "2% extra ELM on short options on expiry day (from 20 Nov 2024)",
+   "sources": [
+    "https://www.sebi.gov.in/sebi_data/attachdocs/oct-2024/1727786261636.pdf"
+   ],
+   "stale_risk": "LOW-MEDIUM",
+   "id": 139
+  },
+  "market_rbi_policy_oct2026": {
+   "note": "RBI MPC 5-7 Oct 2026; repo 5.25%; EY/analysts expect possible hike",
+   "sources": [
+    "https://www.rbi.org.in/scripts/annualpolicy.aspx",
+    "https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx?prid=63403",
+    "https://www.newkerala.com/news/a/case-25-bps-rbi-rate-hike-increases-amid-177.htm"
+   ],
+   "stale_risk": "HIGH — must publish BEFORE 7 Oct 2026 10 AM IST or rewrite with the actual decision; EMI math stays valid",
+   "id": 140
+  },
+  "market_sept2026_fall": {
+   "note": "Nifty -6.1% in Sept 2026, worst month since 2018",
+   "sources": [
+    "https://www.thehindubusinessline.com/markets/september-rout-makes-history-nifty-posts-worst-monthly-fall-in-8-years-worst-series-drop-since-2001/article71528719.ece"
+   ],
+   "stale_risk": "MEDIUM — fact stays true, relevance fades after Oct 2026",
+   "id": 141
+  },
+  "market_fii_dii_flows": {
+   "note": "FPI -25,662 cr (secondary), DII +52,617 cr in Sept 2026 per HBL; other outlets report different totals (e.g. Moneycontrol ~44,013 cr FII sell)",
+   "sources": [
+    "https://www.thehindubusinessline.com/markets/september-rout-makes-history-nifty-posts-worst-monthly-fall-in-8-years-worst-series-drop-since-2001/article71528719.ece",
+    "https://www.moneycontrol.com/news/business/markets/nifty-down-nearly-13-in-2026-as-september-delivers-11-of-fiis-year-to-date-selling-14042636.html/amp"
+   ],
+   "stale_risk": "MEDIUM — numbers differ by source/method; cite one source on screen",
+   "id": 142
+  },
+  "market_crude_rupee": {
+   "note": "Crude >$100 in Sept 2026; rupee ~95.92/$ on 30 Sep",
+   "sources": [
+    "https://www.thehindubusinessline.com/markets/september-rout-makes-history-nifty-posts-worst-monthly-fall-in-8-years-worst-series-drop-since-2001/article71528719.ece",
+    "https://moneynomical.com/gold-silver-mcx-30-september-2026/8395/"
+   ],
+   "stale_risk": "HIGH — prices move daily; refresh numbers on publish day",
+   "id": 143
+  },
+  "market_fed_hike_india": {
+   "note": "US Fed raised rates in Sept 2026; US 10y ~5.25%",
+   "sources": [
+    "https://www.thehindubusinessline.com/markets/september-rout-makes-history-nifty-posts-worst-monthly-fall-in-8-years-worst-series-drop-since-2001/article71528719.ece"
+   ],
+   "stale_risk": "MEDIUM-HIGH",
+   "id": 144
+  },
+  "market_200_week_average": {
+   "note": "Analysts: Nifty testing 200-week MA ~22,600 for first time in 6 years",
+   "sources": [
+    "https://www.thehindubusinessline.com/markets/september-rout-makes-history-nifty-posts-worst-monthly-fall-in-8-years-worst-series-drop-since-2001/article71528719.ece"
+   ],
+   "stale_risk": "HIGH — level may break/recover within days",
+   "id": 145
+  },
+  "market_gold_150k": {
+   "note": "MCX gold Rs 1,50,177/10g on 30 Sep 2026; Sept 24K -3.61%",
+   "sources": [
+    "https://moneynomical.com/gold-silver-mcx-30-september-2026/8395/",
+    "https://www.livemint.com/gold-prices",
+    "https://upstox.com/news/personal-finance/commodities/gold-silver-rates-today-september-30-prices-rise-ahead-of-festive-wedding-season-check-city-wise-rates/article-201120/"
+   ],
+   "stale_risk": "HIGH — refresh price on publish day (Dhanteras/Diwali window ideal)",
+   "id": 146
+  },
+  "market_silver_volatility": {
+   "note": "MCX silver Rs 2,26,270/kg on 30 Sep 2026; ~Rs 15,000 fall in Sept",
+   "sources": [
+    "https://moneynomical.com/gold-silver-mcx-30-september-2026/8395/"
+   ],
+   "stale_risk": "HIGH — refresh price on publish day",
+   "id": 147
+  },
+  "pf_gold_ways": {
+   "note": "Festive season gold buying",
+   "sources": [
+    "https://upstox.com/news/personal-finance/commodities/gold-silver-rates-today-september-30-prices-rise-ahead-of-festive-wedding-season-check-city-wise-rates/article-201120/"
+   ],
+   "stale_risk": "LOW — 3% GST on gold is long-standing; re-check if GST council changes it",
+   "id": 148
+  },
+  "tax_crypto_30": {
+   "note": "VDA regime retained in Income-tax Act 2025 (sec 393(1) TDS)",
+   "sources": [
+    "https://www.livemint.com/money/personal-finance/income-tax-act-2025-what-crypto-investors-should-know-about-vda-provisions-tds-and-itr-filing-rules-11790360376855.html"
+   ],
+   "stale_risk": "MEDIUM — Budget 2027 may change",
+   "id": 149
+  },
+  "tax_ltcg_equity": {
+   "note": "LTCG 12.5% above Rs 1.25 lakh",
+   "sources": [
+    "https://www.incometaxindia.gov.in/w/tax-on-long-term-capital-gains%E2%80%8B",
+    "https://virtualauditor.in/learn/capital-gains-tax-2025-guide/"
+   ],
+   "stale_risk": "MEDIUM — Budget-dependent",
+   "id": 150
+  },
+  "tax_stcg_equity": {
+   "note": "STCG 20% on listed equity",
+   "sources": [
+    "https://taxgarden.in/blog/income-tax-on-sale-of-listed-shares-stcg-ltcg-india-ay-2026-27"
+   ],
+   "stale_risk": "MEDIUM — Budget-dependent",
+   "id": 151
+  },
+  "tax_ltcg_harvesting": {
+   "note": "Uses Rs 1.25 lakh LTCG exemption",
+   "sources": [
+    "https://www.incometaxindia.gov.in/w/tax-on-long-term-capital-gains%E2%80%8B"
+   ],
+   "stale_risk": "MEDIUM — Budget-dependent",
+   "id": 152
+  },
+  "tax_new_regime_12l": {
+   "note": "New regime slabs FY 2026-27; rebate (sec 156 of ITA 2025, ex-87A)",
+   "sources": [
+    "https://newregimetax.com/guides/new-tax-regime-slabs-fy-2026-27.html",
+    "https://taxclue.in/guide/income-tax-slab-fy-2026-27"
+   ],
+   "stale_risk": "MEDIUM — valid for FY 2026-27; re-check after Budget 2027. Secondary sources only; verify on incometaxindia.gov.in",
+   "id": 153
+  },
+  "ipo_timeline": {
+   "note": "Vishal Nirmiti IPO dates",
+   "sources": [
+    "https://www.zeebiz.com/markets/ipo/news-upcoming-ipos-4-mainboard-ipos-to-open-next-week-check-dates-price-bands-402899"
+   ],
+   "stale_risk": "HIGH — dates pass after 8 Oct 2026; swap for a current IPO later",
+   "id": 156
+  },
+  "ipo_fresh_vs_ofs": {
+   "note": "Anarock DRHP filed 30 Sep/1 Oct 2026: Rs 550 cr fresh + Rs 450 cr OFS",
+   "sources": [
+    "https://www.thehindubusinessline.com/markets/anarock-property-consultants-files-papers-for-1000-crore-ipo/article71531534.ece"
+   ],
+   "stale_risk": "LOW-MEDIUM — DRHP figures may change in RHP",
+   "id": 157
+  },
+  "ipo_drhp": {
+   "note": "Anarock DRHP news as hook",
+   "sources": [
+    "https://www.thehindubusinessline.com/markets/anarock-property-consultants-files-papers-for-1000-crore-ipo/article71531534.ece"
+   ],
+   "stale_risk": "LOW",
+   "id": 158
+  },
+  "pf_credit_report_reporting": {
+   "note": "RBI CIC reporting 4x/month from 1 Jul 2026",
+   "sources": [
+    "https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=13189&Mode=0",
+    "https://rbi.org.in/scripts/BS_ViewMasDirections.aspx?id=13154"
+   ],
+   "stale_risk": "LOW — verify exact dates against the RBI direction text before publishing",
+   "id": 159
+  },
+  "market_muhurat_2026": {
+   "note": "NSE: Muhurat trading Sun 8 Nov 2026; timing TBA",
+   "sources": [
+    "https://nsearchives.nseindia.com/content/circulars/CMTR71775.pdf",
+    "https://ipowatch.in/diwali-muhurat-trading-timings/"
+   ],
+   "stale_risk": "HIGH — update with NSE timing circular; publish in the week before 8 Nov",
+   "id": 160
+  },
+  "fund_q2_results_checklist": {
+   "note": "Q2 FY27 results season starts Oct 2026 (HBL: 'eyes on Q2 results')",
+   "sources": [
+    "https://www.thehindubusinessline.com/markets/september-rout-makes-history-nifty-posts-worst-monthly-fall-in-8-years-worst-series-drop-since-2001/article71528719.ece"
+   ],
+   "stale_risk": "MEDIUM — seasonal; reuse each quarter by changing Q label",
+   "id": 177
+  }
+ }
+}

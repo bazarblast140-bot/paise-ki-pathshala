@@ -1,7 +1,58 @@
 {
-  "schema_version": 1,
-  "updated_at": null,
-  "notes": "Optional dated research notes mapped only to existing topic-bank keys; priority 0-2. Verify time-sensitive claims from primary sources before adding.",
-  "topics": []
+ "schema_version": 1,
+ "updated_at": "2026-10-01",
+ "notes": "Dated research boosts for keys in topic_bank.json. priority 0-2 adds priority*0.5 in competitor_patterns.score_topic while the entry is active. valid_until: at and after that instant the boost is zero and pick_topic will not select the key. A YYYY-MM-DD value includes that whole IST calendar day; a timestamp expires at that instant. Entries without valid_until keep their boost. ipo_gmp is absent because that topic was dropped (named IPO price under 3 months old).",
+ "topics": [
+  {
+   "topic_key": "market_rbi_policy_oct2026",
+   "priority": 2,
+   "valid_until": "2026-10-07T10:00:00+05:30",
+   "note": "Publish before the RBI decision at 10:00 IST on 7 Oct 2026. Do not pick at or after that instant.",
+   "source": "https://www.rbi.org.in/scripts/annualpolicy.aspx"
+  },
+  {
+   "topic_key": "market_sept2026_fall",
+   "priority": 2,
+   "note": "Nifty worst month since 2018; relevant first half of Oct 2026",
+   "source": "https://www.thehindubusinessline.com/markets/september-rout-makes-history-nifty-posts-worst-monthly-fall-in-8-years-worst-series-drop-since-2001/article71528719.ece"
+  },
+  {
+   "topic_key": "opt_stt_hike_2026",
+   "priority": 1,
+   "note": "evergreen-ish FY27 cost topic",
+   "source": "https://www.business-standard.com/markets/news/markets-fm-hikes-stt-on-fo-trades-surprise-move-126020100888_1.html"
+  },
+  {
+   "topic_key": "ipo_timeline",
+   "priority": 2,
+   "valid_until": "2026-10-08",
+   "note": "Vishal Nirmiti lists 8 Oct 2026. Do not pick after that IST date.",
+   "source": "https://www.zeebiz.com/markets/ipo/news-upcoming-ipos-4-mainboard-ipos-to-open-next-week-check-dates-price-bands-402899"
+  },
+  {
+   "topic_key": "market_gold_150k",
+   "priority": 1,
+   "note": "Raise to 2 in the Dhanteras/Diwali week; refresh price first",
+   "source": "https://moneynomical.com/gold-silver-mcx-30-september-2026/8395/"
+  },
+  {
+   "topic_key": "fund_q2_results_checklist",
+   "priority": 1,
+   "note": "Q2 results season Oct-Nov 2026",
+   "source": "https://www.thehindubusinessline.com/markets/september-rout-makes-history-nifty-posts-worst-monthly-fall-in-8-years-worst-series-drop-since-2001/article71528719.ece"
+  },
+  {
+   "topic_key": "opt_sebi_fy25_study",
+   "priority": 1,
+   "note": "pairs with STT topic",
+   "source": "https://economictimes.indiatimes.com/markets/stocks/news/91-of-individual-fo-traders-lost-money-in-fy25-despite-sebi-curbs-study/articleshow/122302956.cms"
+  },
+  {
+   "topic_key": "market_muhurat_2026",
+   "priority": 1,
+   "valid_until": "2026-11-08",
+   "note": "NSE Muhurat trading is Sunday 8 Nov 2026 and the time is still TBA. Do not pick after that IST date.",
+   "source": "https://nsearchives.nseindia.com/content/circulars/CMTR71775.pdf"
+  }
+ ]
 }
-

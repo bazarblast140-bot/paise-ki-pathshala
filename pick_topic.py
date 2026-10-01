@@ -9,7 +9,12 @@ Trend weighting (data/trends.json, written by trend_research.py):
   strong pattern weight (2.0) or our own measured result (up to 0.75), so a
   current trend cannot force the pick. Stale or missing trends add zero.
   Placeholder topics — templated beats from the ids 63–133 audit — are removed
-  before scoring and are never returned, including for TOPIC_KEY.
+  before scoring and are never returned, including for TOPIC_KEY. The check
+  is the beat text, not the id, so a rewrite that drops the template is
+  eligible again.
+  Dated rows in data/current_market_topics.json (valid_until) lose their
+  priority boost and are not picked at or after that instant. A calendar
+  date includes that whole IST day.
 """
 import json
 import os
@@ -17,7 +22,8 @@ from datetime import datetime, timezone
 
 from common import ROOT, save, ok, die, video_format
 from competitor_patterns import (
-    is_near_competitor_duplicate, load_research, load_trends, score_topic,
+    blocked_topic_keys, is_near_competitor_duplicate, load_research, load_trends,
+    score_topic,
 )
 
 # Structural fingerprint of the templated block (topic-bank audit, ids 63–102)
@@ -85,11 +91,13 @@ def _is_competitor_duplicate(topic):
     return is_near_competitor_duplicate(topic.get("topic", ""), _seen_competitor_phrases())
 
 
-def _pick_fresh(bank, flag, avoid_cats, research, fmt):
+def _pick_fresh(bank, flag, avoid_cats, research, fmt, now=None):
     weights, market, own = research[0], research[1], research[2]
     trends = research[3] if len(research) > 3 else None
+    blocked = blocked_topic_keys(market, now)
     unused = [t for t in bank["topics"]
-              if not t.get(flag) and not _is_competitor_duplicate(t) and not is_placeholder_topic(t)]
+              if not t.get(flag) and t.get("key") not in blocked
+              and not _is_competitor_duplicate(t) and not is_placeholder_topic(t)]
     if not unused:
         return None
     # Apply the category cooldown when possible, but do not stall if it would
@@ -98,7 +106,7 @@ def _pick_fresh(bank, flag, avoid_cats, research, fmt):
     # placeholder back in.
     outside_cooldown = [t for t in unused if (t.get("cat") or "") not in avoid_cats]
     candidates = outside_cooldown or unused
-    return max(candidates, key=lambda t: score_topic(t, weights, market, own, fmt, trends))
+    return max(candidates, key=lambda t: score_topic(t, weights, market, own, fmt, trends, now=now))
 
 
 def main():
@@ -117,6 +125,8 @@ def main():
             die(f"TOPIC_KEY '{test_key}' competitor-seen duplicate hai — naya angle/topic use karo")
         if is_placeholder_topic(nxt):
             die(f"TOPIC_KEY '{test_key}' placeholder/templated topic hai — pehle beats rewrite karo")
+        if nxt.get("key") in blocked_topic_keys(research[1]):
+            die(f"TOPIC_KEY '{test_key}' dated topic expire ho chuka hai — valid_until ke baad pick nahi hoga")
         save("topic.txt", nxt["topic"])
         save("topic.json", json.dumps(nxt, ensure_ascii=False, indent=1))
         ok(f"TEST topic (used mark nahi): {nxt['key']}")

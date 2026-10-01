@@ -294,6 +294,9 @@ FINANCE_CARD_LABELS = {
     "risk": ("RISK", "CAPITAL / POSITION", "LOSS / RECOVERY", "PROTECT CAPITAL"),
     "business": ("BUSINESS", "REVENUE / UNIT ECONOMICS", "MARGIN / CASH", "READ THE NUMBERS"),
     "market": ("MARKET HISTORY", "INDEX / EVENT", "DRAWDOWN / RECOVERY", "CHECK THE DATES"),
+    "pf": ("PERSONAL FINANCE", "INCOME / SAVE / GOAL", "TIME / COST", "CHECK THE PLAN"),
+    "tax": ("TAX", "GAIN / EXEMPTION", "RATE / HOLDING", "CHECK THE RULE"),
+    "ipo": ("IPO", "ISSUE / ALLOTMENT", "LISTING / RISK", "READ THE DRHP"),
 }
 
 
@@ -359,8 +362,31 @@ def _ascii_title(key):
     return titles.get(key, key.replace("_", " ").upper())
 
 
+# Bar charts for finance-card kinds. Heights are diagram geometry, not facts.
+# fund/stock stay on the labels they already shipped with.
+_BAR_CHARTS = {
+    "fund": ([100, 72, 48], ["REVENUE", "PROFIT", "CASH"], "RESULT -> CASH -> VALUE", "CHECK QUALITY / CASH / VALUATION"),
+    "stock": ([62, 82, 105], ["SALES", "PROFIT", "VALUE"], "RESULT -> CASH -> VALUE", "CHECK QUALITY / CASH / VALUATION"),
+    "pf": ([100, 45, 80], ["INCOME", "SAVE", "GOAL"], "INCOME -> SAVE -> GOAL", "GOAL / TIME / COST"),
+    "tax": ([100, 40, 18], ["GAIN", "EXEMPT", "TAX"], "GAIN -> EXEMPT -> TAX", "HOLDING / EXEMPTION / RATE"),
+    "ipo": ([90, 55, 80], ["ISSUE", "ALLOT", "LIST"], "ISSUE -> ALLOT -> LIST", "DRHP / LOT / RISK"),
+}
+
+
 def _topic_kind(key):
-    low = key.lower()
+    """Map a topic key to a finance-card visual that already has drawings.
+
+    Personal finance, tax and IPO have no candle geometry. They use their own
+    bar/checklist layout. Anything else still falls through to the market
+    chart so a new prefix cannot raise KeyError the way fund_pe once did.
+    """
+    low = str(key or "").lower()
+    if low.startswith("pf_"):
+        return "pf"
+    if low.startswith("tax_"):
+        return "tax"
+    if low.startswith("ipo_"):
+        return "ipo"
     if low.startswith(("opt_", "option_")) or low in {"atm_delta"}:
         return "opt"
     if low.startswith(("fund_", "peg_", "roe_", "debt_", "cashflow_", "operating_", "eps_", "promoter_", "shareholding")) or low in {"fcf", "quality_stock_checklist"}:
@@ -376,6 +402,13 @@ def _topic_kind(key):
     if low.startswith("business_"):
         return "business"
     return "market"
+
+
+def _kind_rows(table, kind):
+    """Visual row for this kind, or the market chart when the kind has none."""
+    if kind in table:
+        return table[kind]
+    return table["market"]
 
 
 def _draw_finance_visual(img, kind, key, beat):
@@ -431,31 +464,30 @@ def _draw_finance_visual(img, kind, key, beat):
         elif beat == "karein":
             label(img, X0 + 85, Y0 + 650, "CHECK EXPIRY / IV / MAX RISK", YELLOW, 30)
         return
-    if kind in {"fund", "stock", "business"}:
-        if kind == "business":
-            from PIL import ImageDraw
-            steps = [("CAC", 180), ("CUSTOMER", 420), ("LTV", 660)]
-            for i, (t, x) in enumerate(steps):
-                d = ImageDraw.Draw(img)
-                d.rounded_rectangle([x-105, Y0+450, x+105, Y0+570], 22, fill=(18,28,45), outline=GREEN if i==2 else MUTED, width=4)
-                label(img, x, Y0+492, t, INK, 34, anchor="ma")
-                if i < 2:
-                    arrow(img, (x+115, Y0+510), (steps[i+1][1]-115, Y0+510), GREEN, 8)
-            label(img, X0 + 85, Y0 + 350, "UNIT ECONOMICS", YELLOW, 42)
-        else:
-            vals = [100, 72, 48] if kind == "fund" else [62, 82, 105]
-            labels = ["REVENUE", "PROFIT", "CASH"] if kind == "fund" else ["SALES", "PROFIT", "VALUE"]
-            bars(img, box, vals, labels, [BLUE, GREEN, YELLOW], fmt="{:g}", hi=120, value_size=42, label_size=30)
-            if beat == "hook":
-                label(img, X0 + 85, Y0 + 325, "COMPARE THE NUMBERS", INK, 34)
-            elif beat == "pehchan":
-                ring(img, X0 + 210, Y0 + 565, 90, 70, YELLOW)
-                label(img, X0 + 85, Y0 + 325, "READ EACH BAR", INK, 34)
-            elif beat == "matlab":
-                arrow(img, (X0 + 270, Y0 + 650), (X1 - 240, Y0 + 650), GREEN, 10)
-                label(img, X0 + 85, Y0 + 650, "RESULT -> CASH -> VALUE", GREEN, 32)
-            elif beat == "karein":
-                label(img, X0 + 85, Y0 + 650, "CHECK QUALITY / CASH / VALUATION", YELLOW, 32)
+    if kind == "business":
+        from PIL import ImageDraw
+        steps = [("CAC", 180), ("CUSTOMER", 420), ("LTV", 660)]
+        for i, (t, x) in enumerate(steps):
+            d = ImageDraw.Draw(img)
+            d.rounded_rectangle([x-105, Y0+450, x+105, Y0+570], 22, fill=(18,28,45), outline=GREEN if i==2 else MUTED, width=4)
+            label(img, x, Y0+492, t, INK, 34, anchor="ma")
+            if i < 2:
+                arrow(img, (x+115, Y0+510), (steps[i+1][1]-115, Y0+510), GREEN, 8)
+        label(img, X0 + 85, Y0 + 350, "UNIT ECONOMICS", YELLOW, 42)
+        return
+    if kind in _BAR_CHARTS:
+        vals, labels, flow, check = _BAR_CHARTS[kind]
+        bars(img, box, vals, labels, [BLUE, GREEN, YELLOW], fmt="{:g}", hi=120, value_size=42, label_size=30)
+        if beat == "hook":
+            label(img, X0 + 85, Y0 + 325, "COMPARE THE NUMBERS", INK, 34)
+        elif beat == "pehchan":
+            ring(img, X0 + 210, Y0 + 565, 90, 70, YELLOW)
+            label(img, X0 + 85, Y0 + 325, "READ EACH BAR", INK, 34)
+        elif beat == "matlab":
+            arrow(img, (X0 + 270, Y0 + 650), (X1 - 240, Y0 + 650), GREEN, 10)
+            label(img, X0 + 85, Y0 + 650, flow, GREEN, 32)
+        elif beat == "karein":
+            label(img, X0 + 85, Y0 + 650, check, YELLOW, 32)
         return
     if kind == "intraday":
         closes = [100, 101, 100.5, 102, 101.4, 103, 102.2, 104, 103.2, 105]
@@ -551,7 +583,7 @@ def finance_card_scene(key):
             # Replace the overview with a component map; deliberately no copy
             # of the hook chart.
             panel(img)
-            boxes = {
+            boxes = _kind_rows({
                 "fund": [("REVENUE", 170), ("PROFIT", 390), ("CASH", 610)],
                 "stock": [("BUSINESS", 170), ("RESULTS", 390), ("VALUE", 610)],
                 "business": [("CUSTOMER", 170), ("UNIT ECONOMICS", 390), ("CASH", 610)],
@@ -559,8 +591,11 @@ def finance_card_scene(key):
                 "opt": [("PREMIUM", 170), ("IV / GREEKS", 390), ("PAYOFF", 610)],
                 "penny": [("PRICE", 170), ("VOLUME", 390), ("LIQUIDITY", 610)],
                 "risk": [("CAPITAL", 170), ("DRAWDOWN", 390), ("RECOVERY", 610)],
+                "pf": [("INCOME", 170), ("SAVE", 390), ("GOAL", 610)],
+                "tax": [("GAIN", 170), ("EXEMPT", 390), ("TAX", 610)],
+                "ipo": [("ISSUE", 170), ("ALLOT", 390), ("LIST", 610)],
                 "market": [("INDEX", 170), ("EVENT", 390), ("RECOVERY", 610)],
-            }[kind]
+            }, kind)
             for i, (txt, y) in enumerate(boxes):
                 d.rounded_rectangle(
                     [X0 + 90, Y0 + y, X1 - 90, Y0 + y + 130],
@@ -579,7 +614,7 @@ def finance_card_scene(key):
             # Cause -> effect visual. This is a new line/flow composition,
             # not the hook chart.
             panel(img)
-            vals = {
+            vals = _kind_rows({
                 "fund": ([40, 65, 90], ["REVENUE", "PROFIT", "CASH"]),
                 "stock": ([55, 72, 88], ["SALES", "PROFIT", "VALUE"]),
                 "business": ([35, 60, 92], ["CAC", "MARGIN", "LTV"]),
@@ -587,8 +622,11 @@ def finance_card_scene(key):
                 "opt": ([30, 52, 80], ["SPOT", "DELTA", "PREMIUM"]),
                 "penny": ([85, 48, 20], ["PRICE", "VOLUME", "LIQUIDITY"]),
                 "risk": ([100, 80, 112], ["START", "LOSS", "RECOVERY"]),
+                "pf": ([100, 55, 85], ["INCOME", "SAVE", "GOAL"]),
+                "tax": ([100, 40, 18], ["GAIN", "EXEMPT", "TAX"]),
+                "ipo": ([80, 50, 90], ["ISSUE", "ALLOT", "LIST"]),
                 "market": ([100, 82, 128], ["INDEX", "EVENT", "RECOVERY"]),
-            }[kind]
+            }, kind)
             ax = Axes((X0 + 80, Y0 + 300, X1 - 80, Y1 - 120),
                       len(vals[0]), 0, max(vals[0]) * 1.15,
                       pad=(70, 60, 70, 70), ypad=0.03)
@@ -608,7 +646,7 @@ def finance_card_scene(key):
 
         # karein: a checklist/risk frame, intentionally no chart reuse.
         panel(img)
-        checks = {
+        checks = _kind_rows({
             "fund": ["QUALITY", "CASH FLOW", "VALUATION"],
             "stock": ["RESULTS", "DEBT", "VALUATION"],
             "business": ["CUSTOMER", "MARGIN", "CASH"],
@@ -616,8 +654,11 @@ def finance_card_scene(key):
             "opt": ["IV", "EXPIRY", "MAX RISK"],
             "penny": ["VOLUME", "SPREAD", "DILUTION"],
             "risk": ["POSITION SIZE", "STOP LOSS", "RECOVERY MATH"],
+            "pf": ["GOAL", "TIME", "COST"],
+            "tax": ["HOLDING", "EXEMPTION", "RATE"],
+            "ipo": ["DRHP", "LOT SIZE", "RISK"],
             "market": ["DATE", "SOURCE", "METHOD"],
-        }[kind]
+        }, kind)
         for i, txt in enumerate(checks):
             y = Y0 + 300 + i * 190
             d.rounded_rectangle(
