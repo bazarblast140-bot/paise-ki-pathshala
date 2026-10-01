@@ -13,10 +13,10 @@ on:
   workflow_dispatch:
     inputs:
       slot:
-        description: "Kaunsa slot check karein (khali = abhi-abhi guzra slot)"
+        description: "Kaunsa slot check karein (auto = abhi-abhi guzra slot)"
         type: choice
-        options: ["", "08:30", "16:00", "21:00"]
-        default: ""
+        options: ["auto", "08:30", "16:00", "21:00"]
+        default: "auto"
       fill:
         description: "Khali mile to naya video bhi bana do"
         type: boolean

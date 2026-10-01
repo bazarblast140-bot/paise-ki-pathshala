@@ -43,7 +43,22 @@ jobs:
             fi
           fi
 
-          if [ -s run/final.mp4 ] && [ -s run/script.txt ]; then
+          # Safety gates (a retry must never post a second Reel, a Reel for an
+          # unlisted test, or a video that failed QA / review):
+          #  1. the failed run must not have published a Reel already;
+          #  2. on automatic runs the failure must be the Instagram step itself.
+          #     run_pipeline.py prints this marker only after every gate passed,
+          #     the verdict was READY and IG_CROSSPOST was on (public runs only).
+          #     Any other failure (QA gate, NEEDS FIX, render error) is skipped.
+          #  publish_instagram.py additionally refuses a non-READY report.md.
+          if [ -n "$(find run -type f -name ig_reel.txt -size +0 -print -quit)" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Failed run already published a Reel (ig_reel.txt present); not posting again."
+          elif [ "${{ github.event_name }}" = "workflow_run" ] && \
+               ! gh run view "$FAILED_RUN" --log-failed 2>/dev/null | grep -q "Instagram Reel publish was not confirmed"; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Failure was not the Instagram publish step; not posting a Reel."
+          elif [ -s run/final.mp4 ] && [ -s run/script.txt ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
             echo "Short artifact found; Instagram-only retry is eligible."
           else

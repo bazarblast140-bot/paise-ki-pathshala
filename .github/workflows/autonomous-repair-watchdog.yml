@@ -1,12 +1,24 @@
 name: Autonomous Repair Watchdog
 
+# MANUAL ONLY. It used to fire automatically after every failed production run,
+# let an LLM / regex patch source files, commit straight to main and then
+# re-dispatch a PUBLIC production run. That re-dispatch also ran when no repair
+# was found (the repair step exits 0), so a failure simply started another
+# public build. Run it by hand when you want it:
+#   gh workflow run "Autonomous Repair Watchdog" -f failed_run_id=<run id>
 on:
-  workflow_run:
-    workflows: ["Paise Ki Pathshala"]
-    types: [completed]
+  workflow_dispatch:
+    inputs:
+      failed_run_id:
+        description: "Failed 'Paise Ki Pathshala' run id to diagnose"
+        required: true
+      redispatch:
+        description: "Repair commit hone ke baad production run dobara chalana hai? (unlisted)"
+        type: boolean
+        default: false
 
 concurrency:
-  group: autonomous-repair-${{ github.event.workflow_run.id }}
+  group: autonomous-repair-${{ inputs.failed_run_id }}
   cancel-in-progress: false
 
 permissions:
@@ -15,7 +27,6 @@ permissions:
 
 jobs:
   repair:
-    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -33,7 +44,7 @@ jobs:
       - name: Collect failed run logs
         env:
           GH_TOKEN: ${{ github.token }}
-          FAILED_RUN: ${{ github.event.workflow_run.id }}
+          FAILED_RUN: ${{ inputs.failed_run_id }}
         run: |
           mkdir -p run
           gh run view "$FAILED_RUN" --log-failed > run/watchdog_failure.log || true
@@ -52,7 +63,7 @@ jobs:
           KIMI_BASE_URL: ${{ secrets.KIMI_BASE_URL }}
           SELF_HEAL_MODEL: deepseek-flash
           SELF_HEAL_FALLBACK_MODEL: claude-haiku-4-5-20251001
-          FAILED_RUN: ${{ github.event.workflow_run.id }}
+          FAILED_RUN: ${{ inputs.failed_run_id }}
         run: |
           python - <<'PY'
           import os, sys
@@ -82,19 +93,19 @@ jobs:
           PY
 
       - name: Re-run repaired production workflow
+        # Only when asked AND a repair was actually committed in this run.
+        if: ${{ inputs.redispatch && hashFiles('run/watchdog_repaired') != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          FAILED_RUN: ${{ github.event.workflow_run.id }}
+          FAILED_RUN: ${{ inputs.failed_run_id }}
         run: |
-          # Preserve the failed run's broad intent. The production workflow's
-          # slot guard prevents duplicate posting when the original slot already succeeded.
+          # Verification run of the repaired code: always UNLISTED (no public
+          # Short, and IG_CROSSPOST is off for unlisted runs). The next scheduled
+          # slot publishes publicly as usual.
           FORMAT=short
           if gh run view "$FAILED_RUN" --log-failed 2>/dev/null | grep -q -- "--format long"; then
             FORMAT=long
           fi
-          PRIVACY=public
-          if gh run view "$FAILED_RUN" --log-failed 2>/dev/null | grep -q "PUBLISH_VISIBILITY: unlisted"; then
-            PRIVACY=unlisted
-          fi
+          PRIVACY=unlisted
           gh workflow run paise-ki-pathshala.yml --ref main -f format="$FORMAT" -f privacy="$PRIVACY"
           echo "[WATCHDOG] repaired workflow dispatched: format=$FORMAT privacy=$PRIVACY"

@@ -39,8 +39,8 @@ def main():
     hit = taken(slot) if slot else None
     if hit:
         date, e = hit
-        print(f"[skip] {date} {slot} IST ka video pehle se hai: "
-              f"https://youtu.be/{e['video_id']}", file=sys.stderr)
+        where = f"https://youtu.be/{e['video_id']}" if e.get("video_id") else e.get("platform", "instagram")
+        print(f"[skip] {date} {slot} IST ka video pehle se hai: {where}", file=sys.stderr)
     print("taken=true" if hit else "taken=false")
 
 
