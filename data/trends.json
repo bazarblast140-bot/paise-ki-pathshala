@@ -1,0 +1,45 @@
+{
+ "schema_version": 1,
+ "schema_note": "schema_version 1. shorts[] metrics views/likes/comments/duration_s/thumbnail_width/thumbnail_height are copied from YouTube Data API fields or null when the response omits them. hook_pattern is a fixed classifier on the description's first line, else the title, and null when neither matches. visual_style_notes is empty unless thumbnail dimensions or a style word inside tags are present. trending_topics[] keep source and published_at (null if the source had no date). quota.used_units counts units this job charged, not YouTube's remaining quota. Research only — nothing here is uploaded or posted. This file is the empty snapshot until Daily trend research runs.",
+ "generated_at": null,
+ "auth": null,
+ "window": {
+  "lookback_days": 7,
+  "published_after": null,
+  "region_code": "IN",
+  "relevance_language": "hi"
+ },
+ "quota": {
+  "budget_units": 1200,
+  "used_units": null,
+  "stopped": false,
+  "stop_reason": null,
+  "skipped": [],
+  "calls": []
+ },
+ "shorts_collected": 0,
+ "shorts": [],
+ "trending_topics": [],
+ "summary": {
+  "hook_patterns": {},
+  "hooks_inferred": 0,
+  "hooks_unknown": 0,
+  "title_formats": {
+   "count": 0,
+   "median_chars": null,
+   "question_titles": 0,
+   "number_led_titles": 0,
+   "how_to_titles": 0,
+   "warning_titles": 0
+  },
+  "duration_s": {
+   "n": 0,
+   "median": null,
+   "p25": null,
+   "p75": null
+  },
+  "topic_clusters": []
+ },
+ "errors": [],
+ "policy": "Read-only research. This job must not publish, upload, or post. Learn patterns; do not reuse competitor titles, scripts, or thumbnails."
+}

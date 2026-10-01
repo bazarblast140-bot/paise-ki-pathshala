@@ -16,10 +16,29 @@
       "role": "reference_only"
     }
   ],
+  "news_feeds": [
+    {
+      "name": "Economic Times Markets",
+      "url": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"
+    },
+    {
+      "name": "Mint Markets",
+      "url": "https://www.livemint.com/rss/markets"
+    },
+    {
+      "name": "Business Standard Markets",
+      "url": "https://www.business-standard.com/rss/markets-106.rss"
+    },
+    {
+      "name": "Hindu BusinessLine Markets",
+      "url": "https://www.thehindubusinessline.com/markets/feeder/default.rss"
+    }
+  ],
   "optional_inputs": {
     "competitor_performance": "data/competitor_performance.json",
     "current_market_topics": "data/current_market_topics.json",
     "own_topic_performance": "data/own_topic_performance.json",
+    "trends": "data/trends.json",
     "vidiq": {
       "enabled": false,
       "required": false,
@@ -31,6 +50,7 @@
     "Never copy competitor titles, scripts, thumbnails, exact topic angles, or trade calls.",
     "Choose only unused, valid topic-bank entries; preserve each entry's scene key, facts, and beats.",
     "Blend stable competitor patterns with dated market relevance and our own measured outcomes; market and competitor signals are small ranking inputs, not factual sources.",
+    "data/trends.json adds at most 0.8 points when a bank topic shares a keyword with a repeated cluster. It is a weight, not a filter, and it never selects a templated placeholder topic.",
     "Never repeat an own-channel topic. Skip competitor-covered topics from the reviewed phrase list unless a materially different educational angle has been added explicitly to the bank.",
     "If research data is missing or malformed, continue the normal fresh-topic rotation without failing.",
     "Use competitor charts only for broad lessons such as whitespace, minimal labels, sequential reveals, and focal callouts. Keep the single box by default; use split mini-charts only for genuine comparisons, and keep every chart and thumbnail treatment original."

@@ -29,7 +29,7 @@ visuals → video → verify → upload. Sirf isi channel ke liye — quiz chann
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Har run ka report |
 | `YT_FIN_CLIENT_ID`, `YT_FIN_CLIENT_SECRET`, `YT_FIN_REFRESH_TOKEN` | Channel ka OAuth — `python youtube_auth.py --set-github-secret` se (neeche dekho) |
 | variable `YT_FIN_CHANNEL_ID` | Upload guard — token ka channel isi ID se match hona chahiye |
-| `YT_DATA_API_KEY` *(optional, naya)* | Competitor research (read-only). Na ho to OAuth token se chalega, woh bhi na chale to step skip |
+| `YT_DATA_API_KEY` *(optional)* | Read-only YouTube Data API for competitor research and the daily trend job. Secret na ho to wahi OAuth chalega (`YT_FIN_CLIENT_ID` / `YT_FIN_CLIENT_SECRET` / `YT_FIN_REFRESH_TOKEN`). Dono na hon to YouTube wala hissa skip; naya secret mat banao jab tak key cloud project me ho |
 | `IG_ACCESS_TOKEN`, variable `IG_USER_ID` | Instagram Reel cross-post |
 | `KIMI_API_KEY`, `ANTHROPIC_API_KEY` | Optional backup LLM |
 | variable `SELF_REPAIR` *(optional)* | `1` = CI ke andar code self-repair (LLM / deterministic patch, phir `main` par push). Default **band**; "Autonomous Repair Watchdog" ab sirf manual (Run workflow) |
@@ -101,7 +101,40 @@ se nahi jeetta) aur likhta hai:
 `prompt_hint()` ek aggregate hint deta hai ("sawaal wale title, ye keywords…") — competitor ka
 title/script kabhi copy ke liye nahi. Ye hint abhi narration prompt me **wired nahi hai** (board_short.py
 ki narration logic jaisi hai waisi chhodi hai); chaaho to baad me jod sakte ho. Secret na ho / quota khatam /
-error — step skip hota hai, video phir bhi banta hai. Quota: ~350 units/run (10,000/din free).
+error — step skip hota hai, video phir bhi banta hai. Quota: ~350 units/run, hard cap
+`COMPETITOR_QUOTA_BUDGET` = 500 (10,000/din free, uploads ke saath shared).
+
+## Daily trend research (read-only, publish nahi)
+
+`trend_research.py` aur workflow **Daily trend research**
+(`.github/workflows/daily-trend-research.yml`).
+
+- **Schedule:** roz 00:00 UTC = **05:30 IST**, 08:30 wale publish slot se pehle.
+  GitHub cron late ho sakta hai. **Run workflow** se bhi chalega (`dry_run` = fetch only,
+  commit nahi). Is workflow par `push:` trigger nahi hai.
+- **Kabhi publish / upload / Reel nahi.** Sirf `data/trends.json` aur
+  `reports/trends-YYYY-WW.md` (IST ISO week, jaise `reports/trends-2026-40.md`) commit
+  karta hai. Push race par `git fetch` + rebase, trend-file conflict par isi run ka
+  snapshot rakhta hai, phir retry.
+- **Auth:** `YT_DATA_API_KEY` ho to wahi, warna `yt_credentials.py` wala OAuth
+  (secrets pehle se pipeline me hain). Naya secret add nahi karna.
+- **Quota:** is job ki hard ceiling **1,200 units** (config se badh nahi sakti).
+  `search.list` = 100, baaki calls (videos, channels, playlistItems, mostPopular) = 1.
+  Queries max 6. `competitor_research.py` ki 500 ke saath mila kar research ~1,700
+  par rukti hai — ~2,000 ki research ceiling ke neeche. Upload ~1,600 × 3 slots alag
+  hain. Budget poora ho ya YouTube `quotaExceeded` de, job skip karke jo data mil chuka
+  hai wahi likhti hai; metric invent nahi karti (field na ho to `null`).
+- **Kya likhti hai:** pichhle 7 din ke Hindi finance Shorts (title, opening line se
+  hook pattern, duration, views/likes/comments, channel, thumbnail size / tag se
+  visual note — warna khali), aur India finance headlines (Economic Times, Mint,
+  Business Standard, Hindu BusinessLine) source + date ke saath. Schema
+  `trend_research.py` ke docstring aur `data/trends.json` ke `schema_note` me hai.
+- **Picker:** `pick_topic.py` cluster keyword match par **+0.25**, cap **0.8**.
+  Ek strong pattern weight 2.0 hai aur apna measured result 0.75 tak, isliye trend
+  topic force nahi karta. 8 din se purana snapshot ignore. Templated placeholder
+  (audit: generic "आसान भाषा में समझो" beats, ya repeated hook + fact = title)
+  candidate list se hat jaate hain — `TOPIC_KEY` se bhi nahi chalte. Bank me jo
+  topic hai sirf wahi rank hota hai; trend file naya topic nahi banati.
 
 ---
 
@@ -198,7 +231,9 @@ Even then it uploads **private + only if verdict READY** — never instant-publi
 | `sketch.py` | hand-drawn (Excalidraw-style) marker highlights, rough strokes, xkcd charts |
 | `assets_pexels.py` | real stock footage per shot, cached in `assets/cache/` |
 | `sfx.py` | synthesized click track — no sound files to ship |
-| `pick_topic.py` | picks next unused topic from `topic_bank.json` |
+| `pick_topic.py` | picks next unused non-placeholder topic; trends add at most 0.8 |
+| `trend_research.py` | read-only daily YouTube + RSS research → `data/trends.json` + `reports/` |
+| `competitor_research.py` | read-only competitor/own-channel patterns (quota cap 500) |
 | `run_script.py` | Script Agent + **Gate 1** (hook, facts, compliance) |
 | `run_voice.py` | Voice Agent + Edge TTS / ElevenLabs + **Gate 2** (coverage, length, TTS-safety) |
 | `run_visuals.py` | Visual Agent + **Gate 3** (density, numbers, repeats) |

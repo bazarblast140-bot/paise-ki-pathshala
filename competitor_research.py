@@ -25,7 +25,10 @@ What it does (read-only YouTube Data API calls, never uploads/edits anything):
 Credentials (first one found wins; none = clean skip, exit 0):
   YT_DATA_API_KEY                          (GitHub secret; simplest, 10k units/day quota)
   YOUTUBE_CLIENT_ID/SECRET/REFRESH_TOKEN   (same channel OAuth used for uploads)
-Quota: ~3-6 units per channel + 100 per search keyword (max 3) ~= 320-350 units/run.
+Quota: search.list is 100 units; videos/channels/playlistItems are 1. This script
+caps itself at COMPETITOR_QUOTA_BUDGET (500) units. The separate daily trend job
+caps itself at 1,200. Together they stay under the ~2,000-unit research ceiling
+on the shared 10,000-unit daily quota (uploads are ~1,600 each).
 """
 from __future__ import annotations
 
@@ -52,6 +55,97 @@ AUTO_SOURCE = "yt_api_auto"
 STOP = {"the", "a", "of", "in", "to", "and", "for", "is", "on", "with", "hindi", "shorts", "short",
         "video", "kya", "hai", "ka", "ki", "ke", "se", "me", "mein", "को", "का", "की", "के", "है",
         "में", "से", "और", "क्या", "ये", "यह", "तो", "पर", "एक", "हैं", "नहीं", "कैसे", "क्यों"}
+
+# Official Data API v3 costs. Unknown methods are refused so a new call cannot
+# slip past the budget with an assumed price.
+# https://developers.google.com/youtube/v3/determine_quota_cost
+QUOTA_UNITS = {
+    "search.list": 100,
+    "videos.list": 1,
+    "channels.list": 1,
+    "playlistItems.list": 1,
+}
+
+# 3 search.list (300) + channel walks + videos.list stays near ~350 today.
+# 500 leaves a little headroom and still cannot eat the trend job's budget.
+COMPETITOR_QUOTA_BUDGET = 500
+
+
+class QuotaBudget:
+    """Hard unit ceiling for YouTube Data API calls made by research.
+
+    allow() refuses a call that would pass the ceiling but does not freeze
+    later cheaper calls. stop() freezes everything (quotaExceeded from Google,
+    or an uncosted method). Charge happens before the HTTP call because Google
+    bills the attempt.
+    """
+
+    def __init__(self, budget):
+        self.budget = max(0, int(budget))
+        self.used = 0
+        self.calls = []
+        self.skipped = []
+        self.stopped = False
+        self.stop_reason = None
+
+    def allow(self, method):
+        if self.stopped:
+            return False
+        cost = QUOTA_UNITS.get(method)
+        if cost is None:
+            self.stop(f"refusing uncosted YouTube method {method}")
+            return False
+        if self.used + cost > self.budget:
+            self.skipped.append({"method": method, "units": cost})
+            return False
+        return True
+
+    def charge(self, method):
+        cost = QUOTA_UNITS[method]
+        self.used += cost
+        self.calls.append({"method": method, "units": cost})
+
+    def stop(self, reason):
+        self.stopped = True
+        if not self.stop_reason:
+            self.stop_reason = reason
+
+    @property
+    def note(self):
+        if self.stop_reason:
+            return self.stop_reason
+        if self.skipped:
+            parts = [f"{s['method']} ({s['units']})" for s in self.skipped]
+            return f"budget {self.budget} skipped {', '.join(parts)}; used {self.used}"
+        return None
+
+
+def quota_exceeded(exc):
+    """True only for YouTube quota / rate-limit failures, not every HTTP 403."""
+    status = getattr(getattr(exc, "resp", None), "status", None)
+    text = str(exc).lower().replace(" ", "")
+    if "quotaexceeded" in text or "dailylimitexceeded" in text or "quota" in text:
+        return True
+    return status == 429 and "ratelimit" in text
+
+
+def yt_execute(request, method, budget=None):
+    """Execute one Data API request. None means skipped or quota-exhausted.
+
+    With budget=None (existing competitor_research callers and unit tests)
+    errors propagate unchanged.
+    """
+    if budget is not None and not budget.allow(method):
+        return None
+    if budget is not None:
+        budget.charge(method)
+    try:
+        return request.execute()
+    except Exception as exc:
+        if budget is not None and quota_exceeded(exc):
+            budget.stop("youtube quotaExceeded")
+            return None
+        raise
 
 
 # ------------------------------------------------------------------ helpers
@@ -131,8 +225,13 @@ def get_client():
         return None, f"oauth unavailable ({type(e).__name__})"
 
 
-def channel_uploads(yt, channel_id, since, limit):
-    ch = yt.channels().list(part="contentDetails,snippet,statistics", id=channel_id).execute().get("items") or []
+def channel_uploads(yt, channel_id, since, limit, budget=None):
+    resp = yt_execute(
+        yt.channels().list(part="contentDetails,snippet,statistics", id=channel_id),
+        "channels.list", budget)
+    if resp is None:
+        return None, []
+    ch = resp.get("items") or []
     if not ch:
         return None, []
     info = {"id": channel_id, "title": ch[0]["snippet"]["title"],
@@ -140,8 +239,12 @@ def channel_uploads(yt, channel_id, since, limit):
     uploads = ch[0]["contentDetails"]["relatedPlaylists"]["uploads"]
     ids, token = [], None
     while len(ids) < limit:
-        resp = yt.playlistItems().list(part="contentDetails", playlistId=uploads, maxResults=50,
-                                       pageToken=token).execute()
+        resp = yt_execute(
+            yt.playlistItems().list(part="contentDetails", playlistId=uploads, maxResults=50,
+                                    pageToken=token),
+            "playlistItems.list", budget)
+        if resp is None:
+            break
         for it in resp.get("items", []):
             pub = it["contentDetails"].get("videoPublishedAt", "")
             if pub and pub < since:
@@ -155,32 +258,51 @@ def channel_uploads(yt, channel_id, since, limit):
     return info, ids
 
 
-def search_ids(yt, q, since, rc):
-    resp = yt.search().list(part="id", q=q, type="video", order="viewCount", publishedAfter=since,
-                            regionCode=rc["region_code"], relevanceLanguage=rc["relevance_language"],
-                            videoDuration="short", maxResults=25).execute()
+def search_ids(yt, q, since, rc, budget=None, max_results=25, order="viewCount", video_duration="short"):
+    kwargs = dict(part="id", q=q, type="video", order=order, publishedAfter=since,
+                  regionCode=rc["region_code"], relevanceLanguage=rc["relevance_language"],
+                  maxResults=max_results)
+    if video_duration:
+        kwargs["videoDuration"] = video_duration
+    resp = yt_execute(yt.search().list(**kwargs), "search.list", budget)
+    if not resp:
+        return []
     return [i["id"]["videoId"] for i in resp.get("items", []) if i.get("id", {}).get("videoId")]
 
 
-def video_details(yt, ids):
+def raw_videos(yt, ids, budget=None):
+    """videos.list batches. Stops early when the quota budget refuses a batch."""
     out = []
     for i in range(0, len(ids), 50):
-        resp = yt.videos().list(part="snippet,statistics,contentDetails", id=",".join(ids[i:i + 50])).execute()
-        for v in resp.get("items", []):
-            sn, st = v["snippet"], v.get("statistics", {})
-            pub = datetime.strptime(sn["publishedAt"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-            age_days = max(0.5, (datetime.now(timezone.utc) - pub).total_seconds() / 86400)
-            views = int(st.get("viewCount", 0) or 0)
-            out.append({
-                "id": v["id"], "channel_id": sn["channelId"], "channel": sn.get("channelTitle", ""),
-                "title": sn.get("title", ""), "tags": (sn.get("tags") or [])[:12],
-                "published_ist": pub.astimezone(IST).strftime("%Y-%m-%d %H:%M"),
-                "hour_ist": pub.astimezone(IST).hour, "weekday": pub.astimezone(IST).strftime("%a"),
-                "duration_s": iso_duration_seconds(v.get("contentDetails", {}).get("duration")),
-                "views": views, "likes": int(st.get("likeCount", 0) or 0),
-                "comments": int(st.get("commentCount", 0) or 0),
-                "views_per_day": round(views / age_days, 1),
-            })
+        chunk = [x for x in ids[i:i + 50] if x]
+        if not chunk:
+            continue
+        resp = yt_execute(
+            yt.videos().list(part="snippet,statistics,contentDetails", id=",".join(chunk)),
+            "videos.list", budget)
+        if resp is None:
+            break
+        out.extend(resp.get("items") or [])
+    return out
+
+
+def video_details(yt, ids, budget=None):
+    out = []
+    for v in raw_videos(yt, ids, budget):
+        sn, st = v["snippet"], v.get("statistics", {})
+        pub = datetime.strptime(sn["publishedAt"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        age_days = max(0.5, (datetime.now(timezone.utc) - pub).total_seconds() / 86400)
+        views = int(st.get("viewCount", 0) or 0)
+        out.append({
+            "id": v["id"], "channel_id": sn["channelId"], "channel": sn.get("channelTitle", ""),
+            "title": sn.get("title", ""), "tags": (sn.get("tags") or [])[:12],
+            "published_ist": pub.astimezone(IST).strftime("%Y-%m-%d %H:%M"),
+            "hour_ist": pub.astimezone(IST).hour, "weekday": pub.astimezone(IST).strftime("%a"),
+            "duration_s": iso_duration_seconds(v.get("contentDetails", {}).get("duration")),
+            "views": views, "likes": int(st.get("likeCount", 0) or 0),
+            "comments": int(st.get("commentCount", 0) or 0),
+            "views_per_day": round(views / age_days, 1),
+        })
     return out
 
 
@@ -254,12 +376,12 @@ def auto_observations(videos):
     return rows
 
 
-def own_performance(yt, channel_id):
+def own_performance(yt, channel_id, budget=None):
     """Score OUR uploads per topic_key (ledger rows written by publish.py)."""
     ledger = [e for e in _read(LEDGER, []) if isinstance(e, dict) and e.get("video_id") and e.get("topic_key")]
     if not ledger:
         return {}
-    vids = {v["id"]: v for v in video_details(yt, [e["video_id"] for e in ledger][-200:])}
+    vids = {v["id"]: v for v in video_details(yt, [e["video_id"] for e in ledger][-200:], budget)}
     rows = [(e["topic_key"], vids[e["video_id"]]["views_per_day"]) for e in ledger if e["video_id"] in vids]
     if not rows:
         return {}
@@ -327,35 +449,44 @@ def main():
     sources = _read(DATA / "research_sources.json", {})
     ch_ids = [c.get("channel_id") for c in sources.get("competitors", []) if c.get("channel_id")]
     ch_ids += [c for c in rc["extra_channel_ids"] if c not in ch_ids]
+    budget = QuotaBudget(COMPETITOR_QUOTA_BUDGET)
 
     from googleapiclient.errors import HttpError
     ids, channels, errors = [], [], []
     for cid in ch_ids:
         try:
-            info, vids = channel_uploads(yt, cid, since, rc["max_videos_per_channel"])
+            info, vids = channel_uploads(yt, cid, since, rc["max_videos_per_channel"], budget)
             if info:
                 channels.append(info)
                 ids += vids
         except HttpError as e:
             errors.append(f"channel {cid}: HTTP {e.resp.status}")
+        if budget.stopped:
+            break
     for q in rc["search_keywords"]:
+        if budget.stopped:
+            break
         try:
-            ids += search_ids(yt, q, since, rc)
+            ids += search_ids(yt, q, since, rc, budget)
         except HttpError as e:
             errors.append(f"search '{q}': HTTP {e.resp.status}")
     own_id = (os.environ.get("EXPECTED_CHANNEL_ID") or "").strip()
     ids = list(dict.fromkeys(ids))
-    videos = add_performance_index([v for v in video_details(yt, ids) if v["channel_id"] != own_id]) if ids else []
+    videos = add_performance_index(
+        [v for v in video_details(yt, ids, budget) if v["channel_id"] != own_id]) if ids else []
     analysis = analyse(videos)
     own = {}
-    if rc["include_own_channel"]:
+    if rc["include_own_channel"] and not budget.stopped:
         try:
-            own = own_performance(yt, own_id)
+            own = own_performance(yt, own_id, budget)
         except HttpError as e:
             errors.append(f"own channel: HTTP {e.resp.status}")
+    if budget.note:
+        errors.append(budget.note)
 
     print(f"[research] via {how}: {len(channels)} channels, {len(videos)} videos analysed, "
-          f"{len(own)} own topics scored" + (f"; errors: {errors}" if errors else ""))
+          f"{len(own)} own topics scored, quota {budget.used}/{budget.budget}"
+          + (f"; errors: {errors}" if errors else ""))
     if analysis:
         print(f"[research] winning keywords: {analysis['winning_keywords'][:8]}")
         print(f"[research] best upload hours IST: {analysis['best_upload_hours_ist']}; "
