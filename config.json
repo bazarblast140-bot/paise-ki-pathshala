@@ -99,5 +99,20 @@
         "thumbnail": true
       }
     }
+  },
+  "research": {
+    "_note": "competitor_research.py (optional, read-only). Needs secret YT_DATA_API_KEY, or falls back to the channel OAuth token. Missing creds = step skipped, pipeline unaffected.",
+    "enabled": true,
+    "lookback_days": 30,
+    "max_videos_per_channel": 25,
+    "search_keywords": [
+      "stock market hindi shorts",
+      "option trading hindi",
+      "candlestick pattern hindi"
+    ],
+    "max_search_keywords": 3,
+    "region_code": "IN",
+    "relevance_language": "hi",
+    "include_own_channel": true
   }
 }
