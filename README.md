@@ -193,6 +193,7 @@ Even then it uploads **private + only if verdict READY** — never instant-publi
 
 | File | Does |
 |---|---|
+| `health_check.py` | pre-slot read-only check (token, credits, IG expiry); opens/closes `health-alert` |
 | `check_setup.py` | preflight: keys, ffmpeg, deps, config TODOs — fails before spending credits |
 | `sketch.py` | hand-drawn (Excalidraw-style) marker highlights, rough strokes, xkcd charts |
 | `assets_pexels.py` | real stock footage per shot, cached in `assets/cache/` |
@@ -250,5 +251,30 @@ Reel pehle se nahi daali.
   design 3:4 box me, peeche blur. YouTube thumbnail nahi badalta. Band karna ho:
   `config.json` → `"instagram": {"grid_safe_cover": false}`.
 - Token: `IG_ACCESS_TOKEN` ~60 din ka hai (24-Sep set → ~23-Nov expire). Refresh manual.
+  Health check **14 din ya usse kam** pe warning issue kholta hai — expiry debug_token se aati hai, date guess nahi hoti.
 
 Monetization thresholds + checklist: `MONETIZATION.md`.
+
+## Health check (slot se ~90 min pehle)
+
+Workflow: **Health check** (`.github/workflows/health-check.yml`). Actions cron UTC hai; IST = UTC+5:30. Lead **90 min** hai (60–90 ki early edge) taaki runner late chale to bhi window ke andar rahe:
+
+| Check (IST) | UTC cron | Slot |
+|---|---|---|
+| 07:00 | `30 1 * * *` | 08:30 |
+| 14:30 | `0 9 * * *` | 16:00 |
+| 19:30 | `0 14 * * *` | 21:00 |
+
+`workflow_dispatch` bhi hai (slot = auto / 08:30 / 16:00 / 21:00). Sirf read: YouTube **refresh** (access token discard, koi Data API call nahi), DeepSeek `GET /user/balance`, Kimi balance **agar key set ho**, Anthropic `GET /v1/models` **agar key set ho**, ElevenLabs `GET /v1/user/subscription`, Instagram `debug_token` (warna ek `fields=id` read). Koi upload / publish / Reel post nahi.
+
+| Check | Problem kab |
+|---|---|
+| YouTube token | missing `YT_FIN_*` ya `invalid_grant` / `invalid_client` → slot at risk |
+| DeepSeek | selected provider. Balance 0 / `is_available=false` → slot at risk. `< 1` currency unit → warning |
+| Kimi | sirf jab `KIMI_API_KEY` set ho. Suspended ya balance 0 → issue. Video tab tak nahi rukta jab tak ye selected provider na ho |
+| Anthropic | sirf jab `ANTHROPIC_API_KEY` set ho. Key invalid ya response me "credit balance too low" → issue. **Balance number measurable nahi** (standard key pe balance endpoint nahi; billed call nahi karte, number guess nahi) |
+| ElevenLabs | key missing → warning (Edge fallback, video ban sakta hai). Invalid key ya 0 characters → slot at risk. `< 3000` characters → warning. Fields missing hon to 0 guess nahi karte |
+| Instagram | missing / invalid / expired token → Reel at risk. **≤ 14 din** → warning. `debug_token` na chale aur cheap read chal jaye to expiry **not measurable** |
+| YouTube quota | hamesha **not measurable**. Refresh response me remainder nahi aata, Cloud Monitoring credential nahi hai, Data API probe nahi chalate |
+
+Koi naya secret nahi chahiye. Optional backup (`KIMI_API_KEY`, `ANTHROPIC_API_KEY`) unset ho to skip — ye missing nahi maana jata. Issue tab khulta hai jab koi check `fail` ya `warn` ho: label `health-alert` (na ho to ban jati hai), ek hi open issue, har run usi ko update karti hai. Sab clear ho to auto-close. `GITHUB_TOKEN` + `issues: write`. Values log ya issue me print nahi hoti.
