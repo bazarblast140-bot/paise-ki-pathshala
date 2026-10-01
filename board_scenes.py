@@ -328,27 +328,53 @@ def _draw_finance_visual(img, kind, key, beat):
     box = (X0 + 55, Y0 + 300, X1 - 55, Y1 - 75)
     title = _ascii_title(key)
     if kind == "opt":
-        # Delta/Gamma family: sensitivity curve + causal chain.
+        # Option topics must not share one generic payoff chart. Each spread
+        # gets its own payoff geometry so adjacent Bull/Bear videos cannot
+        # accidentally show the same curve.
         xs = list(range(11))
-        if "gamma" in key.lower():
+        low = key.lower()
+        if "gamma" in low:
             ys = [0.12, 0.16, 0.22, 0.32, 0.48, 0.70, 0.88, 0.70, 0.48, 0.32, 0.22]
             ax = series_panel(img, box, [(ys, YELLOW, 9)], lo=0, hi=1, pad=(70, 60, 70, 80))
             label(img, X0 + 85, Y0 + 325, "GAMMA = DELTA SENSITIVITY", INK, 34)
-            label(img, X0 + 85, Y1 - 115, "SPOT MOVE", MUTED, 30)
             ring(img, ax.x(5), ax.y(ys[5]), 42, 42, GREEN)
-        elif "delta" in key.lower() or key == "atm_delta":
+        elif "delta" in low or key == "atm_delta":
             ys = [0.18, 0.25, 0.34, 0.43, 0.50, 0.57, 0.66, 0.74, 0.82, 0.88, 0.93]
             ax = series_panel(img, box, [(ys, GREEN, 9)], lo=0, hi=1, pad=(70, 60, 70, 80))
             label(img, X0 + 85, Y0 + 325, "DELTA = PREMIUM SENSITIVITY", INK, 34)
             ring(img, ax.x(5), ax.y(ys[5]), 42, 42, YELLOW)
+        elif "bull_call" in low:
+            # Bull call: long lower-strike call + short higher-strike call.
+            y = [-3,-3,-3,-3,-2,-1,1,3,4,4,4]
+            payoff(img, box, xs, y, strike=5)
+            label(img, X0 + 85, Y0 + 325, "BULL CALL: LIMITED UPSIDE", INK, 34)
+            label(img, X0 + 85, Y0 + 650, "BUY LOWER CALL  ->  SELL HIGHER CALL", GREEN, 29)
+        elif "bear_put" in low:
+            # Bear put: long higher-strike put + short lower-strike put.
+            y = [4,4,4,3,2,1,-1,-3,-3,-3,-3]
+            payoff(img, box, xs, y, strike=5)
+            label(img, X0 + 85, Y0 + 325, "BEAR PUT: LIMITED DOWNSIDE RISK", INK, 34)
+            label(img, X0 + 85, Y0 + 650, "BUY HIGHER PUT  ->  SELL LOWER PUT", RED, 29)
+        elif "bear_call" in low:
+            # Bear call: short lower-strike call + long higher-strike call.
+            y = [2,2,2,2,2,1,-1,-2,-2,-2,-2]
+            payoff(img, box, xs, y, strike=5)
+            label(img, X0 + 85, Y0 + 325, "BEAR CALL: CREDIT + DEFINED RISK", INK, 34)
+            label(img, X0 + 85, Y0 + 650, "SELL LOWER CALL  ->  BUY HIGHER CALL", RED, 29)
         else:
-            payoff(img, box, list(range(11)), [-4,-3,-2,-1,0,1,2,3,4,5,6], strike=5)
+            payoff(img, box, xs, [-4,-3,-2,-1,0,1,2,3,4,5,6], strike=5)
             label(img, X0 + 85, Y0 + 325, "PAYOFF / RISK MAP", INK, 34)
         if beat == "matlab":
-            arrow(img, (X0 + 170, Y0 + 700), (X1 - 170, Y0 + 700), GREEN, 12)
-            label(img, X0 + 85, Y0 + 640, "SPOT MOVE  ->  DELTA CHANGE  ->  PREMIUM IMPACT", GREEN, 30)
+            if "bull_call" in low:
+                label(img, X0 + 85, Y0 + 705, "PROFIT CAPS ABOVE HIGH STRIKE", GREEN, 27)
+            elif "bear_put" in low:
+                label(img, X0 + 85, Y0 + 705, "PROFIT CAPS BELOW LOW STRIKE", RED, 27)
+            elif "bear_call" in low:
+                label(img, X0 + 85, Y0 + 705, "LOSS CAPS ABOVE HIGH STRIKE", RED, 27)
+            else:
+                arrow(img, (X0 + 170, Y0 + 700), (X1 - 170, Y0 + 700), GREEN, 12)
         elif beat == "karein":
-            label(img, X0 + 85, Y0 + 650, "CHECK EXPIRY / IV / DELTA / MAX RISK", YELLOW, 30)
+            label(img, X0 + 85, Y0 + 650, "CHECK EXPIRY / IV / MAX RISK", YELLOW, 30)
         return
     if kind in {"fund", "stock", "business"}:
         if kind == "business":
