@@ -182,3 +182,5 @@ jobs:
 # cancel stale production runs during recovery
 
 # recovery-v22: narration must teach in one continuous setup->recognition->meaning->risk sequence
+
+# recovery-v23: manual QA rerun requested after deleting prior test video
