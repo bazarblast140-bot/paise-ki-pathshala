@@ -264,7 +264,8 @@ CONTINUITY RULES:
 - If category is "REAL DATA": hook = ONLY the question (year, ₹1 लाख, name), max 10 words —
   NEVER the answer. pehchan = the two prices with years. matlab = the multiple (गुना) once.
   karein = the final value once, then the balance line from facts. Say the final value only in
-  karein, never earlier. Total 80-100 words. Write "लगाते" (not "लगते")."""
+  karein, never earlier. Keep the same 160-180 total-word requirement and the same beat ranges;
+  use the extra words for concrete explanation, not filler. Write "लगाते" (not "लगते")."""
 
 
 def narration(topic, c):
@@ -331,6 +332,9 @@ def narration(topic, c):
         ),
     }
     n = {"title": f"{topic['thumb'][0]} {topic['thumb'][1]}", "beats": beats}
+    fallback_fails = check_narration(n, topic)
+    if fallback_fails:
+        die("fallback narration failed the same universal teaching gate: " + "; ".join(fallback_fails))
     cache.write_text(json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
     return n, "fallback"
 
