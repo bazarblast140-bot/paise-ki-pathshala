@@ -50,7 +50,9 @@ jobs:
           #     run_pipeline.py prints this marker only after every gate passed,
           #     the verdict was READY and IG_CROSSPOST was on (public runs only).
           #     Any other failure (QA gate, NEEDS FIX, render error) is skipped.
-          #  publish_instagram.py additionally refuses a non-READY report.md.
+          #  publish_instagram.py additionally refuses unless report.md,
+          #  verify_meta.json, and self_review.json agree the verdict is READY.
+          #  Those files are in the failed run's artifact. The gate is unchanged.
           if [ -n "$(find run -type f -name ig_reel.txt -size +0 -print -quit)" ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "Failed run already published a Reel (ig_reel.txt present); not posting again."
@@ -82,6 +84,7 @@ jobs:
           IG_API_VERSION: v23.0
           MEDIA_REPO: ${{ vars.MEDIA_REPO || 'bazarblast140-bot/HEYGEN--INSTAGRAM-' }}
           MEDIA_REPO_TOKEN: ${{ secrets.MEDIA_REPO_TOKEN || secrets.GITHUB_TOKEN }}
+          ACTIONS_TOKEN_FOR_COMPARE: ${{ secrets.GITHUB_TOKEN }}
         run: python publish_instagram.py
 
       - name: Upload verified Instagram ID

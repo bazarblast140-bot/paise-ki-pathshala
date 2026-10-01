@@ -34,13 +34,29 @@ class WorkflowTriggerTests(unittest.TestCase):
         self.assertIn("workflow_dispatch", on)
         self.assertNotIn("workflow_run", on)
 
-    def test_slot_crons_are_unchanged(self):
+    def test_slot_crons_build_ahead_on_odd_minutes(self):
+        import slot_guard
         publish = (WF / "paise-ki-pathshala.yml").read_text(encoding="utf-8")
         watch = (WF / "slot-watch.yml").read_text(encoding="utf-8")
-        for cron in ('"0 3 * * *"', '"30 10 * * *"', '"30 15 * * *"'):
-            self.assertIn(cron, publish)
-        for cron in ('"15 3 * * *"', '"45 10 * * *"', '"45 15 * * *"'):
-            self.assertIn(cron, watch)
+        health = (WF / "health-check.yml").read_text(encoding="utf-8")
+        for cron, _slot in slot_guard.PUBLISH_CRONS:
+            self.assertIn(f'"{cron}"', publish)
+            self.assertNotIn(int(cron.split()[0]), (0, 30))
+        for cron, _slot in slot_guard.WATCH_CRONS:
+            self.assertIn(f'"{cron}"', watch)
+            self.assertNotIn(int(cron.split()[0]), (0, 30))
+        for cron, _check, _slot, _lead in slot_guard.HEALTH_SCHEDULE:
+            self.assertIn(f'"{cron}"', health)
+            self.assertNotIn(int(cron.split()[0]), (0, 30))
+        for old in ('"0 3 * * *"', '"30 10 * * *"', '"30 15 * * *"'):
+            self.assertNotIn(old, publish)
+        self.assertIn("group: paise-ki-pathshala-publish", publish)
+        self.assertIn("cancel-in-progress: false", publish)
+        self.assertNotIn("cancel-in-progress: true", publish)
+        self.assertIn("run/verify_meta.json", publish)
+        self.assertIn("run/self_review.json", publish)
+        self.assertNotIn("privacy: now", watch)
+        self.assertIn("privacy: public", watch)
 
     def test_no_one_shot_patch_workflows_left(self):
         for name in ("fix-finance-card", "fix-topic-bank-once", "fix-tts-retry",

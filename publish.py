@@ -330,14 +330,20 @@ def main():
     publish_at = None
     slot = os.environ.get("PUBLISH_SLOT_IST", "").strip()
     if visibility == "public" and slot:
-        from datetime import datetime, timedelta, timezone
-        ist = timezone(timedelta(hours=5, minutes=30))
-        now = datetime.now(ist)
-        hh, mm = (int(x) for x in slot.split(":"))
-        when = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
-        if when < now + timedelta(minutes=20):
-            when += timedelta(days=1)
-        publish_at = when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        from datetime import datetime, timezone
+        from slot_guard import UPLOAD_BUFFER, scheduled_publish_at
+        forced = os.environ.get("PUBLISH_AT_UTC", "").strip()
+        date_ist = os.environ.get("PUBLISH_DATE_IST", "").strip() or None
+        publish_at = forced or scheduled_publish_at(slot, date_ist=date_ist)
+        # A missed slot stays missed. Adding a day used to park today's video
+        # on tomorrow's clock time and leave the real slot empty.
+        if not publish_at:
+            die("Slot publish time is not far enough ahead. "
+                "Refusing to move this video onto the next day.")
+        when = datetime.strptime(publish_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        if when < datetime.now(timezone.utc) + UPLOAD_BUFFER:
+            die("Slot publish time is not far enough ahead. "
+                "Refusing to move this video onto the next day.")
         visibility = "private"
     visibility, publish_at = publish_guard.clamp_visibility(visibility, publish_at)
 

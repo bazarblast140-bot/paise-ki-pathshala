@@ -9,7 +9,9 @@ Ledger: data/published.json — publish.py har upload ke baad likhta hai.
 Sirf stdlib + requests (workflow halka rahe).
 """
 import json, os, pathlib, sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+
+import slot_guard
 
 # Windows console cp1252 par emoji se crash karta hai (common.py me bhi yahi guard hai)
 for _stream in (sys.stdout, sys.stderr):
@@ -20,8 +22,8 @@ for _stream in (sys.stdout, sys.stderr):
 
 ROOT = pathlib.Path(__file__).parent
 LEDGER = ROOT / "data" / "published.json"
-IST = timezone(timedelta(hours=5, minutes=30))
-SLOTS = ["08:30", "16:00", "21:00"]
+IST = slot_guard.IST
+SLOTS = list(slot_guard.SLOTS)
 
 
 def entries():
@@ -59,6 +61,13 @@ def gha_output(key, value):
             print(f"{key}={value}", file=f)
 
 
+def _flags(missing, fill=False):
+    gha_output("missing", "true" if missing else "false")
+    # fill is the next unfilled future slot, scheduled via publishAt.
+    # A missed slot does not become an extra instant-public video.
+    gha_output("fill", "true" if fill else "false")
+
+
 def send(text):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat = os.environ.get("TELEGRAM_CHAT_ID")
@@ -77,13 +86,14 @@ def main():
     date, slot = target(now)
     if not LEDGER.exists():
         print(f"[skip] {LEDGER} abhi nahi hai — pehla upload banate hi ban jayega.")
+        _flags(False)
         return
     ents = entries()
     start = min((e.get("date_ist", "") for e in ents), default="")
     if start and date < start:
         # ledger shuru hone se pehle ka din — us waqt ka record hai hi nahi, jhoothi alert mat do
         print(f"[skip] {date} ledger se purana hai (ledger {start} se).")
-        gha_output("missing", "false")
+        _flags(False)
         return
     hit = next((e for e in ents if e.get("date_ist") == date and e.get("slot") == slot), None)
     if hit and not hit.get("video_id"):
@@ -102,7 +112,7 @@ def main():
                     "(Chart Board, verify, or the upload step). "
                     "A healthy YouTube token check means this is not a refresh-token rejection.\n")
         print(msg)
-        gha_output("missing", "false")
+        _flags(False)
         try:
             send(msg)
         except Exception as e:  # noqa: BLE001
@@ -110,13 +120,17 @@ def main():
         return
     if hit:
         print(f"[OK] {date} {slot} IST — https://youtu.be/{hit['video_id']}")
-        gha_output("missing", "false")
+        _flags(False)
         return
+    nxt = slot_guard.next_unfilled(now, ents)
     msg = (f"⚠️ Paise Ki Pathshala\n{date} ka {slot} IST slot KHALI gaya — koi video upload nahi hua.\n\n"
            f"Agla slot bharne ke liye:\ngh workflow run \"Paise Ki Pathshala\" "
            f"-R bazarblast140-bot/paise-ki-pathshala -f format=short -f privacy=public")
+    if nxt:
+        msg += (f"\n\nNext unfilled slot still ahead: {nxt['date_ist']} {nxt['slot']} IST "
+                f"(publishAt {nxt['publish_at']}). No extra public post.")
     print(msg)
-    gha_output("missing", "true")       # fill job agla khali slot bhar dega
+    _flags(True, fill=bool(nxt))
     try:
         send(msg)
     except Exception as e:  # noqa: BLE001 — khabar na jaaye to bhi run fail na ho

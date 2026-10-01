@@ -67,11 +67,11 @@ def assert_clean(testcase, text):
 
 
 class ScheduleTests(unittest.TestCase):
-    def test_each_cron_is_90_minutes_before_the_slot_in_utc(self):
+    def test_each_cron_is_before_the_slot_on_an_odd_minute(self):
         self.assertEqual([row[2] for row in H.SCHEDULE], ["08:30", "16:00", "21:00"])
         for cron, check_ist, slot, lead in H.SCHEDULE:
-            self.assertEqual(lead, 90)
-            self.assertTrue(60 <= lead <= 90)
+            self.assertNotIn(int(cron.split()[0]), (0, 30))
+            self.assertGreater(lead, 60)
             ch, cm = map(int, check_ist.split(":"))
             sh, sm = map(int, slot.split(":"))
             self.assertEqual((ch * 60 + cm + lead) % (24 * 60), sh * 60 + sm)
@@ -79,13 +79,14 @@ class ScheduleTests(unittest.TestCase):
             self.assertEqual(cron, f"{utc_min % 60} {utc_min // 60} * * *")
 
     def test_cron_that_fired_wins_over_the_clock(self):
-        env = {"HEALTH_CRON": "30 1 * * *"}
+        cron_0830 = H.schedule_row("08:30")[0]
+        env = {"HEALTH_CRON": cron_0830}
         slot, cron = H.resolve_slot(env, datetime(2026, 10, 1, 18, 0, tzinfo=IST))
-        self.assertEqual((slot, cron), ("08:30", "30 1 * * *"))
+        self.assertEqual((slot, cron), ("08:30", cron_0830))
 
     def test_explicit_slot_wins(self):
-        slot, cron = H.resolve_slot({"HEALTH_SLOT": "21:00", "HEALTH_CRON": "30 1 * * *"}, NOW)
-        self.assertEqual((slot, cron), ("21:00", "0 14 * * *"))
+        slot, cron = H.resolve_slot({"HEALTH_SLOT": "21:00", "HEALTH_CRON": H.schedule_row("08:30")[0]}, NOW)
+        self.assertEqual((slot, cron), ("21:00", H.schedule_row("21:00")[0]))
 
     def test_clock_picks_the_next_slot(self):
         self.assertEqual(H.resolve_slot({}, datetime(2026, 10, 1, 10, 0, tzinfo=IST))[0], "16:00")
@@ -537,11 +538,12 @@ def _broken_checks():
 class ReportTests(unittest.TestCase):
     def test_alert_body_names_the_slot_in_hinglish_and_english(self):
         title, body = H.render_issue(_broken_checks(), "16:00", NOW, [DS_KEY, YT_REFRESH])
+        cron, check_ist, _slot, lead = H.schedule_row("16:00")
         self.assertIn("16:00 IST slot at risk", title)
         self.assertIn("YouTube token", title)
-        self.assertIn("14:30 IST", body)
-        self.assertIn("90 min pehle", body)
-        self.assertIn("`0 9 * * *`", body)
+        self.assertIn(f"{check_ist} IST", body)
+        self.assertIn(f"{lead} min pehle", body)
+        self.assertIn(f"`{cron}`", body)
         self.assertIn("**Video / YouTube:** AT RISK", body)
         self.assertIn("invalid_grant", body)
         self.assertIn("DeepSeek balance khali", body)

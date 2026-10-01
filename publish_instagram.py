@@ -19,11 +19,14 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 from common import RUN, cfg, ok, video_format
@@ -36,7 +39,7 @@ IG_VERSION = os.environ.get("IG_API_VERSION", "v23.0")
 
 
 def die(msg: str) -> None:
-    print(f"[ig] FAIL: {msg}", file=sys.stderr)
+    print(f"[ig] FAIL: {redact_text(msg)}", file=sys.stderr)
     sys.exit(1)
 
 
@@ -66,62 +69,311 @@ def http_json(url: str, *, method: str = "GET", data: bytes | None = None,
         raise RuntimeError(f"HTTP {e.code} {url}: {err_body}") from e
 
 
-import urllib.parse  # after http_json uses it
+class GitHubHttpError(RuntimeError):
+    def __init__(self, code: int, url: str, body: str = ""):
+        self.code = int(code)
+        self.url = url
+        self.body = body or ""
+        super().__init__(f"HTTP {self.code} {url}: {self.body[:400]}")
+
+
+# uploads.github.com 404s once in a while, and it also 404s (not 403) when the
+# token cannot write. Re-resolve the release and try again before blaming it.
+UPLOAD_ATTEMPTS = 3
+
+
+def redact_text(text: str, extra: str = "") -> str:
+    """Drop credential material. Never print MEDIA_REPO_TOKEN or a Bearer value."""
+    out = str(text or "")
+    secrets = [extra, env("MEDIA_REPO_TOKEN"), env("GITHUB_TOKEN"), env("ACTIONS_TOKEN_FOR_COMPARE"), env("IG_ACCESS_TOKEN")]
+    for secret in secrets:
+        if secret and len(secret) >= 8:
+            out = out.replace(secret, "***")
+    out = re.sub(r"(?i)(Bearer\s+)\S+", r"\1***", out)
+    out = re.sub(r"(?i)(token\s+)\S+", r"\1***", out)
+    return out
+
+
+def media_tag(now=None) -> str:
+    """Daily release tag. UTC on purpose — runner local time is not IST.
+
+    A 21:00 IST run that GitHub starts after midnight IST is still the previous
+    UTC date. The tag is whatever UTC day it is at upload time, then looked up
+    again on every attempt.
+    """
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return "ig-reel-" + now.astimezone(timezone.utc).strftime("%Y-%m-%d")
+
+
+def hosting_credentials() -> tuple[str, str, str]:
+    """(repo, token, source name). Source is a label, never the token value.
+
+    GET and upload both use this same token. A public release GET succeeds
+    even when the token cannot write; the upload is what needs contents:write.
+    """
+    media_repo = env("MEDIA_REPO")
+    media_token = env("MEDIA_REPO_TOKEN")
+    gh_token = env("GITHUB_TOKEN") or env("ACTIONS_TOKEN_FOR_COMPARE")
+    if media_repo:
+        if not media_token and not gh_token:
+            die("Need GitHub media hosting credentials")
+        token = media_token or gh_token
+        if media_token and gh_token and media_token == gh_token:
+            source = "GITHUB_TOKEN"
+        elif media_token:
+            source = "MEDIA_REPO_TOKEN"
+        else:
+            source = "GITHUB_TOKEN"
+        if source == "GITHUB_TOKEN":
+            print(
+                f"[ig] WARN: media upload is using the calling repo GITHUB_TOKEN "
+                f"for {media_repo}. That token can GET a public release and still "
+                f"be refused on upload (HTTP 404). Set MEDIA_REPO_TOKEN to a PAT "
+                f"with contents:write on {media_repo}. The token value is not logged."
+            )
+        return media_repo, token, source
+    repo = env("GITHUB_REPOSITORY")
+    token = gh_token or media_token
+    if not repo or not token:
+        die("Need GitHub media hosting credentials")
+    return repo, token, "GITHUB_TOKEN" if token == gh_token and gh_token else "MEDIA_REPO_TOKEN"
+
+
+def _github_request(url: str, *, method: str = "GET", data: bytes | None = None,
+                    headers: dict | None = None, timeout: int = 120):
+    req = urllib.request.Request(url, data=data, headers=headers or {}, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as res:
+            return res.status, res.read()
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        raise GitHubHttpError(e.code, url, body[:500]) from e
+
+
+def _gh_headers(token: str, *, content_type: str | None = None, content_length: int | None = None) -> dict:
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "paise-ki-pathshala-ig-crosspost",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if content_type:
+        headers["Content-Type"] = content_type
+    if content_length is not None:
+        headers["Content-Length"] = str(content_length)
+    return headers
+
+
+def _gh_json(method: str, url: str, token: str, data: bytes | None = None,
+             content_type: str | None = None) -> dict:
+    length = len(data) if data is not None else None
+    _status, raw = _github_request(
+        url, method=method, data=data,
+        headers=_gh_headers(token, content_type=content_type, content_length=length),
+    )
+    text = raw.decode() if isinstance(raw, (bytes, bytearray)) else (raw or "")
+    if not text:
+        return {}
+    return json.loads(text)
+
+
+def _upload_backoff(attempt: int) -> float:
+    raw = min(8.0, 2.0 * (2 ** attempt))
+    return raw / 2.0 + random.uniform(0, raw / 2.0)
+
+
+def ensure_release(repo: str, token: str, tag: str) -> dict:
+    """Look the release up by tag now. Create it if that GET is a real 404."""
+    tag_url = f"{API}/repos/{repo}/releases/tags/{urllib.parse.quote(tag)}"
+    try:
+        return _gh_json("GET", tag_url, token)
+    except GitHubHttpError as e:
+        if e.code != 404:
+            raise
+        print(f"[ig] release {tag} not found; creating it")
+        try:
+            return _gh_json(
+                "POST", f"{API}/repos/{repo}/releases", token,
+                data=json.dumps({
+                    "tag_name": tag, "name": tag,
+                    "body": "Paise Ki Pathshala short — IG Reel media",
+                }).encode(),
+                content_type="application/json",
+            )
+        except GitHubHttpError as created:
+            if created.code not in (409, 422):
+                raise
+            return _gh_json("GET", tag_url, token)
+
+
+def _upload_url(repo: str, release: dict, name: str) -> str:
+    template = str(release.get("upload_url") or "")
+    base = template.split("{", 1)[0] if template else ""
+    if not base:
+        base = f"{UPLOADS}/repos/{repo}/releases/{release['id']}/assets"
+    return base + "?name=" + urllib.parse.quote(name)
+
+
+def _drop_same_name(repo: str, token: str, release: dict, name: str) -> None:
+    for asset in release.get("assets") or []:
+        if asset.get("name") != name or not asset.get("id"):
+            continue
+        try:
+            _gh_json("DELETE", f"{API}/repos/{repo}/releases/assets/{asset['id']}", token)
+        except GitHubHttpError:
+            pass
+
+
+def diagnose_upload_failure(repo: str, token: str, tag: str, err: BaseException) -> str:
+    """Tell a missing release apart from a token that cannot write. No token text."""
+    code = getattr(err, "code", None)
+    parts = []
+    if env("MEDIA_REPO") and env("MEDIA_REPO_TOKEN") and env("ACTIONS_TOKEN_FOR_COMPARE") \
+            and env("MEDIA_REPO_TOKEN") == env("ACTIONS_TOKEN_FOR_COMPARE"):
+        parts.append(
+            f"MEDIA_REPO_TOKEN is identical to the calling repo GITHUB_TOKEN. "
+            f"That token is not contents:write on {repo}. "
+            "uploads.github.com returns HTTP 404 for the upload. "
+            f"Set MEDIA_REPO_TOKEN to a PAT with contents:write on {repo}. "
+            "This job cannot change secrets."
+        )
+    try:
+        repo_doc = _gh_json("GET", f"{API}/repos/{repo}", token)
+    except GitHubHttpError as e:
+        if e.code == 401:
+            parts.append(
+                f"MEDIA_REPO_TOKEN was rejected (HTTP 401) on GET /repos/{repo}. "
+                "The token is expired, revoked, or not a GitHub token. "
+                "A public release page can still exist while this credential cannot upload. "
+                f"Update the MEDIA_REPO_TOKEN secret with contents:write on {repo}. "
+                "This job cannot change secrets."
+            )
+        elif e.code == 404:
+            parts.append(
+                f"GET /repos/{repo} returned 404 with this token. "
+                f"The token cannot see that repo, so it lacks contents:write on {repo}. "
+                "GitHub answers the asset upload with HTTP 404 in that case, not 403. "
+                "Put a PAT with contents:write in MEDIA_REPO_TOKEN. "
+                "This job cannot change secrets."
+            )
+        else:
+            parts.append(f"GET /repos/{repo} failed with HTTP {e.code}; token permissions were not confirmed.")
+        return redact_text(" ".join(parts), token)
+
+    perms = repo_doc.get("permissions") if isinstance(repo_doc, dict) else None
+    push = perms.get("push") if isinstance(perms, dict) else None
+    try:
+        rel = _gh_json("GET", f"{API}/repos/{repo}/releases/tags/{urllib.parse.quote(tag)}", token)
+        rel_state = f"Release tag {tag} exists (id {rel.get('id')})."
+        missing = False
+    except GitHubHttpError as e:
+        if e.code == 404:
+            parts.append(
+                f"Release tag {tag} is missing (GET /releases/tags/{tag} returned 404). "
+                "This is a missing release, not a contents:write error. "
+                "The upload retried after creating the tag and still failed."
+            )
+            missing = True
+            rel_state = ""
+        elif e.code == 401:
+            parts.append(
+                f"MEDIA_REPO_TOKEN was rejected (HTTP 401) reading release tag {tag}. "
+                "The token is expired or revoked. Update MEDIA_REPO_TOKEN. "
+                "This job cannot change secrets."
+            )
+            return redact_text(" ".join(parts), token)
+        else:
+            rel_state = f"GET release tag {tag} returned HTTP {e.code}."
+            missing = False
+    if not missing:
+        if push is False:
+            parts.append(
+                f"{rel_state} The same token's repo permissions have push=false, "
+                f"so it lacks contents:write on {repo}. "
+                "uploads.github.com returns HTTP 404, not 403, for that upload. "
+                "A successful GET of a public release does not mean the token can upload. "
+                f"Set MEDIA_REPO_TOKEN to a PAT with contents:write on {repo}, "
+                "not the calling repository GITHUB_TOKEN. This job cannot change secrets."
+            )
+        elif push is True:
+            parts.append(
+                f"{rel_state} The token's repo permissions include push=true. "
+                "The release was found by tag, so this is not a missing release and not a missing contents:write grant. "
+                f"uploads.github.com still returned HTTP {code} after {UPLOAD_ATTEMPTS} tries. "
+                "That matches a transient uploads.github.com failure. Re-run the Instagram step; do not rotate the token on this evidence alone."
+            )
+        else:
+            parts.append(
+                f"{rel_state} GET /repos/{repo} did not include permissions.push, "
+                "so contents:write could not be confirmed. "
+                f"If uploads keep returning HTTP {code}, confirm MEDIA_REPO_TOKEN has contents:write on {repo}."
+            )
+    if code is not None and int(code) >= 500 and push is not False:
+        parts.append(
+            f"Last uploads.github.com status was HTTP {code} (server error), after re-resolving tag {tag} on each try."
+        )
+    return redact_text(" ".join(parts), token)
+
+
+def _url_serves(url: str) -> bool:
+    req = urllib.request.Request(url, method="GET", headers={"User-Agent": "ig-host-check"})
+    with urllib.request.urlopen(req, timeout=30) as res:
+        return res.status == 200 and bool(res.read(8))
 
 
 def host_release_asset(file: Path, *, name: str, content_type: str) -> str:
-    """Upload a public release asset so Meta can fetch media without auth."""
-    repo = env("MEDIA_REPO") or env("GITHUB_REPOSITORY")
-    token = env("MEDIA_REPO_TOKEN") if env("MEDIA_REPO") else (env("GITHUB_TOKEN") or env("MEDIA_REPO_TOKEN"))
-    if not repo or not token:
-        die("Need GitHub media hosting credentials")
-    tag = f"ig-reel-{time.strftime('%Y-%m-%d')}"
-    try:
-        release = http_json(
-            f"{API}/repos/{repo}/releases/tags/{tag}",
-            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
-        )
-    except RuntimeError as e:
-        if "404" not in str(e):
-            raise
-        release = http_json(
-            f"{API}/repos/{repo}/releases",
-            method="POST",
-            data=json.dumps({"tag_name": tag, "name": tag, "body": "Paise Ki Pathshala short — IG Reel media"}).encode(),
-            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "Content-Type": "application/json"},
-        )
-    for asset in release.get("assets") or []:
-        if asset.get("name") == name:
-            try:
-                http_json(
-                    f"{API}/repos/{repo}/releases/assets/{asset['id']}",
-                    method="DELETE",
-                    headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
-                )
-            except RuntimeError:
-                pass
-    asset = http_json(
-        f"{UPLOADS}/repos/{repo}/releases/{release['id']}/assets?name={urllib.parse.quote(name)}",
-        method="POST",
-        data=file.read_bytes(),
-        headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
-                 "Content-Type": content_type, "Content-Length": str(file.stat().st_size)},
-    )
-    url = asset.get("browser_download_url") or ""
-    if not url.startswith("https://"):
-        die(f"No public download URL from release asset: {asset}")
-    for attempt in range(1, 9):
+    """Upload a public release asset so Meta can fetch media without auth.
+
+    The release id is resolved by tag at upload time (and again after a 404 or
+    5xx). GET and POST use the same token.
+    """
+    repo, token, source = hosting_credentials()
+    tag = media_tag()
+    print(f"[ig] hosting repo={repo} tag={tag} token_source={source} date_basis=UTC")
+    last: BaseException | None = None
+    for attempt in range(UPLOAD_ATTEMPTS):
         try:
-            req = urllib.request.Request(url, method="GET", headers={"User-Agent": "ig-host-check"})
-            with urllib.request.urlopen(req, timeout=30) as res:
-                if res.status == 200 and res.read(8):
-                    ok(f"hosted: {url}")
-                    return url
-        except Exception as err:
-            print(f"  host wait {attempt}/8: {err}")
-            time.sleep(1.5)
-    die(f"Public URL not serving yet: {url}")
-    return url
+            release = ensure_release(repo, token, tag)
+            print(f"[ig] upload {name} -> release {release.get('id')} tag {tag} (looked up by tag)")
+            _drop_same_name(repo, token, release, name)
+            payload = file.read_bytes()
+            asset = _gh_json(
+                "POST", _upload_url(repo, release, name), token,
+                data=payload, content_type=content_type,
+            )
+            url = asset.get("browser_download_url") or ""
+            if not url.startswith("https://"):
+                die(f"No public download URL from release asset: {asset}")
+            for wait_i in range(1, 9):
+                try:
+                    if _url_serves(url):
+                        ok(f"hosted: {url}")
+                        return url
+                except Exception as err:
+                    print(f"  host wait {wait_i}/8: {redact_text(str(err), token)}")
+                time.sleep(1.5)
+            die(f"Public URL not serving yet: {url}")
+        except GitHubHttpError as e:
+            last = e
+            retryable = e.code == 404 or e.code >= 500
+        except TimeoutError as e:
+            last = e
+            retryable = True
+        if last is None or not retryable or attempt >= UPLOAD_ATTEMPTS - 1:
+            break
+        wait = _upload_backoff(attempt)
+        code = getattr(last, "code", None)
+        print(
+            f"[ig] upload HTTP {code or type(last).__name__} on {tag}; "
+            f"re-resolve release and retry in {wait:.1f}s ({attempt + 1}/{UPLOAD_ATTEMPTS})"
+        )
+        time.sleep(wait)
+    if isinstance(last, (GitHubHttpError, TimeoutError)):
+        die(diagnose_upload_failure(repo, token, tag, last))
+    die(redact_text(str(last), token))
+    return ""
 
 
 def host_mp4(file: Path) -> str:
@@ -381,5 +633,5 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except Exception as e:  # noqa: BLE001
-        print(f"[ig] error: {e}", file=sys.stderr)
+        print(f"[ig] error: {redact_text(str(e))}", file=sys.stderr)
         sys.exit(1)
