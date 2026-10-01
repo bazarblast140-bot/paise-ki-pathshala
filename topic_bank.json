@@ -1707,7 +1707,7 @@
   {
    "id": 46,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "atr_sl",
    "cat": "INDICATOR",
    "topic": "ATR से SL की दूरी — ATR 20 हो तो SL 30 पॉइंट क्यों",
@@ -1741,7 +1741,8 @@
     "ATR दिशा नहीं बताता, सिर्फ़ हलचल",
     "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "ATR Stop Loss"
+   "seo": "ATR Stop Loss",
+   "used_short_at": "2026-10-01T17:06:57Z"
   },
   {
    "id": 47,

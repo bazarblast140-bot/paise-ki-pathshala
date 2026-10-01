@@ -1,0 +1,344 @@
+{
+ "generated_at": "2026-10-01T17:06:54+00:00",
+ "lookback_days": 30,
+ "via": "oauth",
+ "channels": [
+  {
+   "id": "UCE3H9pD9owLyPLuC6dgIcuQ",
+   "title": "Deepu Maurya",
+   "subscribers": 39900
+  },
+  {
+   "id": "UC5-09Heo3sFRvVyTqWsXy7Q",
+   "title": "Stock Menthol",
+   "subscribers": 197000
+  }
+ ],
+ "search_keywords": [
+  "stock market hindi shorts",
+  "option trading hindi",
+  "candlestick pattern hindi"
+ ],
+ "errors": [],
+ "analysis": {
+  "videos_analysed": 88,
+  "title_patterns": {
+   "curiosity_question": {
+    "top_share": 0.59,
+    "rest_share": 0.47,
+    "lift": 1.23
+   },
+   "number_led": {
+    "top_share": 0.59,
+    "rest_share": 0.35,
+    "lift": 1.61
+   },
+   "warning": {
+    "top_share": 0.05,
+    "rest_share": 0.08,
+    "lift": 0.76
+   },
+   "chart_concept": {
+    "top_share": 0.36,
+    "rest_share": 0.3,
+    "lift": 1.17
+   },
+   "real_data": {
+    "top_share": 0.14,
+    "rest_share": 0.06,
+    "lift": 1.68
+   },
+   "mechanism_explainer": {
+    "top_share": 0.09,
+    "rest_share": 0.15,
+    "lift": 0.7
+   }
+  },
+  "winning_keywords": [
+   "candle",
+   "samjhe",
+   "stock",
+   "find",
+   "nifty",
+   "trade",
+   "just",
+   "anuj",
+   "singhal",
+   "n18s",
+   "multibagger",
+   "psychology",
+   "stocks"
+  ],
+  "top_tags": [
+   "candlestick",
+   "candlestick analysis",
+   "candle chart ko kaise samjhe",
+   "surface trader",
+   "candlestick pattern",
+   "trading",
+   "trading me candle ko kaise samjhe",
+   "candlestick patterns",
+   "share market candle ko kaise samjhe",
+   "candlestick pattern indicator on tradingview",
+   "trading candlestick",
+   "trading for beginners",
+   "candle psychology",
+   "stock market",
+   "candle reading"
+  ],
+  "best_upload_hours_ist": [
+   18,
+   19,
+   21,
+   14
+  ],
+  "top_short_duration_s": {
+   "median": 58,
+   "p25": 38,
+   "p75": 114
+  },
+  "top_title_length_chars": 84,
+  "top_videos": [
+   {
+    "channel": "Stock Menthol",
+    "title": "5-Minute Scalping Strategy That Traders Need to Know",
+    "views": 2619,
+    "views_per_day": 2251.0,
+    "performance_index": 5.0,
+    "duration_s": 567,
+    "published_ist": "2026-09-30 18:41",
+    "tags": []
+   },
+   {
+    "channel": "Surface Trader",
+    "title": "candlestick ko kaise samjhe | candlestick pattern | #candlestick #candlestickpattern #trading",
+    "views": 10618,
+    "views_per_day": 1714.8,
+    "performance_index": 5.0,
+    "duration_s": 35,
+    "published_ist": "2026-09-25 18:00",
+    "tags": [
+     "candlestick ko kaise samjhe",
+     "candlestick pattern",
+     "how to understand candlestick pattern",
+     "candle chart ko kaise samjhe",
+     "trading chart ko kaise samjhe",
+     "candlestick",
+     "candlestick analysis",
+     "candlestick kya hota hai",
+     "day trading",
+     "trading",
+     "surface trader",
+     "candlestick Trading"
+    ]
+   },
+   {
+    "channel": "Stock Menthol",
+    "title": "Find Accurate Support & Resistance & Trade 1:4 RR",
+    "views": 11593,
+    "views_per_day": 1619.6,
+    "performance_index": 4.03,
+    "duration_s": 524,
+    "published_ist": "2026-09-24 18:49",
+    "tags": []
+   },
+   {
+    "channel": "Deepu Maurya",
+    "title": "Market Structure Explained in Just 60 Seconds #shorts",
+    "views": 575,
+    "views_per_day": 62.7,
+    "performance_index": 3.73,
+    "duration_s": 81,
+    "published_ist": "2026-09-22 18:33",
+    "tags": [
+     "Market structure",
+     "Market structure explained",
+     "Market structure trading strategy",
+     "What is market structure?",
+     "Market structure in trading",
+     "Price Action trading strategy",
+     "How to identify break of structure",
+     "Forex market structure",
+     "Market structure in just 1 minute",
+     "Bos & choch in SMC"
+    ]
+   },
+   {
+    "channel": "Stock Menthol",
+    "title": "Liquidity Sweep Entry Strategy – 1:4 RR Setup!",
+    "views": 7225,
+    "views_per_day": 1400.2,
+    "performance_index": 3.49,
+    "duration_s": 531,
+    "published_ist": "2026-09-26 18:46",
+    "tags": []
+   },
+   {
+    "channel": "Sourav Trader",
+    "title": "💰 ₹1000 Se Trading? Reality Dekho!",
+    "views": 20893,
+    "views_per_day": 2853.5,
+    "performance_index": 2.87,
+    "duration_s": 22,
+    "published_ist": "2026-09-24 14:53",
+    "tags": []
+   },
+   {
+    "channel": "Surface Trader",
+    "title": "trading me candle ko kaise samjhe | candlestick patterns #trading #candlestickpatterns #candlestick",
+    "views": 3012,
+    "views_per_day": 728.0,
+    "performance_index": 2.54,
+    "duration_s": 34,
+    "published_ist": "2026-09-27 19:18",
+    "tags": [
+     "trading me candle ko kaise samjhe",
+     "candlestick patterns",
+     "candlestick",
+     "share market candle ko kaise samjhe",
+     "trading candle ko kaise samjhe",
+     "candlestick pattern indicator on tradingview",
+     "candlestick analysis",
+     "trading candlestick",
+     "trading for beginners",
+     "candle psychology",
+     "candle reading",
+     "trading"
+    ]
+   },
+   {
+    "channel": "Surface Trader",
+    "title": "trading me candle ko kaise samjhe | candlestick pattern | #trading #candlestickpattern",
+    "views": 15236,
+    "views_per_day": 719.8,
+    "performance_index": 2.51,
+    "duration_s": 38,
+    "published_ist": "2026-09-10 18:35",
+    "tags": [
+     "trading me candle ko kaise samjhe",
+     "candlestick pattern",
+     "share market candle ko kaise samjhe",
+     "candle chart ko kaise samjhe",
+     "candle psychology in trading hindi",
+     "candlestick",
+     "candlestick analysis",
+     "candlestick pattern indicator on tradingview",
+     "trading for beginners",
+     "surface trader",
+     "candle ko kaise samjhe",
+     "quotex candle ko kaise samjhe"
+    ]
+   },
+   {
+    "channel": "CNBC Awaaz.",
+    "title": "NSE ने एक ऐसा नया प्लेटफॉर्म लॉन्च किया है जिसे आपको जरुर देखना चाहिए | Anuj Singhal | N18S",
+    "views": 225252,
+    "views_per_day": 24810.7,
+    "performance_index": 2.24,
+    "duration_s": 58,
+    "published_ist": "2026-09-22 20:43",
+    "tags": [
+     "NSE",
+     "NSE Market Lens",
+     "Market Lens",
+     "NSE Screener",
+     "Stock Screener",
+     "NSE Screener Tool",
+     "NSE India",
+     "National Stock Exchange",
+     "Stock Market",
+     "Indian Stock Market",
+     "Share Market",
+     "Stock Analysis"
+    ]
+   },
+   {
+    "channel": "Zee Business",
+    "title": "NSE Share Listing Strategy: लिस्टिंग के बाद अब NSE शेयर में क्या करें? Anil Singhvi",
+    "views": 258707,
+    "views_per_day": 40060.2,
+    "performance_index": 1.84,
+    "duration_s": 114,
+    "published_ist": "2026-09-25 11:37",
+    "tags": [
+     "zee business",
+     "stock market news",
+     "share market news",
+     "stock market news live",
+     "live share market news",
+     "sensex",
+     "nifty",
+     "stock market updates",
+     "nse share",
+     "nse stock",
+     "nse ipo",
+     "nse ipo listing"
+    ]
+   },
+   {
+    "channel": "Dr. Mukul Agrawal : Stock Market Coach",
+    "title": "Stock Market Crash Today: 4 Reasons Why Nifty Fell | IRDAI, Crude Oil & Bond Yield #shorts",
+    "views": 244425,
+    "views_per_day": 33803.1,
+    "performance_index": 1.84,
+    "duration_s": 141,
+    "published_ist": "2026-09-24 17:04",
+    "tags": []
+   },
+   {
+    "channel": "Zee Business",
+    "title": "Ganesh Chaturthi Stock Secrets: Small Cap Se Multibagger Kaise Banaye? | Anil SInghvi",
+    "views": 738561,
+    "views_per_day": 39762.7,
+    "performance_index": 1.83,
+    "duration_s": 131,
+    "published_ist": "2026-09-13 08:50",
+    "tags": []
+   },
+   {
+    "channel": "Surface Trader",
+    "title": "candle psychology in trading | candlestick psychology #trading #candlestick",
+    "views": 6199,
+    "views_per_day": 508.6,
+    "performance_index": 1.77,
+    "duration_s": 39,
+    "published_ist": "2026-09-19 18:05",
+    "tags": [
+     "candle psychology in trading",
+     "candlestick psychology",
+     "Candle Psychology",
+     "candlestick",
+     "candlestick patterns",
+     "candlestick analysis",
+     "trading candlestick",
+     "candle chart ko kaise samjhe",
+     "surface trader",
+     "chart pattern",
+     "candle reading",
+     "candle analysis episode"
+    ]
+   },
+   {
+    "channel": "Upskill School ",
+    "title": "How Rakesh Jhunjhunwala Found Multibagger Stocks #sharemarket #stockmarket #investing",
+    "views": 121797,
+    "views_per_day": 7580.4,
+    "performance_index": 1.74,
+    "duration_s": 69,
+    "published_ist": "2026-09-15 21:00",
+    "tags": []
+   },
+   {
+    "channel": "Stock Menthol",
+    "title": "How to hold a trade with a 1:5 ratio? SMC Trading Strategy",
+    "views": 9141,
+    "views_per_day": 695.2,
+    "performance_index": 1.73,
+    "duration_s": 522,
+    "published_ist": "2026-09-18 19:02",
+    "tags": []
+   }
+  ]
+ },
+ "policy": "Reference only. Learn patterns; never reuse competitor titles, scripts, thumbnails or layouts."
+}
