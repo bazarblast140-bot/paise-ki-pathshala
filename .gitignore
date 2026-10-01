@@ -23,3 +23,7 @@ quiz/build_out.txt
 quiz/upload_out.txt
 quiz/telegram_out.txt
 **/__pycache__/
+
+# OAuth client downloads — never commit
+client_secret*.json
+token*.json
