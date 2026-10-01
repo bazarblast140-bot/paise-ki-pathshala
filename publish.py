@@ -288,16 +288,10 @@ def main():
     print(f"  Visibility : {visibility}" + (f"  (public at {publish_at} UTC)" if publish_at else ""))
     print(f"  Thumbnail  : {'yes' if (RUN / 'thumbnail.jpg').exists() else 'no'}\n")
 
-    from googleapiclient.discovery import build
-    from google.oauth2.credentials import Credentials
-    creds = Credentials(
-        None,
-        refresh_token=need("YOUTUBE_REFRESH_TOKEN"),
-        client_id=need("YOUTUBE_CLIENT_ID"),
-        client_secret=need("YOUTUBE_CLIENT_SECRET"),
-        token_uri="https://oauth2.googleapis.com/token",
-    )
-    yt = build("youtube", "v3", credentials=creds)
+    # Fresh access token from the long-lived refresh token, with a clear
+    # invalid_grant message (exit 3) instead of a raw traceback.
+    from yt_credentials import youtube_client_or_exit
+    yt = youtube_client_or_exit()
 
     expected = os.environ.get("EXPECTED_CHANNEL_ID", "").strip()
     if not expected:

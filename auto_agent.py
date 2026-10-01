@@ -212,6 +212,14 @@ def main():
         log("failure looks like external publishing/OAuth; no blind rebuild/retry")
         return rc or 1
 
+    # Code self-repair (patch source files inside CI, re-run + publish, then
+    # commit and push the patch to main) is OFF by default. Between 28-Sep and
+    # 01-Oct-2026 it produced broken commits and burned LLM credit without fixing
+    # the real causes. Opt in with repo variable / env SELF_REPAIR=1.
+    if os.environ.get("SELF_REPAIR", "0").strip().lower() not in ("1", "true", "yes", "on"):
+        log("self-repair disabled (set SELF_REPAIR=1 to enable); failing clearly instead")
+        return rc or 1
+
     # Bounded LLM repair loop. The repair model sees the actual failure,
     # relevant source files, and proposes a safe patch. Each patch is syntax
     # checked before the same topic is retried. Max two repairs.

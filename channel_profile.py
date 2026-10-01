@@ -23,16 +23,8 @@ ASSETS = ROOT / "assets"
 
 
 def yt_client():
-    from google.oauth2.credentials import Credentials
-    from googleapiclient.discovery import build
-    creds = Credentials(
-        None,
-        refresh_token=need("YOUTUBE_REFRESH_TOKEN"),
-        client_id=need("YOUTUBE_CLIENT_ID"),
-        client_secret=need("YOUTUBE_CLIENT_SECRET"),
-        token_uri="https://oauth2.googleapis.com/token",
-    )
-    return build("youtube", "v3", credentials=creds)
+    from yt_credentials import youtube_client_or_exit
+    return youtube_client_or_exit()
 
 
 def keywords(c):

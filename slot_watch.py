@@ -86,6 +86,19 @@ def main():
         gha_output("missing", "false")
         return
     hit = next((e for e in ents if e.get("date_ist") == date and e.get("slot") == slot), None)
+    if hit and not hit.get("video_id"):
+        # Only the Instagram Reel went out (YouTube upload failed, usually a dead
+        # token). Don't fill: a re-run would post IG again and still fail on YouTube.
+        msg = (f"⚠️ Paise Ki Pathshala\n{date} {slot} IST: sirf Instagram Reel gaya, YouTube upload FAIL.\n"
+               "Sabse aam wajah: YouTube refresh token expire (OAuth app 'Testing' me). "
+               "README -> 'YouTube token permanent kaise karein'.")
+        print(msg)
+        gha_output("missing", "false")
+        try:
+            send(msg)
+        except Exception as e:  # noqa: BLE001
+            print(f"[warn] Telegram fail: {e}")
+        return
     if hit:
         print(f"[OK] {date} {slot} IST — https://youtu.be/{hit['video_id']}")
         gha_output("missing", "false")

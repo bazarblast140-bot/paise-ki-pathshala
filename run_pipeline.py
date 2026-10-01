@@ -96,11 +96,19 @@ def main():
     if status == "success" and "--publish" in sys.argv:
         print("\n=== Publish (opt-in) ===")
         (RUN / "uploaded.txt").unlink(missing_ok=True)
+        (RUN / "youtube_status.txt").unlink(missing_ok=True)
         # YouTube is optional for the short: a missing/invalid refresh token
         # must not block the Instagram Reel cross-post.
         yt_rc = run("publish.py", "--only-if-ready")
         if yt_rc != 0:
             print(f"[WARN] YouTube publish failed (rc={yt_rc}); continuing to Instagram.")
+            if yt_rc == 3:   # yt_credentials.EXIT_TOKEN_DEAD
+                note = "YouTube TOKEN EXPIRED/REVOKED — README: 'YouTube token permanent kaise karein'"
+                print("::error title=YouTube token expired or revoked::Regenerate YT_FIN_REFRESH_TOKEN "
+                      "(README: 'YouTube token permanent kaise karein').")
+            else:
+                note = f"YouTube upload nahi hua (publish.py rc={yt_rc})"
+            (RUN / "youtube_status.txt").write_text(note + "\n", encoding="utf-8")
 
         yt_uploaded = (RUN / "uploaded.txt").exists()
         ig_published = False
@@ -134,7 +142,26 @@ def main():
         )
         published = yt_uploaded or ig_published
         settle_topic(published)
-        if ig_required and not ig_published:
+
+        # Instagram-only publish (YouTube failed) still fills the slot in the
+        # ledger, so Slot watch doesn't start a second "fill" run that would post
+        # another Reel (and still fail on YouTube).
+        if ig_published and not yt_uploaded:
+            try:
+                from ledger import record_publish
+                from slot_guard import target_date
+                slot = os.environ.get("PUBLISH_SLOT_IST", "").strip()
+                record_publish(None, None, slot or None, platform="instagram",
+                               date_ist=target_date(slot) if slot else None)
+            except Exception as e:  # noqa: BLE001
+                print(f"[warn] ledger IG-only entry skipped: {e}")
+
+        verdict_ready = "READY TO PUBLISH" in (
+            (RUN / "report.md").read_text(encoding="utf-8") if (RUN / "report.md").exists() else "")
+        if not published and not verdict_ready:
+            status = "not published: verify verdict is not READY TO PUBLISH"
+            print("[STOP] Verify verdict is not READY — nothing was published (YouTube or Instagram).")
+        elif ig_required and not ig_published:
             status = "publish failed: Instagram Reel not confirmed"
             print("[STOP] Instagram Reel publish was not confirmed; YouTube status is independent.")
         elif not published:

@@ -9,17 +9,8 @@ def need(key):
     return v
 
 def main():
-    from google.oauth2.credentials import Credentials
-    from googleapiclient.discovery import build
-
-    creds = Credentials(
-        None,
-        refresh_token=need("YOUTUBE_REFRESH_TOKEN"),
-        client_id=need("YOUTUBE_CLIENT_ID"),
-        client_secret=need("YOUTUBE_CLIENT_SECRET"),
-        token_uri="https://oauth2.googleapis.com/token",
-    )
-    yt = build("youtube", "v3", credentials=creds)
+    from yt_credentials import youtube_client_or_exit
+    yt = youtube_client_or_exit()
 
     ch = yt.channels().list(part="contentDetails", mine=True).execute()
     items = ch.get("items") or []

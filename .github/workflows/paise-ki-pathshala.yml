@@ -1,37 +1,19 @@
-# recovery-v26: deterministic narration fallback + REAL DATA hook gate fix
-# recovery-v25: universal narration QA for every video category
-# recovery-v24: natural narration duration fix; no post-render voice retiming
-# recovery-v15: fresh production test for distinct per-beat finance visuals
-# recovery-v12: fix voice-config retry + duration normalization
-# recovery: publish today's missed morning slot — pro-visual-audio QA recovery
-# recovery-v2: duration-safe Shorts voice pacing
 name: Paise Ki Pathshala
-# recovery-v4: autonomous self-repair engine live
-# recovery-v5: continuous TTS boundary-silence repair
-# recovery-v6: stabilize Anthropic self-repair API
-# recovery-v7: execute the recovery job on the next workflow-file push
-# recovery-v8: run after watchdog dependency + board syntax repair
-# recovery-v9: trim only outer TTS silence so speech is not truncated at internal pauses
-# recovery-v10: retest duration-safe Edge TTS fallback
-# recovery-v11: deterministic final.mp4 duration hard gate
-# recovery-v12: execute publish flag and require platform confirmation
-# recovery-v13: validate ElevenLabs with the actual TTS request, not subscription preflight
-# recovery-v14: fresh production verification after actual ElevenLabs TTS validation
-# recovery-v16: ElevenLabs-only voice engine, no mixed Edge fallback
-# recovery-v17: fresh production run after ElevenLabs-only enforcement
-# recovery-v18: verify faster ElevenLabs Shorts voice pacing
-# recovery-v19: remove artificial 56s speech stretching
-# recovery-v20: fresh production run + unique option-spread payoff visuals
-# recovery-v21: candle-pattern beats must explain one idea per scene, no repeated full chart
-# recovery-v22: enforce one continuous teaching sequence in narration (topic -> identify -> meaning -> action)
+
+# Hindi personal-finance channel. Secrets: DEEPSEEK_API_KEY, PEXELS_API_KEY,
+# TELEGRAM_*, YT_FIN_* (python youtube_auth.py --set-github-secret),
+# ELEVENLABS_*, IG_ACCESS_TOKEN, optional YT_DATA_API_KEY (competitor research).
+# Variables: YT_FIN_CHANNEL_ID, IG_USER_ID, optional SELF_REPAIR.
 on:
   schedule:
     - cron: "0 3 * * *"
     - cron: "30 10 * * *"
     - cron: "30 15 * * *"
-  push:
-    paths:
-      - ".github/workflows/paise-ki-pathshala.yml"
+  # NOTE: no `push:` trigger on purpose. A push that touched this file used to
+  # start a PUBLIC upload with no slot and no slot guard (inputs are empty on
+  # push, so the format step falls back to short + public). Between 30-Sep and
+  # 01-Oct-2026 every "chore: trigger ..." comment commit published a Short and
+  # a Reel this way. To test, use Run workflow (privacy = unlisted).
   workflow_call:
     inputs:
       format:
@@ -112,8 +94,29 @@ jobs:
           else
             echo "taken=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Agent preflight
-        run: python -m py_compile auto_agent.py self_repair.py
+      - name: Preflight (compile + unit tests, no network)
+        run: |
+          python -m py_compile *.py
+          PYTHONPATH=. python -m unittest discover -s tests
+      - name: YouTube token health check (no upload)
+        id: yt_token
+        continue-on-error: true
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YT_FIN_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
+        run: python yt_credentials.py
+      - name: Competitor + own-channel research (optional, read-only)
+        if: steps.guard.outputs.taken != 'true'
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          YT_DATA_API_KEY: ${{ secrets.YT_DATA_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YT_FIN_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
+          EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
+        run: python competitor_research.py --max-age-hours 20
       - name: Run Pipeline (+ publish if READY)
         if: steps.guard.outputs.taken != 'true'
         env:
@@ -122,6 +125,9 @@ jobs:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
           KIMI_BASE_URL: ${{ secrets.KIMI_BASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # LLM/deterministic code self-repair inside CI (patches + pushes to main)
+          # is OFF unless repo variable SELF_REPAIR is set to 1. See auto_agent.py.
+          SELF_REPAIR: ${{ vars.SELF_REPAIR || '0' }}
           SELF_HEAL_MODEL: deepseek-flash
           SELF_HEAL_FALLBACK_MODEL: claude-haiku-4-5-20251001
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
@@ -137,7 +143,8 @@ jobs:
           PUBLISH_VISIBILITY: ${{ steps.fmt.outputs.visibility }}
           TOPIC_KEY: ${{ inputs.topic_key }}
           PUBLISH_SLOT_IST: ${{ steps.fmt.outputs.slot }}
-          IG_CROSSPOST: ${{ steps.fmt.outputs.format == 'short' && '1' || '0' }}
+          # Reel only for PUBLIC runs: an unlisted test must not post a public Reel.
+          IG_CROSSPOST: ${{ steps.fmt.outputs.format == 'short' && steps.fmt.outputs.visibility == 'public' && '1' || '0' }}
           IG_USER_ID: ${{ vars.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_SURFACE: ${{ vars.IG_SURFACE || 'facebook' }}
@@ -147,12 +154,18 @@ jobs:
       - name: Commit topic_bank (prevent topic repeats)
         if: success() && steps.guard.outputs.taken != 'true'
         run: |
-          if git diff --quiet topic_bank.json data/published.json; then
-            echo "No topic_bank / ledger changes"
+          FILES=""
+          for f in topic_bank.json data/published.json data/competitor_insights.json \
+                   data/competitor_performance.json data/own_topic_performance.json; do
+            [ -e "$f" ] && FILES="$FILES $f"
+          done
+          git add -N $FILES
+          if git diff --quiet -- $FILES; then
+            echo "No topic_bank / ledger / research changes"
           else
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add topic_bank.json data/published.json
+            git add $FILES
             git commit -m "chore: topic + ledger update [skip ci]"
             git pull --rebase --autostash || true
             git push
@@ -173,17 +186,7 @@ jobs:
             run/gate2_report.txt
             run/gate3_report.txt
             run/ig_reel.txt
+            run/ig_cover.jpg
+            run/youtube_status.txt
+            run/auto_agent_last.log
           retention-days: 14
-# verified recovery trigger refresh: 2026-09-30
-# verified Instagram confirmation watchdog active
-# chart-layout + ElevenLabs paid-first verification trigger: 2026-09-30
-# verification: paid ElevenLabs updated + progressive chart + topic hashtags
-# verify board_scenes indentation fix
-# verify chart beat indentation fix
-# autonomous repair: deterministic syntax fix + 3-attempt bounded recovery
-# verify deterministic self-repair traceback regex
-# cancel stale production runs during recovery
-
-# recovery-v22: narration must teach in one continuous setup->recognition->meaning->risk sequence
-
-# recovery-v23: manual QA rerun requested after deleting prior test video
