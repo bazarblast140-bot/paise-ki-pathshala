@@ -2039,6 +2039,7 @@ def _eleven(text, path, c):
     voice = eleven_voice.configured_voice_id(c)
     if not key:
         return False
+    eleven_voice.require_paid_tts()
 
     global ELEVEN_EXHAUSTED, ELEVEN_REMAINING
     if ELEVEN_EXHAUSTED:
@@ -2152,7 +2153,15 @@ def tts(text, path, c):
     cached_engine = engine_file.read_text(encoding="utf-8").strip().lower() if engine_file.exists() else ""
     cached_id = id_file.read_text(encoding="utf-8").strip() if id_file.exists() else ""
     eleven_key = bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
-    allow_paid = _paid_voice_this_beat()
+    proof_audio = os.environ.get("PROOF_FREE_AUDIO", "").strip().lower()
+    if proof_audio in ("edge", "silence"):
+        allow_paid = False
+    elif _paid_voice_this_beat():
+        # A live slot with the switch off fails here. It does not speak Edge.
+        eleven_voice.require_paid_tts()
+        allow_paid = True
+    else:
+        allow_paid = False
     fresh = path.exists() and path.stat().st_size > 1000 and cached_id == cache_id
     # Reuse paid audio only while this run is still on ElevenLabs.
     # After a credit fallback, an old paid file is discarded and Edge is used.
@@ -2208,7 +2217,14 @@ def synthesize_short_voices(spoken, c, beats=None):
     if (RUN / "narration_block.json").exists():
         die("narration blocked; refusing TTS")
     _reset_voice_state()
-    if eleven_voice.paid_voice_allowed() and str(((c or {}).get("voice") or {}).get("engine") or "elevenlabs").lower() == "elevenlabs":
+    proof_audio = os.environ.get("PROOF_FREE_AUDIO", "").strip().lower()
+    wants_paid = (
+        proof_audio not in ("edge", "silence")
+        and eleven_voice.paid_voice_allowed()
+        and str(((c or {}).get("voice") or {}).get("engine") or "elevenlabs").lower() == "elevenlabs"
+    )
+    if wants_paid:
+        eleven_voice.require_paid_tts()
         eleven_voice.ensure_library_voice(c)
         preflight_eleven_credits([spoken[b] for b in beats])
 
@@ -3539,12 +3555,65 @@ def require_scene_frames(topic, spec, narration=None):
         _refuse_craft_hold(topic, spec, narration or {})
 
 
-def prepare_spoken(spoken, narration, topic, c, spec):
-    """Render once after the dry check. A live miss re-speaks only the changed beats."""
+def _write_silence_wav(path, seconds, rate=44100):
+    """PCM silence. The proof timeline uses words / 1.9s, not a paid voice."""
+    import wave
+    seconds = max(0.4, float(seconds))
+    frames = max(1, int(seconds * rate))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "w") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(rate)
+        handle.writeframes(b"\x00\x00" * frames * 2)
+
+
+def _proof_wps(topic, c):
+    voice = (topic or {}).get("_voice") or ((c or {}).get("voice") or {})
+    try:
+        wps = float(voice.get("words_per_second") or 1.9)
+    except (TypeError, ValueError):
+        wps = 1.9
+    return wps if wps > 0 else 1.9
+
+
+def _proof_silence_spoken(spoken, narration, topic, c, spec):
+    """Free audio timed to the voice pace. No ElevenLabs and no Edge network."""
     order = _lesson(topic)[0] if topic.get("_live_short") else tuple(b for b in BEATS if b in spoken)
     if topic.get("_live_short"):
         require_scene_frames(topic, spec, narration)
-        eleven_voice.ensure_library_voice(c)
+        narration = fit_estimated_duration(narration, topic, c, spec)
+        spoken = {beat: narration["beats"][beat] for beat in order}
+    wps = _proof_wps(topic, c)
+    raw = {}
+    for beat in order:
+        words = max(1, len(str(spoken.get(beat) or "").split()))
+        seconds = max(0.4, words / wps)
+        _write_silence_wav(RUN / f"voice_clean_{beat}.wav", seconds)
+        raw[beat] = seconds
+    beat_times, total = _timeline(raw, order)
+    if topic.get("_live_short"):
+        lo, hi = live_voice_bounds(topic)
+        if total < lo or total > hi:
+            die(
+                f"proof timeline outside {lo:.0f}-{hi:.0f}s before paid TTS; "
+                f"0 characters spent: {total:.1f}s"
+            )
+    topic["_spoken_beats"] = {beat: spoken[beat] for beat in order}
+    audio = {beat: RUN / f"voice_clean_{beat}.wav" for beat in order}
+    return spoken, narration, audio, raw, beat_times, total
+
+
+def prepare_spoken(spoken, narration, topic, c, spec):
+    """Render once after the dry check. A live miss re-speaks only the changed beats."""
+    if os.environ.get("PROOF_FREE_AUDIO", "").strip().lower() == "silence":
+        return _proof_silence_spoken(spoken, narration, topic, c, spec)
+    order = _lesson(topic)[0] if topic.get("_live_short") else tuple(b for b in BEATS if b in spoken)
+    proof = os.environ.get("PROOF_FREE_AUDIO", "").strip().lower() == "edge"
+    if topic.get("_live_short"):
+        require_scene_frames(topic, spec, narration)
+        if not proof:
+            eleven_voice.ensure_library_voice(c)
         topic["_voice"] = dict((c or {}).get("voice") or {})
         narration = fit_estimated_duration(narration, topic, c, spec)
         spoken = {beat: narration["beats"][beat] for beat in order}
@@ -3686,8 +3755,8 @@ def main():
     produce_short(topic, n, c, spec, source, beat_pngs=beat_pngs)
 
 
-def produce_short(topic, n, c, spec, source="llm", beat_pngs=None):
-    """Voice, scenes, sync, and final.mp4. No upload and no git commit."""
+def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
+    """Picture, free or paid audio, and final.mp4. Callers decide which voice."""
     if topic.get("_live_short") and not topic.get("_atr"):
         n["live_beats"] = resolve_live_beats(topic)
     # CTA/disclaimer stay on-screen; do not spend TTS credits speaking them.
@@ -3740,7 +3809,15 @@ def produce_short(topic, n, c, spec, source="llm", beat_pngs=None):
     visual_gate(paced)
     ok(f"scenes: {len(scenes)} cuts, longest {max(s['end'] - s['start'] for s in scenes):.2f}s")
     overlays = short_layout.overlay_plan(topic, beat_times, hook_line, cta)
-    sync_report = _sync_report(topic, n, scenes, beat_audio, beat_times, spec)
+    if os.environ.get("PROOF_FREE_AUDIO", "").strip().lower() == "silence":
+        sync_report = {
+            "ok": True,
+            "reason": "timed silence; the paid voice is checked after this picture passes",
+            "words": [],
+            "scenes": [],
+        }
+    else:
+        sync_report = _sync_report(topic, n, scenes, beat_audio, beat_times, spec)
     audio_words = sync_report.get("words") or None
     samples, text_frames, layout_notes = _craft_samples(
         scenes, topic, beat_times, spoken, hook_line, cta, audio_words=audio_words)
@@ -3807,7 +3884,181 @@ def produce_short(topic, n, c, spec, source="llm", beat_pngs=None):
     (RUN / "narration.json").write_text(
         json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
     ok(f"wrote run/final.mp4 ({final_dur:.1f}s) + thumbnail.jpg")
+    return {
+        "final_dur": final_dur,
+        "spoken": spoken,
+        "narration": n,
+        "beat_audio": beat_audio,
+        "beat_times": beat_times,
+        "order": order,
+        "scenes": scenes,
+        "paced": paced,
+        "switch": switch,
+        "hook_line": hook_line,
+        "cta": cta,
+    }
+
+
+def _eleven_spent():
+    try:
+        return int((credit_log._read() or {}).get("elevenlabs_characters_sent") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _needs_paid_proof(topic, c):
+    """A live ElevenLabs slot must prove the picture before any paid call."""
+    if os.environ.get("PROOF_FREE_AUDIO", "").strip():
+        return False
+    if not (topic or {}).get("_live_short") or (topic or {}).get("_atr"):
+        return False
+    engine = str((((c or {}).get("voice") or {}).get("engine") or "elevenlabs")).strip().lower()
+    return engine == "elevenlabs" and eleven_voice.paid_voice_allowed()
+
+
+def _reuse_proven_frames(old_scenes, beat_times, order):
+    """New beat lengths, same pictures. Chart Board is not drawn again."""
+    fresh = scene_pace.plan_scenes(beat_times, beats=order)
+    pools = {}
+    for scene in old_scenes or []:
+        pools.setdefault(scene.get("beat"), []).append(scene)
+    paced = {}
+    for scene in fresh:
+        pool = pools.get(scene["beat"]) or []
+        if not pool:
+            die(
+                f"proven frames missing for {scene['beat']}; "
+                "refusing to redraw Chart Board after paid TTS"
+            )
+        src = pool[min(int(scene.get("index") or 0), len(pool) - 1)]
+        scene["frame"] = src.get("frame")
+        scene["png"] = src.get("png")
+        scene["kind"] = src.get("kind") or ""
+        scene["callout"] = bool(src.get("callout"))
+        if scene.get("png"):
+            paced.setdefault(scene["beat"], []).append(scene["png"])
+    paced = {beat: tuple(paths) for beat, paths in paced.items()}
+    return fresh, paced
+
+
+def _pay_and_remux(topic, n, c, spec, source, proven):
+    """ElevenLabs, then mux that voice onto the pictures that already passed."""
+    eleven_voice.require_paid_tts()
+    spoken = proven["spoken"]
+    n = proven.get("narration") or n
+    order = tuple(proven["order"])
+    hook_line = proven.get("hook_line") or n.get("hook_line") or ""
+    cta = proven.get("cta") or ""
+    (RUN / "tts_text.txt").unlink(missing_ok=True)
+    synthesize_short_voices(spoken, c, beats=order)
+    raw = _trim_rendered(order)
+    beat_times, total = _timeline(raw, order)
+    lo, hi = live_voice_bounds(topic)
+    if total < lo or total > hi:
+        die(
+            f"paid voice duration outside {lo:.0f}-{hi:.0f}s; "
+            f"refusing the slot: {total:.1f}s"
+        )
+    scenes, paced = _reuse_proven_frames(proven.get("scenes") or [], beat_times, order)
+    beat_audio = {beat: RUN / f"voice_clean_{beat}.wav" for beat in order}
+    sync_report = _sync_report(topic, n, scenes, beat_audio, beat_times, spec)
+    review_path = RUN / "self_review.json"
+    review = {}
+    if review_path.exists():
+        try:
+            review = json.loads(review_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            review = {}
+    review["sync"] = {
+        "ok": bool(sync_report.get("ok")),
+        "reason": sync_report.get("reason") or "",
+        "scenes": sync_report.get("scenes") or [],
+    }
+    if not sync_report.get("ok"):
+        review["public_ok"] = False
+        review["passed"] = False
+        review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
+        die("sync gate failed after paid voice: " + str(sync_report.get("reason") or "mismatch"))
+    assemble(
+        paced, beat_audio, beat_times,
+        build_ass(
+            topic, beat_times, spoken, hook_line, cta,
+            audio_words=sync_report.get("words") or None,
+        ),
+        switch=proven.get("switch") or {},
+        hook_line=hook_line,
+        scenes=scenes,
+    )
+    final_path = RUN / "final.mp4"
+    final_dur = duration(final_path)
+    if final_dur < lo or final_dur > hi:
+        die(
+            f"final.mp4 duration outside {lo:.0f}-{hi:.0f}s after paid voice: {final_dur:.1f}s"
+        )
+    review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
+    topic["_spoken_beats"] = {beat: spoken[beat] for beat in order}
+    write_compat(topic, n, spoken, beat_times)
+    (RUN / "narration.json").write_text(
+        json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
+    ok(f"paid voice muxed onto the proven picture ({final_dur:.1f}s)")
     return final_dur
+
+
+def prove_full_render(topic, n, c, spec, source="llm", beat_pngs=None, free="silence"):
+    """Chart Board through final.mp4 on free audio. Never calls ElevenLabs.
+
+    `free` is \"silence\" (timed at the voice pace) or \"edge\". A crash, a
+    safe-area miss, or a self-review hold exits with 0 characters spent.
+    The returned picture is what a later paid pass muxes onto.
+    """
+    kind = "edge" if str(free or "").strip().lower() == "edge" else "silence"
+    before = _eleven_spent()
+    os.environ["PROOF_FREE_AUDIO"] = kind
+    try:
+        try:
+            proven = _render_short(topic, n, c, spec, source, beat_pngs)
+        except SystemExit:
+            if _eleven_spent() != before:
+                die("ElevenLabs characters were spent during a failed pre-render")
+            raise
+        except Exception as exc:
+            if _eleven_spent() != before:
+                die("ElevenLabs characters were spent during a failed pre-render")
+            die(f"pre-render failed before paid TTS; 0 characters spent: {exc}")
+        if _eleven_spent() != before:
+            die("ElevenLabs characters were spent during the pre-render")
+        review_path = RUN / "self_review.json"
+        review = {}
+        if review_path.exists():
+            try:
+                review = json.loads(review_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                review = {}
+        if not review.get("public_ok"):
+            die(
+                "pre-render HOLD before paid TTS; 0 characters spent: "
+                + str(review.get("summary") or "no passing self-review")
+            )
+        return proven
+    finally:
+        os.environ.pop("PROOF_FREE_AUDIO", None)
+
+
+def produce_short(topic, n, c, spec, source="llm", beat_pngs=None):
+    """Voice, scenes, sync, and final.mp4. No upload and no git commit.
+
+    A live ElevenLabs slot renders the whole Short on free audio first.
+    Paid TTS runs only after that picture passes, then the voice is muxed
+    onto the frames that already passed.
+    """
+    if topic.get("_live_short") and not topic.get("_atr"):
+        n["live_beats"] = resolve_live_beats(topic)
+    if _needs_paid_proof(topic, c):
+        proven = prove_full_render(
+            topic, n, c, spec, source=source, beat_pngs=beat_pngs, free="silence",
+        )
+        return _pay_and_remux(topic, n, c, spec, source, proven)
+    return _render_short(topic, n, c, spec, source, beat_pngs)["final_dur"]
 
 
 if __name__ == "__main__":

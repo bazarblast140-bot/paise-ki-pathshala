@@ -200,7 +200,11 @@ def render_topic(topic, narration, c, beats=None):
     key = topic.get("key") or "topic"
     clear_topic_voice()
     try:
-        board_short.produce_short(live, narration, c, spec, source=narration.get("source") or "llm")
+        board_short.prove_full_render(
+            live, narration, c, spec,
+            source=narration.get("source") or "llm",
+            free="edge",
+        )
     except (Exception, SystemExit):
         _keep_topic_artifacts(key)
         if (board_short.RUN / "self_review.json").is_file():

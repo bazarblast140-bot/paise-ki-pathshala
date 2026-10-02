@@ -91,6 +91,7 @@ jobs:
           # ElevenLabs secrets is repo me nahi — Edge Swara (female) chalti hai.
           # Premium voice chahiye to ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID secrets daal do.
           ELEVENLABS_API_KEY:  ${{ secrets.ELEVENLABS_API_KEY }}
+          PAID_TTS_ENABLED: ${{ vars.PAID_TTS_ENABLED }}
           ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
           ELEVENLABS_MODEL:    ${{ vars.ELEVENLABS_MODEL || 'eleven_multilingual_v2' }}
         run: |

@@ -63,6 +63,7 @@ jobs:
           KIMI_BASE_URL: ${{ secrets.KIMI_BASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          PAID_TTS_ENABLED: ${{ vars.PAID_TTS_ENABLED }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ vars.IG_USER_ID }}
           IG_SURFACE: ${{ vars.IG_SURFACE || 'facebook' }}

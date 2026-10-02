@@ -542,7 +542,7 @@ class PreviewVoiceTests(unittest.TestCase):
 
         with self.assertRaises(SystemExit):
             self._speak_with(
-                {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public"},
+                {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
                 get=low, post=post,
             )
 
@@ -554,7 +554,7 @@ class PreviewVoiceTests(unittest.TestCase):
             })
 
         engine, _meta, credits, posts, calls = self._speak_with(
-            {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public"},
+            {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
             get=at_floor,
         )
         self.assertEqual(engine, "elevenlabs")
@@ -570,7 +570,7 @@ class PreviewVoiceTests(unittest.TestCase):
 
         with self.assertRaises(SystemExit):
             self._speak_with(
-                {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public"},
+                {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
                 get=boom, post=post_no,
             )
 
@@ -611,8 +611,8 @@ class PreviewVoiceTests(unittest.TestCase):
 
     def test_public_publish_and_explicit_opt_in_may_call_elevenlabs(self):
         for env in (
-            {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public"},
-            {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "unlisted", "ELEVENLABS_OPT_IN": "1"},
+            {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
+            {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "unlisted", "ELEVENLABS_OPT_IN": "1", "PAID_TTS_ENABLED": "true"},
         ):
             with self.subTest(env=env):
                 engine, meta, credits, posts, gets, calls = self._speak(env)

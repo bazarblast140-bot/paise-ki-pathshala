@@ -10,6 +10,7 @@ import hashlib
 import json
 import subprocess
 import shutil
+import sys
 from pathlib import Path
 
 import config as C
@@ -65,6 +66,11 @@ def _eleven(text: str, out_wav: Path) -> bool:
         return False
     if not (C.ELEVEN_API_KEY and C.ELEVEN_VOICE_ID):
         return False
+    root = Path(__file__).resolve().parents[2]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    import eleven_voice
+    eleven_voice.require_paid_tts()
     if not C.ELEVEN_API_KEY.startswith("sk_"):
         # Sabse common galti: dashboard se key ka *ID* copy kar lena. Asli key
         # sirf banate/rotate karte waqt ek baar dikhti hai aur 'sk_' se shuru hoti hai.

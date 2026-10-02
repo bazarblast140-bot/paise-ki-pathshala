@@ -33,6 +33,7 @@ jobs:
         env:
           VIDEO_FORMAT: short
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          PAID_TTS_ENABLED: ${{ vars.PAID_TTS_ENABLED }}
         run: python board_short.py --key "${{ inputs.topic_key }}"
       - name: Upload the mp4
         uses: actions/upload-artifact@v4
