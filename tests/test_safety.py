@@ -84,6 +84,12 @@ class SelfRepairGateTests(unittest.TestCase):
              mock.patch.object(sys, "argv", ["auto_agent.py", "--format", "short", "--publish"]):
             import os
             os.environ.pop("SELF_REPAIR", None)
+            # A scheduled public slot would offer the buffer. This test is an
+            # unscheduled failure, so those vars must not be set.
+            os.environ.pop("PUBLISH_VISIBILITY", None)
+            os.environ.pop("PUBLISH_SLOT_IST", None)
+            os.environ.pop("PUBLISH_DATE_IST", None)
+            os.environ.pop("BUFFER_FILL", None)
             self.assertEqual(auto_agent.main(), 1)
         fake.propose_and_apply.assert_not_called()
 

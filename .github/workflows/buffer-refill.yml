@@ -1,0 +1,69 @@
+name: Buffer refill
+
+# Builds at most one evergreen Short when fewer than 3 are ready.
+# workflow_dispatch, plus a daily cron in a quiet hour that does not collide
+# with the 12–14h build crons, the health checks, slot watch, or trend research.
+# 06:41 UTC = 12:11 IST. Odd minute, outside 22:30–01:30 UTC.
+#
+# DeepSeek is capped at 4 calls. ElevenLabs runs only after every gate has
+# passed (the preview render uses Edge). Out of ElevenLabs credit fails closed.
+# This workflow does not publish a slot and does not post a Reel.
+on:
+  schedule:
+    - cron: "41 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: buffer-refill
+  cancel-in-progress: false
+
+jobs:
+  refill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install FFmpeg & fonts
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Build one buffer Short
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+          DEEPSEEK_MAX_CALLS: "4"
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+          ELEVENLABS_MODEL: ${{ vars.ELEVENLABS_MODEL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BUFFER_FILL: "0"
+          PUBLISH_VISIBILITY: unlisted
+          PIPELINE_MODE: preview
+        run: python buffer_shorts.py --refill
+      - name: Commit manifest and topic bank
+        if: success()
+        run: |
+          FILES=""
+          for f in data/buffer_manifest.json topic_bank.json; do
+            [ -e "$f" ] && FILES="$FILES $f"
+          done
+          git add -N $FILES
+          if git diff --quiet -- $FILES; then
+            echo "No buffer changes"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add $FILES
+            git commit -m "chore: buffer refill [skip ci]"
+            git pull --rebase --autostash || true
+            git push
+          fi

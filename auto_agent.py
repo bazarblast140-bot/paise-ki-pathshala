@@ -232,7 +232,7 @@ def main():
     log("---- end pipeline diagnostic ----")
     if external_publish_failure(out):
         log("failure looks like external publishing/OAuth; no blind rebuild/retry")
-        return rc or 1
+        return _buffer_or_fail(rc, out)
 
     # Code self-repair (patch source files inside CI, re-run + publish, then
     # commit and push the patch to main) is OFF by default. Between 28-Sep and
@@ -240,7 +240,7 @@ def main():
     # the real causes. Opt in with repo variable / env SELF_REPAIR=1.
     if os.environ.get("SELF_REPAIR", "0").strip().lower() not in ("1", "true", "yes", "on"):
         log("self-repair disabled (set SELF_REPAIR=1 to enable); failing clearly instead")
-        return rc or 1
+        return _buffer_or_fail(rc, out)
 
     # Bounded LLM repair loop. The repair model sees the actual failure,
     # relevant source files, and proposes a safe patch. Each patch is syntax
@@ -286,6 +286,24 @@ def main():
                 return rc2 or 1
 
     log("bounded self-repair exhausted; stopping without publishing an unsafe result")
+    return _buffer_or_fail(rc, out)
+
+
+def _buffer_or_fail(rc, out):
+    """After the build has given up, fill the open slot from the buffer."""
+    import buffer_shorts
+    if not buffer_shorts.failure_should_try_fill():
+        return rc or 1
+    if not buffer_shorts.build_failed_gates(out):
+        return rc or 1
+    try:
+        result = buffer_shorts.fill_from_env(False)
+    except Exception as exc:  # noqa: BLE001 — a buffer error must not hide the build failure
+        log(f"buffer fill failed: {exc}")
+        return rc or 1
+    if result.get("filled"):
+        log(f"slot filled from buffer {result.get('video_id')}")
+        return 0
     return rc or 1
 
 

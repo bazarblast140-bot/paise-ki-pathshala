@@ -21,7 +21,7 @@ _CREDIT_KEYS = (
 )
 
 
-def record_publish(video_id, publish_at=None, slot=None, platform="youtube", date_ist=None, topic_key=None, note=None, voice_engine=None, voice_fallback=None, credits=None):
+def record_publish(video_id, publish_at=None, slot=None, platform="youtube", date_ist=None, topic_key=None, note=None, voice_engine=None, voice_fallback=None, credits=None, source=None, buffer_id=None):
     """publishAt (UTC) se IST din nikalta hai — raat ka run agle din ke slot me ginta hai.
     platform="instagram" + video_id=None = sirf IG Reel gaya (YouTube token dead etc.);
     slot phir bhi bhara maana jaata hai taaki Slot watch duplicate fill na chalaye."""
@@ -55,6 +55,10 @@ def record_publish(video_id, publish_at=None, slot=None, platform="youtube", dat
         for key in _CREDIT_KEYS:
             if key in credits:
                 entry[key] = credits[key]
+    if source:
+        entry["source"] = str(source)
+    if buffer_id:
+        entry["buffer_id"] = str(buffer_id)
     entries.append(entry)
     PATH.parent.mkdir(exist_ok=True)
     PATH.write_text(json.dumps(entries[-300:], indent=1) + "\n", encoding="utf-8")

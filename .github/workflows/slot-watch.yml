@@ -25,6 +25,7 @@ on:
 # build workflow topic_bank + ledger commit karta hai
 permissions:
   contents: write
+  issues: write
 
 jobs:
   check:
@@ -38,6 +39,9 @@ jobs:
     outputs:
       missing: ${{ steps.check.outputs.missing }}
       fill: ${{ steps.check.outputs.fill }}
+      use_buffer: ${{ steps.check.outputs.use_buffer }}
+      buffer_date: ${{ steps.check.outputs.buffer_date }}
+      buffer_slot: ${{ steps.check.outputs.buffer_slot }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -59,6 +63,58 @@ jobs:
             esac
           fi
           SLOT_CHECK="$SLOT_CHECK" python slot_watch.py
+
+  # The slot that just passed is still empty and not on hold. A buffer
+  # Short is already gated, so a late private + publishAt beats leaving it blank.
+  # Same concurrency group as the publish workflow: the upload waits its turn,
+  # then re-reads the ledger and the live YouTube schedule.
+  buffer-fill:
+    needs: check
+    if: needs.check.outputs.use_buffer == 'true' && (github.event_name == 'schedule' || inputs.fill == true)
+    concurrency:
+      group: paise-ki-pathshala-publish
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Re-read ledger before the buffer upload
+        run: |
+          branch="${GITHUB_REF_NAME:-main}"
+          git fetch origin "$branch"
+          git checkout "origin/$branch" -- data/published.json data/buffer_manifest.json
+      - name: Fill this slot from the buffer
+        env:
+          BUFFER_DATE: ${{ needs.check.outputs.buffer_date }}
+          BUFFER_SLOT: ${{ needs.check.outputs.buffer_slot }}
+          PUBLISH_VISIBILITY: public
+          YOUTUBE_CLIENT_ID: ${{ secrets.YT_FIN_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
+          EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
+          IG_CROSSPOST: "1"
+          IG_USER_ID: ${{ vars.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_SURFACE: ${{ vars.IG_SURFACE || 'facebook' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python buffer_shorts.py --fill-last-chance
+      - name: Commit ledger and buffer manifest
+        run: |
+          git add data/published.json data/buffer_manifest.json
+          if git diff --cached --quiet; then
+            echo "No buffer ledger changes"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore: buffer fill [skip ci]"
+            git pull --rebase --autostash || true
+            git push
+          fi
 
   # Khali slot ka alert alag hai. Fill sirf tab jab next unfilled slot
   # 26h lookahead me ho (aur kam se kam 2h door). privacy=public -> private + publishAt. Instant
