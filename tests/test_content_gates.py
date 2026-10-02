@@ -124,8 +124,13 @@ class CaptionCardTests(unittest.TestCase):
         late = texts["pehchan"][0] + " " + " ".join(figures["pehchan"][0])
         self.assertIn("11", late)
         self.assertIn("22,600", late)
-        flat = [fig for group in figures.values() for figs in group for fig in figs]
-        self.assertEqual(sum(1 for fig in flat if fig.replace(" ", "").startswith("25")), 1)
+        first = figures["pehchan"][0]
+        second = figures["pehchan"][1]
+        self.assertEqual(sum(1 for fig in first if fig.replace(" ", "").startswith("25")), 1)
+        self.assertTrue(
+            any(fig.replace(" ", "").startswith("25") for fig in second),
+            second,
+        )
 
     def test_a_figure_said_inside_the_scene_is_on_that_card(self):
         """A cue clamped to the next beat still paints a figure already spoken."""

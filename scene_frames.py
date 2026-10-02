@@ -1422,9 +1422,10 @@ def _chart_label(fig, index):
 
 
 def panel_fill_fraction(image):
-    """Share of the card panel covered by text or a labelled graphic.
+    """Share of the card panel covered by text.
 
-    An unlabelled bar does not count. Empty navy inside the panel fails
+    Chart bars do not count, labelled or not. A single full-width bar used
+    to clear 35% with almost no words. Empty navy inside the panel fails
     below about 35%.
     """
     panel = getattr(image, "panel_box", None)
@@ -1450,33 +1451,67 @@ def panel_fill_fraction(image):
     return float(mask.mean())
 
 
-def _paint_labelled_chart(image, labels, panel):
-    """Bars inside the panel. Each bar has a label, or the chart is not drawn."""
-    labels = [_chart_label(label, i) for i, label in enumerate(labels or [])]
-    labels = [label for label in labels if label][:4]
-    if not labels:
+def _figure_value(fig):
+    raw = str(fig or "").replace(",", "")
+    match = re.search(r"\d+(?:\.\d+)?", raw)
+    if not match:
+        return None
+    try:
+        return float(match.group(0))
+    except ValueError:
+        return None
+
+
+def _chart_rows(figures):
+    """(label, value) for a real chart. One figure is not a chart."""
+    rows = []
+    for fig in figures or []:
+        value = _figure_value(fig)
+        if value is None or value <= 0:
+            continue
+        label = _chart_label(fig, len(rows))
+        if not label:
+            continue
+        rows.append((label, value))
+    return rows[:4]
+
+
+def _paint_labelled_chart(image, figures, panel, text_bottom=None):
+    """Two or more bars, scaled to the values, each labelled with its figure.
+
+    A single label draws nothing. Bars are not added to the fill boxes.
+    """
+    rows = _chart_rows(figures)
+    if len(rows) < 2:
         return
     x0, y0, x1, y1 = (int(v) for v in panel)
-    n = len(labels)
-    gap = 24
+    n = len(rows)
+    gap = 28
     inner = (x1 - x0) - 80
-    bar_w = max(90, int((inner - gap * (n - 1)) / n))
-    bar_h = int((y1 - y0) * 0.40)
-    base = y1 - 64
-    top = base - bar_h
+    bar_w = max(80, int((inner - gap * (n - 1)) / n))
+    max_h = int((y1 - y0) * 0.22)
+    min_h = max(36, int((y1 - y0) * 0.07))
+    base = y1 - 72
+    zone_top = base - max_h
+    if text_bottom is not None and float(text_bottom) > zone_top - 16:
+        return
+    peak = max(value for _label, value in rows) or 1.0
     colors = ((96, 165, 250), (34, 197, 94), (250, 204, 21), (239, 68, 68))
     draw = ImageDraw.Draw(image)
-    boxes = list(getattr(image, "labelled_graphic_boxes", None) or [])
+    bars = []
     left = x0 + 40
-    for i, label in enumerate(labels):
+    for i, (label, value) in enumerate(rows):
+        frac = max(0.0, min(1.0, value / peak))
+        bar_h = int(min_h + (max_h - min_h) * frac)
+        top = base - bar_h
         x = left + i * (bar_w + gap)
         draw.rounded_rectangle([x, top, x + bar_w, base], 16, fill=colors[i % 4])
-        boxes.append((float(x), float(top), float(x + bar_w), float(base)))
-        _text(image, x + bar_w / 2, base + 6, label, (255, 255, 255), 26, anchor="mt")
-    image.labelled_graphic_boxes = boxes
+        bars.append((float(x), float(top), float(x + bar_w), float(base), float(value)))
+        _text(image, x + bar_w / 2, base + 8, label, (255, 255, 255), 28, anchor="mt")
+    image.chart_bar_boxes = bars
 
 
-def _wrap_card(text, limit=22):
+def _wrap_words(text, limit=18):
     words = str(text or "").split()
     rows, cur = [], ""
     for word in words:
@@ -1488,7 +1523,35 @@ def _wrap_card(text, limit=22):
             cur = trial
     if cur:
         rows.append(cur)
-    return rows[:3]
+    return rows
+
+
+def _card_sentences(text):
+    text = " ".join(str(text or "").split())
+    if not text:
+        return []
+    parts = re.split(r"(?<=[।!?？])\s+", text)
+    out = []
+    for part in parts:
+        out.extend(bit.strip() for bit in re.split(r"(?<=\.)\s+", part) if bit.strip())
+    return [bit for bit in out if bit] or [text]
+
+
+def phrases_that_fit(text, limit, max_lines):
+    """Whole sentences that fit in max_lines. A sentence that does not fit is not started."""
+    shown = []
+    used = 0
+    for sentence in _card_sentences(text):
+        rows = _wrap_words(sentence, limit)
+        if not rows:
+            continue
+        if used and used + len(rows) > max_lines:
+            break
+        if not used and len(rows) > max_lines:
+            break
+        shown.extend(rows)
+        used += len(rows)
+    return shown
 
 
 def frame_card_text(frame):
@@ -1517,15 +1580,8 @@ def frames_safe_area_notes(frames):
     return notes
 
 
-def _live_fact_frame(topic, beat, index, n=1):
-    """One full-frame card of the words this scene says. No zoom and no second title.
-
-    The old finance template drew the same English bars for every risk topic
-    and a zoom then cut the title off both edges. Each scene now shows this
-    beat's own line, and a spoken beat is split so a later figure is not on
-    screen before the narration reaches it. Text stays in the middle band.
-    Text and a labelled chart fill the panel. An unlabelled bar chart is not drawn.
-    """
+def _paint_live_card(topic, beat, index, n, body_size):
+    """Headline at least 64px. Body lines are whole sentences. Bars do not count as fill."""
     width, height = K.W, K.H
     image = _live_plate(width, height)
     draw = ImageDraw.Draw(image)
@@ -1540,31 +1596,53 @@ def _live_fact_frame(topic, beat, index, n=1):
     draw.rounded_rectangle(list(panel_box), 28, fill=panel_color, outline=GOLD, width=4)
     image.panel_box = panel_box
     image.labelled_graphic_boxes = []
+    image.chart_bar_boxes = []
     card = _scene_card_text(topic, beat, index, n)
     spoken = bool(str(((topic or {}).get("_spoken_beats") or {}).get(beat) or "").strip())
     figures = _scene_figure_list(topic, beat, index, card, spoken)
     summary = _summary_line(figures)
-    chart_labels = [_chart_label(fig, i) for i, fig in enumerate(figures[:4])]
-    chart_labels = [label for label in chart_labels if label]
-    if not chart_labels:
-        chart_labels = [_BEAT_HEAD.get(beat, "बात") + " चार्ट"]
-    y = 230
+    head_size = 72
+    y = 228
     head = _BEAT_HEAD.get(beat, "बात")
-    _text(image, 540, y, head, GOLD, 40, anchor="mt")
-    y += 70
+    _text(image, 540, y, head, GOLD, head_size, anchor="mt")
+    y += head_size + 18
+    line_h = int(body_size) + 16
+    bottom = panel_box[3] - 28
+    max_lines = max(1, int((bottom - y) / line_h))
+    # Narrow wrap keeps the large size inside the safe width.
+    limit = 16 if body_size >= 80 else 18
     if summary:
-        _text(image, 540, y, summary, (250, 250, 250), 40, anchor="mt")
-        y += 64
-    chart_top = panel_box[3] - 64 - int((panel_box[3] - panel_box[1]) * 0.40)
-    for part in _wrap_card(card, limit=26):
-        if y > chart_top - 24:
-            break
-        _text(image, 540, y, part, (186, 214, 255), 36, anchor="mt")
-        y += 56
-    _paint_labelled_chart(image, chart_labels, panel_box)
+        for row in phrases_that_fit(summary, limit, max_lines):
+            _text(image, 540, y, row, (250, 250, 250), body_size, anchor="mt")
+            y += line_h
+            max_lines -= 1
+            if max_lines <= 0:
+                break
+    if max_lines > 0:
+        for row in phrases_that_fit(card, limit, max_lines):
+            _text(image, 540, y, row, (230, 236, 245), body_size, anchor="mt")
+            y += line_h
+    _paint_labelled_chart(image, figures, panel_box, text_bottom=y)
     image.scene_kind = f"fact-{beat}"
     image.panel_fill = panel_fill_fraction(image)
     return image
+
+
+def _live_fact_frame(topic, beat, index, n=1):
+    """One full-frame card of the words this scene says. No zoom and no second title.
+
+    The headline is at least 64px on a 1080-wide frame. Short phrases are drawn
+    whole. A chart is two or more bars scaled to the figures, or it is absent.
+    The bars do not count toward the 35% panel fill.
+    """
+    best = None
+    for body_size in (96, 88, 80, 72, 64):
+        image = _paint_live_card(topic, beat, index, n, body_size)
+        if best is None or image.panel_fill > best.panel_fill:
+            best = image
+        if image.panel_fill + 1e-9 >= 0.35:
+            return image
+    return best
 
 
 def _live_plate(width, height):

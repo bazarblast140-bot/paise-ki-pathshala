@@ -218,7 +218,7 @@ class UdaharanNumberTests(unittest.TestCase):
         self.assertIn("140-175", calls[0]["system"])
         self.assertIn("1.90", calls[0]["system"])
         self.assertNotIn("200-270", calls[0]["system"])
-        self.assertTrue(script["beats"]["hook"].startswith(HOOK))
+        self.assertTrue(script["beats"]["hook"].startswith(board_short.fold_roman_words(HOOK)))
         self.assertIn(example.strip("।"), script["beats"]["udaharan"])
         self.assertTrue(script.get("_trim_notes"))
         self.assertEqual(board_short.check_narration(script, topic), [])

@@ -189,7 +189,7 @@ class CraftAndLeakTests(unittest.TestCase):
                 board_short.route_gate_failure(notes[0], order),
                 ["matlab"],
             )
-        clean = "निचली wick बॉडी से 2 गुना होती है।"
+        clean = "निचली विक बॉडी से 2 गुना होती है।"
         self.assertEqual(board_short.narrator_leak_notes({"matlab": clean}, order), [])
         dumps = (
             "उदाहरण: दो, अट्ठानवे, चार हज़ार, दो लाख",

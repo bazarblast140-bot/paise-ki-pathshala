@@ -383,14 +383,20 @@ def lesson_lines(frame):
 
 
 def answer_terms_for(title, lesson=None):
-    """What the title promised. An ATR lesson answers with the distance and the name ATR."""
+    """What the title promised. An ATR lesson answers with the distance and the name ATR.
+
+    Latin finance words are folded first, so "Option buyer का breakeven"
+    is the same promise as ऑप्शन, बायर, ब्रेकईवन.
+    """
     if lesson:
         return ["एटीआर", "एसएल", str(lesson.get("distance") or ""), "हलचल"]
+    import board_short
+    folded = board_short.fold_roman_words(title or "")
     found = []
-    for tok in content_tokens(title):
+    for tok in content_tokens(folded):
         if tok not in found:
             found.append(tok)
-    for num in numbers_in(title or ""):
+    for num in numbers_in(folded):
         if num not in found:
             found.append(num)
     return found
@@ -423,10 +429,14 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
     transcript = " ".join(str(w.get("word") or "") for w in words)
     script_blob = " ".join(str(v or "") for v in (beats_text or {}).values())
     full = set(tokens(transcript)) | set(tokens(script_blob))
+    # Hindi "बाईस हज़ार छह सौ" answers a title that writes 22600.
+    import hook_check
+    spoken_nums = hook_check.extract_numbers(script_blob) | hook_check.extract_numbers(transcript)
     missing_title = []
     for term in answer_terms or []:
-        if not term_covered(term, full):
-            missing_title.append(str(term))
+        if term_covered(term, full) or str(term) in spoken_nums:
+            continue
+        missing_title.append(str(term))
     reasons = []
     if missing_title:
         reasons.append("title promise not answered: " + ", ".join(missing_title))
@@ -595,12 +605,20 @@ def transcribe_beats(beat_audio, beat_times, beats=("hook", "pehchan", "matlab",
     return words
 
 
+# A high compression ratio is the "रख्छत" loop. The tuple makes faster-whisper
+# retry at the next temperature instead of keeping the repeated decode.
+_WHISPER_TEMPERATURES = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
+
+
 def _decode(audio, vad_filter):
-    # Greedy and temperature 0. A wider beam on this CPU build is not stable.
-    # VAD is off by default: it ate a quiet Hindi beat. It is only a retry.
+    # beam_size stays 1: a wider beam on this CPU build is not stable.
+    # condition_on_previous_text stays off so a repeated token is not fed back.
+    # VAD is on when the caller asks. A quiet Hindi beat that VAD drops is
+    # retried without it.
     segments, _info = model().transcribe(
         audio, language="hi", word_timestamps=True, vad_filter=vad_filter,
-        beam_size=1, temperature=0, condition_on_previous_text=False,
+        beam_size=1, temperature=_WHISPER_TEMPERATURES,
+        compression_ratio_threshold=2.4, condition_on_previous_text=False,
     )
     words = []
     for seg in segments:
@@ -621,11 +639,12 @@ def _repetitive(words):
 
 
 def transcribe_pcm(audio):
+    """One beat. VAD first when it returns a real line; temperature fallback is inside the decode."""
     if audio.size == 0:
         raise RuntimeError("empty audio")
-    words = _decode(audio, False)
-    if _repetitive(words):
-        alt = _decode(audio, True)
-        if alt and not _repetitive(alt):
+    words = _decode(audio, True)
+    if not words or _repetitive(words):
+        alt = _decode(audio, False)
+        if alt and (not words or not _repetitive(alt)):
             return alt
     return words
