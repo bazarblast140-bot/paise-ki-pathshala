@@ -192,17 +192,20 @@ TOTAL_WORD_TARGET = (160, 180)
 NARRATION_CALL_CAP = 4
 
 # Live Shorts (ElevenLabs) explain the topic in six beats. Buffer/Edge keeps
-# the four-beat lesson above. Targets are derived from the voice coefficient:
-# Rudra defaults to 2.8 words/s, so 75-90s is 210-252 words and the aim is 231.
+# the four-beat lesson above. Targets are derived from the voice coefficient.
+# Rudra at speed 0.90 was measured at 1.9 words/s (255 words ran 133.9s).
+# 75-90s is about 140-175 words. The 82.5s midpoint is 157 words.
 LIVE_ORDER = ("hook", "pehchan", "matlab", "udaharan", "galti", "karein")
-LIVE_SHARE = {"hook": 26, "pehchan": 36, "matlab": 40, "udaharan": 48, "galti": 42, "karein": 39}
-LIVE_BASE_WPS = 2.8
+LIVE_SHARE = {"hook": 18, "pehchan": 24, "matlab": 27, "udaharan": 33, "galti": 29, "karein": 26}
+LIVE_BASE_WPS = 1.9
 ESTIMATE_SECONDS = (75.0, 90.0)
 LIVE_VOICE_SECONDS = (70.0, 95.0)
 # The model keeps missing a tight count, and a repair makes the script longer.
-# Accept ±30% per beat and 200-270 words. Audio stays 70-95s.
+# Prompt target is 140-175 words. Accept ±30% per beat and 130-185 words.
+# Audio stays 70-95s. The duration estimate is the credit gate, not the word floor.
 LIVE_BEAT_TOLERANCE = 0.30
-LIVE_TOTAL_WORDS = (200, 270)
+LIVE_WORD_TARGET = (140, 175)
+LIVE_TOTAL_WORDS = (130, 185)
 VISUAL_ALIAS = {"udaharan": "matlab", "galti": "karein"}
 CARD_LINES = {
     "udaharan": ("उदाहरण", "एक ठोस केस"),
@@ -224,8 +227,11 @@ def voice_wps(c):
             return float(raw)
         except (TypeError, ValueError):
             pass
+    # Kamal (qsz5tTEjPvsiIJZIpM8S) has not been timed. 1.9 is an unmeasured
+    # conservative estimate, the same pace Rudra was measured at, so a fallback
+    # script is not planned for a faster voice than the one that will speak it.
     if str(voice.get("voice_id") or "") == eleven_voice.KAMAL_VOICE_ID:
-        return 2.0
+        return 1.9
     return LIVE_BASE_WPS
 
 
@@ -266,7 +272,7 @@ def _lesson(topic):
     if (topic or {}).get("_live_short") and not (topic or {}).get("_atr"):
         wps = voice_wps(_topic_voice(topic))
         targets = live_beat_targets(wps)
-        return LIVE_ORDER, targets, LIVE_TOTAL_WORDS, LIVE_TOTAL_WORDS
+        return LIVE_ORDER, targets, LIVE_TOTAL_WORDS, LIVE_WORD_TARGET
     return BEATS, BEAT_WORD_TARGET, TOTAL_WORDS, TOTAL_WORD_TARGET
 
 
@@ -1012,9 +1018,10 @@ def repair_instructions(draft, rewrite, topic=None):
                 "Use this udaharan sentence verbatim or near-verbatim: "
                 + hook_check.worked_example_sentence(topic)
             )
+    tol = LIVE_BEAT_TOLERANCE if (topic or {}).get("_live_short") else None
     for beat in order:
         target = targets[beat]
-        lo, hi = beat_word_window(target)
+        lo, hi = beat_word_window(target, tol)
         current = counts[beat]
         text = str((draft.get("beats") or {}).get(beat) or "")
         if beat in rewrite:
@@ -1088,7 +1095,7 @@ def _usable_narration(n, topic=None):
 
 def live_narration_system(topic):
     """Six-beat prompt. Word targets come from the voice coefficient."""
-    _order, targets, (lo, hi), _band = _lesson(topic)
+    _order, targets, (lo, hi), (target_lo, target_hi) = _lesson(topic)
     wps = voice_wps(_topic_voice(topic))
     lines = [
         "LIVE SHORT OVERRIDE. This replaces the four-beat word counts above.",
@@ -1108,7 +1115,9 @@ def live_narration_system(topic):
         f"Allowed numbers for udaharan and galti: {_allowed_number_text(topic)}.",
         "karein = the confirmation or risk check, then one takeaway. Do not speak a CTA.",
         "Keep sentence punctuation (। . ?) so the voice can pause. Do not write run-on lines.",
-        f"Pace coefficient: {wps:.2f} words/second. Spoken audio must land in 70-95 seconds.",
+        f"Pace coefficient: {wps:.2f} words/second. Target {target_lo}-{target_hi} words "
+        "(about 75-90 seconds).",
+        "Spoken audio must land in 70-95 seconds.",
         f"The script may land in {lo}-{hi} words. A long beat is shortened in code. Do not pad.",
     ]
     for beat, target in targets.items():
@@ -2556,6 +2565,30 @@ def _duration_detail(spoken, raw, order):
     )
 
 
+def _live_estimate(narration, topic):
+    """Words, pace, and estimated seconds. This is the pre-TTS credit check."""
+    order = _lesson(topic)[0]
+    beats = (narration or {}).get("beats") or {}
+    words = sum(len(str(beats.get(beat) or "").split()) for beat in order)
+    wps = voice_wps(_topic_voice(topic))
+    seconds = (words / wps) if wps else 0.0
+    return words, wps, seconds
+
+
+def _estimate_note(narration, topic):
+    """None when words/pace lands in 70-95s. Otherwise the reason to skip TTS."""
+    if not (topic or {}).get("_live_short") or (topic or {}).get("_atr"):
+        return None
+    words, wps, seconds = _live_estimate(narration, topic)
+    lo, hi = LIVE_VOICE_SECONDS
+    if lo <= seconds <= hi:
+        return None
+    return (
+        f"estimated {seconds:.1f}s ({words} words / {wps:.2f} w/s) "
+        f"outside {lo:.0f}-{hi:.0f}"
+    )
+
+
 def _dry_fails(narration, topic, spec):
     fails = check_narration(narration, topic)
     order = _lesson(topic)[0]
@@ -2606,18 +2639,40 @@ def _one_beat_repair(narration, topic, c, spec, why):
     return rewrite
 
 
+def _collect_dry_fails(narration, topic, spec):
+    fails = list(_dry_fails(narration, topic, spec))
+    note = _estimate_note(narration, topic)
+    if note:
+        fails.append(note)
+    return fails
+
+
 def fit_estimated_duration(narration, topic, c, spec):
-    """Text gates before any TTS request. A long live script is trimmed, not rewritten."""
-    if topic.get("_live_short") and not topic.get("_atr"):
+    """Text gates before any TTS request. A long live script is trimmed, not rewritten.
+
+    The duration estimate is words / per-voice pace. Outside 70-95s, no ElevenLabs
+    call is made: a short script gets one repair, a long one is failed as text.
+    """
+    live = bool(topic.get("_live_short") and not topic.get("_atr"))
+    if live:
         apply_live_draft(narration, topic)
-    fails = _dry_fails(narration, topic, spec)
+    fails = _collect_dry_fails(narration, topic, spec)
     if not fails:
         return narration
     why = "; ".join(fails)
     print(f"[duration] dry check failed before TTS: {why}")
+    if live:
+        _words, _wps, seconds = _live_estimate(narration, topic)
+        if seconds > LIVE_VOICE_SECONDS[1]:
+            die(
+                "estimated duration outside 70-95s; refusing TTS with 0 characters spent: "
+                + why
+            )
     if _one_beat_repair(narration, topic, c, spec, why) is None:
-        die("estimated duration outside 75-90s and the DeepSeek cap is spent; no TTS")
-    fails = _dry_fails(narration, topic, spec)
+        die("estimated duration outside 70-95s and the DeepSeek cap is spent; no TTS")
+    if live:
+        apply_live_draft(narration, topic)
+    fails = _collect_dry_fails(narration, topic, spec)
     if fails:
         die(
             "dry text check still failed after one repair; refusing TTS and the topic-card template: "
@@ -2677,8 +2732,10 @@ def prepare_spoken(spoken, narration, topic, c, spec):
     if total > hi:
         words = sum(len(str(spoken.get(beat) or "").split()) for beat in order)
         rate = words / max(total, 0.1)
+        # Measured words/s of this audio. Do not lift the budget to the text-gate
+        # floor: a 1.9 w/s voice needs about 171 words for 90s, and a slower take
+        # may need fewer than 130. The re-measured duration is the final gate.
         budget = int(math.floor(90.0 * rate))
-        budget = max(LIVE_TOTAL_WORDS[0], min(LIVE_TOTAL_WORDS[1], budget))
         print(
             f"[duration] {total:.1f}s outside 70-95; trimming sentences toward {budget} words"
         )
@@ -2690,12 +2747,6 @@ def prepare_spoken(spoken, narration, topic, c, spec):
                 "voice duration outside 70-95s and no sentence could be trimmed; "
                 "refusing a longer rewrite: "
                 f"{total:.1f}s — {_duration_detail(before, raw, order)}"
-            )
-        fails = _dry_fails(narration, topic, spec)
-        if fails:
-            die(
-                "trimmed script missed the text gate; refusing another render and the template: "
-                + "; ".join(fails)
             )
     else:
         why = (
