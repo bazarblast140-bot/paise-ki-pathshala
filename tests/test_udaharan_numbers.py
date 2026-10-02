@@ -227,7 +227,7 @@ class UdaharanNumberTests(unittest.TestCase):
         for number in hook_check.extract_numbers(sub):
             self.assertIn(number, hook_check.extract_numbers(script["beats"]["udaharan"]))
 
-    def test_an_invented_number_is_still_blocked_without_a_second_call(self):
+    def test_an_invented_number_is_repaired_then_blocked(self):
         topic = _topic()
         bad = _script()
         bad["beats"]["udaharan"] = _words(_targets()["udaharan"], "उदाहरण में चार्ज 300")
@@ -247,9 +247,12 @@ class UdaharanNumberTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 board_short.narration(topic, CFG)
             block = json.loads((Path(tmp) / "narration_block.json").read_text(encoding="utf-8"))
-        self.assertEqual(len(calls), 1)
+        self.assertGreaterEqual(len(calls), 2)
+        self.assertIn("REWRITE udaharan", calls[1])
+        self.assertIn("Disallowed numbers", calls[1])
+        self.assertIn("300", calls[1])
+        self.assertIn("Allowed numbers", calls[1])
         self.assertTrue(block["blocked"])
-        self.assertIn("300", block["reason"])
         self.assertNotIn("1.5", block["reason"])
         self.assertIn("topic-card", block["reason"])
 

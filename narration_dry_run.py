@@ -94,8 +94,15 @@ def evaluate_topic(topic, c):
     reason = ""
     try:
         narration, _source = board_short.narration(live, c)
+        before = board_short._live_estimate(narration, live)[0]
+        board_short.tighten_duration_margin(narration, live)
+        gate = []
+        if board_short._live_estimate(narration, live)[0] != before:
+            gate = board_short.check_narration(narration, live)
         note = board_short._estimate_note(narration, live)
-        if note:
+        if gate:
+            reason = "; ".join(gate)
+        elif note:
             reason = note
         else:
             passed = True
