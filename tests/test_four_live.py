@@ -91,7 +91,7 @@ class FourLiveWindowTests(unittest.TestCase):
         counts = {"hook": 30, "pehchan": 40, "matlab": 48, "karein": 42}
         self.assertEqual(sum(counts.values()), 160)
         script = {
-            "title": "सेटअप का नियम समझिए",
+            "title": "नियम कदम",
             "hook_line": HOOK,
             "beats": {
                 beat: _packed(counts[beat], beat, HOOK if beat == "hook" else "")
@@ -128,7 +128,7 @@ class FourLiveWindowTests(unittest.TestCase):
     def test_estimate_still_outside_45_65_spends_no_tts(self):
         topic = _topic()
         script = {
-            "title": "सेटअप का नियम समझिए",
+            "title": "यह नियम है",
             "hook_line": HOOK,
             "beats": {beat: _packed(8, beat, HOOK if beat == "hook" else "") for beat in board_short.BEATS},
             "source": "llm",
@@ -410,7 +410,7 @@ class CraftAndLeakTests(unittest.TestCase):
         from PIL import Image
         topic = _topic()
         script = {
-            "title": "सेटअप का नियम समझिए",
+            "title": "यह नियम है",
             "hook_line": HOOK,
             "beats": {beat: _packed(12, beat, HOOK if beat == "hook" else "") for beat in board_short.BEATS},
             "source": "llm",

@@ -1462,6 +1462,47 @@ def _figure_value(fig):
         return None
 
 
+def _figure_unit(fig):
+    text = str(fig or "")
+    if "%" in text or "％" in text or "प्रतिशत" in text:
+        return "pct"
+    if "₹" in text or "लाख" in text or "करोड़" in text:
+        return "inr"
+    return "num"
+
+
+def comparable_chart_figures(figures):
+    """Figures that can share one axis.
+
+    Percents can. ₹4,000 and ₹2,00,000 cannot: the small bar would vanish.
+    """
+    groups = {}
+    order = []
+    for fig in figures or []:
+        value = _figure_value(fig)
+        if value is None or value <= 0:
+            continue
+        unit = _figure_unit(fig)
+        if unit not in groups:
+            order.append(unit)
+            groups[unit] = []
+        groups[unit].append(fig)
+    best = []
+    for unit in order:
+        rows = groups[unit]
+        if len(rows) < 2:
+            continue
+        values = [_figure_value(fig) for fig in rows]
+        peak, floor = max(values), min(values)
+        if peak <= 0:
+            continue
+        if unit != "pct" and floor * 8 < peak:
+            continue
+        if len(rows) > len(best):
+            best = list(rows)
+    return best[:4]
+
+
 def _chart_rows(figures):
     """(label, value) for a real chart. One figure is not a chart."""
     rows = []
@@ -1476,10 +1517,12 @@ def _chart_rows(figures):
     return rows[:4]
 
 
-def _paint_labelled_chart(image, figures, panel, text_bottom=None):
+def _paint_labelled_chart(image, figures, panel, text_bottom=None, fill_zone=False):
     """Two or more bars, scaled to the values, each labelled with its figure.
 
     A single label draws nothing. Bars are not added to the fill boxes.
+    fill_zone uses the whole panel as the chart, so a live card can give
+    the bars the bottom half of the frame.
     """
     rows = _chart_rows(figures)
     if len(rows) < 2:
@@ -1489,9 +1532,14 @@ def _paint_labelled_chart(image, figures, panel, text_bottom=None):
     gap = 28
     inner = (x1 - x0) - 80
     bar_w = max(80, int((inner - gap * (n - 1)) / n))
-    max_h = int((y1 - y0) * 0.22)
-    min_h = max(36, int((y1 - y0) * 0.07))
-    base = y1 - 72
+    if fill_zone:
+        base = y1 - 48
+        max_h = max(36, int(base - y0 - 8))
+        min_h = max(28, int(max_h * 0.18))
+    else:
+        max_h = int((y1 - y0) * 0.22)
+        min_h = max(36, int((y1 - y0) * 0.07))
+        base = y1 - 72
     zone_top = base - max_h
     if text_bottom is not None and float(text_bottom) > zone_top - 16:
         return
@@ -1663,13 +1711,126 @@ def _seat_panel(image, panel, color):
     return final
 
 
-def _paint_live_card(topic, beat, index, n, body_size=None):
-    """Headline at least 64px. The card hugs the phrase so empty navy is not the panel.
+def _body_spans(text):
+    """(piece, highlight) runs. A digit token is highlighted; spaces stay with it."""
+    spans = []
+    buf = ""
+    num = False
+    for tok in re.findall(r"\s+|\S+", str(text or "")):
+        is_num = bool(re.search(r"\d", tok))
+        if not buf:
+            buf, num = tok, is_num
+            continue
+        if tok.isspace() or is_num == num:
+            buf += tok
+            num = num or is_num
+            continue
+        spans.append((buf, num))
+        buf, num = tok, is_num
+    if buf:
+        spans.append((buf, num))
+    return spans
 
-    Body lines are whole sentences. A chart is drawn only for two or more digit
-    figures, and its bars are not part of the fill.
+
+def _paint_body_line(image, cx, y, text, size, fill, number_fill):
+    """One wrapped sentence line. Every number in it is gold. One sprite, so boxes do not overlap."""
+    spans = _body_spans(text)
+    if not spans:
+        return 0
+    size = int(size)
+    widths = [_text_width(piece, size) for piece, _flag in spans]
+    left = float(cx) - sum(widths) / 2.0
+    _width, row_h = _text_extent(text, size)
+    boxes = []
+    ops = []
+    cursor = left
+    for (piece, flag), width in zip(spans, widths):
+        runs = _runs(piece)
+        if len(runs) == 1:
+            font = _font(size, runs[0][0])
+            box = ImageDraw.Draw(Image.new("RGB", (8, 8))).textbbox(
+                (cursor, y), piece, font=font, anchor="lt",
+            )
+            ops.append((cursor, piece, flag, font, None))
+        else:
+            parts, union = _layout_runs(piece, size)
+            box = (cursor + union[0], y + union[1], cursor + union[2], y + union[3])
+            ops.append((cursor, piece, flag, None, parts))
+        boxes.append(box)
+        cursor += width
+    union = (
+        min(box[0] for box in boxes),
+        min(box[1] for box in boxes),
+        max(box[2] for box in boxes),
+        max(box[3] for box in boxes),
+    )
+    bleed = 4
+    x0 = int(math.floor(union[0])) - bleed
+    y0 = int(math.floor(union[1])) - bleed
+    x1 = int(math.ceil(union[2])) + bleed
+    y1 = int(math.ceil(union[3])) + bleed
+    sprite = Image.new("RGBA", (max(1, x1 - x0), max(1, y1 - y0)), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(sprite)
+    for cursor, piece, flag, font, parts in ops:
+        color = tuple(int(c) for c in (number_fill if flag else fill)) + (255,)
+        if font is not None:
+            draw.text((cursor - x0, y - y0), piece, font=font, fill=color, anchor="lt")
+        else:
+            for _path, bit, bit_font, part_box in parts:
+                draw.text(
+                    (cursor + part_box[0] - x0, y + part_box[1] - y0),
+                    bit, font=bit_font, fill=color, anchor="lt",
+                )
+    _seal(image)
+    _remember(image, sprite, (x0, y0), text, union, size, False, False, "lesson", _runs(text))
+    return max(row_h, union[3] - union[1])
+
+
+def _fit_phrase(phrase, head, head_size, top, bottom, sizes):
+    """Largest size whose wrapped sentences fit between top and bottom."""
+    for size in sizes:
+        trial = _phrase_rows(phrase, size) if phrase else []
+        if any(_text_width(row, size) > 920 for row in trial):
+            continue
+        seen = set()
+        unique = True
+        for row in trial:
+            key = normalize_label(row)
+            if not key:
+                continue
+            if key in seen:
+                unique = False
+                break
+            seen.add(key)
+        if not unique:
+            continue
+        block = _text_extent(head, head_size)[1] + 24
+        block += sum(_text_extent(row, size)[1] + 24 for row in trial)
+        if top + block <= bottom:
+            return size, trial, block
+    return None
+
+
+def _beat_chart_figures(topic, beat, index, figures):
+    """Comparable figures already said by this scene. One figure is not a chart."""
+    pool = []
+    preset = (topic or {}).get("_scene_figures")
+    if isinstance(preset, dict) and beat in preset:
+        for row in list(preset[beat])[: int(index) + 1]:
+            pool.extend(row)
+    if not pool:
+        pool = list(figures or [])
+    return comparable_chart_figures(pool)
+
+
+def _paint_live_card(topic, beat, index, n, body_size=None):
+    """The scene's own sentences, wrapped, with every number highlighted.
+
+    No separate figure line. Two or more comparable figures fill the bottom
+    half with a labelled chart. Otherwise the sentence is centred and larger.
+    Chart bars are not part of the fill. The headline stays at least 64px.
     """
-    del body_size  # size is chosen so the whole phrase fits
+    del body_size
     width, height = K.W, K.H
     shift = (_BEAT_SHIFT.get(beat, 0) + int(index)) % 4
     panel_color = (
@@ -1681,52 +1842,41 @@ def _paint_live_card(topic, beat, index, n, body_size=None):
     card = _scene_card_text(topic, beat, index, n)
     spoken = bool(str(((topic or {}).get("_spoken_beats") or {}).get(beat) or "").strip())
     figures = _scene_figure_list(topic, beat, index, card, spoken)
-    summary = _summary_line(figures)
-    # The summary repeats the card when the card already shows those figures.
-    if summary and summary not in card:
-        phrase = f"{summary} {card}".strip()
-    else:
-        phrase = card
+    phrase = card
+    chart_figs = _beat_chart_figures(topic, beat, index, figures)
     head = _BEAT_HEAD.get(beat, "बात")
     head_size = 72
     content_top = safe_area.CONTENT_TOP + 36
     content_bottom = safe_area.CONTENT_BOTTOM - 28
-    def _unique_lines(trial):
-        seen = set()
-        for row in trial:
-            key = normalize_label(row)
-            if not key:
-                continue
-            if key in seen:
-                return False
-            seen.add(key)
-        return True
-
-    chosen = 64
-    rows = _phrase_rows(phrase, chosen) if phrase else []
-    for size in (168, 152, 136, 120, 104, 88, 72, 64):
-        trial = _phrase_rows(phrase, size) if phrase else []
-        if any(_text_width(row, size) > 920 for row in trial):
-            continue
-        if not _unique_lines(trial):
-            continue
-        block = _text_extent(head, head_size)[1] + 24
-        block += sum(_text_extent(row, size)[1] + 24 for row in trial)
-        if content_top + block <= content_bottom:
-            chosen = size
-            rows = trial
-            break
+    span = content_bottom - content_top
+    charting = len(chart_figs) >= 2
+    full_sizes = (168, 152, 136, 120, 104, 88, 72, 64)
+    fit = None
+    if charting:
+        fit = _fit_phrase(
+            phrase, head, head_size, content_top, content_top + span * 0.42,
+            full_sizes + (56, 48, 40),
+        )
+        if fit is None:
+            charting = False
+    if not charting:
+        fit = _fit_phrase(phrase, head, head_size, content_top, content_bottom, full_sizes)
+    if fit is None:
+        chosen = 64
+        rows = _phrase_rows(phrase, chosen) if phrase else []
+    else:
+        chosen, rows, _block = fit
     image = _live_plate(width, height)
     image.labelled_graphic_boxes = []
     image.chart_bar_boxes = []
     head_h = _text_extent(head, head_size)[1]
     block_h = head_h + 24 + sum(_text_extent(row, chosen)[1] + 24 for row in rows)
-    y = content_top + max(0, (content_bottom - content_top - block_h) / 2)
+    zone_bottom = content_top + span * 0.42 if charting else content_bottom
+    y = content_top + max(0, (zone_bottom - content_top - block_h) / 2)
     _text(image, 540, y, head, GOLD, head_size, anchor="mt")
     y += head_h + 24
     for row in rows:
-        row_h = _text_extent(row, chosen)[1]
-        _text(image, 540, y, row, (250, 250, 250), chosen, anchor="mt")
+        row_h = _paint_body_line(image, 540, y, row, chosen, (250, 250, 250), GOLD)
         y += row_h + 24
     image.scene_kind = f"fact-{beat}"
     boxes = [
@@ -1744,15 +1894,13 @@ def _paint_live_card(topic, beat, index, n, body_size=None):
         seated = trial
         if trial.panel_fill + 1e-9 >= 0.35:
             break
-    # Bars sit under the card. They are not part of the panel, so they cannot
-    # satisfy the 35% fill. Two figures or none.
-    room_top = float(seated.panel_box[3]) + 16
-    room_bottom = min(content_bottom, room_top + 260)
-    if len(figures) >= 2 and room_bottom - room_top >= 160:
-        _paint_labelled_chart(
-            seated, figures, (90, room_top, width - 90, room_bottom),
-            text_bottom=room_top,
-        )
+    if charting:
+        chart_top = max(content_top + span * 0.50, float(seated.panel_box[3]) + 12)
+        if content_bottom - chart_top >= 220:
+            _paint_labelled_chart(
+                seated, chart_figs, (80, chart_top, width - 80, content_bottom),
+                text_bottom=float(seated.panel_box[3]), fill_zone=True,
+            )
     return seated
 
 
