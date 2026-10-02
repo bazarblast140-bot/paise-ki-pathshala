@@ -119,10 +119,26 @@ def _at(date_ist, slot):
     return datetime(year, month, day, hh, mm, tzinfo=IST)
 
 
+def is_withdrawn(entry):
+    """A private withdrawn upload is history. It does not occupy the clock slot."""
+    return str((entry or {}).get("status") or "").strip().lower() == "withdrawn"
+
+
 def find_entry(entries, date_ist, slot):
+    """First row that still occupies this slot.
+
+    Withdrawn rows stay in the ledger so that video id is not republished,
+    but they leave the clock slot open for a new gated upload. A later real
+    row or a hold still occupies the slot.
+    """
     for entry in entries:
-        if isinstance(entry, dict) and entry.get("date_ist") == date_ist and entry.get("slot") == slot:
-            return entry
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("date_ist") != date_ist or entry.get("slot") != slot:
+            continue
+        if is_withdrawn(entry):
+            continue
+        return entry
     return None
 
 
@@ -156,12 +172,11 @@ def slot_is_scheduled(entries, date_ist, slot):
     """True when this future slot is already uploaded for publishAt.
 
     A hold, a withdrawal, or an Instagram-only row (no YouTube id) is not a
-    private + publishAt upload.
+    private + publishAt upload. A withdrawn row does not cancel a later real
+    upload on the same clock slot.
     """
-    rows = _slot_rows(entries, date_ist, slot)
+    rows = [entry for entry in _slot_rows(entries, date_ist, slot) if not is_withdrawn(entry)]
     if any(is_hold(entry) for entry in rows):
-        return False
-    if any(str(entry.get("status") or "").strip().lower() == "withdrawn" for entry in rows):
         return False
     return any(str(entry.get("video_id") or "").strip() for entry in rows)
 
@@ -332,7 +347,7 @@ def taken(slot, now=None):
     except (OSError, ValueError):
         return None
     date = target_date(slot, now)
-    hit = next((e for e in entries if e.get("date_ist") == date and e.get("slot") == slot), None)
+    hit = find_entry(entries, date, slot)
     return hit and (date, hit)
 
 
