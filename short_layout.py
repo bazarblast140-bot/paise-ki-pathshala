@@ -1,5 +1,6 @@
 """On-screen text plan: punchy hook for the first 2 seconds, key points on every beat, poll at the end."""
 from engagement import engagement_question
+import hook_check
 
 BEATS = ("hook", "pehchan", "matlab", "karein")
 ORDER = ("hook", "pehchan", "matlab", "udaharan", "galti", "karein")
@@ -10,6 +11,8 @@ _EXTRA = {
 
 
 def _lines(topic, beat):
+    if beat in hook_check.TEACHING_BEATS:
+        return hook_check.example_card_lines(topic)
     pair = (topic.get("beats") or {}).get(beat)
     if isinstance(pair, (list, tuple)) and len(pair) >= 2:
         return str(pair[0]), str(pair[1])

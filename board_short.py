@@ -273,6 +273,8 @@ def timed_beats(beat_times):
 
 
 def card_pair(topic, beat):
+    if beat in hook_check.TEACHING_BEATS:
+        return hook_check.example_card_lines(topic)
     pair = (topic.get("beats") or {}).get(beat)
     if isinstance(pair, (list, tuple)) and len(pair) >= 2:
         return str(pair[0]), str(pair[1])
@@ -356,6 +358,9 @@ def check_narration(n, topic):
         extra = hook_check.unsourced_numbers(text, topic)
     if extra:
         fails.append(f"ye numbers topic me nahi hain: {sorted(extra)} — sirf diye gaye numbers use karo")
+    if topic.get("_live_short"):
+        for beat in hook_check.unlabelled_example_beats(beats, order):
+            fails.append(f"{beat} numbers must be labelled उदाहरण in the same sentence")
     low = text.lower()
     bad = [w for w in FORBIDDEN if w.lower() in low]
     if bad:
@@ -774,7 +779,7 @@ def require_llm_narration(n, source):
 
 
 def _allowed_number_list(topic):
-    nums = hook_check.allowed_example_numbers(topic)
+    nums = hook_check.teaching_allowed_numbers(topic)
 
     def key(value):
         try:
@@ -839,6 +844,10 @@ def beats_to_rewrite(n, topic, extra=""):
     for beat in _number_beats(n, topic, order):
         if beat not in rewrite:
             rewrite.append(beat)
+    if (topic or {}).get("_live_short"):
+        for beat in hook_check.unlabelled_example_beats(beats, order):
+            if beat not in rewrite:
+                rewrite.append(beat)
     if fails and not rewrite:
         rewrite = list(order)
     return rewrite
@@ -863,12 +872,12 @@ def repair_instructions(draft, rewrite, topic=None):
             f"Allowed numbers: {allowed}. "
             "A rewritten beat may use only these figures. Do not invent any other number."
         )
-        if hook_check.allows_example_numbers(topic):
-            lines.append(
-                "This evergreen topic may use one extra figure in udaharan or galti only, "
-                "when the same sentence says उदाहरण or मान लीजिए. Never in the hook. "
-                "That figure must be the number already on screen."
-            )
+        lines.append(
+            "In udaharan and galti, every number must be one of those figures, "
+            "and the same sentence must contain the word उदाहरण. "
+            "A label does not make an invented number allowed. "
+            "Real market data may use only the sourced figures."
+        )
     for beat in order:
         target = targets[beat]
         lo, hi = beat_word_window(target)
@@ -952,10 +961,12 @@ def live_narration_system(topic):
         "Beats, in order: hook, pehchan, matlab, udaharan, galti, karein.",
         "hook = the problem. The punchy hook_line is on screen from the first frame.",
         "pehchan = how to recognise it. matlab = what it means.",
-        "udaharan = one worked example. Use only the allowed numbers below. "
-        "On an evergreen topic, label an extra on-screen figure as उदाहरण or मान लीजिए "
-        "in the same sentence. Never put that extra figure in the hook.",
-        "galti = one common mistake and the fix, using the same allowed numbers.",
+        "udaharan = one worked example. galti = one common mistake and the fix.",
+        "Both may use only the code-computed numbers below. "
+        "Every number in those beats must sit in a sentence that contains उदाहरण. "
+        "Do not invent a figure. उदाहरण does not permit a new number. "
+        "The four-beat evergreen permission to add a labelled figure does not apply. "
+        "A real market price may use only the sourced figures.",
         f"Allowed numbers for udaharan and galti: {_allowed_number_text(topic)}.",
         "karein = the confirmation or risk check, then one takeaway. Do not speak a CTA.",
         "Keep sentence punctuation (। . ?) so the voice pauses. Do not write run-on lines.",

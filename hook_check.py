@@ -124,11 +124,6 @@ def worked_example_numbers(topic):
     return found | derived
 
 
-def allowed_example_numbers(topic):
-    """Every figure udaharan and galti may speak without a fresh invention."""
-    return set(allowed_numbers(topic)) | worked_example_numbers(topic)
-
-
 def _market_claim(topic):
     if not isinstance(topic, dict) or topic.get("_atr"):
         return True
@@ -141,26 +136,75 @@ def _market_claim(topic):
     return False
 
 
-def live_number_faults(beats, topic, order, allowed=None):
-    """Numbers that are not on the card, and not a labelled teaching example.
+def teaching_allowed_numbers(topic, sourced=None):
+    """The only figures udaharan and galti may use.
 
-    A labelled उदाहरण or मान लीजिए figure is accepted only inside udaharan or
-    galti, and only on an evergreen topic. The hook and a market-data claim
-    never get that exception. The number-match gate still requires the figure
-    on screen.
+    Concept topics get numbers computed from the card (entry, stop, target,
+    and the risk and reward that arithmetic produces). A market-data topic
+    gets only figures already in the topic or the fetched series. A label
+    such as उदाहरण does not add a number.
+    """
+    extra = set(sourced or ())
+    if _market_claim(topic):
+        # Real prices stay on the card and the fetched series. Do not
+        # invent a risk or a charge the source did not write.
+        return set(extract_numbers(_topic_blob(topic))) | extra
+    return set(worked_example_numbers(topic)) | extra
+
+
+def live_number_faults(beats, topic, order, allowed=None):
+    """Numbers that were not computed from the topic or the sourced data.
+
+    udaharan and galti have no label exception. An invented figure fails
+    even when the sentence says उदाहरण. Real market data stays on the
+    sourced set only.
     """
     card = set(allowed if allowed is not None else allowed_numbers(topic))
-    teaching = card | worked_example_numbers(topic)
-    evergreen = (not _market_claim(topic)) and allows_example_numbers(topic)
+    sourced = set()
+    if allowed is not None:
+        sourced = set(allowed) - set(allowed_numbers(topic))
+    teaching = teaching_allowed_numbers(topic, sourced=sourced)
     extra = set()
     for beat in order:
         text = str((beats or {}).get(beat) or "")
         nums = extract_numbers(text)
-        ok = set(teaching if beat in TEACHING_BEATS else card)
-        if evergreen and beat in TEACHING_BEATS:
-            ok |= example_labelled_numbers(text)
+        ok = teaching if beat in TEACHING_BEATS else card
         extra |= nums - ok
     return extra
+
+
+def unlabelled_example_beats(beats, order):
+    """Teaching beats whose numbers are not in a sentence that says उदाहरण."""
+    found = []
+    for beat in order:
+        if beat not in TEACHING_BEATS:
+            continue
+        text = str((beats or {}).get(beat) or "")
+        if not extract_numbers(text):
+            continue
+        pieces = re.split(r"[।!?]+|\.\s+", text) or [text]
+        if not any(piece.strip() for piece in pieces):
+            pieces = [text]
+        for sentence in pieces:
+            if extract_numbers(sentence) and "उदाहरण" not in sentence:
+                found.append(beat)
+                break
+    return found
+
+
+def example_card_lines(topic):
+    """Scene card for the worked example: the word उदाहरण plus the computed figures."""
+    nums = teaching_allowed_numbers(topic)
+
+    def key(value):
+        try:
+            return (0, float(value))
+        except (TypeError, ValueError):
+            return (1, str(value))
+
+    shown = ", ".join(sorted(nums, key=key))
+    detail = f"उदाहरण {shown}".strip()
+    return "उदाहरण", detail
 
 
 def beats_with_number_faults(beats, topic, order, allowed=None):
