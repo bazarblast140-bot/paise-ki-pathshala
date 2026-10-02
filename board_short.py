@@ -206,6 +206,10 @@ LIVE_VOICE_SECONDS = (70.0, 95.0)
 LIVE_BEAT_TOLERANCE = 0.30
 LIVE_WORD_TARGET = (140, 175)
 LIVE_TOTAL_WORDS = (130, 185)
+# 177 words at 1.9 w/s is about 93s: inside the 95s gate, and too close once
+# the take runs long. Trim toward 170 words before any TTS call.
+LIVE_ESTIMATE_MARGIN_S = 90.0
+LIVE_MARGIN_WORDS = 170
 VISUAL_ALIAS = {"udaharan": "matlab", "galti": "karein"}
 CARD_LINES = {
     "udaharan": ("उदाहरण", "एक ठोस केस"),
@@ -1030,12 +1034,60 @@ def apply_live_draft(narration, topic, total_hi=None):
     return narration
 
 
+def drop_disallowed_sentences(narration, topic):
+    """Drop sentences that still contain a rejected number. No model call.
+
+    The hook's first sentence and the udaharan core calculation stay. The
+    caller re-checks the word windows after this and blocks only if they fail.
+    """
+    if not isinstance(narration, dict):
+        return False
+    if not (topic or {}).get("_live_short") or (topic or {}).get("_atr"):
+        return False
+    order = _lesson(topic)[0]
+    beats = narration.setdefault("beats", {})
+    example = hook_check.worked_example_sentence(topic)
+    notes = []
+    changed = False
+    for beat in order:
+        sentences = _split_sentences(beats.get(beat) or "")
+        kept = []
+        beat_changed = False
+        for index, sentence in enumerate(sentences):
+            faults = hook_check.live_number_faults({beat: sentence}, topic, (beat,))
+            protected = (beat == "hook" and index == 0) or _sentence_protected(
+                beat, sentence, index, example)
+            if faults and not protected:
+                snippet = " ".join(str(sentence).split())
+                if len(snippet) > 80:
+                    snippet = snippet[:77] + "..."
+                notes.append(
+                    f"{beat}: dropped '{snippet}' (disallowed {', '.join(sorted(faults))})"
+                )
+                beat_changed = True
+                changed = True
+                continue
+            kept.append(sentence)
+        if beat_changed:
+            beats[beat] = _join_sentences(kept)
+    if not changed:
+        return False
+    bucket = narration.setdefault("_trim_notes", [])
+    if isinstance(bucket, list):
+        bucket.extend(notes)
+    for note in notes:
+        print(f"[trim] {note}", flush=True)
+    topic["_spoken_beats"] = {beat: str(beats.get(beat) or "") for beat in order}
+    return True
+
+
 def beats_to_rewrite(n, topic, extra=""):
     """Beats the model may rewrite.
 
     A live short rewrites a beat that is still outside its window after the
     trim, including a hook that stayed long because its first question is kept.
-    A beat that is only too short is still included.
+    A beat that is only too short is still included. A beat that still contains
+    a disallowed number is rewritten too, inside the same call budget.
     """
     order, targets, total_window, _band = _lesson(topic)
     if topic.get("_atr"):
@@ -1053,6 +1105,9 @@ def beats_to_rewrite(n, topic, extra=""):
             for beat in order:
                 if counts[beat] < targets[beat] and beat not in rewrite:
                     rewrite.append(beat)
+        for beat in _number_beats(n, topic, order):
+            if beat not in rewrite:
+                rewrite.append(beat)
         return rewrite
     rewrite = []
     for beat in order:
@@ -1143,6 +1198,13 @@ def repair_instructions(draft, rewrite, topic=None):
                     " This beat is vague: it needs a concrete number, level, or step "
                     "the viewer can point at."
                 )
+            if topic is not None and topic.get("_live_short"):
+                bad = sorted(hook_check.live_number_faults({beat: text}, topic, (beat,)))
+                if bad:
+                    line += (
+                        f" Disallowed numbers: {bad}. Remove every one of them. "
+                        "Use only the allowed list."
+                    )
             lines.append(line)
         else:
             lines.append(
@@ -1223,7 +1285,11 @@ def live_narration_system(topic):
         "karein = the confirmation or risk check, then one takeaway. Do not speak a CTA.",
         "Keep sentence punctuation (। . ?) so the voice can pause. Do not write run-on lines.",
         f"Pace coefficient: {wps:.2f} words/second. Target {target_lo}-{target_hi} words "
-        "(about 75-90 seconds).",
+        "(about 75-90 seconds). Aim for about 155 words.",
+        "A percentage p on the topic also allows 100−p. "
+        "A sum, difference, product, or ratio of two topic numbers is allowed "
+        "only when the same sentence writes that arithmetic and the result matches. "
+        "Any other new number is blocked.",
         "Spoken audio must land in 70-95 seconds.",
         f"The script may land in {lo}-{hi} words. A long beat is shortened in code. Do not pad.",
     ]
@@ -1354,6 +1420,15 @@ def narration(topic, c, spec=None):
             n = apply_live_draft(n, topic)
         draft = n
         fails = _gate(n)
+        if (
+            fails
+            and kind == "repair"
+            and topic.get("_live_short")
+            and not topic.get("_atr")
+            and drop_disallowed_sentences(n, topic)
+        ):
+            draft = n
+            fails = _gate(n)
         if not fails:
             ok(f"narration OK (call {calls})")
             n["review_attempts"] = calls
@@ -2700,6 +2775,28 @@ def _estimate_note(narration, topic):
     )
 
 
+def tighten_duration_margin(narration, topic):
+    """Before TTS, a live estimate over 90s is trimmed toward 170 words.
+
+    The prompt still aims at 140-175. This pass is free: no model call and no
+    voice request. The hook's first question and the udaharan core stay.
+    """
+    if not isinstance(narration, dict):
+        return narration
+    if not (topic or {}).get("_live_short") or (topic or {}).get("_atr"):
+        return narration
+    words, _wps, seconds = _live_estimate(narration, topic)
+    if seconds <= LIVE_ESTIMATE_MARGIN_S:
+        return narration
+    print(
+        f"[duration] estimate {seconds:.1f}s ({words} words) over "
+        f"{LIVE_ESTIMATE_MARGIN_S:.0f}s; trimming toward {LIVE_MARGIN_WORDS} words",
+        flush=True,
+    )
+    apply_live_draft(narration, topic, total_hi=LIVE_MARGIN_WORDS)
+    return narration
+
+
 def _dry_fails(narration, topic, spec):
     fails = check_narration(narration, topic)
     order = _lesson(topic)[0]
@@ -2769,6 +2866,7 @@ def fit_estimated_duration(narration, topic, c, spec):
         apply_live_draft(narration, topic)
     fails = _collect_dry_fails(narration, topic, spec)
     if not fails:
+        tighten_duration_margin(narration, topic)
         return narration
     why = "; ".join(fails)
     print(f"[duration] dry check failed before TTS: {why}")
@@ -2789,6 +2887,7 @@ def fit_estimated_duration(narration, topic, c, spec):
             "dry text check still failed after one repair; refusing TTS and the topic-card template: "
             + "; ".join(fails)
         )
+    tighten_duration_margin(narration, topic)
     (RUN / "narration.json").write_text(
         json.dumps(narration, ensure_ascii=False, indent=2), encoding="utf-8")
     return narration

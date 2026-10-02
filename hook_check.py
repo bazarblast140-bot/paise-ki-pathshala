@@ -34,7 +34,7 @@ def allowed_numbers(topic):
         *[str(x) for x in (topic.get("facts") or [])],
         *[str(x) for pair in (topic.get("beats") or {}).values() for x in pair],
     ])
-    return extract_numbers(blob) | {"1", "2", "3"}
+    return extract_numbers(blob) | {"1", "2", "3"} | percentage_complements(topic)
 
 
 # Same markers the evergreen buffer uses. A figure counts as an example only
@@ -81,6 +81,30 @@ _EXPR_RE = re.compile(
 
 def standard_multiplier_numbers():
     return {_canon_number(value) for value in STANDARD_MULTIPLIERS}
+
+
+_PERCENT_RE = re.compile(
+    r"(\d[\d,]*(?:\.\d+)?)\s*(?:%|％|प्रतिशत|percent)",
+    re.I,
+)
+
+
+def percentage_complements(topic):
+    """For each percentage p on the topic card, also allow 100−p.
+
+    A 40% win rate may be spoken as a 60% loss rate. The complement is not an
+    invented figure. Values outside 0–100 do not grow the allow list.
+    """
+    found = set()
+    for match in _PERCENT_RE.finditer(_topic_blob(topic)):
+        try:
+            value = float(match.group(1).replace(",", ""))
+        except ValueError:
+            continue
+        if not 0 < value < 100:
+            continue
+        found.add(_canon_number(100 - value))
+    return found
 
 
 def _topic_blob(topic):
@@ -209,6 +233,33 @@ def verified_arithmetic_numbers(text, allowed):
     return found
 
 
+def same_sentence_stated_results(text, allowed):
+    """Equals-results whose operands are allowed and whose arithmetic matches.
+
+    The expression and the written result have to sit in the same sentence.
+    40 × 2 = 80 passes. 40 × 2 = 300 does not, and a bare 300 does not either.
+    """
+    allowed = {
+        _canon_number(float(str(item).replace(",", "")))
+        for item in (allowed or set())
+        if str(item).strip()
+    }
+    found = set()
+    for sentence in re.split(r"[।!?？]+|\.\s+", text or ""):
+        for match in _EXPR_RE.finditer(sentence):
+            value = _eval_arithmetic(match.group(1), allowed)
+            stated = match.group(2)
+            if value is None or stated is None:
+                continue
+            try:
+                stated_value = float(stated.replace(",", ""))
+            except ValueError:
+                continue
+            if _same_number(value, stated_value):
+                found.add(_canon_number(stated_value))
+    return found
+
+
 def worked_example_sentence(topic):
     """The udaharan line the model should speak verbatim or near-verbatim.
 
@@ -284,7 +335,7 @@ def teaching_allowed_numbers(topic, sourced=None):
     gets only figures already in the topic or the fetched series. A label
     such as उदाहरण does not add a number.
     """
-    extra = set(sourced or ())
+    extra = set(sourced or ()) | percentage_complements(topic)
     if _market_claim(topic):
         # Real prices stay on the card and the fetched series. Do not
         # invent a risk or a charge the source did not write.
@@ -296,9 +347,11 @@ def live_number_faults(beats, topic, order, allowed=None):
     """Numbers that were not computed from the topic or the sourced data.
 
     udaharan and galti may also use a standard multiplier (1, 1.5, 2, 3) or a
-    result that the beat's own expression evaluates to. A label does not add
-    a number. Real market data stays on the sourced set only: no multiplier
-    and no extra arithmetic.
+    result that the beat's own expression evaluates to. Any other beat may use
+    a sum, difference, product, or ratio of two topic numbers when that same
+    sentence writes the arithmetic and the result matches. A percentage p on
+    the card also allows 100−p. A label does not add a number. Real market
+    data stays on the sourced set only: no multiplier and no extra arithmetic.
     """
     card = set(allowed if allowed is not None else allowed_numbers(topic))
     sourced = set()
@@ -306,6 +359,7 @@ def live_number_faults(beats, topic, order, allowed=None):
         sourced = set(allowed) - set(allowed_numbers(topic))
     teaching = teaching_allowed_numbers(topic, sourced=sourced)
     market = _market_claim(topic)
+    operands = set(extract_numbers(_topic_blob(topic))) | percentage_complements(topic)
     extra = set()
     for beat in order:
         text = str((beats or {}).get(beat) or "")
@@ -316,7 +370,9 @@ def live_number_faults(beats, topic, order, allowed=None):
         elif beat in TEACHING_BEATS:
             ok = set(teaching)
         else:
-            ok = card
+            ok = set(card)
+            if not market:
+                ok |= same_sentence_stated_results(text, operands)
         extra |= nums - ok
     return extra
 
