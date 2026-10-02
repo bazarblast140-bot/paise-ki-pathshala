@@ -16,6 +16,8 @@ FRAME_H = 1920
 CONTENT_TOP = 188
 CONTENT_BOTTOM = 1060
 SUBTITLE_TOP = 1160
+# Hard ceiling for burned subtitles. The disclaimer starts at SOURCE_Y, below this.
+SUBTITLE_LIMIT = 1504
 SUBTITLE_BOTTOM = 1560
 BRAND_TOP = 1588
 BRAND_BOTTOM = 1720

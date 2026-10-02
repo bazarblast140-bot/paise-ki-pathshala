@@ -254,8 +254,7 @@ class AtrLessonTests(unittest.TestCase):
                 cols = np.flatnonzero(ink[:, :, 3].max(axis=0) > 20)
                 self.assertGreater(cols.size, 2)
                 ink_w = int(cols[-1] - cols[0] + 1)
-                box = probe.textbbox((0, 0), layer["text"], font=scene_frames._font(layer["size"]))
-                expect = box[2] - box[0]
+                expect = scene_frames.measure_ink(layer["text"], layer["size"])
                 self.assertGreater(expect, 0)
                 self.assertAlmostEqual(ink_w, expect, delta=max(12, expect * 0.2))
         names = board_short.SCENE_TRANSITIONS
@@ -352,6 +351,64 @@ class MotionGateTests(unittest.TestCase):
         later = np.asarray(moving[0].animate(1).convert("RGB"))
         delta = float(np.abs(early.astype(np.int16) - later.astype(np.int16)).mean())
         self.assertGreaterEqual(delta, scene_pace.VISUAL_MIN_DELTA)
+
+    def test_no_tofu_glyph_on_any_atr_sprite(self):
+        bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))["topics"]
+        topic = next(t for t in bank if t["key"] == "atr_sl")
+        spec = market_data.spec_for_topic(topic, today=date(2026, 10, 2))
+        self.assertTrue(scene_frames.missing_glyphs("PKP", scene_frames._FONT))
+        frames = []
+        for beat, n in (("hook", 3), ("pehchan", 3), ("matlab", 5), ("karein", 5)):
+            made, _flags = scene_frames.frames_for(topic, beat, n, spec)
+            frames.extend(made)
+        for frame in frames:
+            for layer in frame.text_layers:
+                missing = scene_frames.layer_missing(layer)
+                self.assertEqual(missing, [], f"{layer.get('text')!r} {missing}")
+        brand = next(
+            layer for layer in frames[0].text_layers if layer.get("text") == "PKP" and layer.get("persist")
+        )
+        self.assertEqual(brand["font"], scene_frames._SANS)
+
+    def test_subtitle_box_holds_every_frame_including_a_long_line(self):
+        import engagement
+
+        bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))["topics"]
+        topic = next(t for t in bank if t["key"] == "atr_sl")
+        spec = market_data.spec_for_topic(topic, today=date(2026, 10, 2))
+        market_data.apply_atr_card(topic, spec["atr"])
+        script = board_short.atr_narration(topic)
+        times = {"hook": (0.0, 10.0), "pehchan": (10.0, 21.0), "matlab": (21.0, 38.0), "karein": (38.0, 55.0)}
+        cta = engagement.engagement_question(topic)
+        window = board_short._subtitle_limits()
+        placed = board_short.layout_in_box([cta], window, 40, 18)
+        flat = [row for group in placed for row in group]
+        self.assertTrue(flat)
+        self.assertLessEqual(max(row[1][3] for row in flat), safe_area.SUBTITLE_LIMIT)
+        disclaimer = board_short._top_box(board_short.DISCLAIMER, 540, safe_area.SOURCE_Y, 26)
+        self.assertFalse(safe_area.overlapping([row[1] for row in flat] + [disclaimer]))
+        ass = board_short.build_ass(topic, times, script["beats"], script["hook_line"], cta)
+        self.assertNotIn(cta, ass)
+        self.assertNotIn(f"मात्रा {spec['atr']['qty']}, जोखिम {spec['atr']['risk']}", ass)
+        groups = {}
+        for scene in scene_pace.plan_scenes(times):
+            groups.setdefault(scene["beat"], []).append(scene)
+        frames = []
+        scenes = []
+        for beat, group in groups.items():
+            made, _flags = scene_frames.frames_for(topic, beat, len(group), spec)
+            for scene, frame in zip(group, made):
+                scene["frame"] = frame
+                scenes.append(scene)
+                frames.append(frame)
+        text_frames = board_short.frame_text_boxes(
+            scenes, topic, times, script["beats"], script["hook_line"], cta)
+        self.assertGreater(len(text_frames), 50 * 30)
+        for t, boxes in text_frames:
+            self.assertFalse(safe_area.overlapping(boxes), f"{t:.2f} {safe_area.overlapping(boxes)[:2]}")
+            for box in boxes:
+                if box[1] < safe_area.BRAND_TOP:
+                    self.assertLessEqual(box[3], safe_area.SUBTITLE_LIMIT + 0.5, f"{t:.2f} {box}")
 
 
 class BedTests(unittest.TestCase):

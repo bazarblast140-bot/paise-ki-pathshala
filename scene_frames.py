@@ -19,7 +19,9 @@ import market_data
 import safe_area
 
 _FONT = "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Bold.ttf"
+_SANS = "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf"
 _font_cache = {}
+_cmap_cache = {}
 _BG = None
 _SHADOWS = {}
 CHART_KINDS = ("problem", "split")
@@ -29,14 +31,123 @@ GOLD = (212, 168, 72)
 PROGRESS = (72, 1768, 1008, 1776)
 
 
-def _font(size):
-    size = int(size)
-    if size not in _font_cache:
-        if os.path.exists(_FONT):
-            _font_cache[size] = ImageFont.truetype(_FONT, size)
+def _cmap(path):
+    if path not in _cmap_cache:
+        from fontTools.ttLib import TTFont
+        tt = TTFont(path)
+        _cmap_cache[path] = set(tt.getBestCmap() or {})
+        tt.close()
+    return _cmap_cache[path]
+
+
+def missing_glyphs(text, font_path):
+    """Characters the font would draw as .notdef. Spaces are not glyphs."""
+    covered = _cmap(font_path)
+    return [ch for ch in (text or "") if not ch.isspace() and ord(ch) not in covered]
+
+
+def _kind_for(ch):
+    o = ord(ch)
+    deva = (0x0900 <= o <= 0x097F) or (0xA8E0 <= o <= 0xA8FF)
+    in_d = o in _cmap(_FONT)
+    in_s = o in _cmap(_SANS)
+    if deva or (in_d and not in_s):
+        return "deva"
+    if in_s and not in_d:
+        return "sans"
+    if in_d and in_s:
+        return "common"
+    raise ValueError(f"no glyph for {ch!r}")
+
+
+def _runs(text):
+    """One HarfBuzz run per script. Shared punctuation stays with the neighbor that covers it."""
+    if not text:
+        return []
+    chars = list(text)
+    kinds = [_kind_for(ch) for ch in chars]
+    resolved = list(kinds)
+    for i, kind in enumerate(kinds):
+        if kind != "common":
+            continue
+        prev = next((kinds[j] for j in range(i - 1, -1, -1) if kinds[j] != "common"), None)
+        nxt = next((kinds[j] for j in range(i + 1, len(kinds)) if kinds[j] != "common"), None)
+
+        def covers(name, ch=chars[i]):
+            path = _FONT if name == "deva" else _SANS
+            return ord(ch) in _cmap(path)
+
+        if prev and covers(prev):
+            resolved[i] = prev
+        elif nxt and covers(nxt):
+            resolved[i] = nxt
+        elif covers("deva"):
+            resolved[i] = "deva"
         else:
-            _font_cache[size] = K.font(size)
-    return _font_cache[size]
+            resolved[i] = "sans"
+    runs = []
+    for ch, kind in zip(chars, resolved):
+        path = _FONT if kind == "deva" else _SANS
+        if runs and runs[-1][0] == path:
+            runs[-1] = (path, runs[-1][1] + ch)
+        else:
+            runs.append((path, ch))
+    for path, piece in runs:
+        miss = missing_glyphs(piece, path)
+        if miss:
+            raise ValueError(f"no glyph for {''.join(miss)!r}")
+    return runs
+
+
+def _font(size, path=None):
+    path = path or _FONT
+    size = int(size)
+    key = (size, path)
+    if key not in _font_cache:
+        if os.path.exists(path):
+            _font_cache[key] = ImageFont.truetype(path, size)
+        else:
+            _font_cache[key] = K.font(size)
+    return _font_cache[key]
+
+
+def _layout_runs(text, size):
+    runs = _runs(text)
+    probe = ImageDraw.Draw(Image.new("RGB", (8, 8)))
+    x = 0.0
+    parts = []
+    for path, piece in runs:
+        font = _font(size, path)
+        box = probe.textbbox((x, 0), piece, font=font, anchor="lt")
+        parts.append((path, piece, font, box))
+        x = float(box[2])
+    union = (
+        min(p[3][0] for p in parts),
+        min(p[3][1] for p in parts),
+        max(p[3][2] for p in parts),
+        max(p[3][3] for p in parts),
+    )
+    return parts, union
+
+
+def measure_ink(text, size):
+    """Width of the shaped line, using the same script runs the drawer uses."""
+    _parts, union = _layout_runs(text, int(size))
+    return max(1, int(round(union[2] - union[0])))
+
+
+def layer_missing(layer):
+    """Characters a rendered sprite would have drawn as tofu."""
+    text = layer.get("text") or ""
+    if not text:
+        return []
+    runs = layer.get("runs")
+    if not runs:
+        return missing_glyphs(text, layer.get("font") or _FONT)
+    missing = []
+    for path, piece in runs:
+        missing.extend(missing_glyphs(piece, path))
+    return missing
 
 
 def kinds_for(beat, n):
@@ -149,11 +260,49 @@ def _seal(img):
         img.label_boxes = []
 
 
-def _text(img, x, y, text, fill, size, anchor="lt", persist=False, band=True, alpha=255, faint=False):
+def _anchor_shift(anchor, union):
+    """Move a left-top layout so `anchor` sits on the caller's point."""
+    x0, y0, x1, y1 = union
+    w, h = x1 - x0, y1 - y0
+    if anchor == "mt":
+        return -w / 2.0 - x0, -y0
+    if anchor == "mm":
+        return -w / 2.0 - x0, -h / 2.0 - y0
+    if anchor == "lm":
+        return -x0, -h / 2.0 - y0
+    if anchor == "rm":
+        return -w - x0, -h / 2.0 - y0
+    return -x0, -y0
+
+
+def _remember(img, sprite, xy, text, box, size, persist, faint, role, runs):
+    img.paste(sprite, xy, sprite)
+    pad = 6
+    rect = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
+    img.label_boxes.append(tuple(rect))
+    img.text_layers.append({
+        "image": sprite,
+        "xy": xy,
+        "text": text,
+        "shaped": True,
+        "box": tuple(float(v) for v in box),
+        "size": int(size),
+        "persist": bool(persist),
+        "faint": bool(faint),
+        "role": role or "lesson",
+        "font": runs[0][0] if runs else _FONT,
+        "runs": list(runs),
+    })
+    return rect
+
+
+def _text(img, x, y, text, fill, size, anchor="lt", persist=False, band=True, alpha=255,
+          faint=False, role="lesson"):
     """Draw one whole shaped line and record its padded box.
 
-    One ImageDraw.text call is one HarfBuzz/Raqm sprite. Call this after the
-    candles, rules, and card are already on the plate.
+    A single script is one ImageDraw.text call (one HarfBuzz/Raqm sprite).
+    A mixed line is several runs pasted into that same sprite. Call this after
+    the candles, rules, and card are already on the plate.
     """
     if not text:
         return None
@@ -165,24 +314,37 @@ def _text(img, x, y, text, fill, size, anchor="lt", persist=False, band=True, al
     pad = 6
     size = int(size)
     x, y = float(x), float(y)
+    runs = _runs(text)
+    fill_rgba = tuple(int(c) for c in fill) + (int(alpha),)
     probe = ImageDraw.Draw(img)
     while size >= 16:
-        font = _font(size)
-        box = probe.textbbox((x, y), text, font=font, anchor=anchor)
-        rect = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
-        dx = dy = 0.0
-        if rect[0] < left:
-            dx = left - rect[0]
-        elif rect[2] > right:
-            dx = right - rect[2]
-        if rect[1] < top:
-            dy = top - rect[1]
-        elif rect[3] > bottom:
-            dy = bottom - rect[3]
-        if dx or dy:
-            x += dx
-            y += dy
+        if len(runs) == 1:
+            font = _font(size, runs[0][0])
             box = probe.textbbox((x, y), text, font=font, anchor=anchor)
+        else:
+            _parts, union = _layout_runs(text, size)
+            dx, dy = _anchor_shift(anchor, union)
+            box = (x + dx + union[0], y + dy + union[1], x + dx + union[2], y + dy + union[3])
+        rect = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
+        shift_x = shift_y = 0.0
+        if rect[0] < left:
+            shift_x = left - rect[0]
+        elif rect[2] > right:
+            shift_x = right - rect[2]
+        if rect[1] < top:
+            shift_y = top - rect[1]
+        elif rect[3] > bottom:
+            shift_y = bottom - rect[3]
+        if shift_x or shift_y:
+            x += shift_x
+            y += shift_y
+            if len(runs) == 1:
+                font = _font(size, runs[0][0])
+                box = probe.textbbox((x, y), text, font=font, anchor=anchor)
+            else:
+                _parts, union = _layout_runs(text, size)
+                dx, dy = _anchor_shift(anchor, union)
+                box = (x + dx + union[0], y + dy + union[1], x + dx + union[2], y + dy + union[3])
             rect = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
         fits = (
             rect[0] >= left - 0.2 and rect[2] <= right + 0.2
@@ -191,30 +353,35 @@ def _text(img, x, y, text, fill, size, anchor="lt", persist=False, band=True, al
         if fits:
             break
         size -= 2
-    font = _font(max(size, 16))
-    box = probe.textbbox((x, y), text, font=font, anchor=anchor)
+    size = max(size, 16)
     bleed = 4
-    x0 = int(math.floor(box[0])) - bleed
-    y0 = int(math.floor(box[1])) - bleed
-    x1 = int(math.ceil(box[2])) + bleed
-    y1 = int(math.ceil(box[3])) + bleed
-    sprite = Image.new("RGBA", (max(1, x1 - x0), max(1, y1 - y0)), (0, 0, 0, 0))
-    fill_rgba = tuple(int(c) for c in fill) + (int(alpha),)
-    ImageDraw.Draw(sprite).text((x - x0, y - y0), text, font=font, fill=fill_rgba, anchor=anchor)
-    img.paste(sprite, (x0, y0), sprite)
-    rect = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
-    img.label_boxes.append(tuple(rect))
-    img.text_layers.append({
-        "image": sprite,
-        "xy": (x0, y0),
-        "text": text,
-        "shaped": True,
-        "box": tuple(float(v) for v in box),
-        "size": int(font.size),
-        "persist": bool(persist),
-        "faint": bool(faint or alpha < 80),
-    })
-    return rect
+    if len(runs) == 1:
+        font = _font(size, runs[0][0])
+        box = probe.textbbox((x, y), text, font=font, anchor=anchor)
+        x0 = int(math.floor(box[0])) - bleed
+        y0 = int(math.floor(box[1])) - bleed
+        x1 = int(math.ceil(box[2])) + bleed
+        y1 = int(math.ceil(box[3])) + bleed
+        sprite = Image.new("RGBA", (max(1, x1 - x0), max(1, y1 - y0)), (0, 0, 0, 0))
+        ImageDraw.Draw(sprite).text((x - x0, y - y0), text, font=font, fill=fill_rgba, anchor=anchor)
+    else:
+        parts, union = _layout_runs(text, size)
+        dx, dy = _anchor_shift(anchor, union)
+        box = (x + dx + union[0], y + dy + union[1], x + dx + union[2], y + dy + union[3])
+        x0 = int(math.floor(box[0])) - bleed
+        y0 = int(math.floor(box[1])) - bleed
+        x1 = int(math.ceil(box[2])) + bleed
+        y1 = int(math.ceil(box[3])) + bleed
+        sprite = Image.new("RGBA", (max(1, x1 - x0), max(1, y1 - y0)), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(sprite)
+        for path, piece, font, part_box in parts:
+            draw.text(
+                (x + dx + part_box[0] - x0, y + dy + part_box[1] - y0),
+                piece, font=font, fill=fill_rgba, anchor="lt",
+            )
+    return _remember(
+        img, sprite, (x0, y0), text, box, size, persist, faint or alpha < 80, role, runs,
+    )
 
 
 def _glow_line(img, x0, y, x1, color):
@@ -245,7 +412,10 @@ def _glow_line(img, x0, y, x1, color):
 
 def _brand(img):
     """Channel mark in the brand band, under the subtitles and above the progress bar."""
-    _text(img, 88, safe_area.BRAND_Y, "PKP", GOLD, 26, anchor="lt", persist=True, band=False)
+    _text(
+        img, 88, safe_area.BRAND_Y, "PKP", GOLD, 26, anchor="lt", persist=True, band=False,
+        role="brand",
+    )
 
 
 def paint_progress(img, frac):
@@ -279,7 +449,7 @@ def _source(img, lesson):
     """Source line shares the brand band. It does not sit in the subtitle band."""
     _text(
         img, 540, safe_area.SOURCE_Y, f"Yahoo Finance   {lesson['as_of']}",
-        K.MUTED, 26, anchor="mt", band=False,
+        K.MUTED, 26, anchor="mt", band=False, role="source",
     )
 
 
@@ -334,13 +504,13 @@ def _axis_labels(img, ax, steps=4):
         y = ax.y(price)
         if y < ax.y0 + 4 or y > ax.y1 - 4:
             continue
-        _text(img, ax.x1 + 14, y, f"{price:.1f}", K.MUTED, 20, anchor="lm")
+        _text(img, ax.x1 + 14, y, f"{price:.1f}", K.MUTED, 20, anchor="lm", role="axis")
 
 
 def _watermark(img, box):
     cx = (box[0] + box[2]) / 2
     cy = (box[1] + box[3]) / 2
-    _text(img, cx, cy, "PKP", GOLD, 64, anchor="mm", alpha=42, faint=True)
+    _text(img, cx, cy, "PKP", GOLD, 64, anchor="mm", alpha=42, faint=True, role="brand")
 
 
 def _rule(img, ax, price, color, frac=1.0):
@@ -383,9 +553,11 @@ def _problem(lesson, step, total):
     _text(img, 100, 220, "समस्या", K.YELLOW, 40, anchor="lt")
     _text(img, 100, 274, "एचडीएफसी बैंक दैनिक", K.INK, 28, anchor="lt")
     if show_hit:
-        _text(img, 620, 226, "तंग रेखा कट गई", K.RED, 30, anchor="lt")
+        _text(img, 620, 220, "एटीआर", K.YELLOW, 32, anchor="lt")
+        _text(img, 620, 268, "हलचल नापता है", K.INK, 26, anchor="lt")
     else:
-        _text(img, 620, 226, "कैंडल दर कैंडल", K.MUTED, 30, anchor="lt")
+        _text(img, 620, 220, "सामान्य हलचल", K.YELLOW, 30, anchor="lt")
+        _text(img, 620, 268, "तंग रेखा", K.INK, 28, anchor="lt")
     _axis_labels(img, ax)
     _source(img, lesson)
     return _finish(img, "problem")
@@ -410,13 +582,15 @@ def _formula(lesson, step, total):
         _text(img, 540, 470, str(lesson["period"]), K.YELLOW, 132, anchor="mt")
         _text(img, 540, 680, "कैंडल की औसत", K.INK, 42, anchor="mt")
     elif phase == 1:
-        _text(img, 540, 450, "औसत", K.MUTED, 34, anchor="mt")
-        _text(img, 540, 530, lesson["atr"], K.YELLOW, 116, anchor="mt")
-        _text(img, 540, 720, "पॉइंट हलचल", K.INK, 40, anchor="mt")
+        # The figure itself is spoken at the end of this beat, on the next card.
+        _text(img, 540, 470, "औसत", K.YELLOW, 88, anchor="mt")
+        _text(img, 540, 640, "हलचल", K.INK, 64, anchor="mt")
+        _text(img, 540, 780, "पिछले कैंडल", K.MUTED, 32, anchor="mt")
     else:
-        _text(img, 540, 470, f"{lesson['atr']}  ×  {lesson['multiple']}", K.INK, 50, anchor="mt")
-        _text(img, 540, 580, f"=  {lesson['distance']}", K.YELLOW, 80, anchor="mt")
-        _text(img, 540, 740, "पॉइंट की दूरी", K.INK, 40, anchor="mt")
+        # The product is spoken in the next beat. This card stays on the average.
+        _text(img, 540, 430, "एचडीएफसी बैंक", K.INK, 40, anchor="mt")
+        _text(img, 540, 530, lesson["atr"], K.YELLOW, 116, anchor="mt")
+        _text(img, 540, 720, "औसत हलचल", K.INK, 42, anchor="mt")
     _text(img, 540, 900, "दिशा नहीं, सिर्फ़ हलचल", K.MUTED, 30, anchor="mt")
     _source(img, lesson)
     return _finish(img, "formula")
@@ -514,20 +688,28 @@ def _push(img, box, scale):
 
 
 def _ladder_moving(lesson, phase):
-    """Full ladder with a growing entry-to-SL bracket, a counting distance, and a ticking price."""
+    """Full ladder with a growing entry-to-SL bracket, a counting distance, and a ticking price.
+
+    SL and the upper price stay off the card until this phase has reached them.
+    The distance line is the real figure, never a 0.0 placeholder.
+    """
     phase = max(0.0, min(1.0, float(phase)))
     grown = _ease(phase)
+    show_sl = phase >= 0.35
+    show_target = phase >= 0.70
     img = _blank()
     _card(img)
     entry, sl, target, y_of = _ladder_ys(lesson)
     draw = ImageDraw.Draw(img)
     draw.line([(200, 420), (200, 960)], fill=(88, 100, 120), width=3)
     rows = (
-        (entry, K.TARGET_GREEN, f"एंट्री  {lesson['entry']}"),
-        (sl, K.SL_RED, f"एसएल  {lesson['sl']}"),
-        (target, K.BLUE, f"ऊपर  {lesson['target']}"),
+        (entry, K.TARGET_GREEN, f"एंट्री  {lesson['entry']}", True),
+        (sl, K.SL_RED, f"एसएल  {lesson['sl']}", show_sl),
+        (target, K.BLUE, f"ऊपर  {lesson['target']}", show_target),
     )
-    for price, col, label in rows:
+    for price, col, label, show in rows:
+        if not show:
+            continue
         y = y_of(price)
         draw.line([(230, y), (700, y)], fill=col, width=4)
         draw.line([(860, y), (886, y)], fill=(120, 132, 150), width=3)
@@ -539,10 +721,13 @@ def _ladder_moving(lesson, phase):
     live = entry + (sl - entry) * grown
     tick = lesson["sl"] if abs(live - sl) < 0.05 else f"{live:.1f}"
     _text(img, 100, 220, "कीमत की सीढ़ी", K.YELLOW, 42, anchor="lt")
-    _text(img, 540, 312, f"दूरी  {count}", K.YELLOW, 32, anchor="mt")
-    for price, col, label in rows:
-        _text(img, 250, y_of(price) - 42, label, col, 30, anchor="lt")
-    _text(img, 898, tip, tick, GOLD, 22, anchor="lm")
+    _text(img, 540, 292, f"दूरी  {lesson['distance']}", K.YELLOW, 32, anchor="mt")
+    for price, col, label, show in rows:
+        if show:
+            _text(img, 250, y_of(price) - 42, label, col, 30, anchor="lt")
+    if phase >= 0.08:
+        _text(img, 860, 300, count, GOLD, 22, anchor="mt", role="meter")
+        _text(img, 898, tip, tick, GOLD, 22, anchor="lm", role="meter")
     img = _finish(img, "ladder")
     _push(img, (150, 380, 990, 1020), 1.0 + 0.06 * phase)
     return img
@@ -593,11 +778,16 @@ def _ladder_reveal(lesson, phase):
         draw.line([(230, y), (x1, y)], fill=col, width=4)
         if frac > 0.92:
             draw.line([(860, y), (886, y)], fill=(120, 132, 150), width=3)
-        pending.append((y, col, label, frac))
+        pending.append((y, col, label, frac, price))
     _text(img, 100, 220, "कीमत की सीढ़ी", K.YELLOW, 42, anchor="lt")
-    for y, col, label, frac in pending:
-        if frac > 0.82:
+    # Price words wait until the voice has reached them. The gold row still travels.
+    for y, col, label, frac, price in pending:
+        if frac > 0.82 and abs(price - entry) < 0.05:
             _text(img, 250, y - 42, label, col, 30, anchor="lt")
+    if phase >= 0.50:
+        _text(img, 540, 300, f"{lesson['multiple']} गुना", K.YELLOW, 32, anchor="mt")
+    if phase >= 0.75:
+        _text(img, 540, 360, f"दूरी  {lesson['distance']}", K.INK, 32, anchor="mt")
     return _finish(img, "ladder")
 
 
@@ -670,45 +860,69 @@ def _split(lesson):
 
 
 def _size(lesson):
+    """This slice says the tight line is cut by the ATR swing, not the rupee total."""
     img = _blank()
     _card(img)
-    ImageDraw.Draw(img).rounded_rectangle([200, 800, 880, 812], 5, fill=K.YELLOW)
-    _text(img, 540, 250, "चौड़ी एसएल", K.YELLOW, 60, anchor="mt")
-    _text(img, 540, 370, "कम मात्रा", K.INK, 48, anchor="mt")
-    _text(img, 540, 520, f"{lesson['distance']}  ×  {lesson['qty']}", K.INK, 46, anchor="mt")
-    _text(img, 540, 640, f"=  {lesson['risk']} रुपये", K.YELLOW, 50, anchor="mt")
-    _text(img, 540, 860, "दूरी बढ़े तो मात्रा घटाओ", K.INK, 32, anchor="mt")
-    _text(img, 540, 930, "जोखिम रुपये में रहता है", K.MUTED, 28, anchor="mt")
+    ImageDraw.Draw(img).rounded_rectangle([200, 860, 880, 872], 5, fill=K.YELLOW)
+    _text(img, 540, 280, "तंग रेखा", K.RED, 64, anchor="mt")
+    _text(img, 540, 440, f"{lesson['atr']} की हलचल", K.YELLOW, 52, anchor="mt")
+    _text(img, 540, 600, "रेखा कटती है", K.INK, 48, anchor="mt")
+    _text(img, 540, 760, "शोर में तंग एसएल", K.MUTED, 32, anchor="mt")
     return _finish(img, "size")
 
 
 def _takeaway(lesson):
     img = _blank()
     _card(img)
-    ImageDraw.Draw(img).rectangle([240, 340, 840, 350], fill=K.YELLOW)
-    _text(img, 540, 250, "याद रखें", K.YELLOW, 46, anchor="mt")
-    _text(img, 540, 420, f"{lesson['multiple']} गुना एटीआर", K.YELLOW, 56, anchor="mt")
-    _text(img, 540, 580, "तंग रेखा शोर में कटती है", K.INK, 36, anchor="mt")
-    _text(img, 540, 700, "चौड़ी दूरी, कम मात्रा", K.INK, 36, anchor="mt")
-    _text(img, 540, 880, "शिक्षा है, सलाह नहीं", K.MUTED, 30, anchor="mt")
+    ImageDraw.Draw(img).rectangle([240, 300, 840, 310], fill=K.YELLOW)
+    _text(img, 540, 360, "दूरी", K.YELLOW, 48, anchor="mt")
+    _text(img, 540, 480, str(lesson["distance"]), K.YELLOW, 96, anchor="mt")
+    _text(img, 540, 660, "पॉइंट", K.INK, 40, anchor="mt")
+    _text(img, 540, 780, "मात्रा इसी दूरी से", K.INK, 36, anchor="mt")
     return _finish(img, "takeaway")
 
 
-def _cta(lesson, step=0, total=1):
-    """Two different cards so the last beat is not one still for six seconds."""
+def _rupees(value):
+    return f"₹{int(float(str(value).replace(',', ''))):,}"
+
+
+def _cta_at(lesson, step=0, total=1, phase=1.0):
+    """One recap card. The second still adds the education line and the poll."""
+    phase = max(0.0, min(1.0, float(phase)))
     img = _blank()
     _card(img)
     draw = ImageDraw.Draw(img)
+    bar = 200 + int(680 * (0.35 + 0.65 * phase))
+    draw.rounded_rectangle([200, 250, bar, 264], 5, fill=K.YELLOW)
+    sl_line = f"एसएल = भाव − {lesson['multiple']} गुना एटीआर = {lesson['sl']}"
+    risk_line = f"{lesson['qty']} शेयर पर जोखिम {_rupees(lesson['risk'])}"
+    _text(img, 540, 320, sl_line, K.INK, 32, anchor="mt")
+    _text(img, 540, 430, risk_line, K.YELLOW, 36, anchor="mt")
     if total > 1 and step >= 1:
-        draw.rectangle([140, 280, 940, 294], fill=K.YELLOW)
-        _text(img, 540, 360, "फिर खुद तय करें", K.YELLOW, 64, anchor="mt")
-        _text(img, 540, 540, "शिक्षा है, सलाह नहीं", K.INK, 40, anchor="mt")
-        _text(img, 540, 700, f"दूरी {lesson['multiple']} गुना एटीआर", K.MUTED, 34, anchor="mt")
-    else:
-        draw.rectangle([340, 360, 740, 372], fill=K.YELLOW)
-        _text(img, 540, 430, "एक नियम", K.YELLOW, 76, anchor="mt")
-        _text(img, 540, 620, f"दूरी {lesson['multiple']} गुना एटीआर", K.INK, 40, anchor="mt")
+        panel_h = int(220 * phase)
+        if panel_h > 8:
+            draw.rounded_rectangle([140, 860, 940, 860 + panel_h], 18, fill=(24, 32, 48))
+        _text(img, 540, 560, "शिक्षा है, सलाह नहीं", K.INK, 40, anchor="mt")
+        import engagement
+        _text(
+            img, 540, 700, engagement.engagement_question({"cat": "INDICATOR"}),
+            K.YELLOW, 28, anchor="mt", role="cta",
+        )
+    elif phase > 0.15:
+        # Motion inside the first recap so a four-second span is not a still.
+        tick = int(40 * phase)
+        draw.rectangle([160, 620, 160 + int(760 * phase), 628 + tick], fill=(212, 168, 72))
     return _finish(img, "cta")
+
+
+def _cta(lesson, step=0, total=1):
+    """Two different recap cards so the last beat is not one still."""
+    img = _cta_at(lesson, step, total, 1.0)
+    if total > 1:
+        img.animate = (lambda u, step=step, total=total: _cta_at(
+            lesson, step, total, max(0.0, min(1.0, float(u))),
+        ))
+    return img
 
 
 _BUILDERS = {

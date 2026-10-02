@@ -16,6 +16,7 @@ Writes run/: final.mp4, thumbnail.jpg, script.txt, spoken.txt, shots.json, subs.
 import argparse
 import asyncio
 import json
+import math
 import os
 import re
 import shutil
@@ -598,9 +599,10 @@ def narration(topic, c, spec=None):
             why = fails or [content["summary"]]
             die("ATR narration failed its gate: " + "; ".join(why))
         n["review_attempts"] = 1
+        n["source"] = "outline"
         (RUN / "narration.json").write_text(json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
         ok("narration: calm ATR script")
-        return n, "fallback"
+        return n, "outline"
     cache = RUN / "narration.json"
     if cache.exists():
         try:
@@ -658,7 +660,8 @@ def narration(topic, c, spec=None):
         if self_review.next_action(False, attempt) != "retry":
             break
     print("[warn] LLM narration failed the hook/teaching gate — building narration from the topic card")
-    n = fallback_narration(topic)
+    # The failed or partial LLM text is discarded. The card is one outline, and it is not published.
+    n, source = resolve_narration(None, fallback_narration(topic))
     n["review_attempts"] = self_review.MAX_ATTEMPTS
     n["narration_fallback"] = True
     n["source"] = "fallback"
@@ -670,6 +673,50 @@ def narration(topic, c, spec=None):
     if fallback_fails:
         reason += ": " + "; ".join(fallback_fails)
     block_fallback(n, reason)
+
+
+def resolve_narration(llm_result, template):
+    """One outline only. A partial LLM result is dropped; the template is used whole."""
+    beats = (llm_result or {}).get("beats") if isinstance(llm_result, dict) else None
+    title = str((llm_result or {}).get("title") or "").strip() if isinstance(llm_result, dict) else ""
+    hook = str((llm_result or {}).get("hook_line") or "").strip() if isinstance(llm_result, dict) else ""
+    complete = (
+        isinstance(beats, dict)
+        and bool(title) and bool(hook)
+        and all(str(beats.get(b) or "").strip() for b in BEATS)
+    )
+    if not complete:
+        return {
+            "title": template["title"],
+            "hook_line": template["hook_line"],
+            "beats": {b: template["beats"][b] for b in BEATS},
+        }, "fallback"
+    return {
+        "title": title,
+        "hook_line": hook,
+        "beats": {b: str(beats[b]).strip() for b in BEATS},
+    }, "llm"
+
+
+def upload_block_reason(source, narration=None):
+    """A fallback or a mixed draft does not publish. Skipping the slot is the safe outcome."""
+    if source in ("outline", "llm", "cache"):
+        return ""
+    if source == "fallback":
+        return "LLM narration fell back to the topic card; upload blocked"
+    return f"narration source {source} is not a single outline; upload blocked"
+
+
+def apply_upload_block(review, source):
+    reason = upload_block_reason(source)
+    if not reason:
+        return review
+    review["public_ok"] = False
+    review["passed"] = False
+    review.setdefault("notes", []).append(reason)
+    summary = review.get("summary") or ""
+    review["summary"] = (summary + " — " + reason).strip(" —")
+    return review
 
 
 # ---------------------------------------------------------------- voice
@@ -1008,119 +1055,248 @@ def _top_box(text, x, y, size, max_w=None):
     )
 
 
-def on_screen_boxes(topic, beat_times, spoken, hook_line, cta, t):
-    """ASS boxes visible at time t. Scene sprites are added by the caller."""
+def _subtitle_limits():
     import safe_area
+    left, _top, right, _bottom = safe_area.limits()
+    return (left + 8, safe_area.SUBTITLE_TOP, right - 8, safe_area.SUBTITLE_LIMIT)
+
+
+def layout_in_box(lines, box, max_size, min_size):
+    """Shrink and wrap until every input line sits inside box.
+
+    Returns one group per input line. Each group is (text, bbox, size, y) rows.
+    The last attempt is returned even if it still sticks out, so the gate can fail it.
+    """
+    left, top, right, bottom = (float(v) for v in box)
+    max_w = max(40.0, right - left - 8)
+    probe = ImageDraw.Draw(Image.new("RGB", (4, 4)))
+    best = []
+    size = int(max_size)
+    floor = int(min_size)
+    while size >= floor:
+        gap = max(4, int(size * 0.22))
+        y = top + 4
+        groups = []
+        fits = True
+        font = scene_frames._font(size)
+        for line in lines:
+            rows = []
+            for piece in (_wrap_lines(line, size, max_w) or [""]):
+                if not str(piece).strip():
+                    continue
+                b = probe.textbbox((540, y), piece, font=font, anchor="mt")
+                rect = (float(b[0]), float(b[1]), float(b[2]), float(b[3]))
+                if rect[0] < left - 0.5 or rect[2] > right + 0.5 or rect[1] < top - 0.5 or rect[3] > bottom + 0.5:
+                    fits = False
+                rows.append((piece, rect, size, y))
+                y = rect[3] + gap
+            groups.append(rows)
+            y += 6
+        best = groups
+        if fits and groups and any(groups):
+            return groups
+        size -= 2
+    return best
+
+
+def _measure_at(text, y, size, max_w):
+    """Boxes for `text` wrapped at a reserved size and top, so a shorter line stays put."""
+    probe = ImageDraw.Draw(Image.new("RGB", (4, 4)))
+    font = scene_frames._font(int(size))
+    gap = max(4, int(size * 0.22))
+    rows = []
+    cursor = float(y)
+    for piece in (_wrap_lines(text, size, max_w) or [""]):
+        if not str(piece).strip():
+            continue
+        b = probe.textbbox((540, cursor), piece, font=font, anchor="mt")
+        rows.append((piece, (float(b[0]), float(b[1]), float(b[2]), float(b[3])), int(size), cursor))
+        cursor = float(b[3]) + gap
+    return rows
+
+
+def _active_caption(parts, t0, t1, t):
+    if not parts:
+        return ""
+    total = sum(len(p) for p in parts) or 1
+    cursor = t0 + 0.1
+    span = max(0.2, (t1 - t0) - 0.2)
+    caption = parts[-1]
+    for p in parts:
+        dt = span * len(p) / total
+        if cursor <= t < cursor + dt:
+            return p
+        cursor += dt
+    return caption
+
+
+def _reserved(topic, beat, spoken, hook_line):
+    """Stable slots for one beat, sized from the full headline and the longest caption."""
+    parts = chunks(spoken.get(beat) or "")
+    longest = max(parts, key=len) if parts else ""
+    if beat == "karein":
+        groups = layout_in_box([longest or " "], _subtitle_limits(), 40, 18)
+        return {"caption": groups[0] if groups else []}
+    head = hook_line if beat == "hook" else topic["beats"][beat][0]
+    key = topic["beats"][beat][1]
+    groups = layout_in_box([head, key, longest or " "], _subtitle_limits(), 40, 18)
+    while len(groups) < 3:
+        groups.append([])
+    return {"head": groups[0], "key": groups[1], "caption": groups[2]}
+
+
+def _caption_rows(reserved_rows, text):
+    if not reserved_rows or not str(text).strip():
+        return []
+    _piece, _rect, size, y = reserved_rows[0]
+    left, _top, right, _bottom = _subtitle_limits()
+    return _measure_at(text, y, size, max(40.0, right - left - 8))
+
+
+def on_screen_boxes(topic, beat_times, spoken, hook_line, cta, t):
+    """ASS boxes visible at time t. Scene sprites are added by the caller.
+
+    The poll stays on the recap card. Karein does not burn the beat headline or the key line.
+    """
+    import safe_area
+    del cta  # spoken on the card, not in this band
     boxes = []
     t = float(t)
     for b in BEATS:
         t0, t1 = beat_times[b]
         if b == "hook":
             t0 = 0.0
-        if not (t0 - 1e-6 <= t < t1 + 1e-6):
+        # Half-open, so the cut belongs to the next beat and two stacks never share a frame.
+        if b == BEATS[-1]:
+            active = (t0 - 1e-9) <= t <= (t1 + 1e-9)
+        else:
+            active = (t0 - 1e-9) <= t < (t1 - 1e-9)
+        if not active:
             continue
-        head, sub = topic["beats"][b]
+        slots = _reserved(topic, b, spoken, hook_line)
+        parts = chunks(spoken.get(b) or "")
+        caption = _active_caption(parts, t0, t1, t)
         if b == "hook":
-            head = hook_line
-        head_size = fit_size(head, 960, 60, 32)
-        key_size = fit_size(sub, 960, 36, 26)
-        boxes.append(_top_box(head, 540, safe_area.HEAD_Y, head_size))
-        boxes.append(_top_box(sub, 540, safe_area.KEY_Y, key_size))
-        parts = chunks(spoken[b])
-        total = sum(len(p) for p in parts) or 1
-        cursor = t0 + 0.1
-        span = max(0.2, (t1 - t0) - 0.2)
-        caption = parts[-1] if parts else ""
-        for p in parts:
-            dt = span * len(p) / total
-            if cursor <= t < cursor + dt:
-                caption = p
-                break
-            cursor += dt
-        if caption:
-            cap_size = fit_size(caption, 960, 40, 26)
-            boxes.append(_top_box(caption, 540, safe_area.CAPTION_Y, cap_size))
+            shown = hook_motion.visible_at(hook_line, t)
+            if shown and slots.get("head"):
+                _piece, _rect, size, y = slots["head"][0]
+                left, _top, right, _bottom = _subtitle_limits()
+                for row in _measure_at(shown, y, size, max(40.0, right - left - 8)):
+                    boxes.append(row[1])
+        elif slots.get("head"):
+            boxes.extend(row[1] for row in slots["head"])
+        if b != "karein":
+            boxes.extend(row[1] for row in slots.get("key") or [])
+        boxes.extend(row[1] for row in _caption_rows(slots.get("caption"), caption))
     t0, t1 = beat_times["karein"]
     if t0 - 1e-6 <= t <= t1 + 1e-6:
         boxes.append(_top_box(DISCLAIMER, 540, safe_area.SOURCE_Y, 26))
-        cta_start = max(t0, t1 - 2.8)
-        if t >= cta_start:
-            boxes.append(_top_box(cta, 540, safe_area.CTA_Y, 32, max_w=900))
     return boxes
 
 
+def _layer_boxes(frame):
+    return [
+        layer["box"] for layer in (getattr(frame, "text_layers", None) or [])
+        if layer.get("text") and layer.get("box") and not layer.get("faint")
+    ]
+
+
+def frame_text_boxes(scenes, topic, beat_times, spoken, hook_line, cta, fps=30):
+    """Every frame: scene lesson boxes plus the burned subtitle boxes.
+
+    Animated scenes are redrawn at a few phases and reused, so this stays a
+    box check rather than a full encode.
+    """
+    frames = [s.get("frame") for s in scenes]
+    if not frames or any(frame is None for frame in frames):
+        return None
+    durations = [float(s["end"]) - float(s["start"]) for s in scenes]
+    total = sum(durations)
+    starts = []
+    acc = 0.0
+    for dur in durations:
+        starts.append(acc)
+        acc += dur
+    cache = {}
+
+    def scene_boxes(index, t):
+        frame = frames[index]
+        anim = getattr(frame, "animate", None)
+        if anim is None:
+            return _layer_boxes(frame)
+        local = 0.0 if durations[index] <= 0 else (t - starts[index]) / durations[index]
+        key = (index, round(max(0.0, min(1.0, local)) * 8) / 8)
+        if key not in cache:
+            cache[key] = _layer_boxes(anim(key[1]))
+        return cache[key]
+
+    text_frames = []
+    n = max(1, int(math.ceil(total * fps)))
+    for i in range(n):
+        t = min(total - 1e-3, i / fps)
+        index = 0
+        for k, start in enumerate(starts):
+            if start <= t:
+                index = k
+        boxes = list(scene_boxes(index, t))
+        boxes.extend(on_screen_boxes(topic, beat_times, spoken, hook_line, cta, t))
+        text_frames.append((t, boxes))
+    return text_frames
+
+
 def _craft_samples(scenes, topic, beat_times, spoken, hook_line, cta):
-    """One frame a second for the still check, and each scene's midpoint for text boxes."""
+    """One frame a second for the still check, and every frame for text boxes."""
     frames = [s.get("frame") for s in scenes]
     if not frames or any(frame is None for frame in frames):
         return None, None
     durations = [float(s["end"]) - float(s["start"]) for s in scenes]
     total = sum(durations)
-
-    def boxes_at(frame, t):
-        found = [
-            layer["box"] for layer in (getattr(frame, "text_layers", None) or [])
-            if layer.get("text") and layer.get("box") and not layer.get("faint")
-        ]
-        found.extend(on_screen_boxes(topic, beat_times, spoken, hook_line, cta, t))
-        return found
-
     samples = []
     t = 0.0
     while t < total - 0.05:
         frame = scene_transition.render_at(frames, durations, t, SCENE_TRANSITIONS, SCENE_FADE_S)
         samples.append((t, np.asarray(frame.convert("RGB"))))
         t += 1.0
-    text_frames = []
-    moments = [(float(s["start"]) + float(s["end"])) / 2.0 for s in scenes]
-    k0, k1 = beat_times["karein"]
-    moments.append(max(k0, k1 - 1.4))
-    for moment in moments:
-        frame = scene_transition.render_at(
-            frames, durations, moment, SCENE_TRANSITIONS, SCENE_FADE_S)
-        text_frames.append((moment, boxes_at(frame, moment)))
+    text_frames = frame_text_boxes(scenes, topic, beat_times, spoken, hook_line, cta)
     return samples, text_frames
+
+
+def _ass_rows(rows, t0, t1, colour, fade):
+    ev = []
+    for piece, _rect, size, y in rows:
+        ev.append(K.ass_text(t0, t1, 540, y, size, colour, piece, 8, fade=fade, wrap=False))
+    return ev
 
 
 def build_ass(topic, beat_times, spoken, hook_line, cta):
     import safe_area
+    del cta  # the poll is a card sprite, not a subtitle
     ev = []
     for b in BEATS:
         t0, t1 = beat_times[b]
-        head, sub = topic["beats"][b]
+        slots = _reserved(topic, b, spoken, hook_line)
         if b == "hook":
-            # Solid gold typewriter from the first frame. The full line is on
-            # screen by 1.4s and stays through the hook beat (covers 0-2s).
-            head = hook_line
             t0 = 0.0
-            ev.extend(hook_motion.dialogues(
-                head, t1, 540, safe_area.HEAD_Y, fit_size(head, 960, 60, 32)))
-        else:
-            ev.append(K.ass_text(
-                t0 + 0.05, t1, 540, safe_area.HEAD_Y, fit_size(head, 960, 60, 32),
-                K.YEL, head, 8, fade=True))
-        ev.append(K.ass_text(
-            t0 + (0 if b == "hook" else 0.05), t1, 540, safe_area.KEY_Y,
-            fit_size(sub, 960, 36, 26), K.WHITE, sub, 8, fade=(b != "hook")))
+            head = slots.get("head") or []
+            if head:
+                _piece, _rect, size, y = head[0]
+                ev.extend(hook_motion.dialogues(hook_line, t1, 540, y, size))
+            ev.extend(_ass_rows(slots.get("key") or [], t0, t1, K.WHITE, False))
+        elif b != "karein":
+            ev.extend(_ass_rows(slots.get("head") or [], t0 + 0.05, t1, K.YEL, True))
+            ev.extend(_ass_rows(slots.get("key") or [], t0 + 0.05, t1, K.WHITE, True))
         parts = chunks(spoken[b])
         total = sum(len(p) for p in parts) or 1
         t = t0 + 0.1
-        span = (t1 - t0) - 0.2
+        span = max(0.2, (t1 - t0) - 0.2)
         for p in parts:
             dt = span * len(p) / total
-            ev.append(K.ass_caption(
-                t, t + dt, p, y=safe_area.CAPTION_Y, size=fit_size(p, 960, 40, 26)))
+            for piece, _rect, size, y in _caption_rows(slots.get("caption"), p):
+                ev.append(K.ass_caption(t, t + dt, piece, y=y, size=size))
             t += dt
     t0, t1 = beat_times["karein"]
-    # Grey disclaimer sits in the brand band, under the white subtitle band.
+    # Grey disclaimer sits in the brand band, under the fixed subtitle box.
     ev.append(K.ass_text(t0, t1, 540, safe_area.SOURCE_Y, 26, "&H00B8A394&", DISCLAIMER, 8))
-    # Poll question, not a like/follow/subscribe bait line. Referral disclosure
-    # stays in the description (publish.py), not on this card.
-    cta_start = max(t0, t1 - 2.8)
-    cta_lines = _wrap_lines(cta, 32, 900)
-    ev.append(K.ass_text(
-        cta_start, t1, 540, safe_area.CTA_Y, 32, K.WHITE,
-        "\\N".join(cta_lines), 8, fade=True, wrap=False))
     return K.ASS_HEAD + "\n".join(ev) + "\n"
 
 
@@ -1335,6 +1511,46 @@ def visual_gate(beat_pngs):
     ok("visual QA: every board frame has visible educational graphics")
 
 
+def _sync_report(topic, narration, scenes, beat_audio, beat_times, spec):
+    """Transcribe the beat audio and fail closed on a mismatch or a whisper error."""
+    import sync_gate
+    try:
+        words = sync_gate.transcribe_beats(beat_audio, beat_times)
+        rows = []
+        for scene in scenes:
+            frame = scene.get("frame")
+            rows.append({
+                "start": scene["start"],
+                "end": scene["end"],
+                "beat": scene["beat"],
+                "kind": scene.get("kind") or "",
+                "show": sync_gate.lesson_lines(frame) if frame is not None else [],
+            })
+        lesson = (spec or {}).get("atr") or topic.get("_atr")
+        terms = sync_gate.answer_terms_for(narration.get("title") or "", lesson)
+        report = sync_gate.check(
+            words, rows, narration.get("beats") or {}, beat_times, terms,
+        )
+    except Exception as exc:  # noqa: BLE001
+        report = {
+            "ok": False,
+            "reason": f"transcription failed: {exc}",
+            "transcript": "",
+            "scenes": [],
+        }
+    if report.get("ok"):
+        ok("sync: narration matches the title and each scene")
+    else:
+        print("[HOLD] sync: " + (report.get("reason") or "failed"))
+    for row in report.get("scenes") or []:
+        print(
+            f"  [sync] {row.get('kind') or row.get('beat')} "
+            f"{row.get('start')}-{row.get('end')} jaccard {row.get('jaccard')} "
+            f"shared {row.get('shared')} missing {row.get('missing_numbers')}"
+        )
+    return report
+
+
 # ---------------------------------------------------------------- main
 def load_topic():
     p = RUN / "topic.json"
@@ -1476,12 +1692,20 @@ def main():
     overlays = short_layout.overlay_plan(topic, beat_times, hook_line, cta)
     samples, text_frames = _craft_samples(
         scenes, topic, beat_times, spoken, hook_line, cta)
+    sync_report = _sync_report(topic, n, scenes, beat_audio, beat_times, spec)
     review = self_review.full_review(
         topic, n, spec, overlays, scenes=scenes,
         labels=(label_boxes if labels_ready else None),
         samples=samples, text_frames=text_frames,
+        sync=sync_report,
     )
+    review = apply_upload_block(review, source)
     review["narration_source"] = source
+    review["sync"] = {
+        "ok": bool(sync_report.get("ok")),
+        "reason": sync_report.get("reason") or "",
+        "scenes": sync_report.get("scenes") or [],
+    }
     review["attempts"] = n.get("review_attempts") or self_review.MAX_ATTEMPTS
     review["scenes"] = [
         {"beat": s["beat"], "kind": s.get("kind") or "",

@@ -275,23 +275,46 @@ def score_craft(narration, overlays=None, scenes=None, labels=None, samples=None
         import safe_area
         for t, boxes in text_frames:
             hits = safe_area.overlapping(boxes)
-            if not hits:
-                continue
-            a, b = hits[0]
-            notes.append(
-                "text sprites overlap at "
-                f"{float(t):.1f}s: ({a[0]:.0f},{a[1]:.0f},{a[2]:.0f},{a[3]:.0f}) "
-                f"and ({b[0]:.0f},{b[1]:.0f},{b[2]:.0f},{b[3]:.0f})"
-            )
-            break
+            if hits:
+                a, b = hits[0]
+                notes.append(
+                    "text sprites overlap at "
+                    f"{float(t):.1f}s: ({a[0]:.0f},{a[1]:.0f},{a[2]:.0f},{a[3]:.0f}) "
+                    f"and ({b[0]:.0f},{b[1]:.0f},{b[2]:.0f},{b[3]:.0f})"
+                )
+                break
+            for box in boxes:
+                # A subtitle that starts in the caption band and crosses the ceiling.
+                if box[1] < safe_area.BRAND_TOP and box[3] > safe_area.SUBTITLE_LIMIT + 0.5:
+                    notes.append(
+                        f"subtitle leaves its band at {float(t):.1f}s "
+                        f"(bottom {box[3]:.0f} > {safe_area.SUBTITLE_LIMIT})"
+                    )
+                    break
+            if notes and notes[-1].startswith("subtitle leaves"):
+                break
     if notes:
         return 0, notes
     return 100, []
 
 
+def score_sync(report):
+    """None when the caller did not transcribe. A failed transcript scores 0."""
+    if report is None:
+        return None, []
+    if report.get("ok"):
+        return 100, []
+    reason = report.get("reason") or "narration does not match the title and the scenes"
+    return 0, [reason]
+
+
 def full_review(topic, narration, spec, overlays, trends=None, scenes=None, labels=None,
-                samples=None, text_frames=None):
-    """All parts, including the visual and the craft cut. public_ok follows `passed`."""
+                samples=None, text_frames=None, sync=None):
+    """All parts, including the visual and the craft cut. public_ok follows `passed`.
+
+    sync=None skips the transcript check (older callers). A report that is not
+    ok scores 0 and blocks, including when transcription itself failed.
+    """
     if trends is None:
         trends = load_trends()
     hook, hook_notes = score_hook(narration, topic)
@@ -300,9 +323,11 @@ def full_review(topic, narration, spec, overlays, trends=None, scenes=None, labe
     trend, trend_notes = score_trend(topic, trends)
     craft, craft_notes = score_craft(
         narration, overlays, scenes, labels, samples=samples, text_frames=text_frames)
-    notes = hook_notes + vis_notes + acc_notes + trend_notes + craft_notes
+    sync_score, sync_notes = score_sync(sync)
+    notes = hook_notes + vis_notes + acc_notes + trend_notes + craft_notes + sync_notes
     packed = _pack(
-        {"hook": hook, "visual": visual, "accuracy": accuracy, "trend": trend, "craft": craft},
+        {"hook": hook, "visual": visual, "accuracy": accuracy, "trend": trend,
+         "craft": craft, "sync": sync_score},
         notes,
     )
     packed["chart"] = {
