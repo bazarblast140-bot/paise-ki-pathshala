@@ -4,6 +4,8 @@ Pillow>=10.1.0
 # hand-drawn (xkcd-style) charts + synthesized click sounds
 matplotlib>=3.8.0
 numpy>=1.26.0
+# grapheme clusters for the hook typewriter (\X). Keeps Devanagari conjuncts whole.
+regex>=2024.5.15
 # optional live monthly closes; the checked-in Yahoo file is used when this
 # cannot be fetched. MARKET_DATA_LIVE=1 turns the live call on.
 yfinance>=0.2.40
