@@ -147,6 +147,15 @@ def evaluate_topic(topic, c, beats=None):
     return passed, format_report(live, payload, calls, passed, reason), payload
 
 
+def clear_topic_voice():
+    """Drop the previous topic's beat audio. The cache key is the text, and the files must not linger."""
+    run = board_short.RUN
+    for pattern in ("tts_*.mp3", "tts_*.engine", "tts_*.textid", "voice_clean_*.wav"):
+        for path in run.glob(pattern):
+            path.unlink(missing_ok=True)
+    (run / "tts_text.txt").unlink(missing_ok=True)
+
+
 def _keep_topic_artifacts(key):
     """Copy this topic's video and spoken text aside before the next topic overwrites them."""
     run = board_short.RUN
@@ -159,6 +168,27 @@ def _keep_topic_artifacts(key):
         (run / f"tts_{key}.txt").write_text(spoken.read_text(encoding="utf-8"), encoding="utf-8")
 
 
+def _print_self_review(key):
+    """The same verdict a paid build would use. Missing or HOLD fails the topic."""
+    path = board_short.RUN / "self_review.json"
+    if not path.is_file():
+        print(f"self-review {key}: missing verdict HOLD")
+        raise SystemExit(f"self-review missing for {key}")
+    review = json.loads(path.read_text(encoding="utf-8"))
+    parts = review.get("parts") or {}
+    verdict = "PASS" if review.get("public_ok") else "HOLD"
+    bits = " ".join(
+        f"{name} {parts.get(name)}"
+        for name in ("hook", "visual", "accuracy", "trend", "craft", "sync")
+    )
+    print(f"self-review {key}: overall {review.get('overall')} verdict {verdict} {bits}")
+    summary = str(review.get("summary") or "").strip()
+    if summary:
+        print(f"  {summary}")
+    if not review.get("public_ok"):
+        raise SystemExit(f"self-review HOLD {key}")
+
+
 def render_topic(topic, narration, c, beats=None):
     """Edge TTS and the visual pipeline. No upload. Caller already popped ElevenLabs."""
     live = prepare_live(topic, c, beats=beats)
@@ -167,8 +197,17 @@ def render_topic(topic, narration, c, beats=None):
         market_data.apply_atr_card(live, spec["atr"])
     live["_chart_spec"] = spec
     live["_allow_stale_sample"] = True
-    board_short.produce_short(live, narration, c, spec, source=narration.get("source") or "llm")
-    _keep_topic_artifacts(topic.get("key") or "topic")
+    key = topic.get("key") or "topic"
+    clear_topic_voice()
+    try:
+        board_short.produce_short(live, narration, c, spec, source=narration.get("source") or "llm")
+    except (Exception, SystemExit):
+        _keep_topic_artifacts(key)
+        if (board_short.RUN / "self_review.json").is_file():
+            _print_self_review(key)
+        raise
+    _keep_topic_artifacts(key)
+    _print_self_review(key)
 
 
 def main(argv=None):
