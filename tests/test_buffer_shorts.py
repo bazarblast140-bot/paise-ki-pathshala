@@ -138,12 +138,16 @@ class GateAndFreshnessTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("example", why)
 
-        live = {
+        series = {
             "key": "titan_2010",
             "cat": "REAL DATA",
             "beats": {"hook": ["2010", "Titan"], "pehchan": ["a", "b"], "matlab": ["c", "d"], "karein": ["e", "f"]},
             "facts": ["71"],
         }
+        ok, why = buffer_shorts.is_evergreen_topic(series)
+        self.assertFalse(ok)
+        self.assertIn("market series", why)
+        live = dict(series, key="dated_price_print")
         ok, why = buffer_shorts.is_evergreen_topic(live)
         self.assertFalse(ok)
         self.assertIn("REAL DATA", why)

@@ -285,13 +285,12 @@ class SlotPaidCallTests(unittest.TestCase):
         self.assertIn("run/credits.json", publish)
 
 
-# Slots held on main. expected is the earliest open slot inside 26h, or None
-# when every slot in that window is also held. A run aimed at the held slot
-# still exits before any paid call.
+# Slots still held on main after #21 lifted 2-Oct 21:00 and 3-Oct 08:30.
+# expected is the earliest open slot inside 26h, or None when every slot in
+# that window is also held. A run aimed at the held slot still exits before
+# any paid call. published.json itself is not edited here.
 _HELD_SLOTS = (
-    ("2026-10-02", "16:00", datetime(2026, 10, 2, 13, 0), None),
-    ("2026-10-02", "21:00", datetime(2026, 10, 2, 18, 0), None),
-    ("2026-10-03", "08:30", datetime(2026, 10, 3, 5, 30), None),
+    ("2026-10-02", "16:00", datetime(2026, 10, 2, 13, 0), ("2026-10-02", "21:00")),
     ("2026-10-03", "16:00", datetime(2026, 10, 3, 13, 0), ("2026-10-04", "08:30")),
     ("2026-10-03", "21:00", datetime(2026, 10, 3, 18, 0), ("2026-10-04", "08:30")),
 )
@@ -338,7 +337,8 @@ class RealLedgerHoldTests(unittest.TestCase):
                     slot_guard.main(["--next"])
                 text = out.getvalue()
                 self.assertNotIn(f"slot={slot}\n", text)
-                self.assertNotIn(f"date_ist={date}\n", text)
+                if expected is None or expected[0] != date:
+                    self.assertNotIn(f"date_ist={date}\n", text)
                 if expected is None:
                     self.assertIn("taken=true", text)
                     self.assertIn("no unfilled slot", err.getvalue())
