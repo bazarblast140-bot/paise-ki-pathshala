@@ -1187,7 +1187,349 @@ def _stamp_teaching_card(frame, topic, beat, spec):
     _text(frame, 540, safe_area.CONTENT_TOP + 28, detail, GOLD, 30, anchor="mt")
 
 
+def _wants_filled_plate(topic):
+    """Four-beat live cards must fill the frame. Six-beat and evergreen stay put."""
+    if not isinstance(topic, dict) or not topic.get("_live_short") or topic.get("_atr"):
+        return False
+    raw = str(topic.get("_live_beats") or os.environ.get("LIVE_BEATS", "")).strip().lower()
+    return raw != "six"
+
+
+_CARD_FOLDS = (
+    ("daily loss limit", "दिन की नुकसान हद"),
+    ("daily limit", "दिन की हद"),
+    ("win rate", "जीत दर"),
+    ("expectancy", "अपेक्षा"),
+    ("trading days", "कारोबारी दिन"),
+    ("overtrading", "ज़्यादा ट्रेड"),
+    ("journal", "जर्नल"),
+    ("terminal", "टर्मिनल"),
+    ("charges", "शुल्क"),
+    ("revenge trading", "बदले का ट्रेड"),
+)
+_FIGURE_RE = re.compile(
+    r"₹\s?\d[\d,]*(?:\.\d+)?(?:\s*लाख)?"
+    r"|\d[\d,]*(?:\.\d+)?\s*%"
+    r"|\+\s?\d+(?:\.\d+)?\s*R"
+    r"|\d+(?:\.\d+)?\s*R"
+    r"|\d{1,3}(?:,\d{2,3})+"
+    r"|\d+(?:\.\d+)?\s*लाख"
+)
+_BEAT_HEAD = {
+    "hook": "एक बात",
+    "pehchan": "पहचान",
+    "matlab": "हिसाब",
+    "karein": "जाँच",
+}
+_BEAT_SHIFT = {"hook": 0, "pehchan": 1, "matlab": 2, "karein": 3}
+
+
+def _fold_card_text(text):
+    out = " ".join(str(text or "").split())
+    for src, dst in _CARD_FOLDS:
+        out = re.sub(re.escape(src), dst, out, flags=re.I)
+    return out
+
+
+def topic_display_lines(topic):
+    """Fact lines for this topic only. The shared English template is not one of them."""
+    lines = []
+
+    def add(raw):
+        text = _fold_card_text(raw)
+        if not text or text in lines:
+            return
+        if "शिक्षा है" in text or "सलाह नहीं" in text:
+            return
+        lines.append(text)
+
+    for fact in (topic or {}).get("facts") or []:
+        add(fact)
+    beats = (topic or {}).get("beats") or {}
+    for beat in ("hook", "pehchan", "matlab", "karein"):
+        pair = beats.get(beat)
+        if isinstance(pair, (list, tuple)) and len(pair) >= 2:
+            add(pair[1])
+    topic_line = str((topic or {}).get("topic") or "")
+    if "—" in topic_line:
+        add(topic_line.split("—", 1)[1])
+    elif " - " in topic_line:
+        add(topic_line.split(" - ", 1)[1])
+    return lines
+
+
+def _figure_tokens(lines):
+    found = []
+    for line in lines or []:
+        for match in _FIGURE_RE.finditer(line):
+            token = " ".join(match.group(0).split())
+            if token and token not in found:
+                found.append(token)
+    return found
+
+
+def _digit_tokens(text):
+    """Digits the sync gate will read out of this line, including Hindi number-words."""
+    import sync_gate
+    return {tok for tok in sync_gate.tokens(text) if tok[:1].isdigit()}
+
+
+def _numbers_ok(label, allowed):
+    """True when every raw digit in `label` is already in this scene's outline."""
+    import sync_gate
+    nums = sync_gate.numbers_in(label)
+    return bool(nums) and all(num in allowed for num in nums)
+
+
+def _indian_rupee(value):
+    text = str(int(value))
+    if len(text) <= 3:
+        body = text
+    else:
+        head, tail = text[:-3], text[-3:]
+        parts = [tail]
+        while head:
+            parts.append(head[-2:])
+            head = head[:-2]
+        body = ",".join(reversed(parts))
+    return "₹" + body
+
+
+def _spoken_figures(text, allowed):
+    """Big figures for numbers this slice actually says. No digit from a later beat."""
+    import sync_gate
+    found = []
+
+    def add(label):
+        label = " ".join(str(label or "").split())
+        if label and label not in found and _numbers_ok(label, allowed):
+            found.append(label)
+
+    for token in _figure_tokens([text]):
+        add(token)
+    raw = sync_gate._tokenize(sync_gate._alias(text))
+    i = 0
+    while i < len(raw):
+        tok = raw[i]
+        nxt = raw[i + 1] if i + 1 < len(raw) else ""
+        if tok in sync_gate._ONES and nxt in sync_gate._SCALE:
+            add(_indian_rupee(sync_gate._ONES[tok] * sync_gate._SCALE[nxt]))
+            i += 2
+            continue
+        if tok in sync_gate._FRACTION and nxt in sync_gate._SCALE:
+            add(_indian_rupee(sync_gate._FRACTION[tok] * sync_gate._SCALE[nxt]))
+            i += 2
+            continue
+        if tok in sync_gate._ONES and nxt in ("प्रतिशत", "percent"):
+            add(f"{sync_gate._ONES[tok]}%")
+            i += 2
+            continue
+        if tok in sync_gate._FRACTION and nxt in ("प्रतिशत", "percent"):
+            val = sync_gate._FRACTION[tok]
+            add(f"{int(val) if float(val).is_integer() else val}%")
+            i += 2
+            continue
+        i += 1
+    return found
+
+
+def _slice_words(words, index, n):
+    """The words of equal scene `index`, matching scene_pace's even time split."""
+    words = list(words or [])
+    if not words:
+        return []
+    n = max(1, int(n))
+    index = max(0, min(int(index), n - 1))
+    start = int(round(index / n * len(words)))
+    end = int(round((index + 1) / n * len(words)))
+    if end <= start:
+        end = min(len(words), start + 1)
+    return words[start:end]
+
+
+def _outline_card_text(topic, beat):
+    """This beat's own outline, plus a fact that shares one of its numbers."""
+    import sync_gate
+    parts = []
+    pair = ((topic or {}).get("beats") or {}).get(beat)
+    if isinstance(pair, (list, tuple)):
+        for piece in pair:
+            text = _fold_card_text(piece)
+            if text and text not in parts:
+                parts.append(text)
+    blob = " ".join(parts)
+    beat_nums = _digit_tokens(blob) | set(sync_gate.numbers_in(blob))
+    for line in topic_display_lines(topic):
+        line_nums = _digit_tokens(line) | set(sync_gate.numbers_in(line))
+        if beat_nums and line_nums and (beat_nums & line_nums) and line not in parts:
+            parts.append(line)
+    if not parts:
+        lines = topic_display_lines(topic)
+        if lines:
+            parts.append(lines[0])
+    return " ".join(parts)
+
+
+def _scene_card_text(topic, beat, index, n):
+    """Words this scene says. A spoken beat is split so later numbers stay off early cards."""
+    spoken = _fold_card_text(((topic or {}).get("_spoken_beats") or {}).get(beat) or "")
+    if spoken:
+        return " ".join(_slice_words(spoken.split(), index, n))
+    return _outline_card_text(topic, beat)
+
+
+def _wrap_card(text, limit=22):
+    words = str(text or "").split()
+    rows, cur = [], ""
+    for word in words:
+        trial = (cur + " " + word).strip()
+        if cur and len(trial) > limit:
+            rows.append(cur)
+            cur = word
+        else:
+            cur = trial
+    if cur:
+        rows.append(cur)
+    return rows[:3]
+
+
+def frame_card_text(frame):
+    return " ".join(
+        str(layer.get("text") or "")
+        for layer in (getattr(frame, "text_layers", None) or [])
+        if layer.get("text") and not layer.get("faint")
+    )
+
+
+def frames_safe_area_notes(frames):
+    """Boxes that leave the 6% frame margin. Empty when every recorded label fits."""
+    notes = []
+    for frame in frames or []:
+        boxes = getattr(frame, "label_boxes", None) or []
+        if not boxes:
+            continue
+        width, height = frame.size
+        ok, bad = safe_area.check_boxes(boxes, width, height)
+        if ok:
+            continue
+        sample = ", ".join(
+            f"({b[0]:.0f},{b[1]:.0f},{b[2]:.0f},{b[3]:.0f})" for b in bad[:3]
+        )
+        notes.append(f"label outside the 6% safe area: {sample}")
+    return notes
+
+
+def _live_fact_frame(topic, beat, index, n=1):
+    """One full-frame card of the words this scene says. No zoom and no second title.
+
+    The old finance template drew the same English bars for every risk topic
+    and a zoom then cut the title off both edges. Each scene now shows this
+    beat's own line, and a spoken beat is split so a later figure is not on
+    screen before the narration reaches it. Text stays in the middle band.
+    The bottom 30% is a bar footer, and the plate itself is brighter than
+    the dark-row cutoff.
+    """
+    width, height = K.W, K.H
+    image = _live_plate(width, height)
+    draw = ImageDraw.Draw(image)
+    shift = (_BEAT_SHIFT.get(beat, 0) + int(index)) % 4
+    panel = (
+        (22, 48, 96),
+        (30, 58, 110),
+        (18, 52, 88),
+        (26, 42, 102),
+    )[shift]
+    draw.rounded_rectangle([70, 190, width - 70, 1300], 28, fill=panel, outline=GOLD, width=4)
+    _paint_bottom_band(image, beat, index)
+    card = _scene_card_text(topic, beat, index, n)
+    allowed = _digit_tokens(card)
+    spoken = bool(str(((topic or {}).get("_spoken_beats") or {}).get(beat) or "").strip())
+    figures = _spoken_figures(card, allowed) if spoken else _figure_tokens([card])
+    y = 230
+    head = _BEAT_HEAD.get(beat, "बात")
+    _text(image, 540, y, head, GOLD, 40, anchor="mt")
+    y += 78
+    shown_figures = figures[:4]
+    figure_size = 52 if len(shown_figures) > 3 else 60
+    figure_step = 78 if len(shown_figures) > 3 else 96
+    for token in shown_figures:
+        if y > 980:
+            break
+        _text(image, 540, y, token, (250, 250, 250), figure_size, anchor="mt")
+        y += figure_step
+    shown = 0
+    for part in _wrap_card(card, limit=24):
+        if shown >= 4 or y > 1140:
+            break
+        _text(image, 540, y, part, (186, 214, 255), 36, anchor="mt")
+        y += 68
+        shown += 1
+    image.scene_kind = f"fact-{beat}"
+    return image
+
+
+def _live_plate(width, height):
+    """Slate chart field. Every row is brighter than the dark-row cutoff."""
+    ys = np.linspace(0.0, 1.0, height, dtype=np.float32)[:, None]
+    top = np.array([38, 62, 108], dtype=np.float32)
+    bot = np.array([28, 52, 96], dtype=np.float32)
+    rgb = np.repeat((top + (bot - top) * ys)[:, None, :], width, axis=1)
+    img = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB")
+    draw = ImageDraw.Draw(img)
+    grid = (78, 112, 158)
+    for x in range(0, width, 54):
+        draw.line([(x, 0), (x, height)], fill=grid, width=1)
+    for y in range(0, height, 46):
+        draw.line([(0, y), (width, y)], fill=grid, width=1)
+    return img
+
+
+def _paint_bottom_band(image, beat, index):
+    """Chart footer in the bottom 30%. The lesson text stays above it."""
+    width, height = image.size
+    y0 = int(round(height * 0.70))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle([0, y0, width, height - 1], fill=(36, 64, 118))
+    draw.rectangle([0, y0, width, y0 + 10], fill=(212, 168, 72))
+    colors = ((96, 165, 250), (34, 197, 94), (250, 204, 21), (239, 68, 68))
+    base = {"hook": 0.42, "pehchan": 0.58, "matlab": 0.50, "karein": 0.66}.get(beat, 0.5)
+    for i, col in enumerate(colors):
+        frac = base + ((index + i) % 4) * 0.06
+        bar_h = int(height * (0.08 + 0.10 * frac))
+        x = 120 + i * 220
+        top = max(y0 + 28, height - 140 - bar_h)
+        draw.rounded_rectangle([x, top, x + 150, height - 130], 18, fill=col)
+    rail = colors[index % len(colors)]
+    rx = 28 + (index % 5) * 14
+    draw.rectangle([rx, 96, rx + 16, y0 - 16], fill=rail)
+
+
+def fill_live_frame(src, beat, index=0):
+    """Seat the existing chart in the middle and fill the void around it.
+
+    The old board ends near y=1115 on a near-black gradient, so the opening
+    card is about 34% dark rows and craft scores 0. Marks already on the
+    chart stay. Everything darker than the cutoff becomes the slate plate,
+    and the bottom 30% is a bar footer.
+    """
+    image = src.convert("RGB")
+    width, height = image.size
+    arr = np.asarray(image)
+    shift = 72
+    seated = np.zeros_like(arr)
+    seated[shift:, :, :] = arr[: height - shift, :, :]
+    plate = np.asarray(_live_plate(width, height))
+    void = seated.max(axis=2) <= 80
+    seated[void] = plate[void]
+    out = Image.fromarray(seated, "RGB")
+    _paint_bottom_band(out, beat, index)
+    return out
+
+
 def _generic_frames(topic, beat, n, spec):
+    if _wants_filled_plate(topic):
+        frames = [_live_fact_frame(topic, beat, i, n) for i in range(n)]
+        return frames, [False] * n
     mode = (spec or {}).get("mode")
     if mode == "non_numeric":
         bases = [market_data.non_numeric_frame(topic, beat, i % 2) for i in range(min(n, 2))]

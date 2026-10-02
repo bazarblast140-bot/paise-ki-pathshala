@@ -1,8 +1,10 @@
 """The narration dry run stops before TTS and does not mark topics used."""
+import io
 import json
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -239,8 +241,18 @@ class DryRunTests(unittest.TestCase):
             self.assertNotIn("ELEVENLABS_API_KEY", os.environ)
             (board_short.RUN / "final.mp4").write_bytes(b"mp4")
             (board_short.RUN / "tts_text.txt").write_text(narration["beats"]["hook"], encoding="utf-8")
+            (board_short.RUN / "self_review.json").write_text(json.dumps({
+                "public_ok": True,
+                "overall": 96.7,
+                "parts": {
+                    "hook": 100, "visual": 90, "accuracy": 100,
+                    "trend": 100, "craft": 100, "sync": 100,
+                },
+                "summary": "overall 96.7 (craft 100)",
+            }), encoding="utf-8")
             return 55.0
 
+        out = io.StringIO()
         try:
             with tempfile.TemporaryDirectory() as tmp, \
                  mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "should-be-removed"}, clear=False), \
@@ -248,7 +260,8 @@ class DryRunTests(unittest.TestCase):
                  mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
                  mock.patch.object(board_short, "narration", side_effect=narrate), \
                  mock.patch.object(board_short, "produce_short", side_effect=produce), \
-                 mock.patch.object(board_short, "synthesize_short_voices", side_effect=AssertionError("TTS stays behind produce_short")):
+                 mock.patch.object(board_short, "synthesize_short_voices", side_effect=AssertionError("TTS stays behind produce_short")), \
+                 redirect_stdout(out):
                 (Path(tmp)).mkdir(exist_ok=True)
                 code = narration_dry_run.main([
                     "--topic-keys", "risk_journal", "--beats", "four", "--full",
@@ -262,6 +275,8 @@ class DryRunTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(seen["beats"], "four")
         self.assertEqual(seen["produce"], "four")
+        self.assertIn("verdict PASS", out.getvalue())
+        self.assertIn("craft 100", out.getvalue())
         self.assertEqual(bank_path.read_bytes(), before)
 
     def test_one_topic_crash_does_not_stop_the_next(self):
@@ -296,6 +311,12 @@ class DryRunTests(unittest.TestCase):
                 raise RuntimeError("plain image has no plate")
             (board_short.RUN / "final.mp4").write_bytes(b"mp4")
             (board_short.RUN / "tts_text.txt").write_text("voice", encoding="utf-8")
+            (board_short.RUN / "self_review.json").write_text(json.dumps({
+                "public_ok": True,
+                "overall": 96.7,
+                "parts": {"hook": 100, "visual": 90, "accuracy": 100, "trend": 100, "craft": 100, "sync": 100},
+                "summary": "overall 96.7",
+            }), encoding="utf-8")
 
         try:
             with tempfile.TemporaryDirectory() as tmp, \
@@ -318,6 +339,22 @@ class DryRunTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(seen, ["risk_journal", "intraday_risk_reward"])
         self.assertEqual(bank_path.read_bytes(), before)
+
+    def test_clear_topic_voice_drops_the_previous_beat_audio(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)):
+            run = Path(tmp)
+            (run / "tts_hook.mp3").write_bytes(b"old-voice")
+            (run / "tts_hook.engine").write_text("edge", encoding="utf-8")
+            (run / "tts_hook.textid").write_text("abc", encoding="utf-8")
+            (run / "tts_text.txt").write_text("previous topic", encoding="utf-8")
+            (run / "final_keep.mp4").write_bytes(b"mp4")
+            narration_dry_run.clear_topic_voice()
+            self.assertFalse((run / "tts_hook.mp3").exists())
+            self.assertFalse((run / "tts_hook.engine").exists())
+            self.assertFalse((run / "tts_hook.textid").exists())
+            self.assertFalse((run / "tts_text.txt").exists())
+            self.assertTrue((run / "final_keep.mp4").is_file())
 
 
 if __name__ == "__main__":

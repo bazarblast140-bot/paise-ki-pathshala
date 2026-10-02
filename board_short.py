@@ -15,6 +15,7 @@ Writes run/: final.mp4, thumbnail.jpg, script.txt, spoken.txt, shots.json, subs.
 """
 import argparse
 import asyncio
+import hashlib
 import json
 from datetime import date
 import math
@@ -210,10 +211,11 @@ LIVE_TOTAL_WORDS = (130, 185)
 # the take runs long. Trim toward 170 words before any TTS call.
 LIVE_ESTIMATE_MARGIN_S = 90.0
 LIVE_MARGIN_WORDS = 170
-# Proven four-beat live Short (~55s on Rudra at 1.9 w/s). This is the default.
-# Word target 95-115, text gate 88-122, audio gate 45-65s. Shares sum to 105.
+# Proven four-beat live Short. This is the default.
+# Word target 105-112 (~55-59s on Rudra at 1.9 w/s), text gate 88-122,
+# audio gate 45-65s. The aim is the middle of that target, not the 45s floor.
 FOUR_LIVE_SHARE = {"hook": 18, "pehchan": 26, "matlab": 32, "karein": 29}
-FOUR_LIVE_WORD_TARGET = (95, 115)
+FOUR_LIVE_WORD_TARGET = (105, 112)
 FOUR_LIVE_TOTAL_WORDS = (88, 122)
 FOUR_LIVE_VOICE_SECONDS = (45.0, 65.0)
 FOUR_LIVE_MARGIN_S = 60.0
@@ -313,11 +315,12 @@ def four_live_bounds(wps):
 
 
 def four_live_targets(wps):
-    """Per-beat targets whose sum is the midpoint of 95-115 at 1.9 w/s."""
+    """Per-beat targets whose sum is the middle of 105-112 at 1.9 w/s."""
     wps = float(wps)
     scale = wps / LIVE_BASE_WPS
     targets = {beat: max(8, int(round(FOUR_LIVE_SHARE[beat] * scale))) for beat in BEATS}
-    aim = int(round(((FOUR_LIVE_WORD_TARGET[0] + FOUR_LIVE_WORD_TARGET[1]) / 2.0) * scale))
+    lo, hi = FOUR_LIVE_WORD_TARGET
+    aim = int(math.floor(((lo + hi) / 2.0) * scale + 0.5))
     delta = aim - sum(targets.values())
     step = 0
     while delta != 0 and step < 40:
@@ -499,6 +502,7 @@ def check_narration(n, topic):
     if hook_line and not hook.startswith(hook_line.rstrip("।")):
         fails.append("hook beat must open with the punchy hook line")
     if topic.get("_live_short") and not topic.get("_atr"):
+        fold_roman_beats(n)
         fails.extend(narrator_leak_notes(beats, order))
     return fails
 
@@ -518,10 +522,97 @@ _LEAK_SNIPS = (
 )
 _LEAK_META = re.compile(r"कार्ड|topic\s*card|\bcard\b|\bscript\b|\bbeat\b", re.I)
 _LEAK_TELL = re.compile(r"(बोलो|बताओ|बोलिए|बताइए)")
+_HINDI_NUMBER = (
+    "शून्य|एक|दो|तीन|चार|पाँच|पांच|छह|सात|आठ|नौ|दस|"
+    "ग्यारह|बारह|तेरह|चौदह|पंद्रह|सोलह|सत्रह|अठारह|उन्नीस|"
+    "बीस|तीस|चालीस|पचास|साठ|सत्तर|अस्सी|नब्बे|सौ|"
+    "हज़ार|हजार|लाख|करोड़|अट्ठानवे|अट्ठासी|अट्ठाइस|इक्कीस"
+)
+_BARE_NUMBER = re.compile(
+    rf"(?:[+\-−]?\d[\d,]*(?:\.\d+)?%?"
+    rf"|(?:{_HINDI_NUMBER})(?:\s+(?:{_HINDI_NUMBER}))?)"
+)
+_LATIN_WORD = re.compile(r"(?<![A-Za-z])([A-Za-z]{3,})(?![A-Za-z])")
+# Chart words already spoken in tests and shipped lessons. Romanized Hindi is not in here.
+_LATIN_ALLOW = {
+    "wick", "chart", "traders", "features", "price", "date", "return",
+    "explanation", "hook", "pehchan", "matlab", "karein", "udaharan", "galti",
+    "atr", "rsi", "vwap", "ema", "sma", "risk", "entry", "stop", "loss",
+    "low", "high", "sellers", "buyers",
+}
+_ROMAN_FOLD = {
+    "rakho": "रखो",
+    "karo": "करो",
+    "dekho": "देखो",
+    "samjho": "समझो",
+    "likho": "लिखो",
+    "jaano": "जानो",
+    "suno": "सुनो",
+    "chhodo": "छोड़ो",
+    "batao": "बताओ",
+    "bolo": "बोलो",
+}
+
+
+def _bare_number_piece(text):
+    body = re.sub(r"^(?:उदाहरण|example)\s*[:：]?\s*", "", str(text or ""), flags=re.I)
+    body = body.strip().strip("।. ")
+    return bool(body) and bool(_BARE_NUMBER.fullmatch(body))
+
+
+def _number_dump(sentence):
+    """A label followed by a bare list of numbers, not a worked example."""
+    if not re.search(r"उदाहरण|example", sentence or "", re.I):
+        return False
+    parts = [part.strip() for part in re.split(r"[,،]", sentence) if part.strip()]
+    if len(parts) < 3:
+        return False
+    bare = sum(1 for part in parts if _bare_number_piece(part))
+    return bare >= 3 and bare == len(parts)
+
+
+_ROMAN_HINT = re.compile(r"(?:aa|ee|oo|kh|gh|chh|jh|th|dh|ph|bh|sh)")
+
+
+def latin_misread_words(text):
+    """Romanized Hindi that Edge and Rudra will spell out. English chart words stay."""
+    found = []
+    for match in _LATIN_WORD.finditer(text or ""):
+        word = match.group(1)
+        low = word.lower()
+        if low in _LATIN_ALLOW:
+            continue
+        roman = low in _ROMAN_FOLD or (
+            low[-1] in "aeiou" and _ROMAN_HINT.search(low)
+        )
+        if roman and word not in found:
+            found.append(word)
+    return found
+
+
+def fold_roman_words(text):
+    """Known romanized Hindi becomes Devanagari. Other words stay for the leak gate."""
+    def repl(match):
+        word = match.group(0)
+        return _ROMAN_FOLD.get(word.lower(), word)
+
+    return _LATIN_WORD.sub(repl, str(text or ""))
+
+
+def fold_roman_beats(narration):
+    if not isinstance(narration, dict):
+        return narration
+    beats = narration.get("beats")
+    if isinstance(beats, dict):
+        for beat, text in list(beats.items()):
+            beats[beat] = fold_roman_words(text)
+    if narration.get("hook_line"):
+        narration["hook_line"] = fold_roman_words(narration["hook_line"])
+    return narration
 
 
 def narrator_leak_notes(beats, order):
-    """Sentences that instruct the narrator, or the generic filler openers."""
+    """Sentences that instruct the narrator, dump numbers, or leave Latin for the voice."""
     notes = []
     for beat in order or ():
         text = str((beats or {}).get(beat) or "")
@@ -533,6 +624,12 @@ def narrator_leak_notes(beats, order):
             leaked = any(snip.lower() in low for snip in _LEAK_SNIPS)
             if _LEAK_META.search(line) or _LEAK_TELL.search(line):
                 leaked = True
+            if _number_dump(line):
+                leaked = True
+            latin = latin_misread_words(line)
+            if latin:
+                leaked = True
+                line = line + " [" + ", ".join(latin) + "]"
             if leaked:
                 notes.append(f"{beat} narrator leak: {line[:90]}")
                 break
@@ -1086,6 +1183,78 @@ def _drop_index(sentences, beat, example, lo):
     return None
 
 
+def _expansion_sentences(topic):
+    """Fact lines that can lengthen a short beat without a new number."""
+    sentences = []
+    blobs = []
+    for fact in (topic or {}).get("facts") or []:
+        blobs.append(str(fact))
+    for beat in BEATS:
+        pair = ((topic or {}).get("beats") or {}).get(beat)
+        if isinstance(pair, (list, tuple)) and len(pair) >= 2:
+            blobs.append(str(pair[1]))
+    for raw in blobs:
+        text = fold_roman_words(" ".join(raw.split()))
+        if not text or "शिक्षा है" in text or "सलाह नहीं" in text:
+            continue
+        if latin_misread_words(text) or _number_dump(text):
+            continue
+        if not text.endswith("।"):
+            text = text.rstrip(".") + "।"
+        if hook_check.live_number_faults({"karein": text}, topic, ("karein",)):
+            continue
+        if not scene_pace.segment_is_concrete(text) and not re.search(r"\d", text):
+            continue
+        if text not in sentences:
+            sentences.append(text)
+    return sentences
+
+
+def expand_short_live_beats(narration, topic):
+    """Bring a short live beat up to its minimum with the topic's own facts.
+
+    The word window stays where it is. A beat that still cannot reach the
+    minimum, because no fact fits, is left short and the gate still fails.
+    """
+    if not isinstance(narration, dict):
+        return narration
+    if not (topic or {}).get("_live_short") or (topic or {}).get("_atr"):
+        return narration
+    order, targets, (_lo_total, hi_total), _band = _lesson(topic)
+    beats = narration.setdefault("beats", {})
+    sentences = _expansion_sentences(topic)
+    ranges = {beat: beat_word_window(targets[beat], LIVE_BEAT_TOLERANCE) for beat in order}
+    notes = narration.setdefault("_trim_notes", [])
+    used = set()
+    for beat in order:
+        if beat in hook_check.TEACHING_BEATS:
+            continue
+        lo, hi = ranges[beat]
+        words = str(beats.get(beat) or "").split()
+        if len(words) >= lo:
+            continue
+        for sentence in sentences:
+            if sentence in used:
+                continue
+            extra = sentence.split()
+            total = sum(len(str(beats.get(name) or "").split()) for name in order)
+            if len(words) + len(extra) > hi or total + len(extra) > hi_total:
+                continue
+            if sentence.strip("।") and sentence.strip("।") in str(beats.get(beat) or ""):
+                continue
+            words.extend(extra)
+            beats[beat] = " ".join(words)
+            used.add(sentence)
+            note = f"{beat}: expanded with a topic fact to {len(words)} words"
+            if isinstance(notes, list):
+                notes.append(note)
+            print(f"[trim] {note}", flush=True)
+            if len(words) >= lo:
+                break
+    topic["_spoken_beats"] = {beat: str(beats.get(beat) or "") for beat in order}
+    return narration
+
+
 def apply_live_draft(narration, topic, total_hi=None, locked=()):
     """Insert उदाहरण, then drop whole sentences from the end of long beats.
 
@@ -1096,6 +1265,8 @@ def apply_live_draft(narration, topic, total_hi=None, locked=()):
     """
     if not isinstance(narration, dict):
         return narration
+    if (topic or {}).get("_live_short") and not (topic or {}).get("_atr"):
+        fold_roman_beats(narration)
     order, targets, (lo_total, hi_total), _band = _lesson(topic)
     if total_hi is not None:
         hi_total = int(total_hi)
@@ -1160,6 +1331,7 @@ def apply_live_draft(narration, topic, total_hi=None, locked=()):
     narration["_trim_notes"] = notes
     topic["_spoken_beats"] = {beat: str(beats.get(beat) or "") for beat in order}
     _apply_hook_fit(narration, topic)
+    expand_short_live_beats(narration, topic)
     return narration
 
 
@@ -1381,6 +1553,11 @@ def repair_instructions(draft, rewrite, topic=None, failures=None):
                 )
             elif beat == "hook":
                 line += " The hook must be 20-30 words."
+            if current < lo:
+                line += (
+                    " This beat is short. Add words until it lands in the window. "
+                    "Use only the allowed numbers already on the topic. Do not invent a figure."
+                )
             if beat in vague:
                 line += (
                     " This beat is vague: it needs a concrete number, level, or step "
@@ -1521,7 +1698,7 @@ def four_live_system(topic):
         "A sum, difference, product, or ratio of two topic numbers is allowed "
         "only when the same sentence writes that arithmetic and the result matches.",
         f"Pace coefficient: {wps:.2f} words/second. Target {target_lo}-{target_hi} words "
-        f"(about 50-60 seconds). The script may land in {lo}-{hi} words.",
+        f"(about 55-59 seconds on Rudra). The script may land in {lo}-{hi} words.",
         f"Spoken audio must land in {sec_lo:.0f}-{sec_hi:.0f} seconds.",
         "Keep sentence punctuation (। . ?) so the voice can pause.",
     ]
@@ -1697,6 +1874,7 @@ def narration(topic, c, spec=None):
             and not topic.get("_atr")
             and drop_disallowed_sentences(n, topic)
         ):
+            expand_short_live_beats(n, topic)
             draft = n
             fails = _gate(n)
         if not fails:
@@ -1946,21 +2124,39 @@ def _paid_voice_this_beat():
     )
 
 
+def voice_cache_id(text, c):
+    """Hash of the beat text plus the voice id and speed. Existence is not enough."""
+    voice = ((c or {}).get("voice") or {})
+    edge_voice, edge_rate = _edge_voice_rate(c)
+    blob = "\n".join([
+        str(text or ""),
+        str(voice.get("voice_id") or ""),
+        str(voice.get("speed") or ""),
+        str(edge_voice or ""),
+        str(edge_rate or ""),
+    ])
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
 def tts(text, path, c):
     """ElevenLabs only on a real publish (or an explicit sample opt-in).
 
     Quota on that path uses the configured Edge voice. Auth still fails.
     Previews use free Edge and never call ElevenLabs.
     Voice text is speak.speakable() (₹ -> रुपये). Captions keep the original text.
+    A cached file is reused only when its text hash and voice match this beat.
     """
     engine_file = path.with_suffix(".engine")
+    id_file = path.with_suffix(".textid")
+    cache_id = voice_cache_id(text, c)
     cached_engine = engine_file.read_text(encoding="utf-8").strip().lower() if engine_file.exists() else ""
+    cached_id = id_file.read_text(encoding="utf-8").strip() if id_file.exists() else ""
     eleven_key = bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
     allow_paid = _paid_voice_this_beat()
-    fresh = path.exists() and path.stat().st_size > 1000
+    fresh = path.exists() and path.stat().st_size > 1000 and cached_id == cache_id
     # Reuse paid audio only while this run is still on ElevenLabs.
     # After a credit fallback, an old paid file is discarded and Edge is used.
-    # A preview never reuses a paid file.
+    # A preview never reuses a paid file. A different beat text never reuses it.
     reuse = None
     if fresh and cached_engine == "elevenlabs" and allow_paid:
         reuse = cached_engine
@@ -1984,6 +2180,7 @@ def tts(text, path, c):
             die(f"ElevenLabs TTS did not produce paid audio: {path.name}; not a credit error, so Edge was not used")
         ENGINES.append("elevenlabs")
         engine_file.write_text("elevenlabs", encoding="utf-8")
+        id_file.write_text(cache_id, encoding="utf-8")
         return
     edge_voice, edge_rate = _edge_voice_rate(c)
     ENGINES.append("edge")
@@ -1997,6 +2194,7 @@ def tts(text, path, c):
             ))
             if path.exists() and path.stat().st_size > 1000:
                 engine_file.write_text("edge", encoding="utf-8")
+                id_file.write_text(cache_id, encoding="utf-8")
                 return
         except Exception as exc:  # noqa: BLE001
             print(f"[retry] tts {attempt + 1}: {exc}")
@@ -3183,11 +3381,13 @@ def fit_estimated_duration(narration, topic, c, spec):
         tighten_duration_margin(narration, topic)
         under = [beat for beat in beats_below_minimum(narration, topic) if beat not in already_short]
         if under:
-            die(
-                "margin trim left "
+            print(
+                "[duration] margin trim left "
                 + ", ".join(under)
-                + " under the beat minimum; refusing TTS with 0 characters spent"
+                + " under the minimum; repairing with topic facts",
+                flush=True,
             )
+            expand_short_live_beats(narration, topic)
     fails = _collect_dry_fails(narration, topic, spec)
     if not fails:
         return narration
@@ -3236,7 +3436,7 @@ def _rerender_beats(spoken, c, beats):
             f"{ELEVEN_REMAINING - need} below {floor}"
         )
     for beat in beats:
-        for name in (f"tts_{beat}.mp3", f"tts_{beat}.engine", f"voice_clean_{beat}.wav"):
+        for name in (f"tts_{beat}.mp3", f"tts_{beat}.engine", f"tts_{beat}.textid", f"voice_clean_{beat}.wav"):
             (RUN / name).unlink(missing_ok=True)
         try:
             tts(spoken[beat], RUN / f"tts_{beat}.mp3", c)
@@ -3245,8 +3445,83 @@ def _rerender_beats(spoken, c, beats):
     return _trim_rendered(beats)
 
 
-def require_scene_frames(topic, spec):
-    """Die before TTS when a lesson beat has no picture."""
+def _static_craft_samples(topic, narration, spec):
+    """Scene pictures on the estimated timeline. No voice and no paid call."""
+    order = _lesson(topic)[0]
+    beats = (narration or {}).get("beats") or {}
+    weights = [max(8, len(str(beats.get(beat) or "").split())) for beat in order]
+    wps = max(float(voice_wps(_topic_voice(topic)) or LIVE_BASE_WPS), 0.1)
+    total = max(16.0, sum(weights) / wps)
+    weight_sum = float(sum(weights)) or 1.0
+    beat_times = {}
+    cursor = 0.0
+    for beat, weight in zip(order, weights):
+        span = total * weight / weight_sum
+        beat_times[beat] = (cursor, cursor + span)
+        cursor += span
+    scenes = scene_pace.plan_scenes(beat_times, beats=order)
+    groups = {}
+    for scene in scenes:
+        groups.setdefault(scene["beat"], []).append(scene)
+    frames = []
+    built = []
+    for beat in order:
+        group = groups.get(beat) or []
+        if not group:
+            continue
+        made, _flags = scene_frames.frames_for(topic, beat, len(group), spec or {})
+        if len(made) < len(group) or any(frame is None for frame in made):
+            die(f"scene has no frame before TTS: {beat}")
+        for scene, frame in zip(group, made):
+            scene["frame"] = frame
+            built.append(scene)
+            frames.append(frame)
+    durations = [float(scene["end"]) - float(scene["start"]) for scene in built]
+    span = sum(durations)
+    samples = []
+    layout_notes = []
+    seen = set()
+    t = 0.0
+    while built and t < span - 0.05:
+        frame = scene_transition.render_at(
+            frames, durations, t, SCENE_TRANSITIONS, SCENE_FADE_S)
+        for note in scene_frames.frame_layout_notes(frame):
+            if note not in seen:
+                seen.add(note)
+                layout_notes.append(note)
+        samples.append((t, np.asarray(frame.convert("RGB"))))
+        t += 1.0
+    return built, samples, layout_notes
+
+
+def _refuse_craft_hold(topic, spec, narration):
+    """The same empty-background craft gate, before any ElevenLabs character."""
+    scenes, samples, layout_notes = _static_craft_samples(topic, narration, spec)
+    labels = []
+    for scene in scenes:
+        frame = scene.get("frame")
+        if frame is None:
+            continue
+        labels.extend(getattr(frame, "label_boxes", None) or [])
+    outside = scene_frames.frames_safe_area_notes(
+        [scene.get("frame") for scene in scenes if scene.get("frame") is not None]
+    )
+    craft, notes = self_review.score_craft(
+        narration, scenes=scenes, samples=samples, labels=labels, layout_notes=layout_notes)
+    if outside or craft == 0:
+        visual = [
+            note for note in (outside + notes)
+            if "empty background" in note or "visual change" in note or "safe area" in note
+        ]
+        detail = "; ".join((visual or outside or notes)[:4])
+        die(
+            "craft would HOLD before TTS; refusing with 0 characters spent: "
+            + detail
+        )
+
+
+def require_scene_frames(topic, spec, narration=None):
+    """Die before TTS when a lesson beat has no picture, or craft would hold."""
     if (topic or {}).get("_atr"):
         return
     order = _lesson(topic)[0] if (topic or {}).get("_live_short") else BEATS
@@ -3260,13 +3535,15 @@ def require_scene_frames(topic, spec):
             missing.append(beat)
     if missing:
         die("scene has no frame before TTS: " + ", ".join(missing))
+    if four_live(topic):
+        _refuse_craft_hold(topic, spec, narration or {})
 
 
 def prepare_spoken(spoken, narration, topic, c, spec):
     """Render once after the dry check. A live miss re-speaks only the changed beats."""
     order = _lesson(topic)[0] if topic.get("_live_short") else tuple(b for b in BEATS if b in spoken)
     if topic.get("_live_short"):
-        require_scene_frames(topic, spec)
+        require_scene_frames(topic, spec, narration)
         eleven_voice.ensure_library_voice(c)
         topic["_voice"] = dict((c or {}).get("voice") or {})
         narration = fit_estimated_duration(narration, topic, c, spec)
@@ -3495,8 +3772,18 @@ def produce_short(topic, n, c, spec, source="llm", beat_pngs=None):
          "callout": bool(s.get("callout"))}
         for s in scenes
     ]
+    outside = scene_frames.frames_safe_area_notes(
+        [scene.get("frame") for scene in scenes if scene.get("frame") is not None]
+    )
+    if outside:
+        review["public_ok"] = False
+        review["passed"] = False
+        review.setdefault("notes", []).extend(outside)
+        review["summary"] = (str(review.get("summary") or "") + " — " + "; ".join(outside[:2])).strip(" —")
     (RUN / "self_review.json").write_text(
         json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
+    if outside:
+        die("text outside the frame safe area; refusing the render: " + "; ".join(outside[:4]))
     if review["public_ok"]:
         ok("self-review passed: " + review["summary"])
     else:
