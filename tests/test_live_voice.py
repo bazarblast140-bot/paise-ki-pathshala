@@ -334,15 +334,11 @@ class DryRenderTests(unittest.TestCase):
     def test_real_miss_rerenders_only_the_changed_beat(self):
         topic = _live_topic()
         script = _live_script()
+        # Extra sentences keep the beats inside ±30%. A long render trims them
+        # in code and re-speaks only those beats. The model is not called.
+        script["beats"]["pehchan"] += "। यह अतिरिक्त पंक्ति हटाओ अभी कदम नियम वाक्य।"
+        script["beats"]["matlab"] += "। यह दूसरी अतिरिक्त पंक्ति हटाओ अभी कदम नियम।"
         spoken = dict(script["beats"])
-        repaired = _live_script(salts={
-            "hook": "हुकबदल",
-            "pehchan": "पहचान",
-            "matlab": "मतलब",
-            "udaharan": "उदाहरण",
-            "galti": "गलती",
-            "karein": "करें",
-        })
         seen = []
         trims = {"n": 0}
 
@@ -365,7 +361,7 @@ class DryRenderTests(unittest.TestCase):
              mock.patch.object(board_short, "RUN", Path(tmp)), \
              mock.patch.object(board_short.credit_log, "PATH", Path(tmp) / "credits.json"), \
              mock.patch.object(board_short.eleven_voice, "ensure_library_voice", return_value=RUDRA), \
-             mock.patch.object(board_short, "claude_json", return_value=repaired), \
+             mock.patch.object(board_short, "claude_json", side_effect=AssertionError("long audio must be trimmed, not rewritten")), \
              mock.patch.object(board_short, "_content_ok", return_value={"passed": True, "summary": "ok"}), \
              mock.patch.object(board_short, "synthesize_short_voices", synthesize), \
              mock.patch.object(board_short, "_trim_rendered", trim), \
@@ -373,10 +369,13 @@ class DryRenderTests(unittest.TestCase):
              redirect_stdout(io.StringIO()):
             _spoken, _narr, _audio, raw, _times, total = board_short.prepare_spoken(
                 spoken, script, topic, {**CFG, "voice": _rudra_voice()}, {})
-        self.assertEqual(seen, [("speak-all", board_short.LIVE_ORDER), ("beat", "tts_hook")])
-        self.assertAlmostEqual(total, 94.1, places=3)
+        self.assertEqual(seen[0], ("speak-all", board_short.LIVE_ORDER))
+        self.assertEqual(sorted(item[1] for item in seen[1:]), ["tts_matlab", "tts_pehchan"])
+        self.assertAlmostEqual(total, 92.1, places=3)
         self.assertTrue(70.0 <= total <= 95.0)
-        self.assertEqual(raw["hook"], 14.0)
+        self.assertEqual(raw["hook"], 16.0)
+        self.assertEqual(raw["pehchan"], 14.0)
+        self.assertEqual(raw["matlab"], 14.0)
         self.assertEqual(raw["karein"], 16.0)
 
     def test_rerender_stops_below_the_credit_floor(self):

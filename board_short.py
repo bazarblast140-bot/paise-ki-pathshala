@@ -199,6 +199,10 @@ LIVE_SHARE = {"hook": 26, "pehchan": 36, "matlab": 40, "udaharan": 48, "galti": 
 LIVE_BASE_WPS = 2.8
 ESTIMATE_SECONDS = (75.0, 90.0)
 LIVE_VOICE_SECONDS = (70.0, 95.0)
+# The model keeps missing a tight count, and a repair makes the script longer.
+# Accept ±30% per beat and 200-270 words. Audio stays 70-95s.
+LIVE_BEAT_TOLERANCE = 0.30
+LIVE_TOTAL_WORDS = (200, 270)
 VISUAL_ALIAS = {"udaharan": "matlab", "galti": "karein"}
 CARD_LINES = {
     "udaharan": ("उदाहरण", "एक ठोस केस"),
@@ -262,8 +266,7 @@ def _lesson(topic):
     if (topic or {}).get("_live_short") and not (topic or {}).get("_atr"):
         wps = voice_wps(_topic_voice(topic))
         targets = live_beat_targets(wps)
-        window = live_word_window(wps)
-        return LIVE_ORDER, targets, window, window
+        return LIVE_ORDER, targets, LIVE_TOTAL_WORDS, LIVE_TOTAL_WORDS
     return BEATS, BEAT_WORD_TARGET, TOTAL_WORDS, TOTAL_WORD_TARGET
 
 
@@ -274,7 +277,8 @@ def timed_beats(beat_times):
 
 def card_pair(topic, beat):
     if beat in hook_check.TEACHING_BEATS:
-        return hook_check.example_card_lines(topic)
+        spoken = str(((topic or {}).get("_spoken_beats") or {}).get(beat) or "")
+        return hook_check.example_card_lines(topic, spoken)
     pair = (topic.get("beats") or {}).get(beat)
     if isinstance(pair, (list, tuple)) and len(pair) >= 2:
         return str(pair[0]), str(pair[1])
@@ -303,10 +307,11 @@ def duplicate_sentence_notes(beats, order):
     return notes
 
 
-def beat_word_window(target):
-    """Inclusive word window, ±20% of the target, rounded to a whole word."""
-    lo = max(1, int(round(target * (1 - BEAT_WORD_TOLERANCE))))
-    hi = int(round(target * (1 + BEAT_WORD_TOLERANCE)))
+def beat_word_window(target, tolerance=None):
+    """Inclusive word window. Four-beat scripts stay at ±20%. Live uses ±30%."""
+    tol = BEAT_WORD_TOLERANCE if tolerance is None else float(tolerance)
+    lo = max(1, int(round(target * (1 - tol))))
+    hi = int(round(target * (1 + tol)))
     return lo, hi
 
 
@@ -345,7 +350,8 @@ def check_narration(n, topic):
             fails.append(
                 f"{words} words ({lo}-{hi} chahiye, target {target_lo}-{target_hi})"
             )
-        beat_ranges = {b: beat_word_window(targets[b]) for b in order}
+        tol = LIVE_BEAT_TOLERANCE if topic.get("_live_short") else None
+        beat_ranges = {b: beat_word_window(targets[b], tol) for b in order}
         if topic.get("_live_short"):
             fails.extend(duplicate_sentence_notes(beats, order))
     for b, (lo, hi) in beat_ranges.items():
@@ -810,13 +816,136 @@ def _number_beats(n, topic, order):
     return found
 
 
+def _split_sentences(text):
+    text = " ".join(str(text or "").split())
+    if not text:
+        return []
+    parts = re.split(r"(?<=[।!?])\s+", text)
+    out = []
+    for part in parts:
+        out.extend(bit.strip() for bit in re.split(r"(?<=\.)\s+", part) if bit.strip())
+    return out or [text]
+
+
+def _join_sentences(sentences):
+    return " ".join(bit.strip() for bit in sentences if str(bit).strip())
+
+
+def _sentence_protected(beat, sentence, index, example):
+    """The hook keeps its opening line. The code-written udaharan example is never cut."""
+    if beat == "hook" and index == 0:
+        return True
+    if beat != "udaharan":
+        return False
+    core = str(example or "").strip().strip("।")
+    if not core:
+        return False
+    body = core
+    if body.startswith("उदाहरण:"):
+        body = body[len("उदाहरण:"):].strip()
+    elif body.startswith("उदाहरण"):
+        body = body[len("उदाहरण"):].strip(" :")
+    return core in sentence or (len(body) >= 12 and body in sentence)
+
+
+def _drop_index(sentences, beat, example, lo):
+    """Last sentence that can be removed without cutting a protected line or falling under lo."""
+    total = len(_join_sentences(sentences).split())
+    for index in range(len(sentences) - 1, -1, -1):
+        if _sentence_protected(beat, sentences[index], index, example):
+            continue
+        trial = _join_sentences(sentences[:index] + sentences[index + 1:])
+        if len(trial.split()) < lo:
+            continue
+        if len(trial.split()) < total:
+            return index
+    return None
+
+
+def apply_live_draft(narration, topic, total_hi=None):
+    """Insert उदाहरण, then drop whole sentences from the end of long beats.
+
+    The model is not asked to shorten a script. A beat that is still too short
+    after this pass is the only reason to call the repair.
+    """
+    if not isinstance(narration, dict):
+        return narration
+    order, targets, (lo_total, hi_total), _band = _lesson(topic)
+    if total_hi is not None:
+        hi_total = int(total_hi)
+    beats = narration.setdefault("beats", {})
+    example = hook_check.worked_example_sentence(topic)
+    notes = []
+    for beat in order:
+        if beat not in hook_check.TEACHING_BEATS:
+            continue
+        sentences = _split_sentences(beats.get(beat) or "")
+        changed = False
+        for index, sentence in enumerate(sentences):
+            if hook_check.extract_numbers(sentence) and "उदाहरण" not in sentence:
+                sentences[index] = "उदाहरण " + sentence.strip()
+                changed = True
+        if changed:
+            beats[beat] = _join_sentences(sentences)
+            notes.append(f"{beat}: inserted उदाहरण at the start of the example sentence")
+    ranges = {beat: beat_word_window(targets[beat], LIVE_BEAT_TOLERANCE) for beat in order}
+
+    def counts():
+        return {beat: len(str(beats.get(beat) or "").split()) for beat in order}
+
+    def trim_once(beat):
+        lo, _hi = ranges[beat]
+        sentences = _split_sentences(beats.get(beat) or "")
+        index = _drop_index(sentences, beat, example, lo)
+        if index is None:
+            return False
+        dropped = sentences.pop(index)
+        beats[beat] = _join_sentences(sentences)
+        snippet = " ".join(str(dropped).split())
+        if len(snippet) > 80:
+            snippet = snippet[:77] + "..."
+        notes.append(f"{beat}: dropped '{snippet}'")
+        return True
+
+    # Per beat, shed trailing sentences until the ±30% window, or until another
+    # drop would fall below the minimum or cut the protected line.
+    guard = 0
+    for beat in order:
+        while counts()[beat] > ranges[beat][1] and guard < 80:
+            guard += 1
+            if not trim_once(beat):
+                break
+    while sum(counts().values()) > hi_total and guard < 80:
+        guard += 1
+        ranked = sorted(order, key=lambda beat: counts()[beat] - targets[beat], reverse=True)
+        if not any(trim_once(beat) for beat in ranked):
+            break
+    for note in notes:
+        print(f"[trim] {note}", flush=True)
+    topic["_spoken_beats"] = {beat: str(beats.get(beat) or "") for beat in order}
+    narration["_trim_notes"] = notes
+    return narration
+
+
 def beats_to_rewrite(n, topic, extra=""):
-    """Beats outside the ±20% window, plus any beat named by another gate failure."""
+    """Beats the model may rewrite. A live short asks only for beats that are too short."""
     order, targets, total_window, _band = _lesson(topic)
     if topic.get("_atr"):
         return list(BEATS)
     beats = (n or {}).get("beats") or {}
     counts = {b: len(str(beats.get(b) or "").split()) for b in order}
+    if topic.get("_live_short"):
+        rewrite = []
+        for beat in order:
+            lo, _hi = beat_word_window(targets[beat], LIVE_BEAT_TOLERANCE)
+            if counts[beat] < lo:
+                rewrite.append(beat)
+        total = sum(counts.values())
+        if total < total_window[0]:
+            for beat in order:
+                if counts[beat] < targets[beat] and beat not in rewrite:
+                    rewrite.append(beat)
+        return rewrite
     rewrite = []
     for beat in order:
         lo, hi = beat_word_window(targets[beat])
@@ -873,11 +1002,16 @@ def repair_instructions(draft, rewrite, topic=None):
             "A rewritten beat may use only these figures. Do not invent any other number."
         )
         lines.append(
-            "In udaharan and galti, every number must be one of those figures, "
-            "and the same sentence must contain the word उदाहरण. "
+            "In udaharan and galti, every number must be an allowed figure, "
+            "a multiplier 1, 1.5, 2, or 3, or a result whose expression evaluates to it. "
             "A label does not make an invented number allowed. "
             "Real market data may use only the sourced figures."
         )
+        if topic.get("_live_short"):
+            lines.append(
+                "Use this udaharan sentence verbatim or near-verbatim: "
+                + hook_check.worked_example_sentence(topic)
+            )
     for beat in order:
         target = targets[beat]
         lo, hi = beat_word_window(target)
@@ -962,20 +1096,24 @@ def live_narration_system(topic):
         "hook = the problem. The punchy hook_line is on screen from the first frame.",
         "pehchan = how to recognise it. matlab = what it means.",
         "udaharan = one worked example. galti = one common mistake and the fix.",
-        "Both may use only the code-computed numbers below. "
-        "Every number in those beats must sit in a sentence that contains उदाहरण. "
-        "Do not invent a figure. उदाहरण does not permit a new number. "
-        "The four-beat evergreen permission to add a labelled figure does not apply. "
-        "A real market price may use only the sourced figures.",
+        "Use this udaharan sentence verbatim or near-verbatim:",
+        hook_check.worked_example_sentence(topic),
+        "In udaharan and galti a number may be one of the allowed figures, a multiplier "
+        "1, 1.5, 2, or 3, or the result of an expression written with those values. "
+        "The result is accepted only when the expression evaluates to it. "
+        "Any other number is blocked. उदाहरण does not make an invented number legal.",
+        "Every such number must sit in a sentence that contains उदाहरण.",
+        "The four-beat evergreen permission to add a labelled figure does not apply.",
+        "A real market price may use only the sourced figures. Multipliers do not apply there.",
         f"Allowed numbers for udaharan and galti: {_allowed_number_text(topic)}.",
         "karein = the confirmation or risk check, then one takeaway. Do not speak a CTA.",
-        "Keep sentence punctuation (। . ?) so the voice pauses. Do not write run-on lines.",
-        f"Pace coefficient: {wps:.2f} words/second. The estimate must land in 75-90 seconds.",
-        f"That is {lo}-{hi} words total.",
+        "Keep sentence punctuation (। . ?) so the voice can pause. Do not write run-on lines.",
+        f"Pace coefficient: {wps:.2f} words/second. Spoken audio must land in 70-95 seconds.",
+        f"The script may land in {lo}-{hi} words. A long beat is shortened in code. Do not pad.",
     ]
     for beat, target in targets.items():
-        blo, bhi = beat_word_window(target)
-        lines.append(f"- {beat}: target exactly {target} words. Accept {blo}-{bhi} (±20%).")
+        blo, bhi = beat_word_window(target, LIVE_BEAT_TOLERANCE)
+        lines.append(f"- {beat}: target about {target} words. Accept {blo}-{bhi} (±30%).")
     example = ", ".join(
         f'"{beat}":"<exactly {target} words{"" if beat != "hook" else ", first sentence is hook_line"}>"'
         for beat, target in targets.items()
@@ -1018,6 +1156,8 @@ def narration(topic, c, spec=None):
                     n,
                     "cached narration is a topic-card fallback, not an LLM script that passed the hook/teaching gate",
                 )
+            if topic.get("_live_short") and not topic.get("_atr"):
+                n = apply_live_draft(n, topic)
             fails = check_narration(n, topic)
             content = _content_ok(topic, n, spec)
             # Only an LLM pass is reusable. A file without that mark is regenerated.
@@ -1031,7 +1171,8 @@ def narration(topic, c, spec=None):
     user = {"topic": topic["topic"], "category": topic["cat"],
             "on_screen": {b: {"headline": h, "sub": s} for b, (h, s) in topic["beats"].items()},
             "facts": topic["facts"],
-            "allowed_numbers": _allowed_number_list(topic)}
+            "allowed_numbers": _allowed_number_list(topic),
+            "udaharan_sentence": hook_check.worked_example_sentence(topic)}
     msg = json.dumps(user, ensure_ascii=False)
     draft = None
     repair_done = False
@@ -1056,6 +1197,8 @@ def narration(topic, c, spec=None):
         rewrite = None
         if draft is not None and not repair_done:
             rewrite = beats_to_rewrite(draft, topic, last)
+            if topic.get("_live_short") and not rewrite:
+                break
             user_msg = msg + "\n\n" + repair_instructions(draft, rewrite, topic)
             kind = "repair"
         else:
@@ -1087,6 +1230,8 @@ def narration(topic, c, spec=None):
         if kind == "repair":
             n = merge_repair(draft, n, rewrite, topic)
             repair_done = True
+        if topic.get("_live_short") and not topic.get("_atr"):
+            n = apply_live_draft(n, topic)
         draft = n
         fails = _gate(n)
         if not fails:
@@ -2421,14 +2566,6 @@ def _dry_fails(narration, topic, spec):
         content = _content_ok(topic, narration, spec)
         if content and not content["passed"]:
             fails.append("self-review below bar: " + content["summary"])
-    if topic.get("_live_short"):
-        wps = max(voice_wps(_topic_voice(topic)), 0.1)
-        words = sum(len(str((narration.get("beats") or {}).get(b) or "").split()) for b in order)
-        seconds = words / wps
-        if not (ESTIMATE_SECONDS[0] <= seconds <= ESTIMATE_SECONDS[1]):
-            fails.append(
-                f"estimated duration {seconds:.1f}s outside 75-90 at {wps:.2f} words/s"
-            )
     return fails
 
 
@@ -2470,7 +2607,9 @@ def _one_beat_repair(narration, topic, c, spec, why):
 
 
 def fit_estimated_duration(narration, topic, c, spec):
-    """Text gates, including the 75-90s estimate, before any TTS request."""
+    """Text gates before any TTS request. A long live script is trimmed, not rewritten."""
+    if topic.get("_live_short") and not topic.get("_atr"):
+        apply_live_draft(narration, topic)
     fails = _dry_fails(narration, topic, spec)
     if not fails:
         return narration
@@ -2532,33 +2671,60 @@ def prepare_spoken(spoken, narration, topic, c, spec):
         return spoken, narration, audio, raw, beat_times, total
     lo, hi = LIVE_VOICE_SECONDS
     if lo <= total <= hi:
+        topic["_spoken_beats"] = {beat: spoken[beat] for beat in order}
         audio = {beat: RUN / f"voice_clean_{beat}.wav" for beat in order}
         return spoken, narration, audio, raw, beat_times, total
-    why = (
-        f"The spoken voice is {total:.1f}s. It must land in 70-95 seconds. "
-        "Do not change the speaking speed. Change only the number of words."
-    )
-    print(f"[duration] {total:.1f}s outside 70-95; one repair, then only the changed beats")
-    if _one_beat_repair(narration, topic, c, spec, why) is None:
-        die(
-            "voice duration outside 70-95s; refusing artificial speed change: "
-            f"{total:.1f}s — {_duration_detail(spoken, raw, order)}"
+    if total > hi:
+        words = sum(len(str(spoken.get(beat) or "").split()) for beat in order)
+        rate = words / max(total, 0.1)
+        budget = int(math.floor(90.0 * rate))
+        budget = max(LIVE_TOTAL_WORDS[0], min(LIVE_TOTAL_WORDS[1], budget))
+        print(
+            f"[duration] {total:.1f}s outside 70-95; trimming sentences toward {budget} words"
         )
-    spoken = {beat: narration["beats"][beat] for beat in order}
-    fails = _dry_fails(narration, topic, spec)
-    if fails:
-        die(
-            "duration repair missed the text gate; refusing another render and the template: "
-            + "; ".join(fails)
+        apply_live_draft(narration, topic, total_hi=budget)
+        spoken = {beat: narration["beats"][beat] for beat in order}
+        changed = [beat for beat in order if spoken[beat] != before[beat]]
+        if not changed:
+            die(
+                "voice duration outside 70-95s and no sentence could be trimmed; "
+                "refusing a longer rewrite: "
+                f"{total:.1f}s — {_duration_detail(before, raw, order)}"
+            )
+        fails = _dry_fails(narration, topic, spec)
+        if fails:
+            die(
+                "trimmed script missed the text gate; refusing another render and the template: "
+                + "; ".join(fails)
+            )
+    else:
+        why = (
+            f"The spoken voice is {total:.1f}s. It must land in 70-95 seconds. "
+            "The script is too short. Add words only on the short beats."
         )
-    changed = [beat for beat in order if spoken[beat] != before[beat]]
-    if not changed:
-        die(
-            "voice duration outside 70-95s and the repair changed no beats; "
-            f"refusing artificial speed change: {total:.1f}s"
-        )
+        print(f"[duration] {total:.1f}s under 70; one repair of the short beats")
+        if _one_beat_repair(narration, topic, c, spec, why) is None:
+            die(
+                "voice duration outside 70-95s; refusing artificial speed change: "
+                f"{total:.1f}s — {_duration_detail(spoken, raw, order)}"
+            )
+        apply_live_draft(narration, topic)
+        spoken = {beat: narration["beats"][beat] for beat in order}
+        fails = _dry_fails(narration, topic, spec)
+        if fails:
+            die(
+                "duration repair missed the text gate; refusing another render and the template: "
+                + "; ".join(fails)
+            )
+        changed = [beat for beat in order if spoken[beat] != before[beat]]
+        if not changed:
+            die(
+                "voice duration outside 70-95s and the repair changed no beats; "
+                f"refusing artificial speed change: {total:.1f}s"
+            )
     raw.update(_rerender_beats(spoken, c, changed))
     beat_times, total = _timeline(raw, order)
+    topic["_spoken_beats"] = {beat: spoken[beat] for beat in order}
     if total < lo or total > hi:
         die(
             "voice duration outside 70-95s after one repair; refusing artificial speed change: "
@@ -2627,6 +2793,7 @@ def main():
     # Speech speed is never changed.
     spoken, n, beat_audio, raw_durations, beat_times, t = prepare_spoken(
         spoken, n, topic, c, spec)
+    topic["_spoken_beats"] = {beat: spoken[beat] for beat in timed_beats(beat_times)}
     raw_total = sum(raw_durations.values())
     order = timed_beats(beat_times)
     if t < 45.0 and not topic.get("_live_short"):

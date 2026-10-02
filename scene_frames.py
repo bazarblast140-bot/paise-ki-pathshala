@@ -1180,7 +1180,8 @@ def _stamp_teaching_card(frame, topic, beat, spec):
         return
     if (spec or {}).get("mode") == "non_numeric":
         return
-    _head, detail = hook_check.example_card_lines(topic)
+    spoken = str(((topic or {}).get("_spoken_beats") or {}).get(beat) or "")
+    _head, detail = hook_check.example_card_lines(topic, spoken)
     if not str(detail or "").strip():
         return
     _text(frame, 540, safe_area.CONTENT_TOP + 28, detail, GOLD, 30, anchor="mt")
