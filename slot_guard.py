@@ -86,8 +86,50 @@ def _at(date_ist, slot):
     return datetime(year, month, day, hh, mm, tzinfo=IST)
 
 
+def find_entry(entries, date_ist, slot):
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("date_ist") == date_ist and entry.get("slot") == slot:
+            return entry
+    return None
+
+
+def is_hold(entry):
+    """A hold row blocks the slot and must not be described as a missing video id."""
+    return str((entry or {}).get("platform") or "").strip().lower() == "hold"
+
+
+def row_state(entry):
+    """'open' (no row), 'held' (platform hold), or 'filled' (any other row)."""
+    if not entry:
+        return "open"
+    if is_hold(entry):
+        return "held"
+    return "filled"
+
+
 def _filled(entries, date_ist, slot):
-    return any(e.get("date_ist") == date_ist and e.get("slot") == slot for e in entries)
+    # Held and filled both stay out of the picker. A hold is not an empty slot.
+    return row_state(find_entry(entries, date_ist, slot)) != "open"
+
+
+def scheduled_slot_block():
+    """Reason to exit before paid APIs, or None when this run may build.
+
+    Public scheduled builds name their slot via PUBLISH_DATE_IST and
+    PUBLISH_SLOT_IST. Unlisted previews and immediate posts (no slot) are
+    not blocked here.
+    """
+    vis = os.environ.get("PUBLISH_VISIBILITY", "").strip().lower()
+    slot = os.environ.get("PUBLISH_SLOT_IST", "").strip()
+    date = os.environ.get("PUBLISH_DATE_IST", "").strip()
+    if vis not in ("public", "now") or not slot or not date:
+        return None
+    state = row_state(find_entry(_read(), date, slot))
+    if state == "held":
+        return f"{date} {slot} IST is on hold"
+    if state == "filled":
+        return f"{date} {slot} IST is already filled"
+    return None
 
 
 def _candidates(now):
@@ -221,11 +263,14 @@ def main(argv=None):
     hit = taken(slot) if slot else None
     if hit:
         date, entry = hit
-        where = (
-            f"https://youtu.be/{entry['video_id']}"
-            if entry.get("video_id") else entry.get("platform", "instagram")
-        )
-        print(f"[skip] {date} {slot} IST ka video pehle se hai: {where}", file=sys.stderr)
+        if is_hold(entry):
+            print(f"[skip] {date} {slot} IST is on hold", file=sys.stderr)
+        else:
+            where = (
+                f"https://youtu.be/{entry['video_id']}"
+                if entry.get("video_id") else entry.get("platform", "instagram")
+            )
+            print(f"[skip] {date} {slot} IST ka video pehle se hai: {where}", file=sys.stderr)
     print("taken=true" if hit else "taken=false")
 
 

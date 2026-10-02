@@ -4,8 +4,8 @@ Same template for every topic:
   HOOK -> 1 PEHCHAN -> 2 MATLAB -> 3 KYA KAREIN
 Pictures come from board_scenes (code, not the LLM). On-screen Hindi comes from
 topic_bank.json. The LLM writes only the spoken lines, and may use only numbers
-that already appear in the topic; if it keeps failing, the narration is built
-from the on-screen text so the day's video still ships.
+that already appear in the topic. If that narration misses the hook/teaching
+gate, the topic-card template is not spoken and not uploaded — the slot stays empty.
 
 Writes run/: final.mp4, thumbnail.jpg, script.txt, spoken.txt, shots.json, subs.ass
 (the files run_verify.py and publish.py already read).
@@ -27,12 +27,14 @@ import numpy as np
 
 import board_kit as K
 import board_scenes as S
+import credit_log
 import eleven_voice
 import engagement
 import hook_check
 import market_data
 import self_review
 import short_layout
+import slot_guard
 from common import RUN, ROOT, cfg, claude_json, die, ok, save
 
 BEATS = S.BEATS
@@ -449,17 +451,73 @@ def _content_ok(topic, narration, spec):
     return self_review.score_content(topic, narration, spec, trends={})
 
 
+def block_fallback(n, reason):
+    """Record why this slot will not ship, then stop before TTS or upload."""
+    if not isinstance(n, dict):
+        n = {}
+    n["narration_fallback"] = True
+    n["source"] = "fallback"
+    payload = {
+        "blocked": True,
+        "reason": reason,
+        "narration_source": "fallback",
+        "narration_fallback": True,
+    }
+    (RUN / "narration_block.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    review = {
+        "passed": False,
+        "public_ok": False,
+        "narration_fallback": True,
+        "narration_source": "fallback",
+        "summary": reason,
+        "notes": [reason],
+        "parts": {"hook": 0, "visual": 0, "accuracy": 0, "trend": None},
+        "overall": 0,
+        "bar": {"part": self_review.PART_BAR, "overall": self_review.OVERALL_BAR},
+    }
+    (RUN / "self_review.json").write_text(
+        json.dumps(review, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    cache = RUN / "narration.json"
+    cache.unlink(missing_ok=True)
+    print(f"[BLOCK] {reason}", flush=True)
+    die(reason)
+
+
+def require_llm_narration(n, source):
+    """TTS runs only for an LLM narration that already passed the teaching gate."""
+    if (
+        source in ("llm", "cache")
+        and isinstance(n, dict)
+        and not n.get("narration_fallback")
+        and str(n.get("source") or "llm").strip().lower() != "fallback"
+    ):
+        return
+    block_fallback(
+        n if isinstance(n, dict) else {},
+        "narration is not an LLM script that passed the hook/teaching gate; refusing TTS and upload",
+    )
+
+
 def narration(topic, c, spec=None):
     market_data.sync_topic_numbers(topic)
     cache = RUN / "narration.json"
     if cache.exists():
         try:
             n = json.loads(cache.read_text(encoding="utf-8"))
+            if n.get("narration_fallback") or str(n.get("source") or "").strip().lower() == "fallback":
+                block_fallback(
+                    n,
+                    "cached narration is a topic-card fallback, not an LLM script that passed the hook/teaching gate",
+                )
             fails = check_narration(n, topic)
             content = _content_ok(topic, n, spec)
-            if not fails and content["passed"]:
+            # Only an LLM pass is reusable. A file without that mark is regenerated.
+            if not fails and content["passed"] and n.get("source") == "llm" and not n.get("narration_fallback"):
                 ok("narration cache reused — no LLM credit")
                 return n, "cache"
+        except SystemExit:
+            raise
         except Exception as e:
             print(f"[cache] narration invalid, regenerating: {e}")
     user = {"topic": topic["topic"], "category": topic["cat"],
@@ -488,6 +546,8 @@ def narration(topic, c, spec=None):
         if not fails:
             ok(f"narration OK (attempt {attempt})")
             n["review_attempts"] = attempt
+            n["narration_fallback"] = False
+            n["source"] = "llm"
             cache.write_text(json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
             return n, "llm"
         last = "; ".join(fails)
@@ -497,11 +557,16 @@ def narration(topic, c, spec=None):
     print("[warn] LLM narration failed the hook/teaching gate — building narration from the topic card")
     n = fallback_narration(topic)
     n["review_attempts"] = self_review.MAX_ATTEMPTS
+    n["narration_fallback"] = True
+    n["source"] = "fallback"
     fallback_fails = check_narration(n, topic)
+    reason = (
+        "LLM narration failed the hook/teaching gate; "
+        "refusing the topic-card template (no upload, no paid voice)"
+    )
     if fallback_fails:
-        die("fallback narration failed the same universal teaching gate: " + "; ".join(fallback_fails))
-    cache.write_text(json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
-    return n, "fallback"
+        reason += ": " + "; ".join(fallback_fails)
+    block_fallback(n, reason)
 
 
 # ---------------------------------------------------------------- voice
@@ -566,6 +631,7 @@ def preflight_eleven_credits(texts):
     if remaining is None:
         return
     ELEVEN_REMAINING = remaining
+    credit_log.set_eleven_remaining(remaining)
     import speak
     need = sum(len(speak.speakable(text or "")) for text in texts)
     if need > 0 and remaining < need:
@@ -603,6 +669,7 @@ def _eleven(text, path, c):
 
     for attempt in range(3):
         try:
+            credit_log.add_eleven_chars(len(text))
             response = requests.post(
                 f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
                 headers={"xi-api-key": key, "accept": "audio/mpeg"},
@@ -646,19 +713,44 @@ def _eleven(text, path, c):
     die("ElevenLabs paid TTS failed after retries; not a credit error, so Edge was not used")
 
 
-def tts(text, path, c):
-    """ElevenLabs when a key is set. Quota uses the configured Edge voice. Auth still fails.
+def _edge_voice_rate(c):
+    """Publish-run quota fallback keeps the configured Edge voice.
 
+    Previews, samples, and dry runs use free hi-IN-MadhurNeural at +0%.
+    """
+    if eleven_voice.paid_voice_allowed():
+        voice = c["voice"]
+        return voice.get("edge_voice", "hi-IN-SwaraNeural"), voice.get("edge_rate", "+10%")
+    return eleven_voice.PREVIEW_EDGE_VOICE, eleven_voice.PREVIEW_EDGE_RATE
+
+
+def _paid_voice_this_beat():
+    return (
+        eleven_voice.paid_voice_allowed()
+        and bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
+        and not ELEVEN_EXHAUSTED
+    )
+
+
+def tts(text, path, c):
+    """ElevenLabs only on a real publish (or an explicit sample opt-in).
+
+    Quota on that path uses the configured Edge voice. Auth still fails.
+    Previews use free Edge and never call ElevenLabs.
     Voice text is speak.speakable() (₹ -> रुपये). Captions keep the original text.
     """
     engine_file = path.with_suffix(".engine")
     cached_engine = engine_file.read_text(encoding="utf-8").strip().lower() if engine_file.exists() else ""
     eleven_key = bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
+    allow_paid = _paid_voice_this_beat()
     fresh = path.exists() and path.stat().st_size > 1000
     # Reuse paid audio only while this run is still on ElevenLabs.
     # After a credit fallback, an old paid file is discarded and Edge is used.
+    # A preview never reuses a paid file.
     reuse = None
-    if fresh and cached_engine == "elevenlabs" and eleven_key and not ELEVEN_EXHAUSTED:
+    if fresh and cached_engine == "elevenlabs" and allow_paid:
+        reuse = cached_engine
+    elif fresh and cached_engine == "edge" and not allow_paid:
         reuse = cached_engine
     elif fresh and cached_engine == "edge" and (not eleven_key or ELEVEN_EXHAUSTED):
         reuse = cached_engine
@@ -673,20 +765,20 @@ def tts(text, path, c):
         print(f"[warn] voice text me ab bhi: {sorted(set(left))} — speak.py me jodo")
     with open(RUN / "tts_text.txt", "a", encoding="utf-8") as handle:
         handle.write(f"{path.stem}: {text}\n")
-    if eleven_key and not ELEVEN_EXHAUSTED:
+    if allow_paid:
         if not _eleven(text, path, c):
             die(f"ElevenLabs TTS did not produce paid audio: {path.name}; not a credit error, so Edge was not used")
         ENGINES.append("elevenlabs")
         engine_file.write_text("elevenlabs", encoding="utf-8")
         return
-    voice = c["voice"]
+    edge_voice, edge_rate = _edge_voice_rate(c)
     ENGINES.append("edge")
     for attempt in range(3):
         try:
             asyncio.run(_edge(
                 text,
-                voice.get("edge_voice", "hi-IN-SwaraNeural"),
-                voice.get("edge_rate", "+10%"),
+                edge_voice,
+                edge_rate,
                 path,
             ))
             if path.exists() and path.stat().st_size > 1000:
@@ -700,8 +792,12 @@ def tts(text, path, c):
 def synthesize_short_voices(spoken, c):
     """Speak every beat on one engine. A quota error redoes the whole run on Edge."""
     global ENGINES
+    if (RUN / "narration_block.json").exists():
+        die("narration blocked; refusing TTS")
     _reset_voice_state()
-    preflight_eleven_credits([spoken[b] for b in BEATS])
+    # Subscription GET is free, and only relevant when this run may call ElevenLabs.
+    if eleven_voice.paid_voice_allowed():
+        preflight_eleven_credits([spoken[b] for b in BEATS])
 
     def once():
         global ENGINES
@@ -724,8 +820,9 @@ def synthesize_short_voices(spoken, c):
         RUN,
         engine,
         VOICE_FALLBACK_REASON,
-        elevenlabs_attempted=key_set,
+        elevenlabs_attempted=key_set and eleven_voice.paid_voice_allowed(),
     )
+    credit_log.set_tts_engine(engine)
     ok(f"voice engine: {engine}" + (f" ({VOICE_FALLBACK_REASON})" if VOICE_FALLBACK_REASON else ""))
     return engine
 
@@ -947,6 +1044,11 @@ def main():
     ap.add_argument("--qa", action="store_true", help="no LLM/voice: frames + thumbnail only")
     ap.add_argument("--key", help="QA: topic key (default: run/topic.json)")
     args = ap.parse_args()
+    if not args.qa:
+        blocked = slot_guard.scheduled_slot_block()
+        if blocked:
+            print(f"[skip] {blocked}; exiting before paid APIs")
+            die(blocked)
     c = cfg()
     if not shutil.which("ffmpeg"):
         die("ffmpeg missing")
@@ -980,6 +1082,7 @@ def main():
         return
 
     n, source = narration(topic, c, spec)
+    require_llm_narration(n, source)
     # CTA/disclaimer stay on-screen; do not spend TTS credits speaking them.
     spoken = dict(n["beats"])
     # Generate each beat voice, then trim only the *outer* TTS silence.

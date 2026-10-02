@@ -104,8 +104,22 @@ def resolve_publish_status(yt_rc, yt_uploaded, ig_published, ig_required, verdic
     return ("success", None)
 
 
+def _finish_credits():
+    try:
+        import credit_log
+        credit_log.write_summary()
+    except Exception as exc:  # noqa: BLE001 — the summary must not hide the real exit
+        print(f"[credits] summary skipped: {exc}")
+
+
 def main():
     global STAGES
+    import slot_guard
+    reason = slot_guard.scheduled_slot_block()
+    if reason:
+        print(f"[skip] {reason}; exiting before paid APIs")
+        _finish_credits()
+        sys.exit(0)
     print(f"[info] format: {video_format()}")
     if video_format() == "short":
         STAGES = SHORT_STAGES
@@ -187,9 +201,10 @@ def main():
                 status_path = RUN / "youtube_status.txt"
                 if status_path.exists():
                     note = status_path.read_text(encoding="utf-8")
+                import credit_log
                 record_publish(None, None, slot or None, platform="instagram",
                                date_ist=target_date(slot) if slot else None, note=note or None,
-                               **ledger_voice_kwargs(RUN))
+                               **ledger_voice_kwargs(RUN), credits=credit_log.ledger_fields())
             except Exception as e:  # noqa: BLE001
                 print(f"[warn] ledger IG-only entry skipped: {e}")
 
@@ -202,6 +217,7 @@ def main():
     # always notify
     print("\n=== Notify ===")
     run("notify.py", "--status", status)
+    _finish_credits()
 
     # Propagate stage failures to CI (and cron callers).  Previously the
     # notification step ran and the process exited 0 even when a stage had

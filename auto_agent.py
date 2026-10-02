@@ -25,6 +25,12 @@ def run_cmd(args, env=None, capture=False):
     return p.returncode
 
 
+def _paid_work_skipped(out):
+    """True when slot_guard stopped the run before DeepSeek or ElevenLabs."""
+    text = out or ""
+    return "[skip]" in text and "before paid" in text
+
+
 def topic_key():
     try:
         return json.loads((RUN / "topic.json").read_text(encoding="utf-8"))["key"]
@@ -186,6 +192,15 @@ def main():
     # First normal run.
     rc, out = run_once(fmt, publish)
     (RUN / "auto_agent_last.log").write_text(out[-30000:], encoding="utf-8")
+    import credit_log
+    credit_log.write_summary()
+
+    if _paid_work_skipped(out):
+        for line in (out or "").splitlines():
+            if line.startswith("[skip]"):
+                log(line)
+        log("slot filled or on hold; exited before paid APIs")
+        return 0 if rc == 0 else (rc or 1)
 
     if rc == 0:
         qa_ok, detail = board_quality(fmt)

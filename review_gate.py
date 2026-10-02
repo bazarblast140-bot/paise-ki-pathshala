@@ -313,6 +313,11 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
         reasons.append(f"narration too short ({words} words)")
 
     review_ok = True
+    if isinstance(self_review, dict) and self_review.get("narration_fallback"):
+        review_ok = False
+        reasons.append(
+            "narration is a topic-card fallback, not an LLM script that passed the hook/teaching gate"
+        )
     if fmt == "short":
         if not isinstance(self_review, dict) or not self_review.get("public_ok"):
             review_ok = False
@@ -386,6 +391,8 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
 
 def files_allow_public(run_dir, fmt):
     """True only when the files on disk agree the video may be uploaded publicly."""
+    if (run_dir / "narration_block.json").exists():
+        return False
     report_path = run_dir / "report.md"
     meta_path = run_dir / "verify_meta.json"
     if not report_path.exists() or not meta_path.exists():
@@ -400,6 +407,6 @@ def files_allow_public(run_dir, fmt):
         return False
     if fmt == "short":
         review = _load_json(run_dir / "self_review.json")
-        if not review or not review.get("public_ok"):
+        if not review or not review.get("public_ok") or review.get("narration_fallback"):
             return False
     return True

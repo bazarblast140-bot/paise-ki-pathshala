@@ -28,6 +28,10 @@ def _topic(key):
 
 
 class ReviewTruncationTests(unittest.TestCase):
+    def setUp(self):
+        import credit_log
+        credit_log.reset()
+
     def test_length_finish_is_an_error_and_thinking_stays_off(self):
         partial = "VERDICT: [NEEDS FIX — 1 item]\n🔴 Risks / assumptions:\n- Data 3 mahi"
         message = SimpleNamespace(content=partial, reasoning_content="x" * 18, model_extra=None)

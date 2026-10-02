@@ -2,6 +2,7 @@
 Exits non-zero if Gate 2 fails (coverage, length band, or leftover markers)."""
 import os, asyncio, re, time, subprocess
 import requests
+import credit_log
 import eleven_voice
 from common import cfg, claude, claude_json, read, save, need, ok, die, RUN
 
@@ -92,6 +93,7 @@ def tts_request(text, c, key, prev=None, nxt=None, retries=3):
         payload["next_text"] = nxt[:500]
 
     for attempt in range(retries):
+        credit_log.add_eleven_chars(len(text))
         r = requests.post(url, headers={"xi-api-key": key, "Content-Type": "application/json"},
                           json=payload, timeout=300)
         if r.status_code == 200:
@@ -154,6 +156,12 @@ def _stitch(files):
 
 
 def synthesize(text, c):
+    c = dict(c)
+    c["voice"] = dict(c.get("voice") or {})
+    if not eleven_voice.paid_voice_allowed():
+        c["voice"]["engine"] = "edge"
+        c["voice"]["edge_voice"] = eleven_voice.PREVIEW_EDGE_VOICE
+        c["voice"]["edge_rate"] = eleven_voice.PREVIEW_EDGE_RATE
     engine = str(c["voice"].get("engine", "edge")).strip().lower()
     if engine not in ("edge", "elevenlabs"):
         die(f"Unknown voice.engine '{engine}' in config.json — use 'edge' or 'elevenlabs'.")
@@ -200,9 +208,11 @@ def synthesize(text, c):
         eleven_voice.log_fallback(exc.reason)
         render_all("edge")
         eleven_voice.write_voice_meta(RUN, "edge", exc.reason, elevenlabs_attempted=True)
+        credit_log.set_tts_engine("edge")
         return
     eleven_voice.write_voice_meta(
         RUN, engine, "", elevenlabs_attempted=(engine == "elevenlabs"))
+    credit_log.set_tts_engine(engine)
 
 
 def main():
@@ -219,6 +229,8 @@ def main():
     fails, words = gate2(spoken, c)
     if fails:
         save("gate2_report.txt", "\n".join(fails))
+        if c["pipeline"].get("stop_on_gate_fail", True):
+            die("GATE 2 FAILED before TTS: " + "; ".join(fails))
         print(f"[warn] GATE 2 Notes: {fails}")
     else:
         ok(f"GATE 2 PASSED (full coverage, {words} spoken words)")

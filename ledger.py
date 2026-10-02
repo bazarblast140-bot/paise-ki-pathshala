@@ -11,7 +11,17 @@ IST = timezone(timedelta(hours=5, minutes=30))
 PATH = ROOT / "data" / "published.json"
 
 
-def record_publish(video_id, publish_at=None, slot=None, platform="youtube", date_ist=None, topic_key=None, note=None, voice_engine=None, voice_fallback=None):
+_CREDIT_KEYS = (
+    "deepseek_calls",
+    "deepseek_prompt_tokens",
+    "deepseek_completion_tokens",
+    "elevenlabs_characters_sent",
+    "elevenlabs_characters_remaining",
+    "tts_engine",
+)
+
+
+def record_publish(video_id, publish_at=None, slot=None, platform="youtube", date_ist=None, topic_key=None, note=None, voice_engine=None, voice_fallback=None, credits=None):
     """publishAt (UTC) se IST din nikalta hai — raat ka run agle din ke slot me ginta hai.
     platform="instagram" + video_id=None = sirf IG Reel gaya (YouTube token dead etc.);
     slot phir bhi bhara maana jaata hai taaki Slot watch duplicate fill na chalaye."""
@@ -41,6 +51,10 @@ def record_publish(video_id, publish_at=None, slot=None, platform="youtube", dat
         entry["voice_engine"] = str(voice_engine)
     if voice_fallback:
         entry["voice_fallback"] = " ".join(str(voice_fallback).split())[:300]
+    if isinstance(credits, dict):
+        for key in _CREDIT_KEYS:
+            if key in credits:
+                entry[key] = credits[key]
     entries.append(entry)
     PATH.parent.mkdir(exist_ok=True)
     PATH.write_text(json.dumps(entries[-300:], indent=1) + "\n", encoding="utf-8")
