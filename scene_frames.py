@@ -1786,11 +1786,11 @@ def _paint_body_line(image, cx, y, text, size, fill, number_fill):
     return max(row_h, union[3] - union[1])
 
 
-def _fit_phrase(phrase, head, head_size, top, bottom, sizes):
+def _fit_phrase(phrase, head, head_size, top, bottom, sizes, max_width=900):
     """Largest size whose wrapped sentences fit between top and bottom."""
     for size in sizes:
-        trial = _phrase_rows(phrase, size) if phrase else []
-        if any(_text_width(row, size) > 920 for row in trial):
+        trial = _phrase_rows(phrase, size, max_width=max_width) if phrase else []
+        if any(_text_width(row, size) > max_width + 20 for row in trial):
             continue
         seen = set()
         unique = True
@@ -1845,62 +1845,76 @@ def _paint_live_card(topic, beat, index, n, body_size=None):
     phrase = card
     chart_figs = _beat_chart_figures(topic, beat, index, figures)
     head = _BEAT_HEAD.get(beat, "बात")
-    head_size = 72
     content_top = safe_area.CONTENT_TOP + 36
     content_bottom = safe_area.CONTENT_BOTTOM - 28
     span = content_bottom - content_top
-    charting = len(chart_figs) >= 2
-    full_sizes = (168, 152, 136, 120, 104, 88, 72, 64)
-    fit = None
-    if charting:
-        fit = _fit_phrase(
-            phrase, head, head_size, content_top, content_top + span * 0.42,
-            full_sizes + (56, 48, 40),
-        )
-        if fit is None:
-            charting = False
-    if not charting:
-        fit = _fit_phrase(phrase, head, head_size, content_top, content_bottom, full_sizes)
-    if fit is None:
-        chosen = 64
-        rows = _phrase_rows(phrase, chosen) if phrase else []
-    else:
-        chosen, rows, _block = fit
-    image = _live_plate(width, height)
-    image.labelled_graphic_boxes = []
-    image.chart_bar_boxes = []
-    head_h = _text_extent(head, head_size)[1]
-    block_h = head_h + 24 + sum(_text_extent(row, chosen)[1] + 24 for row in rows)
-    zone_bottom = content_top + span * 0.42 if charting else content_bottom
-    y = content_top + max(0, (zone_bottom - content_top - block_h) / 2)
-    _text(image, 540, y, head, GOLD, head_size, anchor="mt")
-    y += head_h + 24
-    for row in rows:
-        row_h = _paint_body_line(image, 540, y, row, chosen, (250, 250, 250), GOLD)
-        y += row_h + 24
-    image.scene_kind = f"fact-{beat}"
-    boxes = [
-        layer["box"] for layer in (image.text_layers or [])
-        if layer.get("text") and layer.get("box") and not layer.get("faint")
-    ]
-    if not boxes:
-        image.panel_box = (70, 190, width - 70, 1300)
-        image.panel_fill = panel_fill_fraction(image)
-        return image
+    # A wide one-line sentence beside a short headline leaves the panel under
+    # 35%. The second pass wraps tighter, drops the chart, and centres larger.
+    attempts = []
+    if len(chart_figs) >= 2:
+        attempts.append({"chart": True, "width": 900, "gap": 24, "head": 72})
+    attempts.append({"chart": False, "width": 640, "gap": 8, "head": 96})
     seated = None
-    for pad in (72, 56, 44, 32, 24):
-        panel = _tight_panel(boxes, pad)
-        trial = _seat_panel(image, panel, panel_color)
-        seated = trial
-        if trial.panel_fill + 1e-9 >= 0.35:
-            break
-    if charting:
-        chart_top = max(content_top + span * 0.50, float(seated.panel_box[3]) + 12)
-        if content_bottom - chart_top >= 220:
-            _paint_labelled_chart(
-                seated, chart_figs, (80, chart_top, width - 80, content_bottom),
-                text_bottom=float(seated.panel_box[3]), fill_zone=True,
+    for attempt in attempts:
+        charting = attempt["chart"]
+        head_size = attempt["head"]
+        gap = attempt["gap"]
+        full_sizes = (168, 152, 136, 120, 104, 88, 72, 64)
+        fit = None
+        if charting:
+            fit = _fit_phrase(
+                phrase, head, head_size, content_top, content_top + span * 0.42,
+                full_sizes + (56, 48, 40), max_width=attempt["width"],
             )
+            if fit is None:
+                charting = False
+        if not charting:
+            fit = _fit_phrase(
+                phrase, head, head_size, content_top, content_bottom, full_sizes,
+                max_width=attempt["width"],
+            )
+        if fit is None:
+            chosen = 64
+            rows = _phrase_rows(phrase, chosen, max_width=attempt["width"]) if phrase else []
+        else:
+            chosen, rows, _block = fit
+        image = _live_plate(width, height)
+        image.labelled_graphic_boxes = []
+        image.chart_bar_boxes = []
+        head_h = _text_extent(head, head_size)[1]
+        block_h = head_h + gap + sum(_text_extent(row, chosen)[1] + gap for row in rows)
+        zone_bottom = content_top + span * 0.42 if charting else content_bottom
+        y = content_top + max(0, (zone_bottom - content_top - block_h) / 2)
+        _text(image, 540, y, head, GOLD, head_size, anchor="mt")
+        y += head_h + gap
+        for row in rows:
+            row_h = _paint_body_line(image, 540, y, row, chosen, (250, 250, 250), GOLD)
+            y += row_h + gap
+        image.scene_kind = f"fact-{beat}"
+        boxes = [
+            layer["box"] for layer in (image.text_layers or [])
+            if layer.get("text") and layer.get("box") and not layer.get("faint")
+        ]
+        if not boxes:
+            image.panel_box = (70, 190, width - 70, 1300)
+            image.panel_fill = panel_fill_fraction(image)
+            seated = image
+            break
+        for pad in (72, 56, 44, 32, 24):
+            panel = _tight_panel(boxes, pad)
+            trial = _seat_panel(image, panel, panel_color)
+            seated = trial
+            if trial.panel_fill + 1e-9 >= 0.35:
+                break
+        if charting and seated.panel_fill + 1e-9 >= 0.35:
+            chart_top = max(content_top + span * 0.50, float(seated.panel_box[3]) + 12)
+            if content_bottom - chart_top >= 220:
+                _paint_labelled_chart(
+                    seated, chart_figs, (80, chart_top, width - 80, content_bottom),
+                    text_bottom=float(seated.panel_box[3]), fill_zone=True,
+                )
+        if seated.panel_fill + 1e-9 >= 0.35:
+            break
     return seated
 
 
