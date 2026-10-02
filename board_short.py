@@ -570,12 +570,12 @@ def block_fallback(n, reason):
 
 
 def require_llm_narration(n, source):
-    """TTS runs only for an LLM narration that already passed the teaching gate."""
+    """TTS runs only for a gated script. A topic-card fallback never spends voice."""
     if (
-        source in ("llm", "cache")
+        source in ("llm", "cache", "outline")
         and isinstance(n, dict)
         and not n.get("narration_fallback")
-        and str(n.get("source") or "llm").strip().lower() != "fallback"
+        and str(n.get("source") or source).strip().lower() != "fallback"
     ):
         return
     block_fallback(
