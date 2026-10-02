@@ -1252,13 +1252,19 @@ def _craft_samples(scenes, topic, beat_times, spoken, hook_line, cta):
     durations = [float(s["end"]) - float(s["start"]) for s in scenes]
     total = sum(durations)
     samples = []
+    layout_notes = []
+    seen = set()
     t = 0.0
     while t < total - 0.05:
         frame = scene_transition.render_at(frames, durations, t, SCENE_TRANSITIONS, SCENE_FADE_S)
+        for note in scene_frames.frame_layout_notes(frame):
+            if note not in seen:
+                seen.add(note)
+                layout_notes.append(f"{note} at {t:.1f}s")
         samples.append((t, np.asarray(frame.convert("RGB"))))
         t += 1.0
     text_frames = frame_text_boxes(scenes, topic, beat_times, spoken, hook_line, cta)
-    return samples, text_frames
+    return samples, text_frames, layout_notes
 
 
 def _ass_rows(rows, t0, t1, colour, fade):
@@ -1699,14 +1705,14 @@ def main():
     visual_gate(paced)
     ok(f"scenes: {len(scenes)} cuts, longest {max(s['end'] - s['start'] for s in scenes):.2f}s")
     overlays = short_layout.overlay_plan(topic, beat_times, hook_line, cta)
-    samples, text_frames = _craft_samples(
+    samples, text_frames, layout_notes = _craft_samples(
         scenes, topic, beat_times, spoken, hook_line, cta)
     sync_report = _sync_report(topic, n, scenes, beat_audio, beat_times, spec)
     review = self_review.full_review(
         topic, n, spec, overlays, scenes=scenes,
         labels=(label_boxes if labels_ready else None),
         samples=samples, text_frames=text_frames,
-        sync=sync_report,
+        sync=sync_report, layout_notes=layout_notes,
     )
     review = apply_upload_block(review, source)
     review["narration_source"] = source

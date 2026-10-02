@@ -1,6 +1,7 @@
 """Scene pacing, ATR chart numbers, adult script, voice settings, and the craft gate."""
 import json
 import os
+import re
 import subprocess
 import unittest
 from datetime import date
@@ -409,6 +410,98 @@ class MotionGateTests(unittest.TestCase):
             for box in boxes:
                 if box[1] < safe_area.BRAND_TOP:
                     self.assertLessEqual(box[3], safe_area.SUBTITLE_LIMIT + 0.5, f"{t:.2f} {box}")
+
+
+class LayoutGateTests(unittest.TestCase):
+    def _lesson(self):
+        bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))["topics"]
+        topic = next(t for t in bank if t["key"] == "atr_sl")
+        spec = market_data.spec_for_topic(topic, today=date(2026, 10, 2))
+        return spec["atr"]
+
+    def test_ladder_labels_stay_visible_and_one_distance_number(self):
+        lesson = self._lesson()
+        for phase in (0.0, 0.5, 0.86):
+            img = scene_frames._ladder_reveal(lesson, phase)
+            self._labels_clear(img)
+        for phase in (0.2, 0.66, 1.0):
+            img = scene_frames._ladder_moving(lesson, phase)
+            self._labels_clear(img)
+            nums = set()
+            for layer in img.text_layers:
+                if layer.get("quantity") == "distance":
+                    nums.update(re.findall(r"\d+(?:\.\d+)?", layer.get("text") or ""))
+            self.assertLessEqual(len(nums), 1, (phase, nums))
+
+    def _labels_clear(self, img):
+        blob = " ".join(layer.get("text") or "" for layer in img.text_layers)
+        for needle in ("एंट्री", "795.9", "एसएल", "772.4", "ऊपर", "819.4"):
+            self.assertIn(needle, blob)
+        self.assertEqual(scene_frames.frame_layout_notes(img), [])
+        layers = [layer for layer in img.text_layers if layer.get("text") and not layer.get("faint")]
+        for shape in img.shapes:
+            if shape.get("kind") != "highlight":
+                continue
+            self.assertLess(shape["alpha"], 120)
+            for layer in layers:
+                self.assertFalse(
+                    safe_area.intersects(shape["box"], layer["box"]),
+                    (shape["box"], layer.get("text")),
+                )
+
+    def test_outro_has_no_empty_bar_and_a_large_poll(self):
+        lesson = self._lesson()
+        for step in (0, 1):
+            img = scene_frames._cta_at(lesson, step, 2, 0.4)
+            self.assertFalse(any(shape.get("kind") == "fill" for shape in img.shapes))
+            self.assertEqual(scene_frames.frame_layout_notes(img), [])
+        poll = [
+            layer for layer in scene_frames._cta_at(lesson, 1, 2, 1.0).text_layers
+            if layer.get("role") == "cta"
+        ]
+        self.assertGreaterEqual(len(poll), 2)
+        self.assertGreaterEqual(min(layer["size"] for layer in poll), 40)
+        self.assertTrue(any("हाँ" in layer["text"] for layer in poll))
+
+    def test_card_uses_the_frame_and_the_caption_sits_under_it(self):
+        height = scene_frames.CARD[3] - scene_frames.CARD[1]
+        frac = height / safe_area.FRAME_H
+        self.assertGreaterEqual(frac, 0.60)
+        self.assertLessEqual(frac, 0.66)
+        self.assertGreater(safe_area.SUBTITLE_TOP, scene_frames.CARD[3])
+        self.assertLess(safe_area.SUBTITLE_TOP - scene_frames.CARD[3], 80)
+        self.assertLess(safe_area.SUBTITLE_LIMIT, safe_area.SOURCE_Y)
+
+    def test_opaque_cover_empty_box_and_two_numbers_fail(self):
+        covered = scene_frames._blank()
+        scene_frames._text(covered, 200, 400, "एंट्री  795.9", (255, 255, 255), 32, band=False)
+        scene_frames._mark_shape(covered, (180, 360, 520, 460), 220, "fill")
+        self.assertTrue(any("opaque" in note for note in scene_frames.frame_layout_notes(covered)))
+        empty = scene_frames._blank()
+        scene_frames._mark_shape(empty, (200, 400, 860, 760), 255, "fill")
+        self.assertTrue(any("empty box" in note for note in scene_frames.frame_layout_notes(empty)))
+        rule = scene_frames._blank()
+        scene_frames._accent(rule, [200, 400, 860, 412])
+        self.assertEqual(scene_frames.frame_layout_notes(rule), [])
+        pair = scene_frames._blank()
+        scene_frames._text(pair, 200, 300, "दूरी  23.5", (255, 220, 40), 36, band=False, quantity="distance")
+        scene_frames._text(pair, 200, 420, "20.8", (255, 220, 40), 36, band=False, quantity="distance")
+        self.assertTrue(any("two values" in note for note in scene_frames.frame_layout_notes(pair)))
+
+    def test_a_short_card_is_empty_background_and_the_atr_card_is_not(self):
+        import numpy as np
+
+        short = np.zeros((1920, 1080, 3), dtype=np.uint8)
+        short[:768, :, :] = 180
+        notes = scene_pace.empty_background_spans([(0.0, short), (4.0, short.copy())])
+        self.assertTrue(any("empty background" in note for note in notes))
+        lesson = self._lesson()
+        for img in (
+            scene_frames._hook(lesson),
+            scene_frames._ladder_moving(lesson, 0.5),
+            scene_frames._cta_at(lesson, 1, 2, 1.0),
+        ):
+            self.assertLessEqual(scene_pace.empty_row_fraction(img), scene_pace.EMPTY_MAX_FRAC)
 
 
 class BedTests(unittest.TestCase):

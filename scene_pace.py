@@ -50,6 +50,55 @@ def plan_scenes(beat_times, beats=BEATS):
     return scenes
 
 
+# A frame that is more than this fraction background, for about four seconds, fails.
+EMPTY_MAX_FRAC = 0.30
+
+
+def empty_row_fraction(image):
+    """Share of rows that are bare background.
+
+    The caption and brand bands count as used: those rows are reserved even
+    when the burned caption is not in this still.
+    """
+    arr = np.asarray(image)
+    if arr.ndim == 3:
+        bright = arr.max(axis=2) > 80
+        rows = bright.any(axis=1)
+    else:
+        rows = np.asarray(arr) > 80
+    height = int(rows.shape[0])
+    if height >= 1600:
+        import safe_area
+        rows = rows.copy()
+        rows[int(safe_area.SUBTITLE_TOP):int(safe_area.SUBTITLE_LIMIT) + 1] = True
+        rows[int(safe_area.BRAND_TOP):int(safe_area.BRAND_BOTTOM) + 1] = True
+    return float((~rows).mean())
+
+
+def empty_background_spans(samples, span=VISUAL_SPAN_S, max_frac=EMPTY_MAX_FRAC):
+    """Spans of about `span` seconds whose frames stay mostly empty background."""
+    notes = []
+    fracs = []
+    for item in samples or []:
+        image = item[1]
+        if np.asarray(image).shape[0] < 1000:
+            return []
+        fracs.append((float(item[0]), empty_row_fraction(image)))
+    for i, (t0, frac) in enumerate(fracs):
+        if frac <= max_frac + 1e-9:
+            continue
+        for t1, later in fracs[i + 1:]:
+            if t1 - t0 + 1e-6 < span:
+                continue
+            if later > max_frac + 1e-9:
+                notes.append(
+                    f"empty background across {t1 - t0:.1f}s "
+                    f"({t0:.1f}-{t1:.1f}, {frac:.0%} of the frame)"
+                )
+            break
+    return notes
+
+
 def unchanged_spans(samples, span=VISUAL_SPAN_S, min_delta=VISUAL_MIN_DELTA):
     """Spans of about `span` seconds whose frames barely differ.
 

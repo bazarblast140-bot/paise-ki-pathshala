@@ -9,6 +9,7 @@ Labels are recorded so the 6% safe-area gate can reject a crop.
 """
 import math
 import os
+import re
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -25,7 +26,8 @@ _cmap_cache = {}
 _BG = None
 _SHADOWS = {}
 CHART_KINDS = ("problem", "split")
-CARD = (72, 188, 1008, 1048)
+# 1240px is 64.6% of the 1920 frame. The caption band starts just under this.
+CARD = (72, 124, 1008, 1364)
 NAVY = (12, 18, 32)
 GOLD = (212, 168, 72)
 PROGRESS = (72, 1768, 1008, 1776)
@@ -193,6 +195,11 @@ def screen_callout(img, text, x=160, y=250):
     return out
 
 
+def _cy(y):
+    """Map a y laid out on the old short card onto the taller card."""
+    return 188.0 + (float(y) - 210.0) / 770.0 * 1100.0
+
+
 def _ease(t):
     t = max(0.0, min(1.0, float(t)))
     return 1.0 - (1.0 - t) ** 3
@@ -226,6 +233,7 @@ def _blank():
     img = _terminal_bg()
     img.label_boxes = []
     img.text_layers = []
+    img.shapes = []
     img.plate = None
     img.scene_kind = ""
     return img
@@ -275,7 +283,7 @@ def _anchor_shift(anchor, union):
     return -x0, -y0
 
 
-def _remember(img, sprite, xy, text, box, size, persist, faint, role, runs):
+def _remember(img, sprite, xy, text, box, size, persist, faint, role, runs, quantity=None):
     img.paste(sprite, xy, sprite)
     pad = 6
     rect = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
@@ -290,6 +298,7 @@ def _remember(img, sprite, xy, text, box, size, persist, faint, role, runs):
         "persist": bool(persist),
         "faint": bool(faint),
         "role": role or "lesson",
+        "quantity": quantity,
         "font": runs[0][0] if runs else _FONT,
         "runs": list(runs),
     })
@@ -297,7 +306,7 @@ def _remember(img, sprite, xy, text, box, size, persist, faint, role, runs):
 
 
 def _text(img, x, y, text, fill, size, anchor="lt", persist=False, band=True, alpha=255,
-          faint=False, role="lesson"):
+          faint=False, role="lesson", quantity=None):
     """Draw one whole shaped line and record its padded box.
 
     A single script is one ImageDraw.text call (one HarfBuzz/Raqm sprite).
@@ -381,6 +390,7 @@ def _text(img, x, y, text, fill, size, anchor="lt", persist=False, band=True, al
             )
     return _remember(
         img, sprite, (x0, y0), text, box, size, persist, faint or alpha < 80, role, runs,
+        quantity,
     )
 
 
@@ -523,12 +533,12 @@ def _rule(img, ax, price, color, frac=1.0):
 def _hook(lesson):
     img = _blank()
     _card(img)
-    ImageDraw.Draw(img).rectangle([220, 300, 860, 312], fill=K.YELLOW)
-    _text(img, 540, 360, "तंग एसएल", K.YELLOW, 92, anchor="mt")
-    _text(img, 540, 520, "बार-बार कटता क्यों?", K.INK, 48, anchor="mt")
-    _text(img, 540, 680, "सामान्य हलचल", K.INK, 42, anchor="mt")
-    _text(img, 540, 780, "तंग रेखा को काट देती है", K.INK, 38, anchor="mt")
-    _text(img, 540, 900, "एटीआर इस हलचल को नापता है", K.YELLOW, 32, anchor="mt")
+    _accent(img, [220, _cy(300), 860, _cy(300) + 12])
+    _text(img, 540, _cy(360), "तंग एसएल", K.YELLOW, 92, anchor="mt")
+    _text(img, 540, _cy(520), "बार-बार कटता क्यों?", K.INK, 48, anchor="mt")
+    _text(img, 540, _cy(680), "सामान्य हलचल", K.INK, 42, anchor="mt")
+    _text(img, 540, _cy(780), "तंग रेखा को काट देती है", K.INK, 38, anchor="mt")
+    _text(img, 540, _cy(900), "एटीआर इस हलचल को नापता है", K.YELLOW, 36, anchor="mt")
     return _finish(img, "hook")
 
 
@@ -544,20 +554,20 @@ def _problem(lesson, step, total):
     tight = float(lesson["tight"])
     lo = min(min(c[2] for c in ohlc), tight)
     hi = max(max(c[1] for c in ohlc), tight)
-    box = (108, 330, 880, 860)
+    box = (108, _cy(300), 900, _cy(860))
     ax = _candles(img, box, bars, lo, hi, count)
     if show_hit:
         _rule(img, ax, tight, K.RED, 1.0)
         K.cross(img, ax.x(hit), ax.y(tight), 16, K.RED, 5)
     _watermark(img, box)
-    _text(img, 100, 220, "समस्या", K.YELLOW, 40, anchor="lt")
-    _text(img, 100, 274, "एचडीएफसी बैंक दैनिक", K.INK, 28, anchor="lt")
+    _text(img, 100, _cy(220), "समस्या", K.YELLOW, 40, anchor="lt")
+    _text(img, 100, _cy(274), "एचडीएफसी बैंक दैनिक", K.INK, 28, anchor="lt")
     if show_hit:
-        _text(img, 620, 220, "एटीआर", K.YELLOW, 32, anchor="lt")
-        _text(img, 620, 268, "हलचल नापता है", K.INK, 26, anchor="lt")
+        _text(img, 620, _cy(220), "एटीआर", K.YELLOW, 32, anchor="lt")
+        _text(img, 620, _cy(268), "हलचल नापता है", K.INK, 26, anchor="lt")
     else:
-        _text(img, 620, 220, "सामान्य हलचल", K.YELLOW, 30, anchor="lt")
-        _text(img, 620, 268, "तंग रेखा", K.INK, 28, anchor="lt")
+        _text(img, 620, _cy(220), "सामान्य हलचल", K.YELLOW, 30, anchor="lt")
+        _text(img, 620, _cy(268), "तंग रेखा", K.INK, 28, anchor="lt")
     _axis_labels(img, ax)
     _source(img, lesson)
     return _finish(img, "problem")
@@ -573,25 +583,24 @@ def _formula(lesson, step, total):
     else:
         phase = min(2, step)
     filled = _ease((phase + 1) / 3.0)
-    ImageDraw.Draw(img).rounded_rectangle(
-        [200, 830, 200 + int(680 * filled), 842], 5, fill=K.YELLOW,
-    )
-    _text(img, 540, 240, "एटीआर क्या है", K.YELLOW, 58, anchor="mt")
-    _text(img, 540, 330, "पिछले कैंडल की औसत हलचल", K.INK, 32, anchor="mt")
+    bar_y = _cy(900)
+    _accent(img, [200, bar_y, 200 + int(680 * filled), bar_y + 12])
+    _text(img, 540, _cy(240), "एटीआर क्या है", K.YELLOW, 64, anchor="mt")
+    _text(img, 540, _cy(340), "पिछले कैंडल की औसत हलचल", K.INK, 36, anchor="mt")
     if phase == 0:
-        _text(img, 540, 470, str(lesson["period"]), K.YELLOW, 132, anchor="mt")
-        _text(img, 540, 680, "कैंडल की औसत", K.INK, 42, anchor="mt")
+        _text(img, 540, _cy(500), str(lesson["period"]), K.YELLOW, 140, anchor="mt")
+        _text(img, 540, _cy(720), "कैंडल की औसत", K.INK, 48, anchor="mt")
     elif phase == 1:
         # The figure itself is spoken at the end of this beat, on the next card.
-        _text(img, 540, 470, "औसत", K.YELLOW, 88, anchor="mt")
-        _text(img, 540, 640, "हलचल", K.INK, 64, anchor="mt")
-        _text(img, 540, 780, "पिछले कैंडल", K.MUTED, 32, anchor="mt")
+        _text(img, 540, _cy(500), "औसत", K.YELLOW, 96, anchor="mt")
+        _text(img, 540, _cy(680), "हलचल", K.INK, 72, anchor="mt")
+        _text(img, 540, _cy(820), "पिछले कैंडल", K.MUTED, 36, anchor="mt")
     else:
         # The product is spoken in the next beat. This card stays on the average.
-        _text(img, 540, 430, "एचडीएफसी बैंक", K.INK, 40, anchor="mt")
-        _text(img, 540, 530, lesson["atr"], K.YELLOW, 116, anchor="mt")
-        _text(img, 540, 720, "औसत हलचल", K.INK, 42, anchor="mt")
-    _text(img, 540, 900, "दिशा नहीं, सिर्फ़ हलचल", K.MUTED, 30, anchor="mt")
+        _text(img, 540, _cy(460), "एचडीएफसी बैंक", K.INK, 44, anchor="mt")
+        _text(img, 540, _cy(580), lesson["atr"], K.YELLOW, 128, anchor="mt")
+        _text(img, 540, _cy(780), "औसत हलचल", K.INK, 48, anchor="mt")
+    _text(img, 540, _cy(960), "दिशा नहीं, सिर्फ़ हलचल", K.MUTED, 32, anchor="mt")
     _source(img, lesson)
     return _finish(img, "formula")
 
@@ -600,25 +609,83 @@ def _ladder_ys(lesson):
     entry, sl = float(lesson["entry"]), float(lesson["sl"])
     target = float(lesson["target"])
     span = (target - sl) or 1.0
+    top, bot = _cy(480), _cy(920)
 
     def y_of(price):
-        return 900 - (price - sl) / span * 440
+        return bot - (price - sl) / span * (bot - top)
 
     return entry, sl, target, y_of
 
 
-def _band(img, y, alpha):
-    """Gold row behind the level being drawn. Geometry, not a text sprite."""
-    alpha = int(max(0, min(180, alpha)))
+def _mark_shape(img, box, alpha=255, kind="fill"):
+    shapes = getattr(img, "shapes", None)
+    if shapes is None:
+        img.shapes = []
+    img.shapes.append({
+        "box": tuple(float(v) for v in box),
+        "alpha": int(alpha),
+        "kind": kind,
+    })
+
+
+def _accent(img, box):
+    """Thin rule. A divider, not an empty bar."""
+    ImageDraw.Draw(img).rounded_rectangle(list(box), 4, fill=K.YELLOW)
+    _mark_shape(img, box, 255, "divider")
+
+
+def _highlight(img, y, alpha=64):
+    """Translucent gold wash on the plot, to the right of the price labels."""
+    alpha = int(max(0, min(90, int(alpha))))
     if alpha < 8:
         return
-    height = 58
-    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    height = 96
+    x0, x1 = 560, 1000
     top = int(round(float(y) - height / 2.0))
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     ImageDraw.Draw(overlay).rounded_rectangle(
-        [188, top, 908, top + height], 16, fill=(212, 168, 72, alpha),
+        [x0, top, x1, top + height], 8, fill=(212, 168, 72, alpha),
     )
     img.paste(overlay, (0, 0), overlay)
+    _mark_shape(img, (x0, top, x1, top + height), alpha, "highlight")
+
+
+def frame_layout_notes(img):
+    """Opaque covers, empty boxes, and two numbers for one quantity."""
+    layers = [
+        layer for layer in (getattr(img, "text_layers", None) or [])
+        if layer.get("text") and layer.get("box") and not layer.get("faint")
+    ]
+    notes = []
+    for shape in getattr(img, "shapes", None) or []:
+        box = shape.get("box")
+        if not box:
+            continue
+        kind = shape.get("kind") or "fill"
+        alpha = int(shape.get("alpha") or 255)
+        if kind != "divider" and alpha >= 120:
+            for layer in layers:
+                if safe_area.intersects(box, layer["box"]):
+                    notes.append("opaque shape covers a text sprite")
+                    break
+        if kind == "fill":
+            width = abs(float(box[2]) - float(box[0]))
+            height = abs(float(box[3]) - float(box[1]))
+            if width * height < 2400 or min(width, height) <= 16:
+                continue
+            if not any(safe_area.intersects(box, layer["box"]) for layer in layers):
+                notes.append("empty box with no content")
+    groups = {}
+    for layer in layers:
+        key = layer.get("quantity")
+        if not key:
+            continue
+        raw = str(layer.get("text") or "").replace(",", "")
+        groups.setdefault(key, set()).update(re.findall(r"\d+(?:\.\d+)?", raw))
+    for key, nums in groups.items():
+        if len(nums) > 1:
+            notes.append("two values for " + key + ": " + ", ".join(sorted(nums)))
+    return notes
 
 
 def _bracket(img, x, y0, y1, color):
@@ -687,145 +754,89 @@ def _push(img, box, scale):
     return img
 
 
-def _ladder_moving(lesson, phase):
-    """Full ladder with a growing entry-to-SL bracket, a counting distance, and a ticking price.
+def _ladder_labels(img, lesson, y_of, sl_lesson, target_lesson):
+    """Every level keeps its price. Early SL/target words are the chart scale."""
+    rows = (
+        (lesson["entry"], K.TARGET_GREEN, f"एंट्री  {lesson['entry']}", "lesson"),
+        (lesson["sl"], K.SL_RED, f"एसएल  {lesson['sl']}", "lesson" if sl_lesson else "axis"),
+        (lesson["target"], K.BLUE, f"ऊपर  {lesson['target']}", "lesson" if target_lesson else "axis"),
+    )
+    for price, col, label, role in rows:
+        y = y_of(float(price))
+        _text(img, 150, y - 8, label, col, 34, anchor="lm", role=role)
 
-    SL and the upper price stay off the card until this phase has reached them.
-    The distance line is the real figure, never a 0.0 placeholder.
-    """
+
+def _ladder_lines(img, lesson, y_of):
+    entry, sl, target, _ = _ladder_ys(lesson)
+    draw = ImageDraw.Draw(img)
+    draw.line([(500, y_of(target) - 36), (500, y_of(sl) + 36)], fill=(88, 100, 120), width=3)
+    colors = ((entry, K.TARGET_GREEN), (sl, K.SL_RED), (target, K.BLUE))
+    for price, col in colors:
+        y = y_of(price)
+        draw.line([(560, y), (900, y)], fill=col, width=5)
+    return entry, sl, target
+
+
+def _ladder_moving(lesson, phase):
+    """All three prices stay labeled. One distance figure: the bracket counter, then 23.5."""
     phase = max(0.0, min(1.0, float(phase)))
     grown = _ease(phase)
-    show_sl = phase >= 0.35
-    show_target = phase >= 0.70
     img = _blank()
     _card(img)
     entry, sl, target, y_of = _ladder_ys(lesson)
-    draw = ImageDraw.Draw(img)
-    draw.line([(200, 420), (200, 960)], fill=(88, 100, 120), width=3)
-    rows = (
-        (entry, K.TARGET_GREEN, f"एंट्री  {lesson['entry']}", True),
-        (sl, K.SL_RED, f"एसएल  {lesson['sl']}", show_sl),
-        (target, K.BLUE, f"ऊपर  {lesson['target']}", show_target),
-    )
-    for price, col, label, show in rows:
-        if not show:
-            continue
-        y = y_of(price)
-        draw.line([(230, y), (700, y)], fill=col, width=4)
-        draw.line([(860, y), (886, y)], fill=(120, 132, 150), width=3)
     tip = y_of(entry) + (y_of(sl) - y_of(entry)) * grown
-    _band(img, tip, 90 + 70 * grown)
-    _bracket(img, 760, y_of(entry), tip, GOLD)
+    _highlight(img, tip, 56 + 20 * grown)
+    _ladder_lines(img, lesson, y_of)
+    _bracket(img, 930, y_of(entry), tip, GOLD)
+    _text(img, 150, _cy(230), "कीमत की सीढ़ी", K.YELLOW, 44, anchor="lt")
+    _text(img, 540, _cy(300), f"{lesson['multiple']} गुना", K.YELLOW, 36, anchor="mt")
+    _ladder_labels(img, lesson, y_of, phase >= 0.35, phase >= 0.70)
     final = float(lesson["distance"])
     shown = final * grown
-    count = lesson["distance"] if abs(shown - final) < 0.05 else f"{shown:.1f}"
-    live = entry + (sl - entry) * grown
-    tick = lesson["sl"] if abs(live - sl) < 0.05 else f"{live:.1f}"
-    _text(img, 100, 220, "कीमत की सीढ़ी", K.YELLOW, 42, anchor="lt")
-    _text(img, 540, 292, f"दूरी  {lesson['distance']}", K.YELLOW, 32, anchor="mt")
-    for price, col, label, show in rows:
-        if show:
-            _text(img, 250, y_of(price) - 42, label, col, 30, anchor="lt")
-    if phase >= 0.08:
-        _text(img, 860, 300, count, GOLD, 22, anchor="mt", role="meter")
-        _text(img, 898, tip, tick, GOLD, 22, anchor="lm", role="meter")
-    img = _finish(img, "ladder")
-    _push(img, (150, 380, 990, 1020), 1.0 + 0.06 * phase)
-    return img
+    if abs(shown - final) < 0.05:
+        _text(
+            img, 540, _cy(390), f"दूरी  {lesson['distance']}", K.YELLOW, 40,
+            anchor="mt", quantity="distance",
+        )
+    elif phase >= 0.08:
+        # Above the wash, at the bracket tip, so the wash does not cover the figure.
+        _text(
+            img, 948, tip - 86, f"{shown:.1f}", GOLD, 32, anchor="lt",
+            role="meter", quantity="distance",
+        )
+        _text(img, 540, _cy(390), "पॉइंट", K.INK, 32, anchor="mt")
+    return _finish(img, "ladder")
 
 
 def _ladder_reveal(lesson, phase):
-    """Entry, SL, then the upper line draw on while a gold row travels with them.
-
-    phase 1 is the bracket's first frame, so the handoff does not pop.
-    """
+    """The three prices are on from the first frame. The gold wash stays behind them."""
     phase = max(0.0, min(1.0, float(phase)))
     if phase >= 0.999:
         return _ladder_moving(lesson, 0.0)
-    entry, sl, target, y_of = _ladder_ys(lesson)
     img = _blank()
     _card(img)
-    draw = ImageDraw.Draw(img)
-    draw.line([(200, 420), (200, 960)], fill=(88, 100, 120), width=3)
-    rows = (
-        (entry, K.TARGET_GREEN, f"एंट्री  {lesson['entry']}"),
-        (sl, K.SL_RED, f"एसएल  {lesson['sl']}"),
-        (target, K.BLUE, f"ऊपर  {lesson['target']}"),
-    )
-    cuts = (0.34, 0.67)
-    if phase < cuts[0]:
-        local = _ease(phase / cuts[0])
-        fracs = (local, 0.0, 0.0)
-        band_y = y_of(entry)
-        band_a = 150 * local
-    elif phase < cuts[1]:
-        local = _ease((phase - cuts[0]) / (cuts[1] - cuts[0]))
-        fracs = (1.0, local, 0.0)
-        band_y = y_of(entry) + (y_of(sl) - y_of(entry)) * local
-        band_a = 150
-    else:
-        local = _ease((phase - cuts[1]) / (1.0 - cuts[1]))
-        fracs = (1.0, 1.0, local)
-        band_y = y_of(sl) + (y_of(target) - y_of(sl)) * local
-        fade = max(0.0, (phase - 0.90) / 0.10)
-        band_a = 150 * (1.0 - _ease(fade))
-    _band(img, band_y, band_a)
-    pending = []
-    for (price, col, label), frac in zip(rows, fracs):
-        if frac <= 0.02:
-            continue
-        y = y_of(price)
-        x1 = 230 + 470 * frac
-        draw.line([(230, y), (x1, y)], fill=col, width=4)
-        if frac > 0.92:
-            draw.line([(860, y), (886, y)], fill=(120, 132, 150), width=3)
-        pending.append((y, col, label, frac, price))
-    _text(img, 100, 220, "कीमत की सीढ़ी", K.YELLOW, 42, anchor="lt")
-    # Price words wait until the voice has reached them. The gold row still travels.
-    for y, col, label, frac, price in pending:
-        if frac > 0.82 and abs(price - entry) < 0.05:
-            _text(img, 250, y - 42, label, col, 30, anchor="lt")
+    entry, sl, target, y_of = _ladder_ys(lesson)
+    # Linear, across the whole ladder. An ease curve arrives early and the
+    # last four seconds of the reveal then sit still.
+    travel = y_of(sl) + (y_of(target) - y_of(sl)) * phase
+    _highlight(img, travel, 64)
+    _ladder_lines(img, lesson, y_of)
+    _text(img, 150, _cy(230), "कीमत की सीढ़ी", K.YELLOW, 44, anchor="lt")
+    _ladder_labels(img, lesson, y_of, False, False)
     if phase >= 0.50:
-        _text(img, 540, 300, f"{lesson['multiple']} गुना", K.YELLOW, 32, anchor="mt")
+        _text(img, 540, _cy(300), f"{lesson['multiple']} गुना", K.YELLOW, 36, anchor="mt")
     if phase >= 0.75:
-        _text(img, 540, 360, f"दूरी  {lesson['distance']}", K.INK, 32, anchor="mt")
+        _text(
+            img, 540, _cy(390), f"दूरी  {lesson['distance']}", K.YELLOW, 40,
+            anchor="mt", quantity="distance",
+        )
     return _finish(img, "ladder")
 
 
 def _ladder(lesson, step, total):
-    img = _blank()
-    _card(img)
-    entry, sl, target, y_of = _ladder_ys(lesson)
-    reveal = 4 if total <= 1 else min(4, step + 1)
-    draw = ImageDraw.Draw(img)
-    draw.line([(200, 420), (200, 960)], fill=(88, 100, 120), width=3)
-    rows = (
-        (entry, K.TARGET_GREEN, f"एंट्री  {lesson['entry']}", 1),
-        (sl, K.SL_RED, f"एसएल  {lesson['sl']}", 2),
-        (target, K.BLUE, f"ऊपर  {lesson['target']}", 3),
-    )
-    pending = []
-    active = min(reveal, 3)
-    for price, col, label, need in rows:
-        if reveal < need:
-            continue
-        y = y_of(price)
-        glow = need == active
-        partial = glow and reveal < 4 and total > 1
-        frac = _ease(0.58) if partial else 1.0
-        x1 = 230 + 470 * frac
-        if not glow:
-            draw.line([(230, y), (x1, y)], fill=col, width=4)
-        pending.append((230, y, x1, col, label, glow, frac))
-    _text(img, 100, 220, "कीमत की सीढ़ी", K.YELLOW, 42, anchor="lt")
-    for x0, y, x1, col, label, glow, frac in pending:
-        if glow:
-            _glow_line(img, x0, y, x1, col)
-        if frac > 0.8:
-            _text(img, 250, y - 42, label, col, 30, anchor="lt")
-    if reveal >= 4 and total <= 1:
-        _text(img, 540, 312, f"दूरी  {lesson['distance']}", K.YELLOW, 32, anchor="mt")
-    return _finish(img, "ladder")
+    """A single ladder card shows the finished picture. Several cards animate."""
+    del step, total
+    return _ladder_moving(lesson, 1.0)
 
 
 def _split(lesson):
@@ -838,8 +849,8 @@ def _split(lesson):
     tight, sl = float(lesson["tight"]), float(lesson["sl"])
     lo = min(min(c[2] for c in ohlc), sl, tight)
     hi = max(max(c[1] for c in ohlc), tight)
-    left = (96, 310, 500, 760)
-    right = (548, 310, 860, 760)
+    left = (96, _cy(280), 500, _cy(780))
+    right = (548, _cy(280), 860, _cy(780))
     ax_l = _candles(img, left, bars, lo, hi, len(ohlc))
     ax_r = _candles(img, right, bars, lo, hi, len(ohlc))
     _rule(img, ax_l, tight, K.RED, 1.0)
@@ -849,11 +860,11 @@ def _split(lesson):
     if held:
         K.tick(img, ax_r.x(len(ohlc) - 1), max(340, ax_r.y(sl) - 28), 14, K.GREEN, 5)
     _watermark(img, right)
-    _text(img, 300, 220, "गलत", K.RED, 36, anchor="mt")
-    _text(img, 760, 220, "सही", K.GREEN, 36, anchor="mt")
+    _text(img, 300, _cy(210), "गलत", K.RED, 40, anchor="mt")
+    _text(img, 760, _cy(210), "सही", K.GREEN, 40, anchor="mt")
     _axis_labels(img, ax_r, steps=3)
-    _text(img, 298, 860, "तंग रेखा कट गई", K.RED, 24, anchor="mt")
-    _text(img, 760, 860, "एटीआर रेखा रुकी" if held else "एटीआर रेखा", K.GREEN, 24, anchor="mt")
+    _text(img, 298, _cy(900), "तंग रेखा कट गई", K.RED, 28, anchor="mt")
+    _text(img, 760, _cy(900), "एटीआर रेखा रुकी" if held else "एटीआर रेखा", K.GREEN, 28, anchor="mt")
     # Karein already burns the grey disclaimer in the brand band. A second
     # source line there would sit on top of it. The problem and formula
     # scenes, outside that beat, still carry the Yahoo line.
@@ -864,22 +875,22 @@ def _size(lesson):
     """This slice says the tight line is cut by the ATR swing, not the rupee total."""
     img = _blank()
     _card(img)
-    ImageDraw.Draw(img).rounded_rectangle([200, 860, 880, 872], 5, fill=K.YELLOW)
-    _text(img, 540, 280, "तंग रेखा", K.RED, 64, anchor="mt")
-    _text(img, 540, 440, f"{lesson['atr']} की हलचल", K.YELLOW, 52, anchor="mt")
-    _text(img, 540, 600, "रेखा कटती है", K.INK, 48, anchor="mt")
-    _text(img, 540, 760, "शोर में तंग एसएल", K.MUTED, 32, anchor="mt")
+    _accent(img, [220, _cy(860), 860, _cy(860) + 12])
+    _text(img, 540, _cy(300), "तंग रेखा", K.RED, 72, anchor="mt")
+    _text(img, 540, _cy(480), f"{lesson['atr']} की हलचल", K.YELLOW, 56, anchor="mt")
+    _text(img, 540, _cy(660), "रेखा कटती है", K.INK, 52, anchor="mt")
+    _text(img, 540, _cy(820), "शोर में तंग एसएल", K.MUTED, 36, anchor="mt")
     return _finish(img, "size")
 
 
 def _takeaway(lesson):
     img = _blank()
     _card(img)
-    ImageDraw.Draw(img).rectangle([240, 300, 840, 310], fill=K.YELLOW)
-    _text(img, 540, 360, "दूरी", K.YELLOW, 48, anchor="mt")
-    _text(img, 540, 480, str(lesson["distance"]), K.YELLOW, 96, anchor="mt")
-    _text(img, 540, 660, "पॉइंट", K.INK, 40, anchor="mt")
-    _text(img, 540, 780, "मात्रा इसी दूरी से", K.INK, 36, anchor="mt")
+    _accent(img, [240, _cy(300), 840, _cy(300) + 10])
+    _text(img, 540, _cy(400), "दूरी", K.YELLOW, 56, anchor="mt")
+    _text(img, 540, _cy(540), str(lesson["distance"]), K.YELLOW, 120, anchor="mt", quantity="distance")
+    _text(img, 540, _cy(740), "पॉइंट", K.INK, 48, anchor="mt")
+    _text(img, 540, _cy(880), "मात्रा इसी दूरी से", K.INK, 40, anchor="mt")
     return _finish(img, "takeaway")
 
 
@@ -888,31 +899,23 @@ def _rupees(value):
 
 
 def _cta_at(lesson, step=0, total=1, phase=1.0):
-    """One recap card. The second still adds the education line and the poll."""
-    phase = max(0.0, min(1.0, float(phase)))
+    """One recap card. The second still adds the education line and a large poll."""
+    del phase  # the two cards differ by content, not by an empty growing bar
     img = _blank()
     _card(img)
-    draw = ImageDraw.Draw(img)
-    bar = 200 + int(680 * (0.35 + 0.65 * phase))
-    draw.rounded_rectangle([200, 250, bar, 264], 5, fill=K.YELLOW)
     sl_line = f"एसएल = भाव − {lesson['multiple']} गुना एटीआर = {lesson['sl']}"
     risk_line = f"{lesson['qty']} शेयर पर जोखिम {_rupees(lesson['risk'])}"
-    _text(img, 540, 320, sl_line, K.INK, 32, anchor="mt")
-    _text(img, 540, 430, risk_line, K.YELLOW, 36, anchor="mt")
-    if total > 1 and step >= 1:
-        panel_h = int(220 * phase)
-        if panel_h > 8:
-            draw.rounded_rectangle([140, 860, 940, 860 + panel_h], 18, fill=(24, 32, 48))
-        _text(img, 540, 560, "शिक्षा है, सलाह नहीं", K.INK, 40, anchor="mt")
+    # The first card centers the two facts. The second keeps them up so the poll fits.
+    later = total > 1 and step >= 1
+    _text(img, 540, _cy(280 if later else 520), sl_line, K.INK, 36, anchor="mt")
+    _text(img, 540, _cy(460 if later else 760), risk_line, K.YELLOW, 52 if not later else 48, anchor="mt")
+    if later:
+        _text(img, 540, _cy(640), "शिक्षा है, सलाह नहीं", K.INK, 48, anchor="mt")
         import engagement
-        _text(
-            img, 540, 700, engagement.engagement_question({"cat": "INDICATOR"}),
-            K.YELLOW, 28, anchor="mt", role="cta",
-        )
-    elif phase > 0.15:
-        # Motion inside the first recap so a four-second span is not a still.
-        tick = int(40 * phase)
-        draw.rectangle([160, 620, 160 + int(760 * phase), 628 + tick], fill=(212, 168, 72))
+        poll = engagement.engagement_question({"cat": "INDICATOR"})
+        head, _, tail = poll.partition("? ")
+        _text(img, 540, _cy(800), head + "?", K.YELLOW, 48, anchor="mt", role="cta")
+        _text(img, 540, _cy(920), tail or poll, K.YELLOW, 48, anchor="mt", role="cta")
     return _finish(img, "cta")
 
 

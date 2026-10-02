@@ -13,18 +13,19 @@ FRAME_H = 1920
 #   subtitle  white captions, the beat line, and the poll
 #   brand     PKP, the source line, and the grey disclaimer
 #   progress  the bar, geometry only, under the brand line
-CONTENT_TOP = 188
-CONTENT_BOTTOM = 1060
-SUBTITLE_TOP = 1160
+# The card fills about 60–65% of the frame. Captions start just under it.
+CONTENT_TOP = 168
+CONTENT_BOTTOM = 1336
+SUBTITLE_TOP = 1388
 # Hard ceiling for burned subtitles. The disclaimer starts at SOURCE_Y, below this.
-SUBTITLE_LIMIT = 1504
-SUBTITLE_BOTTOM = 1560
+SUBTITLE_LIMIT = 1568
+SUBTITLE_BOTTOM = 1580
 BRAND_TOP = 1588
 BRAND_BOTTOM = 1720
-HEAD_Y = 1172
-KEY_Y = 1288
-CAPTION_Y = 1376
-CTA_Y = 1464
+HEAD_Y = 1408
+KEY_Y = 1468
+CAPTION_Y = 1520
+CTA_Y = 1520
 SOURCE_Y = 1604
 BRAND_Y = 1668
 

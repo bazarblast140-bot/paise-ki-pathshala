@@ -232,7 +232,8 @@ def score_content(topic, narration, spec=None, trends=None):
     return _reject_fallback(narration, _pack({"hook": hook, "accuracy": accuracy, "trend": trend}, notes))
 
 
-def score_craft(narration, overlays=None, scenes=None, labels=None, samples=None, text_frames=None):
+def score_craft(narration, overlays=None, scenes=None, labels=None, samples=None, text_frames=None,
+                layout_notes=None):
     """0 when a scene sits too long, there are too few scenes, a beat is vague, or a label leaves the 6% margin.
 
     scenes=None derives the cut list from the on-screen beat spans, which is what
@@ -271,6 +272,7 @@ def score_craft(narration, overlays=None, scenes=None, labels=None, samples=None
         notes.extend(scene_notes)
     if samples:
         notes.extend(scene_pace.unchanged_spans(samples))
+        notes.extend(scene_pace.empty_background_spans(samples))
     if text_frames:
         import safe_area
         for t, boxes in text_frames:
@@ -293,6 +295,8 @@ def score_craft(narration, overlays=None, scenes=None, labels=None, samples=None
                     break
             if notes and notes[-1].startswith("subtitle leaves"):
                 break
+    if layout_notes:
+        notes.extend(layout_notes)
     if notes:
         return 0, notes
     return 100, []
@@ -309,7 +313,7 @@ def score_sync(report):
 
 
 def full_review(topic, narration, spec, overlays, trends=None, scenes=None, labels=None,
-                samples=None, text_frames=None, sync=None):
+                samples=None, text_frames=None, sync=None, layout_notes=None):
     """All parts, including the visual and the craft cut. public_ok follows `passed`.
 
     sync=None skips the transcript check (older callers). A report that is not
@@ -322,7 +326,8 @@ def full_review(topic, narration, spec, overlays, trends=None, scenes=None, labe
     accuracy, acc_notes = score_accuracy(narration, topic, spec)
     trend, trend_notes = score_trend(topic, trends)
     craft, craft_notes = score_craft(
-        narration, overlays, scenes, labels, samples=samples, text_frames=text_frames)
+        narration, overlays, scenes, labels, samples=samples, text_frames=text_frames,
+        layout_notes=layout_notes)
     sync_score, sync_notes = score_sync(sync)
     notes = hook_notes + vis_notes + acc_notes + trend_notes + craft_notes + sync_notes
     packed = _pack(
