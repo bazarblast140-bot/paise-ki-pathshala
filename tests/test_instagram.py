@@ -151,7 +151,7 @@ class HostingTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def _run(self, handler):
+    def _run(self, handler, *, serves=True):
         calls = []
 
         def request(url, method="GET", data=None, headers=None, timeout=120):
@@ -162,7 +162,7 @@ class HostingTests(unittest.TestCase):
         stdout, stderr = __import__("io").StringIO(), __import__("io").StringIO()
         with mock.patch.dict("os.environ", self.env, clear=False), \
              mock.patch.object(IG, "_github_request", side_effect=request), \
-             mock.patch.object(IG, "_url_serves", return_value=True), \
+             mock.patch.object(IG, "_url_serves", return_value=serves), \
              mock.patch.object(IG, "media_tag", return_value="ig-reel-2026-10-01"), \
              mock.patch.object(IG.time, "sleep"), \
              mock.patch("sys.stdout", stdout), \
@@ -325,6 +325,90 @@ class HostingTests(unittest.TestCase):
         self.assertIn("contents:write", text)
         self.assertIn("GITHUB_TOKEN", text)
         self.assertNotIn(TOKEN, text)
+
+    def test_names_use_run_id_attempt_and_content_hash(self):
+        seen = {}
+
+        def capture(file, *, name, content_type):
+            seen["name"] = name
+            seen["type"] = content_type
+            return "https://example.com/asset"
+
+        cover = Path(self.tmp.name) / "cover.jpg"
+        cover.write_bytes(b"jpeg-bytes")
+        with mock.patch.object(IG, "host_release_asset", side_effect=capture), \
+             mock.patch.dict("os.environ", {"GITHUB_RUN_ID": "4242", "GITHUB_RUN_ATTEMPT": "2"}):
+            IG.host_mp4(self.file)
+            self.assertEqual(seen["type"], "video/mp4")
+            self.assertEqual(
+                seen["name"], f"paise-short-4242-2-{IG.content_hash(self.file)}.mp4")
+            IG.host_cover(cover)
+            self.assertEqual(seen["type"], "image/jpeg")
+            self.assertEqual(
+                seen["name"], f"paise-cover-4242-2-{IG.content_hash(cover)}.jpg")
+        self.assertFalse(hasattr(IG, "_drop_same_name"))
+        self.assertNotIn("int(time.time())", Path(IG.__file__).read_text(encoding="utf-8"))
+
+    def test_url_not_serving_retries_without_deleting(self):
+        def handler(method, url, calls):
+            if method == "DELETE":
+                raise AssertionError("must not delete another run's asset")
+            if method == "GET" and "/releases/tags/" in url:
+                return 200, _release_json()
+            if method == "POST" and "uploads.github.com" in url:
+                return 201, json.dumps({"browser_download_url": "https://github.com/example/a.mp4"}).encode()
+            raise AssertionError(method + " " + url)
+
+        calls, code, err, url = self._run(handler, serves=False)
+        self.assertEqual(code, 1, err)
+        self.assertIsNone(url)
+        self.assertIn("Public URL not serving yet", err)
+        posts = [c for c in calls if c[0] == "POST" and "uploads.github.com" in c[1]]
+        self.assertEqual(len(posts), IG.UPLOAD_ATTEMPTS)
+        self.assertFalse(any(c[0] == "DELETE" for c in calls))
+
+    def test_same_name_asset_is_reused_not_deleted(self):
+        name = "paise-short-1790890344.mp4"
+        public = "https://github.com/example/a.mp4"
+        release = dict(RELEASE)
+        release["assets"] = [{"id": 9, "name": name, "browser_download_url": public}]
+
+        def handler(method, url, calls):
+            if method == "DELETE":
+                raise AssertionError("must not delete")
+            if method == "POST":
+                raise AssertionError("must not re-upload " + url)
+            if method == "GET" and "/releases/tags/" in url:
+                return 200, json.dumps(release).encode()
+            raise AssertionError(method + " " + url)
+
+        calls, code, err, url = self._run(handler)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(url, public)
+        self.assertFalse(any(c[0] == "DELETE" for c in calls))
+
+    def test_duplicate_name_422_reuses_the_asset_without_deleting(self):
+        name = "paise-short-1790890344.mp4"
+        public = "https://github.com/example/a.mp4"
+
+        def handler(method, url, calls):
+            if method == "DELETE":
+                raise AssertionError("must not delete")
+            if method == "GET" and "/releases/tags/" in url:
+                posted = any(c[0] == "POST" and "uploads.github.com" in c[1] for c in calls)
+                body = dict(RELEASE)
+                body["assets"] = [{"name": name, "browser_download_url": public}] if posted else []
+                return 200, json.dumps(body).encode()
+            if method == "POST" and "uploads.github.com" in url:
+                raise IG.GitHubHttpError(422, url, "already_exists")
+            raise AssertionError(method + " " + url)
+
+        calls, code, err, url = self._run(handler)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(url, public)
+        posts = [c for c in calls if c[0] == "POST" and "uploads.github.com" in c[1]]
+        self.assertEqual(len(posts), 1)
+        self.assertFalse(any(c[0] == "DELETE" for c in calls))
 
 
 class WatchdogVerdictTests(unittest.TestCase):

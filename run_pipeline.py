@@ -83,7 +83,8 @@ def resolve_publish_status(yt_rc, yt_uploaded, ig_published, ig_required, verdic
 
     A YouTube upload failure (invalid_grant is exit code 3) fails the job even
     when an Instagram Reel was confirmed. A missing READY verdict with nothing
-    published also fails the job.
+    published also fails the job. A YouTube upload whose Reel was not confirmed
+    is success with a warning: the slot is filled, and the Reel is retried later.
     """
     if yt_rc:
         if yt_rc == 3:
@@ -96,12 +97,48 @@ def resolve_publish_status(yt_rc, yt_uploaded, ig_published, ig_required, verdic
         return ("not published: verify verdict is not READY TO PUBLISH",
                 "[STOP] Verify verdict is not READY — nothing was published (YouTube or Instagram).")
     if ig_required and not ig_published:
+        if yt_uploaded:
+            return (
+                "success",
+                "[warn] Instagram Reel was not confirmed after the YouTube upload. "
+                "The slot stays filled. The Reel is retried from run/ig_status.txt.",
+            )
         return ("publish failed: Instagram Reel not confirmed",
                 "[STOP] Instagram Reel publish was not confirmed; YouTube status is independent.")
     if not published:
         return ("publish failed: YouTube and Instagram both failed",
                 "[STOP] No platform confirmed a publish; topic was not marked used.")
     return ("success", None)
+
+
+def _youtube_video_id():
+    path = RUN / "uploaded.txt"
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    token = raw.strip().split()
+    if not token:
+        return ""
+    video_id = token[0]
+    if video_id.lower().startswith("http"):
+        video_id = video_id.rstrip("/").split("/")[-1]
+    return video_id
+
+
+def finish_publish(yt_rc, yt_uploaded, ig_published, ig_required, verdict_ready, ig_rc=0):
+    """Resolve the publish step and, when only the Reel missed, leave a retry marker.
+
+    ``run/ig_status.txt`` is ``skipped: <reason>``. The existing YouTube ledger
+    row gets an ``ig_skipped`` note. The process then exits 0 because the status
+    is success. YouTube failures still return a non-success status.
+    """
+    if yt_uploaded and ig_required and not ig_published and not yt_rc:
+        import publish_instagram
+        publish_instagram.mark_ig_skipped(
+            RUN, _youtube_video_id(), f"Instagram publish rc={ig_rc}")
+    return resolve_publish_status(
+        yt_rc, yt_uploaded, ig_published, ig_required, verdict_ready)
 
 
 def _finish_credits():
@@ -160,6 +197,7 @@ def main():
 
         yt_uploaded = (RUN / "uploaded.txt").exists()
         ig_published = False
+        ig_rc = 0
 
         # Same short → Instagram Reel (no re-render). Opt-in via IG_CROSSPOST=1.
         # Instagram can publish from final.mp4 even when YouTube upload failed.
@@ -180,10 +218,9 @@ def main():
             if ig_rc != 0:
                 print(f"[WARN] Instagram publish failed (rc={ig_rc}).")
 
-        # For Shorts with Instagram cross-post enabled, Instagram confirmation
-        # is the production success gate. YouTube remains independent: a YouTube
-        # failure must not prevent Instagram, but a YouTube-only success must not
-        # make the run look fully healthy when the Reel was not confirmed.
+        # The YouTube upload fills the slot. A missed Reel is a warning plus
+        # run/ig_status.txt, not a failed Short: the repair workflow posts it
+        # later. A YouTube failure still fails the job, even if a Reel went up.
         from publish_guard import blocked_reason
         import review_gate
         ig_required = (
@@ -216,8 +253,8 @@ def main():
                 print(f"[warn] ledger IG-only entry skipped: {e}")
 
         verdict_ready = review_gate.files_allow_public(RUN, video_format())
-        status, stop = resolve_publish_status(
-            yt_rc, yt_uploaded, ig_published, ig_required, verdict_ready)
+        status, stop = finish_publish(
+            yt_rc, yt_uploaded, ig_published, ig_required, verdict_ready, ig_rc)
         if stop:
             print(stop)
 

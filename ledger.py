@@ -102,6 +102,31 @@ def find_ig_media(video_id=None, topic_key=None, content_hash=None, title_norm=N
     return ""
 
 
+def note_ig_skipped(video_id, reason):
+    """Note a missed Reel on the YouTube row for this video.
+
+    publish.py already appended that row. A second row for the same slot would
+    look like another fill and is how a later run uploaded again.
+    """
+    video_id = str(video_id or "").strip()
+    note = " ".join(str(reason or "").split())[:300]
+    if not video_id or not note:
+        return False
+    entries = _entries()
+    idx = None
+    for i, entry in enumerate(entries):
+        if isinstance(entry, dict) and str(entry.get("video_id") or "") == video_id:
+            idx = i
+    if idx is None:
+        print(f"[warn] ledger has no row for {video_id}; ig_skipped not appended")
+        return False
+    entries[idx]["ig_skipped"] = note
+    PATH.parent.mkdir(exist_ok=True)
+    PATH.write_text(json.dumps(entries[-300:], indent=1) + "\n", encoding="utf-8")
+    print(f"[ig] ledger ig_skipped for {video_id}")
+    return True
+
+
 def attach_ig_media(media_id, *, video_id=None, topic_key=None, content_hash=None, title_norm=None):
     """Store the IG media id the moment media_publish returns.
 
