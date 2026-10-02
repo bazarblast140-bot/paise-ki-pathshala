@@ -269,8 +269,16 @@ def claude(system, user, model=None, max_tokens=16000, retries=3, raise_on_trunc
                     break
                 call_limit = max(1, min(attempt_timeout, int(remaining)))
                 try:
+                    import credit_log
+                    try:
+                        credit_log.reserve_deepseek_call()
+                    except credit_log.DeepSeekCallCap as cap_err:
+                        # Fail closed: do not send the request, and do not fall
+                        # through to a template that would still be published.
+                        die(str(cap_err))
                     completion = _with_deadline(
                         lambda: client.chat.completions.create(**kwargs), call_limit)
+                    credit_log.add_deepseek_usage(completion)
                     choices = getattr(completion, "choices", None)
                     message = choices[0].message if choices else None
                     content = deepseek_message_text(message) if message is not None else ""

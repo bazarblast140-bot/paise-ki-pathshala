@@ -190,6 +190,30 @@ def _pack(parts, notes):
     }
 
 
+def _reject_fallback(narration, packed):
+    """A topic-card fallback cannot pass, even when the numeric scores are high."""
+    if not isinstance(narration, dict):
+        return packed
+    flagged = (
+        narration.get("narration_fallback") is True
+        or str(narration.get("source") or "").strip().lower() == "fallback"
+    )
+    if not flagged:
+        return packed
+    note = "narration fallback is blocked: not an LLM script that passed the hook/teaching gate"
+    notes = list(packed.get("notes") or [])
+    if note not in notes:
+        notes.append(note)
+    packed["notes"] = notes
+    packed["passed"] = False
+    packed["public_ok"] = False
+    packed["narration_fallback"] = True
+    summary = packed.get("summary") or ""
+    if note not in summary:
+        packed["summary"] = (summary + " — " + note).strip(" —")
+    return packed
+
+
 def score_content(topic, narration, spec=None, trends=None):
     """Hook, accuracy, and trend. Used to decide whether to regenerate narration."""
     if trends is None and trends != {}:
@@ -199,7 +223,7 @@ def score_content(topic, narration, spec=None, trends=None):
     accuracy, acc_notes = score_accuracy(narration, topic, spec)
     trend, trend_notes = score_trend(topic, trends if trends else None)
     notes = hook_notes + acc_notes + trend_notes
-    return _pack({"hook": hook, "accuracy": accuracy, "trend": trend}, notes)
+    return _reject_fallback(narration, _pack({"hook": hook, "accuracy": accuracy, "trend": trend}, notes))
 
 
 def full_review(topic, narration, spec, overlays, trends=None):
@@ -220,4 +244,4 @@ def full_review(topic, narration, spec, overlays, trends=None):
         "source": (spec or {}).get("source"),
         "as_of": (spec or {}).get("as_of"),
     }
-    return packed
+    return _reject_fallback(narration, packed)

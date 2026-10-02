@@ -240,3 +240,30 @@ def ledger_voice_kwargs(run_dir):
         "voice_engine": rec["engine"] or None,
         "voice_fallback": rec["fallback_reason"] or None,
     }
+
+
+# Samples and dry runs stay on this free voice. A real publish keeps the
+# configured Edge fallback (the short override is a different neural voice).
+PREVIEW_EDGE_VOICE = "hi-IN-MadhurNeural"
+PREVIEW_EDGE_RATE = "+0%"
+
+_TRUTHY = {"1", "true", "yes", "on"}
+_PREVIEW_MODES = {"preview", "sample", "dry-run", "dry_run", "test", "qa", "retry", "repair"}
+
+
+def paid_voice_allowed():
+    """ElevenLabs only on a real public publish, or an explicit sample opt-in.
+
+    Unlisted renders, previews, tests, dry runs, and repair retries use Edge.
+    ELEVENLABS_OPT_IN=1 is the only way a sample spends voice credits.
+    """
+    if os.environ.get("ELEVENLABS_OPT_IN", "").strip().lower() in _TRUTHY:
+        return True
+    mode = os.environ.get("PIPELINE_MODE", "").strip().lower()
+    if mode in _PREVIEW_MODES:
+        return False
+    for key in ("DRY_RUN", "RENDER_SAMPLE", "SAMPLE_NO_UPLOAD"):
+        if os.environ.get(key, "").strip().lower() in _TRUTHY:
+            return False
+    vis = os.environ.get("PUBLISH_VISIBILITY", "").strip().lower()
+    return vis in ("public", "now")

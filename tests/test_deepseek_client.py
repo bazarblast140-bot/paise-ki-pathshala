@@ -5,9 +5,13 @@ from types import SimpleNamespace
 from unittest import mock
 
 import common
+import credit_log
 
 
 class DeepSeekMessageTests(unittest.TestCase):
+    def setUp(self):
+        credit_log.reset()
+
     def test_content_wins_over_reasoning(self):
         message = SimpleNamespace(content='{"ok": true}', reasoning_content="thinking")
         self.assertEqual(common.deepseek_message_text(message), '{"ok": true}')
@@ -48,6 +52,9 @@ def _client(create):
 
 
 class DeepSeekBudgetTests(unittest.TestCase):
+    def setUp(self):
+        credit_log.reset()
+
     def test_defaults_stay_inside_one_ladder(self):
         self.assertGreaterEqual(common.LLM_ATTEMPT_TIMEOUT, 60)
         self.assertLessEqual(common.LLM_ATTEMPT_TIMEOUT, 90)

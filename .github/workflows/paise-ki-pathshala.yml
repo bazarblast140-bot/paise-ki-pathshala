@@ -115,6 +115,7 @@ jobs:
           # showing a Testing-app token expiry on jobs whose token check passed.
           SUPPRESS_GHA_COMMANDS=1 PYTHONPATH=. python -m unittest discover -s tests
       - name: DeepSeek balance (log only, no upload)
+        if: steps.guard.outputs.taken != 'true'
         continue-on-error: true
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
@@ -218,4 +219,6 @@ jobs:
             run/ig_cover.jpg
             run/youtube_status.txt
             run/auto_agent_last.log
+            run/credits.json
+            run/narration_block.json
           retention-days: 14

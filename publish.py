@@ -13,6 +13,7 @@ from pathlib import Path
 from common import ROOT, cfg, read, die, ok, RUN, need, video_format
 from eleven_voice import ledger_voice_kwargs
 from ledger import record_publish
+import credit_log
 import engagement
 import publish_guard
 import review_gate
@@ -404,7 +405,7 @@ def main():
 
     video_id = resp["id"]
     (RUN / "uploaded.txt").write_text(video_id, encoding="utf-8")
-    record_publish(video_id, publish_at, slot, **ledger_voice_kwargs(RUN))
+    record_publish(video_id, publish_at, slot, **ledger_voice_kwargs(RUN), credits=credit_log.ledger_fields())
     ok(f"Uploaded as {visibility}: https://youtu.be/{video_id}")
     set_thumbnail(yt, video_id)
     print(f"\nEdit before going public: https://studio.youtube.com/video/{video_id}/edit")

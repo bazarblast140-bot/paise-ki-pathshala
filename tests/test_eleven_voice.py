@@ -138,7 +138,12 @@ class ShortFallbackTests(unittest.TestCase):
         return {beat: text for beat in self.board.BEATS}
 
     def _env(self):
-        return {"ELEVENLABS_API_KEY": "test-eleven-key", "SUPPRESS_GHA_COMMANDS": ""}
+        return {
+            "ELEVENLABS_API_KEY": "test-eleven-key",
+            "SUPPRESS_GHA_COMMANDS": "",
+            # Paid TTS is the publish path. Previews stay on Edge unless this is set.
+            "PUBLISH_VISIBILITY": "public",
+        }
 
     def test_default_voice_choice_is_unchanged(self):
         import common
@@ -409,7 +414,11 @@ class LongFormTests(unittest.TestCase):
         buf = io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, \
              mock.patch.object(run_voice, "RUN", Path(tmp)), \
-             mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-eleven-key", "SUPPRESS_GHA_COMMANDS": ""}), \
+             mock.patch.dict(os.environ, {
+                 "ELEVENLABS_API_KEY": "test-eleven-key",
+                 "SUPPRESS_GHA_COMMANDS": "",
+                 "PUBLISH_VISIBILITY": "public",
+             }), \
              mock.patch("requests.post", quota), \
              mock.patch.object(run_voice, "edge_request", edge), \
              redirect_stdout(buf):
@@ -426,7 +435,10 @@ class LongFormTests(unittest.TestCase):
         out = io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, \
              mock.patch.object(run_voice, "RUN", Path(tmp)), \
-             mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-eleven-key"}), \
+             mock.patch.dict(os.environ, {
+                 "ELEVENLABS_API_KEY": "test-eleven-key",
+                 "PUBLISH_VISIBILITY": "public",
+             }), \
              mock.patch("requests.post", auth), \
              mock.patch.object(run_voice, "edge_request", edge), \
              redirect_stdout(out), redirect_stderr(err):

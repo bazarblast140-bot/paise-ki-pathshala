@@ -96,6 +96,17 @@ def main():
         _flags(False)
         return
     hit = next((e for e in ents if e.get("date_ist") == date and e.get("slot") == slot), None)
+    if hit and slot_guard.is_hold(hit):
+        # A hold is not a missing upload. Do not fill it and do not page about a video id.
+        msg = (f"⚠️ Paise Ki Pathshala\n{date} {slot} IST is on hold "
+               f"(platform=hold).\nSlot watch is not filling this slot.\n")
+        print(msg)
+        _flags(False)
+        try:
+            send(msg)
+        except Exception as e:  # noqa: BLE001
+            print(f"[warn] Telegram fail: {e}")
+        return
     if hit and not hit.get("video_id"):
         # YouTube id missing. Do not fill: a re-run would post another public Reel.
         # Do not blame the OAuth Testing expiry. The token health step can be
