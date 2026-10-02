@@ -125,7 +125,11 @@ def score_accuracy(narration, topic, spec=None):
     names = [b for b in order if b in beats] or list(short_layout.BEATS)
     spoken = " ".join(str(beats.get(b) or "") for b in names)
     spoken = spoken + " " + str((narration or {}).get("hook_line") or "")
-    extra = hook_check.unsourced_numbers(spoken, topic, allowed=allowed)
+    if (topic or {}).get("_live_short") or any(b in beats for b in hook_check.TEACHING_BEATS):
+        extra = hook_check.live_number_faults(beats, topic, names, allowed=allowed)
+        extra |= hook_check.extract_numbers(str((narration or {}).get("hook_line") or "")) - allowed
+    else:
+        extra = hook_check.unsourced_numbers(spoken, topic, allowed=allowed)
     if extra:
         return 0, [f"numbers with no source: {sorted(extra)}"]
     return 100, []

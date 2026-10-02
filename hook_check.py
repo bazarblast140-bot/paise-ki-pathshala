@@ -39,7 +39,8 @@ def allowed_numbers(topic):
 
 # Same markers the evergreen buffer uses. A figure counts as an example only
 # when one of these sits in the same sentence.
-_EXAMPLE_MARK = re.compile(r"(example|misal|मिसाल|उदाहरण|illustrative)", re.I)
+_EXAMPLE_MARK = re.compile(r"(example|misal|मिसाल|उदाहरण|मान\s*लीजिए|illustrative)", re.I)
+TEACHING_BEATS = ("udaharan", "galti")
 
 
 def example_labelled_numbers(text):
@@ -59,6 +60,160 @@ def allows_example_numbers(topic):
     import buffer_shorts
     ok, _why = buffer_shorts.is_evergreen_topic(topic)
     return bool(ok)
+
+
+def _canon_number(value):
+    number = float(value)
+    if number.is_integer():
+        return str(int(number))
+    return f"{number:.4f}".rstrip("0").rstrip(".")
+
+
+def _topic_blob(topic):
+    parts = [str((topic or {}).get("topic") or "")]
+    parts.extend(str(x) for x in ((topic or {}).get("thumb") or []))
+    parts.extend(str(x) for x in ((topic or {}).get("facts") or []))
+    for pair in ((topic or {}).get("beats") or {}).values():
+        if isinstance(pair, (list, tuple)):
+            parts.extend(str(x) for x in pair)
+        else:
+            parts.append(str(pair))
+    return " ".join(parts)
+
+
+def _labelled_level(blob, labels):
+    for label in labels:
+        match = re.search(rf"(?:{label})\s*[:\-]?\s*(\d[\d,]*(?:\.\d+)?)", blob, re.I)
+        if match:
+            return float(match.group(1).replace(",", ""))
+    return None
+
+
+def worked_example_numbers(topic):
+    """Figures the worked example may use, taken from the topic card.
+
+    Entry, stop, and target on the card also yield the per-share risk and
+    reward, and the same sums for the quantity the card already states.
+    A charge is included only when the card already writes that figure.
+    """
+    blob = _topic_blob(topic)
+    found = set(extract_numbers(blob))
+    entry = _labelled_level(blob, ["entry", "एंट्री", "buy"])
+    stop = _labelled_level(blob, ["SL", "stop(?:-loss)?", "स्टॉप"])
+    target = _labelled_level(blob, ["target", "टारगेट"])
+    qty = _labelled_level(blob, ["quantity", "qty"])
+    qty_match = re.search(r"(\d[\d,]*)\s*शेयर", blob)
+    if qty_match:
+        qty = float(qty_match.group(1).replace(",", ""))
+    derived = set()
+    if entry is not None and stop is not None:
+        derived.add(_canon_number(abs(entry - stop)))
+    if entry is not None and target is not None:
+        derived.add(_canon_number(abs(target - entry)))
+    if qty is not None and entry is not None and stop is not None:
+        derived.add(_canon_number(abs(entry - stop) * qty))
+    if qty is not None and entry is not None and target is not None:
+        derived.add(_canon_number(abs(target - entry) * qty))
+    for label in ("charges", "charge", "brokerage", "STT", "चार्ज", "ब्रोकरेज"):
+        match = re.search(rf"{label}\s*[:\-]?\s*(\d[\d,]*(?:\.\d+)?)", blob, re.I)
+        if not match:
+            match = re.search(rf"(\d[\d,]*(?:\.\d+)?)\s*(?:{label})", blob, re.I)
+        if match:
+            derived.add(match.group(1).replace(",", ""))
+            break
+    return found | derived
+
+
+def _market_claim(topic):
+    if not isinstance(topic, dict) or topic.get("_atr"):
+        return True
+    if str(topic.get("cat") or "") in ("REAL DATA", "MARKET FACT"):
+        return True
+    import market_data
+    key = str(topic.get("key") or "")
+    if key in getattr(market_data, "TOPIC_SERIES", ()) or key == "atr_sl":
+        return True
+    return False
+
+
+def teaching_allowed_numbers(topic, sourced=None):
+    """The only figures udaharan and galti may use.
+
+    Concept topics get numbers computed from the card (entry, stop, target,
+    and the risk and reward that arithmetic produces). A market-data topic
+    gets only figures already in the topic or the fetched series. A label
+    such as उदाहरण does not add a number.
+    """
+    extra = set(sourced or ())
+    if _market_claim(topic):
+        # Real prices stay on the card and the fetched series. Do not
+        # invent a risk or a charge the source did not write.
+        return set(extract_numbers(_topic_blob(topic))) | extra
+    return set(worked_example_numbers(topic)) | extra
+
+
+def live_number_faults(beats, topic, order, allowed=None):
+    """Numbers that were not computed from the topic or the sourced data.
+
+    udaharan and galti have no label exception. An invented figure fails
+    even when the sentence says उदाहरण. Real market data stays on the
+    sourced set only.
+    """
+    card = set(allowed if allowed is not None else allowed_numbers(topic))
+    sourced = set()
+    if allowed is not None:
+        sourced = set(allowed) - set(allowed_numbers(topic))
+    teaching = teaching_allowed_numbers(topic, sourced=sourced)
+    extra = set()
+    for beat in order:
+        text = str((beats or {}).get(beat) or "")
+        nums = extract_numbers(text)
+        ok = teaching if beat in TEACHING_BEATS else card
+        extra |= nums - ok
+    return extra
+
+
+def unlabelled_example_beats(beats, order):
+    """Teaching beats whose numbers are not in a sentence that says उदाहरण."""
+    found = []
+    for beat in order:
+        if beat not in TEACHING_BEATS:
+            continue
+        text = str((beats or {}).get(beat) or "")
+        if not extract_numbers(text):
+            continue
+        pieces = re.split(r"[।!?]+|\.\s+", text) or [text]
+        if not any(piece.strip() for piece in pieces):
+            pieces = [text]
+        for sentence in pieces:
+            if extract_numbers(sentence) and "उदाहरण" not in sentence:
+                found.append(beat)
+                break
+    return found
+
+
+def example_card_lines(topic):
+    """Scene card for the worked example: the word उदाहरण plus the computed figures."""
+    nums = teaching_allowed_numbers(topic)
+
+    def key(value):
+        try:
+            return (0, float(value))
+        except (TypeError, ValueError):
+            return (1, str(value))
+
+    shown = ", ".join(sorted(nums, key=key))
+    detail = f"उदाहरण {shown}".strip()
+    return "उदाहरण", detail
+
+
+def beats_with_number_faults(beats, topic, order, allowed=None):
+    """Beat names whose own text contains a rejected number."""
+    found = []
+    for beat in order:
+        if live_number_faults({beat: (beats or {}).get(beat)}, topic, (beat,), allowed=allowed):
+            found.append(beat)
+    return found
 
 
 def unsourced_numbers(text, topic, allowed=None):

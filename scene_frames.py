@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 import board_kit as K
 import board_scenes as S
+import hook_check
 import market_data
 import safe_area
 
@@ -1169,6 +1170,22 @@ def _atr_frames(beat, n, lesson):
     return frames, flags
 
 
+def _stamp_teaching_card(frame, topic, beat, spec):
+    """Put उदाहरण and the code-computed figures on the udaharan and galti cards.
+
+    A non-numeric card stays free of digits. Real market scenes still get the
+    label, and only the sourced figures, so a spoken example matches the frame.
+    """
+    if beat not in hook_check.TEACHING_BEATS:
+        return
+    if (spec or {}).get("mode") == "non_numeric":
+        return
+    _head, detail = hook_check.example_card_lines(topic)
+    if not str(detail or "").strip():
+        return
+    _text(frame, 540, safe_area.CONTENT_TOP + 28, detail, GOLD, 30, anchor="mt")
+
+
 def _generic_frames(topic, beat, n, spec):
     mode = (spec or {}).get("mode")
     if mode == "non_numeric":
@@ -1194,6 +1211,7 @@ def _generic_frames(topic, beat, n, spec):
             flag = False
         if mode == "series":
             frame = market_data.stamp(frame, spec)
+        _stamp_teaching_card(frame, topic, beat, spec)
         frames.append(frame)
         flags.append(flag)
     return frames, flags
