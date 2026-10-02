@@ -234,6 +234,7 @@ def _blank():
     img.label_boxes = []
     img.text_layers = []
     img.shapes = []
+    img.content_boxes = []
     img.plate = None
     img.scene_kind = ""
     return img
@@ -256,6 +257,7 @@ def _card(img, box=CARD):
     sx0, sy0, shadow = _SHADOWS[key]
     img.paste(shadow, (sx0, sy0), shadow)
     ImageDraw.Draw(img).rounded_rectangle(box, 26, fill=NAVY, outline=GOLD, width=2)
+    _mark_content(img, box)
 
 
 def _seal(img):
@@ -485,6 +487,7 @@ def _candles(img, box, bars, lo, hi, count):
     ohlc = _ohlc(bars)
     vols = [float(b.get("volume") or 0.0) for b in bars]
     count = max(1, min(int(count), len(ohlc)))
+    _mark_content(img, box)
     _plot_grid(img, box, 4)
     ax = K.Axes(box, len(ohlc), lo, hi, pad=(18, 14, 14, 16), ypad=0.08)
     draw = ImageDraw.Draw(img)
@@ -517,10 +520,13 @@ def _axis_labels(img, ax, steps=4):
         _text(img, ax.x1 + 14, y, f"{price:.1f}", K.MUTED, 20, anchor="lm", role="axis")
 
 
-def _watermark(img, box):
-    cx = (box[0] + box[2]) / 2
-    cy = (box[1] + box[3]) / 2
-    _text(img, cx, cy, "PKP", GOLD, 64, anchor="mm", alpha=42, faint=True, role="brand")
+def _mark_content(img, box):
+    """A chart or card rectangle the watermark must stay clear of."""
+    boxes = getattr(img, "content_boxes", None)
+    if boxes is None:
+        img.content_boxes = []
+        boxes = img.content_boxes
+    boxes.append(tuple(float(v) for v in box))
 
 
 def _rule(img, ax, price, color, frac=1.0):
@@ -539,6 +545,7 @@ def _hook(lesson):
     _text(img, 540, _cy(680), "सामान्य हलचल", K.INK, 42, anchor="mt")
     _text(img, 540, _cy(780), "तंग रेखा को काट देती है", K.INK, 38, anchor="mt")
     _text(img, 540, _cy(900), "एटीआर इस हलचल को नापता है", K.YELLOW, 36, anchor="mt")
+    _lower_callout(img, "सामान्य हलचल")
     return _finish(img, "hook")
 
 
@@ -559,7 +566,7 @@ def _problem(lesson, step, total):
     if show_hit:
         _rule(img, ax, tight, K.RED, 1.0)
         K.cross(img, ax.x(hit), ax.y(tight), 16, K.RED, 5)
-    _watermark(img, box)
+    _mark_content(img, box)
     _text(img, 100, _cy(220), "समस्या", K.YELLOW, 40, anchor="lt")
     _text(img, 100, _cy(274), "एचडीएफसी बैंक दैनिक", K.INK, 28, anchor="lt")
     if show_hit:
@@ -569,6 +576,7 @@ def _problem(lesson, step, total):
         _text(img, 620, _cy(220), "सामान्य हलचल", K.YELLOW, 30, anchor="lt")
         _text(img, 620, _cy(268), "तंग रेखा", K.INK, 28, anchor="lt")
     _axis_labels(img, ax)
+    _lower_callout(img, "दैनिक भाव")
     _source(img, lesson)
     return _finish(img, "problem")
 
@@ -601,6 +609,7 @@ def _formula(lesson, step, total):
         _text(img, 540, _cy(580), lesson["atr"], K.YELLOW, 128, anchor="mt")
         _text(img, 540, _cy(780), "औसत हलचल", K.INK, 48, anchor="mt")
     _text(img, 540, _cy(960), "दिशा नहीं, सिर्फ़ हलचल", K.MUTED, 32, anchor="mt")
+    _lower_callout(img, "सिर्फ़ हलचल")
     _source(img, lesson)
     return _finish(img, "formula")
 
@@ -637,17 +646,37 @@ def _accent(img, box):
 def _highlight(img, y, alpha=64):
     """Translucent gold wash on the plot, to the right of the price labels."""
     alpha = int(max(0, min(90, int(alpha))))
-    if alpha < 8:
-        return
     height = 96
     x0, x1 = 560, 1000
     top = int(round(float(y) - height / 2.0))
-    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    ImageDraw.Draw(overlay).rounded_rectangle(
-        [x0, top, x1, top + height], 8, fill=(212, 168, 72, alpha),
-    )
-    img.paste(overlay, (0, 0), overlay)
-    _mark_shape(img, (x0, top, x1, top + height), alpha, "highlight")
+    box = (x0, top, x1, top + height)
+    if alpha >= 8:
+        overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        ImageDraw.Draw(overlay).rounded_rectangle(
+            [x0, top, x1, top + height], 8, fill=(212, 168, 72, alpha),
+        )
+        img.paste(overlay, (0, 0), overlay)
+        _mark_shape(img, box, alpha, "highlight")
+    return box
+
+
+def _band_label(img, y):
+    """'जोखिम क्षेत्र' sits inside the wash, above the price line, with no second distance."""
+    height = 96
+    x0, x1 = 560, 1000
+    top = float(y) - height / 2.0
+    cx = (x0 + x1) / 2.0
+    anchor_y = (top + float(y)) / 2.0
+    label = "जोखिम क्षेत्र"
+    chosen = 20
+    for size in (28, 26, 24, 22, 20):
+        font = _font(size)
+        probe = ImageDraw.Draw(Image.new("RGB", (4, 4)))
+        box = probe.textbbox((cx, anchor_y), label, font=font, anchor="mm")
+        if box[0] >= x0 + 4 and box[2] <= x1 - 8 and box[1] >= top + 2 and box[3] <= float(y) - 2:
+            chosen = size
+            break
+    _text(img, cx, anchor_y, label, K.INK, chosen, anchor="mm", role="lesson")
 
 
 _UNIT_WORDS = {"पॉइंट", "रुपये", "शेयर"}
@@ -704,13 +733,15 @@ def frame_layout_notes(img):
                 if safe_area.intersects(box, layer["box"]):
                     notes.append("opaque shape covers a text sprite")
                     break
-        if kind == "fill":
+        if kind in ("fill", "highlight"):
             width = abs(float(box[2]) - float(box[0]))
             height = abs(float(box[3]) - float(box[1]))
             if width * height < 2400 or min(width, height) <= 16:
                 continue
             if not any(safe_area.intersects(box, layer["box"]) for layer in layers):
                 notes.append("empty box with no content")
+    for note in _watermark_notes(img, layers):
+        notes.append(note)
     groups = {}
     for layer in layers:
         key = layer.get("quantity")
@@ -726,6 +757,51 @@ def frame_layout_notes(img):
             notes.append("lone unit word with no number")
             break
     return notes
+
+
+def _watermark_notes(img, layers):
+    """PKP must miss every content sprite and every chart or card rectangle."""
+    brands = [
+        layer for layer in (getattr(img, "text_layers", None) or [])
+        if layer.get("role") == "brand" and layer.get("box") and layer.get("text")
+    ]
+    if not brands:
+        return []
+    content = [
+        layer for layer in layers
+        if layer.get("role") != "brand" and layer.get("box")
+    ]
+    regions = list(getattr(img, "content_boxes", None) or [])
+    notes = []
+    for brand in brands:
+        hit = any(safe_area.intersects(brand["box"], layer["box"]) for layer in content)
+        hit = hit or any(safe_area.intersects(brand["box"], box) for box in regions)
+        if hit:
+            notes.append("watermark overlaps content")
+            break
+    return notes
+
+
+def _lower_callout(img, text):
+    """A key line in the lower card, above the Shorts UI and left of the side buttons."""
+    if not text:
+        return
+    size = 34
+    x, y = 430.0, 1288.0
+    font = _font(size)
+    probe = ImageDraw.Draw(Image.new("RGB", (4, 4)))
+    box = probe.textbbox((x, y), text, font=font, anchor="mt")
+    pad = 8
+    rect = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
+    if rect[3] > 1600 or rect[2] > 880 or rect[1] < CARD[1] or rect[3] > CARD[3] - 4:
+        return
+    for layer in getattr(img, "text_layers", None) or []:
+        if layer.get("box") and not layer.get("faint") and safe_area.intersects(rect, layer["box"]):
+            return
+    for shape in getattr(img, "shapes", None) or []:
+        if shape.get("box") and safe_area.intersects(rect, shape["box"]):
+            return
+    _text(img, x, y, text, K.YELLOW, size, anchor="mt", role="lesson")
 
 
 def _bracket(img, x, y0, y1, color):
@@ -828,6 +904,7 @@ def _ladder_moving(lesson, phase):
     _highlight(img, tip, 56 + 20 * grown)
     _ladder_lines(img, lesson, y_of)
     _bracket(img, 930, y_of(entry), tip, GOLD)
+    _band_label(img, tip)
     _text(img, 150, _cy(230), "कीमत की सीढ़ी", K.YELLOW, 44, anchor="lt")
     _text(img, 540, _cy(300), f"{lesson['multiple']} गुना", K.YELLOW, 36, anchor="mt")
     # SL is already drawn. Counting it as lesson text keeps this beat matched
@@ -847,6 +924,7 @@ def _ladder_moving(lesson, phase):
             img, 948, tip - 86, f"{shown:.1f}", GOLD, 32, anchor="lt",
             role="meter", quantity="distance",
         )
+    _lower_callout(img, "एंट्री से एसएल")
     return _finish(img, "ladder")
 
 
@@ -863,6 +941,7 @@ def _ladder_reveal(lesson, phase):
     travel = y_of(sl) + (y_of(target) - y_of(sl)) * phase
     _highlight(img, travel, 64)
     _ladder_lines(img, lesson, y_of)
+    _band_label(img, travel)
     _text(img, 150, _cy(230), "कीमत की सीढ़ी", K.YELLOW, 44, anchor="lt")
     _ladder_labels(img, lesson, y_of, False, False)
     if phase >= 0.50:
@@ -872,6 +951,7 @@ def _ladder_reveal(lesson, phase):
             img, 540, _cy(390), f"दूरी  {lesson['distance']}", K.YELLOW, 40,
             anchor="mt", quantity="distance",
         )
+    _lower_callout(img, "एंट्री से एसएल")
     return _finish(img, "ladder")
 
 
@@ -901,12 +981,12 @@ def _split(lesson):
     held = min(c[2] for c in ohlc) + 1e-9 >= sl
     if held:
         K.tick(img, ax_r.x(len(ohlc) - 1), max(340, ax_r.y(sl) - 28), 14, K.GREEN, 5)
-    _watermark(img, right)
     _text(img, 300, _cy(210), "गलत", K.RED, 40, anchor="mt")
     _text(img, 760, _cy(210), "सही", K.GREEN, 40, anchor="mt")
     _axis_labels(img, ax_r, steps=3)
     _text(img, 298, _cy(900), "तंग रेखा कट गई", K.RED, 28, anchor="mt")
     _text(img, 760, _cy(900), "एटीआर रेखा रुकी" if held else "एटीआर रेखा", K.GREEN, 28, anchor="mt")
+    _lower_callout(img, "तंग बनाम एटीआर")
     # Karein already burns the grey disclaimer in the brand band. A second
     # source line there would sit on top of it. The problem and formula
     # scenes, outside that beat, still carry the Yahoo line.
@@ -922,6 +1002,7 @@ def _size(lesson):
     _text(img, 540, _cy(480), f"{lesson['atr']} की हलचल", K.YELLOW, 56, anchor="mt")
     _text(img, 540, _cy(660), "रेखा कटती है", K.INK, 52, anchor="mt")
     _text(img, 540, _cy(820), "शोर में तंग एसएल", K.MUTED, 36, anchor="mt")
+    _lower_callout(img, "शोर काटता है")
     return _finish(img, "size")
 
 
@@ -933,6 +1014,7 @@ def _takeaway(lesson):
     _text(img, 540, _cy(540), str(lesson["distance"]), K.YELLOW, 120, anchor="mt", quantity="distance")
     _text(img, 540, _cy(740), "पॉइंट", K.INK, 48, anchor="mt")
     _text(img, 540, _cy(880), "मात्रा इसी दूरी से", K.INK, 40, anchor="mt")
+    _lower_callout(img, "मात्रा इसी से")
     return _finish(img, "takeaway")
 
 

@@ -1115,79 +1115,291 @@ def _measure_at(text, y, size, max_w):
     return rows
 
 
-def _active_caption(parts, t0, t1, t):
-    if not parts:
-        return ""
-    total = sum(len(p) for p in parts) or 1
-    cursor = t0 + 0.1
-    span = max(0.2, (t1 - t0) - 0.2)
-    caption = parts[-1]
-    for p in parts:
-        dt = span * len(p) / total
-        if cursor <= t < cursor + dt:
-            return p
-        cursor += dt
-    return caption
-
-
-def _reserved(topic, beat, spoken, hook_line):
-    """Stable slots for one beat, sized from the full headline and the longest caption."""
-    parts = chunks(spoken.get(beat) or "")
-    longest = max(parts, key=len) if parts else ""
-    if beat == "karein":
-        groups = layout_in_box([longest or " "], _subtitle_limits(), 40, 18)
-        return {"caption": groups[0] if groups else []}
-    head = hook_line if beat == "hook" else topic["beats"][beat][0]
-    key = topic["beats"][beat][1]
-    groups = layout_in_box([head, key, longest or " "], _subtitle_limits(), 40, 18)
-    while len(groups) < 3:
-        groups.append([])
-    return {"head": groups[0], "key": groups[1], "caption": groups[2]}
-
-
-def _caption_rows(reserved_rows, text):
-    if not reserved_rows or not str(text).strip():
-        return []
-    _piece, _rect, size, y = reserved_rows[0]
+def _caption_width():
     left, _top, right, _bottom = _subtitle_limits()
-    return _measure_at(text, y, size, max(40.0, right - left - 8))
+    return max(40.0, right - left - 8)
 
 
-def on_screen_boxes(topic, beat_times, spoken, hook_line, cta, t):
-    """ASS boxes visible at time t. Scene sprites are added by the caller.
+def _wrap_caption(text, size=40):
+    return [ln for ln in _wrap_lines(text, size, _caption_width()) if str(ln).strip()]
 
-    The poll stays on the recap card. Karein does not burn the beat headline or the key line.
+
+def _cue_texts(text):
+    """Spoken groups that wrap to at most two lines, and never split a number from its unit."""
+    size = 40
+    out = []
+    for sent in re.split(r"(?<=[।.?!])\s+", (text or "").strip()):
+        words = sent.split()
+        cur = []
+        for i, word in enumerate(words):
+            nxt = words[i + 1] if i + 1 < len(words) else ""
+            glued = (bool(re.search(r"\d", word)) and nxt.strip("।.,?!") in UNITS) or (
+                word in ("करीब", "लगभग", "₹") and bool(re.search(r"\d", nxt))
+            )
+            trial = cur + [word]
+            lines = _wrap_caption(" ".join(trial), size)
+            if len(lines) > 2 and cur and not glued:
+                out.append(" ".join(cur))
+                cur = [word]
+            else:
+                cur = trial
+        while cur:
+            lines = _wrap_caption(" ".join(cur), size)
+            if len(lines) <= 2 or len(cur) == 1:
+                out.append(" ".join(cur))
+                break
+            if len(cur) >= 2 and re.search(r"\d", cur[-2]) and cur[-1].strip("।.,?!") in UNITS:
+                out.append(" ".join(cur))
+                break
+            last = cur.pop()
+            out.append(" ".join(cur))
+            cur = [last]
+    merged = []
+    for part in out:
+        if merged and len(part.split()) == 1:
+            combo = merged[-1] + " " + part
+            if len(_wrap_caption(combo)) <= 2:
+                merged[-1] = combo
+                continue
+        merged.append(part)
+    return [part for part in merged if part.strip()]
+
+
+def _cue_rows(text):
+    groups = layout_in_box([text or " "], _subtitle_limits(), 40, 18)
+    return groups[0] if groups else []
+
+
+def _find_token_span(stream, pos, want):
+    """First exact token run at or after pos. A miss waits; it never matches early."""
+    limit = min(len(stream), pos + 8)
+    for k in range(pos, limit):
+        if stream[k][1] != want[0]:
+            continue
+        cursor = k + 1
+        ok_span = True
+        for tok in want[1:]:
+            hit = None
+            for j in range(cursor, min(len(stream), cursor + 3)):
+                if stream[j][1] == tok:
+                    hit = j + 1
+                    break
+            if hit is None:
+                ok_span = False
+                break
+            cursor = hit
+        if ok_span:
+            return stream[k][0], cursor
+    return None
+
+
+def _align_starts(script_words, audio_words, t0, t1):
+    """Whisper start for each script word. Unmatched words take the next matched start."""
+    import sync_gate
+    window = [
+        w for w in audio_words
+        if float(w.get("end") or 0) >= float(t0) - 0.25
+        and float(w.get("start") or 0) <= float(t1) + 0.45
+    ]
+    stream = []
+    for word in window:
+        start = float(word.get("start") or 0)
+        for tok in sync_gate.tokens(word.get("word") or ""):
+            stream.append((start, tok))
+    starts = [None] * len(script_words)
+    pos = 0
+    for i, word in enumerate(script_words):
+        want = sync_gate.tokens(word)
+        if not want:
+            continue
+        found = _find_token_span(stream, pos, want)
+        if found is None:
+            continue
+        starts[i], pos = found
+    nxt = None
+    for i in range(len(starts) - 1, -1, -1):
+        if starts[i] is None:
+            starts[i] = nxt
+        else:
+            nxt = starts[i]
+    if starts and all(item is None for item in starts) and window:
+        floor = min(float(word.get("start") or 0) for word in window)
+        starts = [floor] * len(starts)
+    return starts
+
+
+def _place_cues(parts, starts, t0, t1):
+    """One interval per cue. A shared start is sequenced so the later cue waits."""
+    cues = []
+    idx = 0
+    for part in parts:
+        nwords = len(part.split())
+        word_start = None
+        if starts is not None:
+            known = [starts[i] for i in range(idx, min(len(starts), idx + nwords)) if starts[i] is not None]
+            word_start = known[0] if known else None
+        cues.append({
+            "text": part,
+            "lines": _wrap_caption(part),
+            "word_start": word_start,
+        })
+        idx += nwords
+    if not cues:
+        return []
+    if starts is None:
+        total = sum(len(cue["text"]) for cue in cues) or 1
+        cursor = float(t0)
+        span = max(0.05, float(t1) - float(t0))
+        for cue in cues:
+            cue["t0"] = cursor
+            cursor += span * max(1, len(cue["text"])) / total
+            cue["t1"] = cursor
+        cues[-1]["t1"] = float(t1)
+        return cues
+    merged = []
+    for cue in cues:
+        if merged and cue["word_start"] is not None and merged[-1]["word_start"] == cue["word_start"]:
+            combo = merged[-1]["text"] + " " + cue["text"]
+            lines = _wrap_caption(combo)
+            if len(lines) <= 2:
+                merged[-1]["text"] = combo
+                merged[-1]["lines"] = lines
+                continue
+        merged.append(cue)
+    cues = merged
+    prev = None
+    for cue in cues:
+        start = cue["word_start"] if cue["word_start"] is not None else (prev if prev is not None else float(t0))
+        if cue["word_start"] is not None:
+            start = max(float(start), float(cue["word_start"]))
+        if prev is not None:
+            start = max(float(start), prev)
+        cue["t0"] = float(start)
+        prev = cue["t0"]
+    i = 0
+    while i < len(cues):
+        j = i
+        while j + 1 < len(cues) and cues[j + 1]["t0"] <= cues[i]["t0"] + 1e-3:
+            j += 1
+        if j > i:
+            end_anchor = float(t1)
+            for k in range(j + 1, len(cues)):
+                ws = cues[k]["word_start"]
+                if ws is not None and float(ws) > cues[i]["t0"] + 1e-3:
+                    end_anchor = float(ws)
+                    break
+            width = max(0.05, (end_anchor - float(cues[i]["t0"])) / (j - i + 1))
+            base = float(cues[i]["t0"])
+            for k in range(i, j + 1):
+                cues[k]["t0"] = base + (k - i) * width
+                ws = cues[k]["word_start"]
+                if ws is not None and cues[k]["t0"] < float(ws):
+                    cues[k]["t0"] = float(ws)
+            for k in range(i + 1, j + 1):
+                if cues[k]["t0"] <= cues[k - 1]["t0"] + 1e-3:
+                    cues[k]["t0"] = cues[k - 1]["t0"] + 0.05
+        i = j + 1
+    for k in range(1, len(cues)):
+        if cues[k]["t0"] <= cues[k - 1]["t0"] + 1e-3:
+            cues[k]["t0"] = cues[k - 1]["t0"] + 0.05
+    for k, cue in enumerate(cues):
+        nxt = float(cues[k + 1]["t0"]) if k + 1 < len(cues) else float(t1)
+        cue["t1"] = max(float(cue["t0"]), nxt)
+    cues[-1]["t1"] = max(float(cues[-1]["t0"]), float(t1))
+    for k in range(len(cues) - 1):
+        cues[k]["t1"] = min(float(cues[k]["t1"]), float(cues[k + 1]["t0"]))
+    return cues
+
+
+_CUE_CACHE = {}
+
+
+def plan_cues(spoken, beat_times, audio_words=None):
+    """One caption at a time. With whisper times, a cue starts when its words do."""
+    word_key = None
+    if audio_words:
+        word_key = tuple(
+            (str(word.get("word") or ""), round(float(word.get("start") or 0), 3),
+             round(float(word.get("end") or 0), 3))
+            for word in audio_words
+        )
+    key = (
+        tuple((beat, (spoken or {}).get(beat) or "", (beat_times or {}).get(beat)) for beat in BEATS),
+        word_key,
+    )
+    cached = _CUE_CACHE.get(key)
+    if cached is not None:
+        return cached
+    cues = []
+    for beat in BEATS:
+        if beat not in (beat_times or {}):
+            continue
+        t0, t1 = (float(v) for v in beat_times[beat])
+        if beat == "hook":
+            t0 = 0.0
+        text = (spoken or {}).get(beat) or ""
+        parts = _cue_texts(text)
+        if not parts:
+            continue
+        starts = _align_starts(text.split(), audio_words, t0, t1) if audio_words else None
+        for cue in _place_cues(parts, starts, t0, t1):
+            cue["beat"] = beat
+            cues.append(cue)
+    for i in range(1, len(cues)):
+        if cues[i]["t0"] < cues[i - 1]["t1"] - 1e-3:
+            cues[i]["t0"] = max(float(cues[i]["t0"]), float(cues[i - 1]["t1"]))
+            ws = cues[i].get("word_start")
+            if ws is not None:
+                cues[i]["t0"] = max(float(cues[i]["t0"]), float(ws))
+    for i in range(len(cues) - 1):
+        if cues[i]["t1"] > cues[i + 1]["t0"]:
+            cues[i]["t1"] = cues[i + 1]["t0"]
+    _CUE_CACHE[key] = cues
+    return cues
+
+
+def cues_at(cues, t):
+    """The single cue on screen at t. The end instant belongs to the next cue."""
+    t = float(t)
+    hits = [cue for cue in cues or [] if float(cue["t0"]) - 1e-9 <= t < float(cue["t1"]) - 1e-9]
+    if not hits and cues:
+        last = max(cues, key=lambda cue: float(cue["t1"]))
+        if float(last["t0"]) - 1e-9 <= t <= float(last["t1"]) + 1e-6:
+            hits = [last]
+    return hits
+
+
+def cue_faults(cues):
+    """More than one cue in a frame, more than two lines, or a cue ahead of its words."""
+    notes = []
+    ordered = sorted(cues or [], key=lambda cue: (float(cue["t0"]), float(cue["t1"])))
+    for i, cue in enumerate(ordered):
+        lines = cue.get("lines") or _wrap_caption(cue.get("text") or "")
+        if len([ln for ln in lines if str(ln).strip()]) > 2:
+            notes.append(f"cue has {len(lines)} lines at {float(cue['t0']):.2f}s")
+        ws = cue.get("word_start")
+        if ws is not None and float(cue["t0"]) + 1e-3 < float(ws) - 0.02:
+            notes.append(
+                f"cue before audio at {float(cue['t0']):.2f}s (word {float(ws):.2f}s)"
+            )
+        if i and float(ordered[i - 1]["t1"]) > float(cue["t0"]) + 1e-3:
+            notes.append(f"two cues visible at {float(cue['t0']):.2f}s")
+            break
+    return notes
+
+
+def on_screen_boxes(topic, beat_times, spoken, hook_line, cta, t, audio_words=None):
+    """Boxes for the one spoken cue at t, plus the grey disclaimer during karein.
+
+    The poll stays on the recap card. Headlines and key lines are not burned.
     """
     import safe_area
-    del cta  # spoken on the card, not in this band
+    del topic, hook_line, cta
     boxes = []
     t = float(t)
-    for b in BEATS:
-        t0, t1 = beat_times[b]
-        if b == "hook":
-            t0 = 0.0
-        # Half-open, so the cut belongs to the next beat and two stacks never share a frame.
-        if b == BEATS[-1]:
-            active = (t0 - 1e-9) <= t <= (t1 + 1e-9)
-        else:
-            active = (t0 - 1e-9) <= t < (t1 - 1e-9)
-        if not active:
-            continue
-        slots = _reserved(topic, b, spoken, hook_line)
-        parts = chunks(spoken.get(b) or "")
-        caption = _active_caption(parts, t0, t1, t)
-        if b == "hook":
-            shown = hook_motion.visible_at(hook_line, t)
-            if shown and slots.get("head"):
-                _piece, _rect, size, y = slots["head"][0]
-                left, _top, right, _bottom = _subtitle_limits()
-                for row in _measure_at(shown, y, size, max(40.0, right - left - 8)):
-                    boxes.append(row[1])
-        elif slots.get("head"):
-            boxes.extend(row[1] for row in slots["head"])
-        if b != "karein":
-            boxes.extend(row[1] for row in slots.get("key") or [])
-        boxes.extend(row[1] for row in _caption_rows(slots.get("caption"), caption))
+    for cue in cues_at(plan_cues(spoken, beat_times, audio_words), t):
+        boxes.extend(row[1] for row in _cue_rows(cue["text"]))
+        break
     t0, t1 = beat_times["karein"]
     if t0 - 1e-6 <= t <= t1 + 1e-6:
         boxes.append(_top_box(DISCLAIMER, 540, safe_area.SOURCE_Y, 26))
@@ -1201,7 +1413,7 @@ def _layer_boxes(frame):
     ]
 
 
-def frame_text_boxes(scenes, topic, beat_times, spoken, hook_line, cta, fps=30):
+def frame_text_boxes(scenes, topic, beat_times, spoken, hook_line, cta, fps=30, audio_words=None):
     """Every frame: scene lesson boxes plus the burned subtitle boxes.
 
     Animated scenes are redrawn at a few phases and reused, so this stays a
@@ -1239,12 +1451,13 @@ def frame_text_boxes(scenes, topic, beat_times, spoken, hook_line, cta, fps=30):
             if start <= t:
                 index = k
         boxes = list(scene_boxes(index, t))
-        boxes.extend(on_screen_boxes(topic, beat_times, spoken, hook_line, cta, t))
+        boxes.extend(on_screen_boxes(
+            topic, beat_times, spoken, hook_line, cta, t, audio_words=audio_words))
         text_frames.append((t, boxes))
     return text_frames
 
 
-def _craft_samples(scenes, topic, beat_times, spoken, hook_line, cta):
+def _craft_samples(scenes, topic, beat_times, spoken, hook_line, cta, audio_words=None):
     """One frame a second for the still check, and every frame for text boxes."""
     frames = [s.get("frame") for s in scenes]
     if not frames or any(frame is None for frame in frames):
@@ -1263,7 +1476,13 @@ def _craft_samples(scenes, topic, beat_times, spoken, hook_line, cta):
                 layout_notes.append(f"{note} at {t:.1f}s")
         samples.append((t, np.asarray(frame.convert("RGB"))))
         t += 1.0
-    text_frames = frame_text_boxes(scenes, topic, beat_times, spoken, hook_line, cta)
+    cues = plan_cues(spoken, beat_times, audio_words)
+    for note in cue_faults(cues):
+        if note not in seen:
+            seen.add(note)
+            layout_notes.append(note)
+    text_frames = frame_text_boxes(
+        scenes, topic, beat_times, spoken, hook_line, cta, audio_words=audio_words)
     return samples, text_frames, layout_notes
 
 
@@ -1274,32 +1493,16 @@ def _ass_rows(rows, t0, t1, colour, fade):
     return ev
 
 
-def build_ass(topic, beat_times, spoken, hook_line, cta):
+def build_ass(topic, beat_times, spoken, hook_line, cta, audio_words=None):
     import safe_area
-    del cta  # the poll is a card sprite, not a subtitle
+    del topic, hook_line, cta  # one spoken cue; the poll is a card sprite
     ev = []
-    for b in BEATS:
-        t0, t1 = beat_times[b]
-        slots = _reserved(topic, b, spoken, hook_line)
-        if b == "hook":
-            t0 = 0.0
-            head = slots.get("head") or []
-            if head:
-                _piece, _rect, size, y = head[0]
-                ev.extend(hook_motion.dialogues(hook_line, t1, 540, y, size))
-            ev.extend(_ass_rows(slots.get("key") or [], t0, t1, K.WHITE, False))
-        elif b != "karein":
-            ev.extend(_ass_rows(slots.get("head") or [], t0 + 0.05, t1, K.YEL, True))
-            ev.extend(_ass_rows(slots.get("key") or [], t0 + 0.05, t1, K.WHITE, True))
-        parts = chunks(spoken[b])
-        total = sum(len(p) for p in parts) or 1
-        t = t0 + 0.1
-        span = max(0.2, (t1 - t0) - 0.2)
-        for p in parts:
-            dt = span * len(p) / total
-            for piece, _rect, size, y in _caption_rows(slots.get("caption"), p):
-                ev.append(K.ass_caption(t, t + dt, piece, y=y, size=size))
-            t += dt
+    for cue in plan_cues(spoken, beat_times, audio_words):
+        t0, t1 = float(cue["t0"]), float(cue["t1"])
+        if t1 <= t0:
+            continue
+        for piece, _rect, size, y in _cue_rows(cue["text"]):
+            ev.append(K.ass_caption(t0, t1, piece, y=y, size=size))
     t0, t1 = beat_times["karein"]
     # Grey disclaimer sits in the brand band, under the fixed subtitle box.
     ev.append(K.ass_text(t0, t1, 540, safe_area.SOURCE_Y, 26, "&H00B8A394&", DISCLAIMER, 8))
@@ -1546,6 +1749,11 @@ def _sync_report(topic, narration, scenes, beat_audio, beat_times, spec):
         report = sync_gate.check(
             words, rows, narration.get("beats") or {}, beat_times, terms,
         )
+        report["words"] = [
+            {"word": w.get("word") or "", "start": float(w.get("start") or 0),
+             "end": float(w.get("end") or 0)}
+            for w in words
+        ]
     except Exception as exc:  # noqa: BLE001
         report = {
             "ok": False,
@@ -1705,9 +1913,10 @@ def main():
     visual_gate(paced)
     ok(f"scenes: {len(scenes)} cuts, longest {max(s['end'] - s['start'] for s in scenes):.2f}s")
     overlays = short_layout.overlay_plan(topic, beat_times, hook_line, cta)
-    samples, text_frames, layout_notes = _craft_samples(
-        scenes, topic, beat_times, spoken, hook_line, cta)
     sync_report = _sync_report(topic, n, scenes, beat_audio, beat_times, spec)
+    audio_words = sync_report.get("words") or None
+    samples, text_frames, layout_notes = _craft_samples(
+        scenes, topic, beat_times, spoken, hook_line, cta, audio_words=audio_words)
     review = self_review.full_review(
         topic, n, spec, overlays, scenes=scenes,
         labels=(label_boxes if labels_ready else None),
@@ -1735,8 +1944,8 @@ def main():
     else:
         print("[HOLD] self-review below the bar — public upload blocked. " + review["summary"])
     assemble(paced, beat_audio, beat_times,
-             build_ass(topic, beat_times, spoken, hook_line, cta), switch=switch,
-             hook_line=hook_line, scenes=scenes)
+             build_ass(topic, beat_times, spoken, hook_line, cta, audio_words=audio_words),
+             switch=switch, hook_line=hook_line, scenes=scenes)
 
     # Final-file hard gate: never retime the finished video.
     # If duration is outside the publishing window, fail and regenerate narration.

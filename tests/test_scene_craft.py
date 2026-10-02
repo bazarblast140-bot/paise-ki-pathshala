@@ -122,6 +122,12 @@ class AtrLessonTests(unittest.TestCase):
         fresh = market_data.atr_lesson(today=date(2026, 10, 2))
         self.assertEqual(fresh["as_of"], "2026-07-02")
         self.assertEqual(fresh["entry"], "795.9")
+        self.assertEqual(fresh["atr"], "15.7")
+        fresh_ranges = self._true_ranges(fresh["window"])
+        self.assertEqual(len(fresh_ranges), 14)
+        self.assertEqual(f"{sum(fresh_ranges) / 14:.1f}", "15.7")
+        self.assertEqual(daily["ticker"], "HDFCBANK.NS")
+        self.assertEqual(str(market_data.ATR_DAILY_PATH.name), "hdfc_atr_daily.json")
         self.assertTrue(fresh["close_matches_adj"])
         self.assertTrue(market_data.stock_price_is_old_enough(fresh["as_of"], date(2026, 10, 2)))
 
@@ -442,17 +448,27 @@ class LayoutGateTests(unittest.TestCase):
         blob = " ".join(layer.get("text") or "" for layer in img.text_layers)
         for needle in ("एंट्री", "795.9", "एसएल", "772.4", "ऊपर", "819.4"):
             self.assertIn(needle, blob)
+        self.assertIn("जोखिम क्षेत्र", blob)
         self.assertEqual(scene_frames.frame_layout_notes(img), [])
         layers = [layer for layer in img.text_layers if layer.get("text") and not layer.get("faint")]
         for shape in img.shapes:
             if shape.get("kind") != "highlight":
                 continue
             self.assertLess(shape["alpha"], 120)
+            labelled = False
             for layer in layers:
-                self.assertFalse(
-                    safe_area.intersects(shape["box"], layer["box"]),
-                    (shape["box"], layer.get("text")),
-                )
+                text = layer.get("text") or ""
+                hit = safe_area.intersects(shape["box"], layer["box"])
+                if text == "जोखिम क्षेत्र":
+                    self.assertTrue(hit)
+                    self.assertFalse(re.search(r"\d", text))
+                    mid_y = (layer["box"][1] + layer["box"][3]) / 2.0
+                    self.assertGreater(mid_y, shape["box"][1])
+                    self.assertLess(mid_y, shape["box"][3])
+                    labelled = True
+                else:
+                    self.assertFalse(hit, (shape["box"], text))
+            self.assertTrue(labelled)
 
     def test_outro_has_no_empty_bar_and_a_large_poll(self):
         lesson = self._lesson()
@@ -514,6 +530,71 @@ class LayoutGateTests(unittest.TestCase):
             scene_frames._cta_at(lesson, 1, 2, 1.0),
         ):
             self.assertLessEqual(scene_pace.empty_row_fraction(img), scene_pace.EMPTY_MAX_FRAC)
+
+    def test_one_cue_at_a_time_and_never_before_its_words(self):
+        early = [{"t0": 0.0, "t1": 2.0, "text": "तंग एसएल", "lines": ["तंग एसएल"], "word_start": 1.0}]
+        early_notes = board_short.cue_faults(early)
+        self.assertTrue(any("before audio" in note for note in early_notes))
+        overlap = [
+            {"t0": 0.0, "t1": 2.0, "text": "पहला", "lines": ["पहला"], "word_start": 0.0},
+            {"t0": 1.0, "t1": 3.0, "text": "दूसरा", "lines": ["दूसरा"], "word_start": 1.0},
+        ]
+        overlap_notes = board_short.cue_faults(overlap)
+        self.assertTrue(any("two cues" in note for note in overlap_notes))
+        narration = {"beats": {"hook": "x", "pehchan": "x", "matlab": "x", "karein": "x"}}
+        scenes = scene_pace.plan_scenes(
+            {"hook": (0.0, 8.0), "pehchan": (8.0, 16.0), "matlab": (16.0, 28.0), "karein": (28.0, 42.0)})
+        craft, notes = self_review.score_craft(narration, scenes=scenes, layout_notes=early_notes)
+        self.assertEqual(craft, 0)
+        self.assertTrue(any("before audio" in note for note in notes))
+        craft, notes = self_review.score_craft(narration, scenes=scenes, layout_notes=overlap_notes)
+        self.assertEqual(craft, 0)
+        self.assertTrue(any("two cues" in note for note in notes))
+
+        bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))["topics"]
+        topic = next(t for t in bank if t["key"] == "atr_sl")
+        spec = market_data.spec_for_topic(topic, today=date(2026, 10, 2))
+        market_data.apply_atr_card(topic, spec["atr"])
+        script = board_short.atr_narration(topic)
+        times = {"hook": (0.0, 10.0), "pehchan": (10.0, 21.0), "matlab": (21.0, 38.0), "karein": (38.0, 55.0)}
+        audio = []
+        for beat, (t0, t1) in times.items():
+            words = script["beats"][beat].split()
+            span = (t1 - t0) * 0.8
+            for i, word in enumerate(words):
+                start = t0 + 0.35 + span * i / max(1, len(words))
+                audio.append({"word": word, "start": start, "end": start + 0.25})
+        board_short._CUE_CACHE.clear()
+        cues = board_short.plan_cues(script["beats"], times, audio)
+        self.assertEqual(board_short.cue_faults(cues), [])
+        for cue in cues:
+            self.assertLessEqual(len(cue["lines"]), 2)
+            self.assertGreaterEqual(cue["t0"] + 1e-6, cue["word_start"] - 0.02)
+        for moment in (0.5, 1.5, 3.0, 12.0, 30.0, 35.0, 42.0):
+            self.assertEqual(len(board_short.cues_at(cues, moment)), 1, moment)
+        self.assertEqual(board_short.cues_at(cues, 0.05), [])
+        ass = board_short.build_ass(topic, times, script["beats"], script["hook_line"], "poll", audio)
+        self.assertNotIn(f"मात्रा {spec['atr']['qty']}, जोखिम {spec['atr']['risk']}", ass)
+
+    def test_watermark_misses_chart_and_card_content(self):
+        lesson = self._lesson()
+        for img in (
+            scene_frames._problem(lesson, 0, 2),
+            scene_frames._problem(lesson, 1, 2),
+            scene_frames._split(lesson),
+            scene_frames._ladder_moving(lesson, 1.0),
+        ):
+            self.assertFalse(any("watermark" in note for note in scene_frames.frame_layout_notes(img)))
+            brands = [layer for layer in img.text_layers if layer.get("role") == "brand"]
+            self.assertTrue(brands)
+            for brand in brands:
+                for box in img.content_boxes:
+                    self.assertFalse(safe_area.intersects(brand["box"], box), (brand["box"], box))
+        covered = scene_frames._blank()
+        scene_frames._card(covered)
+        scene_frames._text(covered, 540, 700, "795.9", (255, 255, 255), 48, anchor="mm", band=False)
+        scene_frames._text(covered, 540, 700, "PKP", (212, 168, 72), 48, anchor="mm", band=False, role="brand")
+        self.assertTrue(any("watermark" in note for note in scene_frames.frame_layout_notes(covered)))
 
 
 class BedTests(unittest.TestCase):
