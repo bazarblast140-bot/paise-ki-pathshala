@@ -337,6 +337,27 @@ def ensure_library_voice(c):
         return fallback
 
 
+def paid_tts_enabled():
+    """Hard switch. Only the exact string \"true\" may spend ElevenLabs characters."""
+    return os.environ.get("PAID_TTS_ENABLED", "").strip() == "true"
+
+
+def require_paid_tts():
+    """Choke point for every ElevenLabs speech request.
+
+    Anything other than PAID_TTS_ENABLED=true refuses before a character is
+    sent. Live slots must not fall through to Edge. Subscription reads do not
+    call this.
+    """
+    if paid_tts_enabled():
+        return
+    message = (
+        "[BLOCK] PAID_TTS_ENABLED is not true; refusing ElevenLabs with 0 characters spent"
+    )
+    print(message, flush=True)
+    raise SystemExit(message)
+
+
 def paid_voice_allowed():
     """ElevenLabs only on a real public publish, or an explicit sample opt-in.
 

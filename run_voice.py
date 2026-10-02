@@ -79,6 +79,7 @@ def chunk(text, limit=MAX_CHARS):
 
 
 def tts_request(text, c, key, prev=None, nxt=None, retries=3):
+    eleven_voice.require_paid_tts()
     vid = eleven_voice.configured_voice_id(c)
     if not vid:
         die("ELEVENLABS_API_KEY is set but config voice_id and ELEVENLABS_VOICE_ID are empty")
@@ -170,6 +171,7 @@ def synthesize(text, c):
 
     key = os.environ.get("ELEVENLABS_API_KEY")
     if engine == "elevenlabs" and eleven_voice.paid_voice_allowed():
+        eleven_voice.require_paid_tts()
         eleven_voice.ensure_library_voice(c)
     if engine == "elevenlabs":
         if not key:

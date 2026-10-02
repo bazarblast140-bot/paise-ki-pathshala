@@ -235,9 +235,10 @@ class DryRunTests(unittest.TestCase):
             seen["beats"] = live.get("_live_beats")
             return script, "llm"
 
-        def produce(topic, narration, _c, _spec, source="llm", beat_pngs=None):
+        def produce(topic, narration, _c, _spec, source="llm", beat_pngs=None, free="silence"):
             seen["produce"] = topic.get("_live_beats")
             seen["source"] = source
+            seen["free"] = free
             self.assertNotIn("ELEVENLABS_API_KEY", os.environ)
             (board_short.RUN / "final.mp4").write_bytes(b"mp4")
             (board_short.RUN / "tts_text.txt").write_text(narration["beats"]["hook"], encoding="utf-8")
@@ -259,8 +260,8 @@ class DryRunTests(unittest.TestCase):
                  mock.patch.object(board_short, "RUN", Path(tmp)), \
                  mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
                  mock.patch.object(board_short, "narration", side_effect=narrate), \
-                 mock.patch.object(board_short, "produce_short", side_effect=produce), \
-                 mock.patch.object(board_short, "synthesize_short_voices", side_effect=AssertionError("TTS stays behind produce_short")), \
+                 mock.patch.object(board_short, "prove_full_render", side_effect=produce), \
+                 mock.patch.object(board_short, "synthesize_short_voices", side_effect=AssertionError("TTS stays behind prove_full_render")), \
                  redirect_stdout(out):
                 (Path(tmp)).mkdir(exist_ok=True)
                 code = narration_dry_run.main([
@@ -275,6 +276,7 @@ class DryRunTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(seen["beats"], "four")
         self.assertEqual(seen["produce"], "four")
+        self.assertEqual(seen["free"], "edge")
         self.assertIn("verdict PASS", out.getvalue())
         self.assertIn("craft 100", out.getvalue())
         self.assertEqual(bank_path.read_bytes(), before)
@@ -305,7 +307,7 @@ class DryRunTests(unittest.TestCase):
         def narrate(_live, _c, spec=None):
             return script, "llm"
 
-        def produce(topic, _narration, _c, _spec, source="llm", beat_pngs=None):
+        def produce(topic, _narration, _c, _spec, source="llm", beat_pngs=None, free="silence"):
             seen.append(topic.get("key"))
             if topic.get("key") == "risk_journal":
                 raise RuntimeError("plain image has no plate")
@@ -323,7 +325,7 @@ class DryRunTests(unittest.TestCase):
                  mock.patch.object(board_short, "RUN", Path(tmp)), \
                  mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
                  mock.patch.object(board_short, "narration", side_effect=narrate), \
-                 mock.patch.object(board_short, "produce_short", side_effect=produce):
+                 mock.patch.object(board_short, "prove_full_render", side_effect=produce):
                 code = narration_dry_run.main([
                     "--topic-keys", "risk_journal,intraday_risk_reward",
                     "--beats", "four", "--full",

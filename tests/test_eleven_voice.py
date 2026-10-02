@@ -143,6 +143,7 @@ class ShortFallbackTests(unittest.TestCase):
             "SUPPRESS_GHA_COMMANDS": "",
             # Paid TTS is the publish path. Previews stay on Edge unless this is set.
             "PUBLISH_VISIBILITY": "public",
+            "PAID_TTS_ENABLED": "true",
         }
 
     def test_default_voice_choice_is_unchanged(self):
@@ -310,7 +311,7 @@ class ShortFallbackTests(unittest.TestCase):
         err = io.StringIO()
         out = io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, \
-             mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-eleven-key"}), \
+             mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-eleven-key", "PAID_TTS_ENABLED": "true"}), \
              mock.patch("requests.post", post), \
              redirect_stderr(err), redirect_stdout(out):
             with self.assertRaises(SystemExit):
@@ -330,7 +331,7 @@ class ShortFallbackTests(unittest.TestCase):
 
         err = io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, \
-             mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-eleven-key"}), \
+             mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-eleven-key", "PAID_TTS_ENABLED": "true"}), \
              mock.patch("requests.post", post), \
              redirect_stderr(err):
             with self.assertRaises(SystemExit):
@@ -350,7 +351,7 @@ class ShortFallbackTests(unittest.TestCase):
         err = io.StringIO()
         out = io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, \
-             mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-eleven-key"}), \
+             mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-eleven-key", "PAID_TTS_ENABLED": "true"}), \
              mock.patch("requests.post", post), \
              mock.patch("time.sleep", lambda _s: None), \
              redirect_stderr(err), redirect_stdout(out):
@@ -371,7 +372,7 @@ class ShortFallbackTests(unittest.TestCase):
             return FakeResp(200, b"E" * 2500)
 
         with tempfile.TemporaryDirectory() as tmp, \
-             mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-eleven-key"}), \
+             mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-eleven-key", "PAID_TTS_ENABLED": "true"}), \
              mock.patch("requests.post", post), \
              mock.patch("time.sleep", lambda _s: None), \
              redirect_stdout(io.StringIO()):
@@ -388,7 +389,7 @@ class ShortFallbackTests(unittest.TestCase):
             return FakeResp(429, _payment_body())
 
         with tempfile.TemporaryDirectory() as tmp, \
-             mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-eleven-key"}), \
+             mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "test-eleven-key", "PAID_TTS_ENABLED": "true"}), \
              mock.patch("requests.post", post), \
              mock.patch("time.sleep", lambda _s: (_ for _ in ()).throw(AssertionError("no retry"))):
             with self.assertRaises(eleven_voice.QuotaFallback) as caught:
@@ -419,6 +420,7 @@ class LongFormTests(unittest.TestCase):
                  "ELEVENLABS_API_KEY": "test-eleven-key",
                  "SUPPRESS_GHA_COMMANDS": "",
                  "PUBLISH_VISIBILITY": "public",
+                 "PAID_TTS_ENABLED": "true",
              }), \
              mock.patch("requests.post", quota), \
              mock.patch.object(run_voice, "edge_request", edge), \
@@ -440,6 +442,7 @@ class LongFormTests(unittest.TestCase):
              mock.patch.dict(os.environ, {
                  "ELEVENLABS_API_KEY": "test-eleven-key",
                  "PUBLISH_VISIBILITY": "public",
+                 "PAID_TTS_ENABLED": "true",
              }), \
              mock.patch("requests.post", auth), \
              mock.patch.object(run_voice, "edge_request", edge), \

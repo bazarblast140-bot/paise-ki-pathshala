@@ -156,6 +156,7 @@ class VoiceIdTests(unittest.TestCase):
              mock.patch.dict(os.environ, {
                  "ELEVENLABS_API_KEY": "test-key",
                  "ELEVENLABS_VOICE_ID": "7qBNUtXRGP0jPi0H4r8k",
+                 "PAID_TTS_ENABLED": "true",
              }), \
              mock.patch.object(board_short.credit_log, "PATH", Path(tmp) / "credits.json"), \
              mock.patch("requests.post", post):
@@ -180,6 +181,7 @@ class VoiceIdTests(unittest.TestCase):
                  mock.patch.dict(os.environ, {
                      "ELEVENLABS_API_KEY": "test-key",
                      "ELEVENLABS_VOICE_ID": SECRET_VOICE,
+                     "PAID_TTS_ENABLED": "true",
                  }), \
                  mock.patch.object(board_short.credit_log, "PATH", Path(tmp) / "credits.json"), \
                  mock.patch("requests.post", post):
