@@ -109,6 +109,9 @@ _ALIAS = (
     ("SL", "एसएल"),
     ("sl", "एसएल"),
     ("यल", "एसएल"),
+    # small-whisper on Edge: हजार and लाख lose a vowel.
+    ("हाजार", "हजार"),
+    ("लाक", "लाख"),
 )
 
 _MODEL = None
@@ -123,7 +126,10 @@ def _alias(text):
 
 
 def _tokenize(text):
-    glued = re.sub(r"(\d)\s*,\s*(\d{3})", r"\1\2", _alias(text or ""))
+    # Indian grouping (2,00,000) before a plain thousands comma (2,350).
+    aliased = _alias(text or "")
+    glued = re.sub(r"(\d{1,3})\s*,\s*(\d{2})\s*,\s*(\d{3})\b", r"\1\2\3", aliased)
+    glued = re.sub(r"(\d)\s*,\s*(\d{3})", r"\1\2", glued)
     # Skip danda (U+0964/U+0965) so "है।" is the word है.
     return re.findall(r"\d+(?:\.\d+)?|[A-Za-z\u0900-\u0963\u0966-\u097F\uA8E0-\uA8FF]+", glued)
 
@@ -237,13 +243,55 @@ def jaccard(a, b):
     return len(left & right) / len(left | right)
 
 
+def _fold_token(tok):
+    """One nasal, and bindi versus the half-form (बंद / बन्द). Nukta is already gone."""
+    text = str(tok or "").replace("\u0901", "\u0902").replace("\u094d", "")
+    return text.replace("\u0902", "\u0928")
+
+
+def _edit_distance(a, b, limit):
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[-1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+_NUMERIC = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _near_token(src, heard):
+    """True for the same token, or a Whisper spelling of the same Hindi word.
+
+    Edge plus the small Hindi model rewrites घाटा as गाता, हजार as हाजार,
+    प्रतिशत as प्रतीषत. Digits stay exact, so 300 does not cover 4000.
+    Words shorter than 4 characters stay exact, so हद does not cover अग.
+    """
+    if src == heard:
+        return True
+    # Decimals too: 15.7 must not cover 15.1, 23.5 must not cover 23.6.
+    if _NUMERIC.fullmatch(str(src)) or _NUMERIC.fullmatch(str(heard)):
+        return False
+    src, heard = _fold_token(src), _fold_token(heard)
+    if src == heard:
+        return True
+    if min(len(src), len(heard)) < 4:
+        return False
+    limit = 2 if max(len(src), len(heard)) >= 6 else 1
+    return _edit_distance(src, heard, limit) <= limit
+
+
 def recall(script, heard):
-    """How much of this scene's outline shows up in the transcript window."""
+    """How much of this outline shows up in the transcript, allowing a near spelling."""
     src = [tok for tok in tokens(script) if tok not in _STOP]
     if not src:
         return 0.0
-    got = set(tokens(heard))
-    return sum(1 for tok in src if tok in got) / len(src)
+    got = tokens(heard)
+    return sum(1 for tok in src if any(_near_token(tok, item) for item in got)) / len(src)
 
 
 def content_tokens(text):
@@ -392,8 +440,14 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
             start - WINDOW_PAD, end + WINDOW_PAD,
         )
         heard = _window_text(words, start - WINDOW_PAD, end + WINDOW_PAD)
+        # Whisper's word clock drifts inside a beat. The scene slice is what
+        # this cut should teach; the whole beat is where those words may land.
+        # A different topic's words are still absent from that beat.
+        beat_heard = _window_text(
+            words, float(span[0]) - WINDOW_PAD, float(span[1]) + WINDOW_PAD,
+        )
         score = jaccard(spoken, heard)
-        covered = recall(spoken, heard)
+        covered = recall(spoken, beat_heard)
         show = " ".join(scene.get("show") or [])
         said = _said_tokens(words, end)
         heard_set = set(tokens(heard))
@@ -417,6 +471,8 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
             "recall": round(covered, 3),
             "missing_numbers": missing_numbers,
             "shared": shared[:6],
+            "script": spoken,
+            "heard": heard,
         }
         rows.append(row)
         if covered + 1e-9 < MIN_RECALL:
@@ -434,12 +490,25 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
                 f"{row['kind'] or beat} {row['start']:.1f}-{row['end']:.1f}s "
                 "on-screen text is not what this scene says"
             )
+    beats_out = []
+    for beat, span in (beat_times or {}).items():
+        script = str((beats_text or {}).get(beat) or "")
+        heard_beat = _window_text(
+            words, float(span[0]) - WINDOW_PAD, float(span[1]) + WINDOW_PAD,
+        )
+        beats_out.append({
+            "beat": beat,
+            "recall": round(recall(script, heard_beat), 3),
+            "script": script,
+            "heard": heard_beat,
+        })
     reason = "; ".join(reasons)
     return {
         "ok": not reasons,
         "reason": reason,
         "transcript": normalize(transcript),
         "scenes": rows,
+        "beats": beats_out,
     }
 
 

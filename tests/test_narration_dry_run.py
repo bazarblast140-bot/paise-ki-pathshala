@@ -133,8 +133,9 @@ class DryRunTests(unittest.TestCase):
         self.assertIn("beats:", text)
         self.assertIn("full:", text)
         self.assertIn("--full", text)
-        self.assertIn("run/final.mp4", text)
-        self.assertIn("run/tts_text.txt", text)
+        self.assertIn("run/final_*.mp4", text)
+        self.assertIn("run/tts_*.txt", text)
+        self.assertIn("always()", text)
         self.assertIn("upload-artifact", text)
         self.assertNotIn("ELEVENLABS_API_KEY", text)
         self.assertNotIn("git commit", text)
@@ -261,6 +262,61 @@ class DryRunTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(seen["beats"], "four")
         self.assertEqual(seen["produce"], "four")
+        self.assertEqual(bank_path.read_bytes(), before)
+
+    def test_one_topic_crash_does_not_stop_the_next(self):
+        saved = {
+            key: os.environ.get(key)
+            for key in (
+                "VIDEO_FORMAT", "DRY_RUN", "PUBLISH_VISIBILITY", "ELEVENLABS_OPT_IN",
+                "ELEVENLABS_API_KEY", "LIVE_BEATS",
+            )
+        }
+        bank_path = ROOT / "topic_bank.json"
+        before = bank_path.read_bytes()
+        targets = board_short.four_live_targets(1.9)
+        beats = {}
+        for beat, target in targets.items():
+            lead = "क्या यह सेटअप गलत है?" if beat == "hook" else ""
+            beats[beat] = " ".join((lead.split() + ["नियम"] * target)[:target])
+        script = {
+            "title": "सेटअप का नियम समझिए",
+            "hook_line": "क्या यह सेटअप गलत है?",
+            "beats": beats,
+            "source": "llm",
+        }
+        seen = []
+
+        def narrate(_live, _c, spec=None):
+            return script, "llm"
+
+        def produce(topic, _narration, _c, _spec, source="llm", beat_pngs=None):
+            seen.append(topic.get("key"))
+            if topic.get("key") == "risk_journal":
+                raise RuntimeError("plain image has no plate")
+            (board_short.RUN / "final.mp4").write_bytes(b"mp4")
+            (board_short.RUN / "tts_text.txt").write_text("voice", encoding="utf-8")
+
+        try:
+            with tempfile.TemporaryDirectory() as tmp, \
+                 mock.patch.object(board_short, "RUN", Path(tmp)), \
+                 mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+                 mock.patch.object(board_short, "narration", side_effect=narrate), \
+                 mock.patch.object(board_short, "produce_short", side_effect=produce):
+                code = narration_dry_run.main([
+                    "--topic-keys", "risk_journal,intraday_risk_reward",
+                    "--beats", "four", "--full",
+                ])
+                self.assertTrue((Path(tmp) / "final_intraday_risk_reward.mp4").is_file())
+                self.assertTrue((Path(tmp) / "tts_intraday_risk_reward.txt").is_file())
+        finally:
+            for key, value in saved.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+        self.assertEqual(code, 1)
+        self.assertEqual(seen, ["risk_journal", "intraday_risk_reward"])
         self.assertEqual(bank_path.read_bytes(), before)
 
 

@@ -512,6 +512,9 @@ _LEAK_SNIPS = (
     "कार्ड पर दिया हिसाब बोलो",
     "कार्ड का आंकड़ा ही बोलो",
     "अगले हफ़्ते से हर trade के बाद",
+    "यह explanation इसी दिए गए तथ्य तक सीमित है",
+    "किसी अतिरिक्त price, date या return का अनुमान नहीं लगाया जा रहा",
+    "स्क्रीन पर दिख रहे feature",
 )
 _LEAK_META = re.compile(r"कार्ड|topic\s*card|\bcard\b|\bscript\b|\bbeat\b", re.I)
 _LEAK_TELL = re.compile(r"(बोलो|बताओ|बोलिए|बताइए)")
@@ -765,7 +768,7 @@ def fallback_narration(topic):
             38, 46,
             [
                 "अब इसे पहचानें।",
-                "स्क्रीन पर दिख रहे feature को एक साथ देखें।",
+                "दिख रहे हिस्से को एक साथ देखें।",
                 "पहचान का मतलब है कि पहले वही structure साफ समझें।",
                 "इसके बाद ही उसका market meaning पढ़ना आसान होता है।",
             ],
@@ -776,8 +779,8 @@ def fallback_narration(topic):
             [
                 "इन बातों का मतलब समझिए।",
                 "अब setup के कारण और असर को जोड़कर देखें।",
-                "यह explanation इसी दिए गए तथ्य तक सीमित है।",
-                "किसी अतिरिक्त price, date या return का अनुमान नहीं लगाया जा रहा।",
+                "यह मतलब इसी दिए गए तथ्य तक है।",
+                "किसी अतिरिक्त अनुमान को यहाँ नहीं जोड़ा जा रहा।",
                 "इसलिए meaning को context के साथ पढ़ना जरूरी है।",
             ],
         ),
@@ -2966,6 +2969,12 @@ def _sync_report(topic, narration, scenes, beat_audio, beat_times, spec):
         ok("sync: narration matches the title and each scene")
     else:
         print("[HOLD] sync: " + (report.get("reason") or "failed"))
+    for row in report.get("beats") or []:
+        print(
+            f"  [sync-beat] {row.get('beat')} recall {row.get('recall')}\n"
+            f"    script: {row.get('script')}\n"
+            f"    heard:  {row.get('heard')}"
+        )
     for row in report.get("scenes") or []:
         print(
             f"  [sync] {row.get('kind') or row.get('beat')} "

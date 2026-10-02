@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import sys
+import traceback
 
 from common import ROOT, cfg
 from pick_topic import CAT_COOLDOWN, _bank_recent_cats, _pick_fresh, load_research, load_trends
@@ -146,6 +147,18 @@ def evaluate_topic(topic, c, beats=None):
     return passed, format_report(live, payload, calls, passed, reason), payload
 
 
+def _keep_topic_artifacts(key):
+    """Copy this topic's video and spoken text aside before the next topic overwrites them."""
+    run = board_short.RUN
+    video = run / "final.mp4"
+    named = run / f"final_{key}.mp4"
+    if video.exists():
+        named.write_bytes(video.read_bytes())
+    spoken = run / "tts_text.txt"
+    if spoken.exists():
+        (run / f"tts_{key}.txt").write_text(spoken.read_text(encoding="utf-8"), encoding="utf-8")
+
+
 def render_topic(topic, narration, c, beats=None):
     """Edge TTS and the visual pipeline. No upload. Caller already popped ElevenLabs."""
     live = prepare_live(topic, c, beats=beats)
@@ -155,6 +168,7 @@ def render_topic(topic, narration, c, beats=None):
     live["_chart_spec"] = spec
     live["_allow_stale_sample"] = True
     board_short.produce_short(live, narration, c, spec, source=narration.get("source") or "llm")
+    _keep_topic_artifacts(topic.get("key") or "topic")
 
 
 def main(argv=None):
@@ -191,15 +205,23 @@ def main(argv=None):
     failed = 0
     rendered = 0
     for topic in topics:
-        passed, report, narration = evaluate_topic(topic, c, beats=args.beats)
+        key = topic.get("key") or "topic"
+        try:
+            passed, report, narration = evaluate_topic(topic, c, beats=args.beats)
+        except (Exception, SystemExit):
+            print(f"FAIL {key}\n{traceback.format_exc()}")
+            failed += 1
+            print("")
+            continue
         print(report)
         if passed and args.full:
             try:
                 render_topic(topic, narration, c, beats=args.beats)
                 rendered += 1
-                print(f"RENDER {topic.get('key')} run/final.mp4")
-            except SystemExit as exc:
-                print(f"FAIL render {topic.get('key')}: {exc}")
+                print(f"RENDER {key} run/final_{key}.mp4")
+            except (Exception, SystemExit):
+                print(f"FAIL render {key}\n{traceback.format_exc()}")
+                _keep_topic_artifacts(key)
                 failed += 1
         print("")
         if not passed:

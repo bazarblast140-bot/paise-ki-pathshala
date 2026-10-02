@@ -185,6 +185,51 @@ class CraftAndLeakTests(unittest.TestCase):
             )
         clean = "निचली wick बॉडी से 2 गुना होती है।"
         self.assertEqual(board_short.narrator_leak_notes({"matlab": clean}, order), [])
+        for line in (
+            "यह explanation इसी दिए गए तथ्य तक सीमित है।",
+            "किसी अतिरिक्त price, date या return का अनुमान नहीं लगाया जा रहा।",
+            "स्क्रीन पर दिख रहे feature को एक साथ देखें।",
+        ):
+            notes = board_short.narrator_leak_notes({"matlab": line}, order)
+            self.assertTrue(notes, line)
+        fallback = board_short.fallback_narration(_topic())
+        blob = " ".join(fallback["beats"].values())
+        self.assertNotIn("explanation इसी दिए गए तथ्य", blob)
+        self.assertNotIn("price, date", blob)
+        self.assertNotIn("दिख रहे feature", blob)
+
+    def test_plain_images_pass_through_craft_samples_and_render_at(self):
+        from PIL import Image
+        import scene_transition
+        scenes = []
+        beat_times = {}
+        spoken = {}
+        t = 0.0
+        for i, beat in enumerate(("hook", "pehchan", "matlab", "karein")):
+            scenes.append({
+                "beat": beat,
+                "start": t,
+                "end": t + 3.0,
+                "frame": Image.new("RGB", (108, 192), (20 + i * 40, 40, 60)),
+            })
+            beat_times[beat] = (t, t + 3.0)
+            spoken[beat] = "नियम कदम"
+            t += 3.0
+        self.assertFalse(hasattr(scenes[0]["frame"], "plate"))
+        samples, _text_frames, notes = board_short._craft_samples(
+            scenes, {}, beat_times, spoken, "", "",
+        )
+        self.assertGreaterEqual(len(samples), 4)
+        self.assertFalse(any("no frame" in note for note in notes))
+        mixed = scene_transition.render_at(
+            [scene["frame"] for scene in scenes],
+            [3.0, 3.0, 3.0, 3.0],
+            2.9,
+            board_short.SCENE_TRANSITIONS,
+            board_short.SCENE_FADE_S,
+        )
+        self.assertEqual(mixed.size, (108, 192))
+        self.assertEqual(mixed.mode, "RGB")
 
 
 class HindiNumberTests(unittest.TestCase):

@@ -111,6 +111,54 @@ class SyncGateTests(unittest.TestCase):
         for figure in ("एसएल", "एटीआर", "पॉइंट", "बराबर", "हलचल", "एचडीएफसी", "बैंक"):
             self.assertIn(figure, again.split(), figure)
 
+    def test_edge_whisper_near_spellings_match_and_a_different_topic_does_not(self):
+        # Measured on hi-IN-MadhurNeural with faster-whisper small, language=hi:
+        # घाटा→गाता, प्रतिशत→प्रतीषत, हजार→हाजार, बंद→बन्द. The sentence is the
+        # same lesson. A different topic and a different number still fail.
+        script = "दिन का घाटा दो प्रतिशत पर चार हजार पर बंद होता है"
+        heard = "दिन का गाता दो प्रतीषत पर चार हाजार पर बन्द होता है"
+        self.assertGreaterEqual(sync_gate.recall(script, heard), sync_gate.MIN_RECALL)
+        self.assertIn("4000", sync_gate.tokens("चार हाजार"))
+        self.assertIn("200000", sync_gate.tokens("2 ,00 ,000"))
+        self.assertLess(
+            sync_gate.recall("एसआईपी हर महीने इक्विटी फंड में लगाओ", heard),
+            sync_gate.MIN_RECALL,
+        )
+        self.assertLess(sync_gate.recall("चार्ज 300 और भाव 9999", heard), sync_gate.MIN_RECALL)
+        self.assertFalse(sync_gate._near_token("300", "4000"))
+        for left, right in (("15.7", "15.1"), ("23.5", "23.6"), ("772.4", "772.9"), ("2350", "2360")):
+            self.assertFalse(sync_gate._near_token(left, right), (left, right))
+        self.assertLess(sync_gate.recall("एटीआर 15.7 है", "एटीआर 15.1 है"), 1.0)
+        self.assertFalse(sync_gate._near_token("हद", "अग"))
+        self.assertFalse(sync_gate._near_token("कारोबारी", "व्यापारी"))
+        self.assertGreater(sync_gate._edit_distance("कारोबारी", "व्यापारी", 2), 2)
+        beats = {"hook": script, "karein": "हद पहले लिखो और टर्मिनल बंद कर दो"}
+        times = {"hook": (0.0, 4.0), "karein": (4.0, 8.0)}
+        words = []
+        for beat, (start, end) in times.items():
+            text = heard if beat == "hook" else "अग पहले लिख हो और तरमिनल बन्द कर दो"
+            toks = text.split()
+            step = (end - start) / len(toks)
+            for i, tok in enumerate(toks):
+                words.append({
+                    "word": tok,
+                    "start": start + i * step,
+                    "end": start + (i + 1) * step - 0.01,
+                })
+        scenes = [
+            {"start": 0.0, "end": 2.0, "beat": "hook", "kind": "hook", "show": []},
+            {"start": 2.0, "end": 4.0, "beat": "hook", "kind": "hook", "show": []},
+        ]
+        report = sync_gate.check(words, scenes, beats, times, [])
+        self.assertTrue(report["ok"], report["reason"])
+        self.assertTrue(report["beats"])
+        missed = sync_gate.check(
+            words, scenes, {"hook": "एसआईपी हर महीने इक्विटी फंड", "karein": beats["karein"]},
+            times, ["SIP"],
+        )
+        self.assertFalse(missed["ok"])
+        self.assertIn("title promise", missed["reason"])
+
     def test_speech_offset_uses_loudness_not_zero_crossings(self):
         rate = 16000
         silence = np.zeros(int(0.30 * rate), dtype=np.float32)
