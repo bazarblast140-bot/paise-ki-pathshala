@@ -89,6 +89,7 @@ CAT_CHIPS = {
 
 
 def _scene_images(topic, beat):
+    beat = visual_beat(beat)
     img = K.background()
     # The chart is the hook; no extra top chip row.
     key = topic["key"]
@@ -182,21 +183,122 @@ def allowed_numbers(topic):
     return hook_check.allowed_numbers(topic)
 
 
-# Spoken targets for Edge hi-IN-MadhurNeural at +0%.
-# Measured on real Hindi beats, silence-trimmed the same way as the duration gate:
-#   three full lessons averaged 1.94 words/s;
-#   a 104-word cut was 52.8s (1.97 words/s);
-#   84 words was 41.2s and 124 words was 63.0s.
-# The four targets sum to 104 words, about 53s. ±20% still applies per beat.
-# The total window is 95-114 words, about 48-58s, inside the 42-62s gate.
-EDGE_WORDS_PER_SECOND = 1.97
-BEAT_WORD_TARGET = {"hook": 16, "pehchan": 27, "matlab": 32, "karein": 29}
+# Spoken targets. The gate accepts ±20% on each beat and 150-190 words overall.
+# The hook target stays short so a 40-word opening still fails.
+BEAT_WORD_TARGET = {"hook": 25, "pehchan": 42, "matlab": 50, "karein": 46}
 BEAT_WORD_TOLERANCE = 0.20
-TOTAL_WORDS = (95, 114)
-TOTAL_WORD_TARGET = (95, 114)
-VOICE_SECONDS = (42.0, 62.0)
-VOICE_AIM_SECONDS = 53.0
+TOTAL_WORDS = (150, 190)
+TOTAL_WORD_TARGET = (160, 180)
 NARRATION_CALL_CAP = 4
+
+# Live Shorts (ElevenLabs) explain the topic in six beats. Buffer/Edge keeps
+# the four-beat lesson above. Targets are derived from the voice coefficient:
+# Rudra defaults to 2.8 words/s, so 75-90s is 210-252 words and the aim is 231.
+LIVE_ORDER = ("hook", "pehchan", "matlab", "udaharan", "galti", "karein")
+LIVE_SHARE = {"hook": 26, "pehchan": 36, "matlab": 40, "udaharan": 48, "galti": 42, "karein": 39}
+LIVE_BASE_WPS = 2.8
+ESTIMATE_SECONDS = (75.0, 90.0)
+LIVE_VOICE_SECONDS = (70.0, 95.0)
+VISUAL_ALIAS = {"udaharan": "matlab", "galti": "karein"}
+CARD_LINES = {
+    "udaharan": ("उदाहरण", "एक ठोस केस"),
+    "galti": ("आम गलती", "इसे ऐसे सुधारें"),
+}
+
+
+def _live_lesson(c):
+    """Paid ElevenLabs publishes the six-beat Short. Preview and buffer stay on four."""
+    engine = str(((c or {}).get("voice") or {}).get("engine") or "elevenlabs").strip().lower()
+    return engine == "elevenlabs" and eleven_voice.paid_voice_allowed()
+
+
+def voice_wps(c):
+    voice = (c or {}).get("voice") or {}
+    raw = voice.get("words_per_second")
+    if raw not in (None, ""):
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            pass
+    if str(voice.get("voice_id") or "") == eleven_voice.KAMAL_VOICE_ID:
+        return 2.0
+    return LIVE_BASE_WPS
+
+
+def live_beat_targets(wps):
+    """Scale the Rudra shares so the sum is the midpoint of 75-90s."""
+    wps = float(wps)
+    scale = wps / LIVE_BASE_WPS
+    targets = {beat: max(8, int(round(LIVE_SHARE[beat] * scale))) for beat in LIVE_ORDER}
+    aim = int(round(((ESTIMATE_SECONDS[0] + ESTIMATE_SECONDS[1]) / 2.0) * wps))
+    delta = aim - sum(targets.values())
+    step = 0
+    while delta != 0 and step < 40:
+        beat = LIVE_ORDER[step % len(LIVE_ORDER)]
+        if delta > 0:
+            targets[beat] += 1
+            delta -= 1
+        elif targets[beat] > 8:
+            targets[beat] -= 1
+            delta += 1
+        step += 1
+    return targets
+
+
+def live_word_window(wps):
+    """Word counts whose estimate is inside 75-90s at this pace."""
+    wps = float(wps)
+    lo = int(math.ceil(ESTIMATE_SECONDS[0] * wps - 1e-9))
+    hi = int(math.floor(ESTIMATE_SECONDS[1] * wps + 1e-9))
+    return lo, hi
+
+
+def _topic_voice(topic):
+    return {"voice": (topic or {}).get("_voice") or {}}
+
+
+def _lesson(topic):
+    """Beat order, per-beat targets, accept window, and the prompt's target band."""
+    if (topic or {}).get("_live_short") and not (topic or {}).get("_atr"):
+        wps = voice_wps(_topic_voice(topic))
+        targets = live_beat_targets(wps)
+        window = live_word_window(wps)
+        return LIVE_ORDER, targets, window, window
+    return BEATS, BEAT_WORD_TARGET, TOTAL_WORDS, TOTAL_WORD_TARGET
+
+
+def timed_beats(beat_times):
+    found = tuple(b for b in LIVE_ORDER if b in (beat_times or {}))
+    return found or BEATS
+
+
+def card_pair(topic, beat):
+    pair = (topic.get("beats") or {}).get(beat)
+    if isinstance(pair, (list, tuple)) and len(pair) >= 2:
+        return str(pair[0]), str(pair[1])
+    return CARD_LINES.get(beat, (beat, beat))
+
+
+def visual_beat(beat):
+    return VISUAL_ALIAS.get(beat, beat)
+
+
+def duplicate_sentence_notes(beats, order):
+    """A sentence of six or more words copied into another beat."""
+    seen = {}
+    notes = []
+    for beat in order:
+        text = str((beats or {}).get(beat) or "")
+        for sent in re.split(r"[।?!]", text):
+            words = sent.split()
+            if len(words) < 6:
+                continue
+            key = " ".join(words)
+            if key in seen and seen[key] != beat:
+                notes.append(f"duplicate sentence in {seen[key]} and {beat}")
+            else:
+                seen.setdefault(key, beat)
+    return notes
 
 
 def beat_word_window(target):
@@ -215,36 +317,35 @@ def _teaching_beat_ranges():
     return {b: beat_word_window(BEAT_WORD_TARGET[b]) for b in BEATS}
 
 
-def _narration_bounds(topic):
-    """Total window and per-beat windows the narration gate accepts."""
-    if (topic or {}).get("_atr"):
-        return (75, 140), {
+def check_narration(n, topic):
+    fails = []
+    beats = n.get("beats") or {}
+    order = BEATS if topic.get("_atr") or not topic.get("_live_short") else LIVE_ORDER
+    for b in order:
+        if not str(beats.get(b) or "").strip():
+            fails.append(f"beat '{b}' khaali")
+    text = " ".join(str(beats.get(b) or "") for b in order)
+    words = len(text.split())
+    # The ATR short is spoken at a calm rate, so its script is shorter.
+    # Every other topic targets 160-180 and may land anywhere in 150-190.
+    if topic.get("_atr"):
+        if not 75 <= words <= 140:
+            fails.append(f"{words} words (75-140 for the calm ATR short)")
+        beat_ranges = {
             "hook": (18, 26),
             "pehchan": (16, 30),
             "matlab": (14, 32),
             "karein": (22, 36),
         }
-    return TOTAL_WORDS, _teaching_beat_ranges()
-
-
-def check_narration(n, topic):
-    fails = []
-    beats = n.get("beats") or {}
-    for b in BEATS:
-        if not str(beats.get(b) or "").strip():
-            fails.append(f"beat '{b}' khaali")
-    text = " ".join(str(beats.get(b) or "") for b in BEATS)
-    words = len(text.split())
-    # ATR keeps its calm ranges. Every other topic uses the Edge Madhur window,
-    # 95-114 words, about 48-58s at the measured pace.
-    (lo, hi), beat_ranges = _narration_bounds(topic)
-    if topic.get("_atr"):
+    else:
+        order, targets, (lo, hi), (target_lo, target_hi) = _lesson(topic)
         if not lo <= words <= hi:
-            fails.append(f"{words} words ({lo}-{hi} for the calm ATR short)")
-    elif not lo <= words <= hi:
-        fails.append(
-            f"{words} words ({lo}-{hi} chahiye, target {TOTAL_WORD_TARGET[0]}-{TOTAL_WORD_TARGET[1]})"
-        )
+            fails.append(
+                f"{words} words ({lo}-{hi} chahiye, target {target_lo}-{target_hi})"
+            )
+        beat_ranges = {b: beat_word_window(targets[b]) for b in order}
+        if topic.get("_live_short"):
+            fails.extend(duplicate_sentence_notes(beats, order))
     for b, (lo, hi) in beat_ranges.items():
         bw = len(str(beats.get(b) or "").split())
         if not lo <= bw <= hi:
@@ -382,12 +483,7 @@ def word_count_rules():
     lines.append(
         f"- total: target {target_lo}-{target_hi} words. Accept {total_lo}-{total_hi}."
     )
-    hook_target = BEAT_WORD_TARGET["hook"]
-    hook_lo, hook_hi = beat_word_window(hook_target)
-    lines.append(
-        f"The hook stays short. Its target is {hook_target} words "
-        f"and it must land in {hook_lo}-{hook_hi} words."
-    )
+    lines.append("The hook stays short. Its target is 25 words and it must land in 20-30 words.")
     lines.append(
         "Every beat needs a concrete number, a level, or a step "
         "(a figure, रेखा, नियम, कदम, or उदाहरण). A vague beat fails."
@@ -400,13 +496,11 @@ def word_count_rules():
     lines.append(
         "Short example of the JSON shape (write the real lesson, and hit these counts):"
     )
-    example_beats = ", ".join(
-        f'"{beat}":"<exactly {target} words{"" if beat != "hook" else ", first sentence is hook_line"}>"'
-        for beat, target in BEAT_WORD_TARGET.items()
-    )
     lines.append(
-        '{"title":"काले बादल का मतलब","hook_line":"काले बादल छा गए क्यों?",'
-        f'"beats":{{{example_beats}}}}}'
+        '{"title":"1:2 सेटअप और फिर भी घाटा","hook_line":"1:2 सेटअप फिर भी घाटा क्यों?",'
+        '"beats":{"hook":"<exactly 25 words, first sentence is hook_line>",'
+        '"pehchan":"<exactly 42 words>","matlab":"<exactly 50 words>",'
+        '"karein":"<exactly 46 words>"}}'
     )
     return "\n".join(lines)
 
@@ -443,14 +537,14 @@ def _card_line(text):
 
 def _ensure_concrete(beats, hook_line):
     """A vague beat fails the craft score. Add or swap one step-word, never a new number."""
-    caps = {b: beat_word_window(BEAT_WORD_TARGET[b])[1] for b in BEATS}
+    caps = {"hook": 28, "pehchan": 46, "matlab": 54, "karein": 50}
     prefix = hook_line.rstrip("।").split()
     for beat in BEATS:
         if scene_pace.segment_is_concrete(beats.get(beat)):
             continue
         words = str(beats.get(beat) or "").split()
         total = sum(len(str(beats.get(b) or "").split()) for b in BEATS)
-        if len(words) < caps[beat] and total < TOTAL_WORDS[1]:
+        if len(words) < caps[beat] and total < 180:
             beats[beat] = " ".join(words + ["उदाहरण"])
             continue
         if beat == "hook" and len(words) <= len(prefix):
@@ -521,7 +615,7 @@ def fallback_narration(topic):
         hook_seed = f"{hook_line} आज पहले इसी setup का मतलब साफ समझते हैं।"
     beats = {
         "hook": _fit_words(
-            hook_seed, beat_word_window(BEAT_WORD_TARGET["hook"])[0], BEAT_WORD_TARGET["hook"],
+            hook_seed, 22, 28,
             [
                 "अब इसे chart पर पहचानने का तरीका समझिए।",
                 "आगे की जानकारी इसी topic के संदर्भ में रहेगी।",
@@ -529,7 +623,7 @@ def fallback_narration(topic):
         ),
         "pehchan": _fit_words(
             f'{src["pehchan"][0]}। {src["pehchan"][1]}।',
-            beat_word_window(BEAT_WORD_TARGET["pehchan"])[0], BEAT_WORD_TARGET["pehchan"],
+            38, 46,
             [
                 "अब इसे chart पर पहचानें।",
                 "स्क्रीन पर दिख रहे feature को एक साथ देखें।",
@@ -539,7 +633,7 @@ def fallback_narration(topic):
         ),
         "matlab": _fit_words(
             f'{src["matlab"][0]}। {src["matlab"][1]}।',
-            beat_word_window(BEAT_WORD_TARGET["matlab"])[0], BEAT_WORD_TARGET["matlab"],
+            46, 54,
             [
                 "इन features का मतलब समझिए।",
                 "अब setup के कारण और असर को जोड़कर देखें।",
@@ -550,7 +644,7 @@ def fallback_narration(topic):
         ),
         "karein": _fit_words(
             f'{src["karein"][0]}। {src["karein"][1]}।',
-            beat_word_window(BEAT_WORD_TARGET["karein"])[0], BEAT_WORD_TARGET["karein"],
+            42, 50,
             [
                 "अब आगे traders क्या check करते हैं।",
                 "पहले confirmation और risk की सीमा समझी जाती है।",
@@ -560,11 +654,11 @@ def fallback_narration(topic):
             ],
         ),
     }
-    # Beat ranges can all sit near their floor and leave the lesson under the
-    # duration window. After the sentences, add one Hindi word at a time into
-    # whichever beat still has room. Never past a beat cap or the total cap.
-    caps = {b: beat_word_window(BEAT_WORD_TARGET[b])[1] for b in BEATS}
-    floor, ceiling = TOTAL_WORDS
+    # Beat ranges can all sit near their floor and leave the lesson under 160 words.
+    # A whole sentence often does not fit the last 1–2 words of room, which is
+    # how a lesson stopped at 159. After the sentences, add one Hindi word at a
+    # time into whichever beat still has room. Never past a beat cap or 180.
+    caps = {"hook": 28, "pehchan": 46, "matlab": 54, "karein": 50}
     fillers = (
         ("karein", "यह सीमा याद रखने लायक है।"),
         ("matlab", "इसीलिए संदर्भ के साथ पढ़ें।"),
@@ -572,13 +666,13 @@ def fallback_narration(topic):
         ("hook", "इसी सवाल को आगे खोलते हैं।"),
     )
     guard = 0
-    while sum(len(beats[b].split()) for b in BEATS) < floor and guard < 8:
+    while sum(len(beats[b].split()) for b in BEATS) < 160 and guard < 8:
         guard += 1
         added = False
         for beat, sentence in fillers:
             extra = sentence.split()
             words = beats[beat].split()
-            if len(words) + len(extra) <= caps[beat] and sum(len(beats[b].split()) for b in BEATS) + len(extra) <= ceiling:
+            if len(words) + len(extra) <= caps[beat] and sum(len(beats[b].split()) for b in BEATS) + len(extra) <= 180:
                 beats[beat] = " ".join(words + extra)
                 added = True
                 break
@@ -587,13 +681,13 @@ def fallback_narration(topic):
     pad = "यही आगे स्पष्ट सीमा संदर्भ सवाल पहचान मतलब जाँच".split()
     pad_i = 0
     guard = 0
-    while sum(len(beats[b].split()) for b in BEATS) < floor and guard < 40:
+    while sum(len(beats[b].split()) for b in BEATS) < 160 and guard < 40:
         guard += 1
         placed = False
         for beat in ("karein", "matlab", "pehchan", "hook"):
             words = beats[beat].split()
             total = sum(len(beats[b].split()) for b in BEATS)
-            if len(words) >= caps[beat] or total >= ceiling:
+            if len(words) >= caps[beat] or total >= 180:
                 continue
             words.append(pad[pad_i % len(pad)])
             pad_i += 1
@@ -678,50 +772,55 @@ def require_llm_narration(n, source):
 
 def beats_to_rewrite(n, topic, extra=""):
     """Beats outside the ±20% window, plus any beat named by another gate failure."""
+    order, targets, total_window, _band = _lesson(topic)
     if topic.get("_atr"):
         return list(BEATS)
-    counts = beat_word_counts(n)
+    beats = (n or {}).get("beats") or {}
+    counts = {b: len(str(beats.get(b) or "").split()) for b in order}
     rewrite = []
-    for beat in BEATS:
-        lo, hi = beat_word_window(BEAT_WORD_TARGET[beat])
-        text = str(((n or {}).get("beats") or {}).get(beat) or "").strip()
+    for beat in order:
+        lo, hi = beat_word_window(targets[beat])
+        text = str(beats.get(beat) or "").strip()
         if not text or not lo <= counts[beat] <= hi:
             rewrite.append(beat)
     total = sum(counts.values())
-    if not (TOTAL_WORDS[0] <= total <= TOTAL_WORDS[1]) and not rewrite:
-        if total > TOTAL_WORDS[1]:
-            rewrite = [b for b in BEATS if counts[b] > BEAT_WORD_TARGET[b]]
+    if not (total_window[0] <= total <= total_window[1]) and not rewrite:
+        if total > total_window[1]:
+            rewrite = [b for b in order if counts[b] > targets[b]]
         else:
-            rewrite = [b for b in BEATS if counts[b] < BEAT_WORD_TARGET[b]]
+            rewrite = [b for b in order if counts[b] < targets[b]]
         if not rewrite:
-            rewrite = list(BEATS)
+            rewrite = list(order)
     fails = list(check_narration(n, topic))
     if extra:
         fails.append(str(extra))
     joined = " ".join(fails)
-    for beat in BEATS:
+    for beat in order:
         if beat in joined and beat not in rewrite:
             rewrite.append(beat)
-    for beat in scene_pace.vague_beats((n or {}).get("beats")):
+    for beat in scene_pace.vague_beats(beats, order=order):
         if beat not in rewrite:
             rewrite.append(beat)
     if fails and not rewrite:
-        rewrite = list(BEATS)
+        rewrite = list(order)
     return rewrite
 
 
 def repair_instructions(draft, rewrite, topic=None):
     """Tell the model the current count, the exact target, and which beats are vague."""
-    counts = beat_word_counts(draft)
-    vague = set(scene_pace.vague_beats((draft or {}).get("beats")))
+    order, targets, _window, _band = _lesson(topic)
+    counts = {b: len(str(((draft or {}).get("beats") or {}).get(b) or "").split()) for b in order}
+    vague = set(scene_pace.vague_beats((draft or {}).get("beats"), order=order))
+    how_many = "six" if order == LIVE_ORDER else "four"
     lines = [
         "The draft missed the word targets or a beat is vague.",
         "Rewrite ONLY the beats listed under REWRITE.",
         "Copy every KEEP beat verbatim, character for character.",
-        "Return one JSON object with title, hook_line, and all four beats.",
+        f"Return one JSON object with title, hook_line, and all {how_many} beats.",
+        "Keep sentence punctuation (। . ?) so the voice can pause. Do not write run-on lines.",
     ]
-    for beat in BEATS:
-        target = BEAT_WORD_TARGET[beat]
+    for beat in order:
+        target = targets[beat]
         lo, hi = beat_word_window(target)
         current = counts[beat]
         text = str((draft.get("beats") or {}).get(beat) or "")
@@ -730,8 +829,8 @@ def repair_instructions(draft, rewrite, topic=None):
                 f"REWRITE {beat}: current {current} words, target exactly {target} words "
                 f"(accept {lo}-{hi})."
             )
-            if beat == "hook":
-                line += f" The hook must be {lo}-{hi} words."
+            if beat == "hook" and order != LIVE_ORDER:
+                line += " The hook must be 20-30 words."
             if beat in vague:
                 line += (
                     " This beat is vague: it needs a concrete number, level, or step "
@@ -756,13 +855,14 @@ def repair_instructions(draft, rewrite, topic=None):
     return "\n".join(lines)
 
 
-def merge_repair(original, repaired, rewrite):
+def merge_repair(original, repaired, rewrite, topic=None):
     """Keep passing beats verbatim even if the repair rewrites them."""
+    order = _lesson(topic)[0]
     out = {
         "title": str((original or {}).get("title") or ""),
         "hook_line": str((original or {}).get("hook_line") or ""),
         "beats": {
-            b: str(((original or {}).get("beats") or {}).get(b) or "") for b in BEATS
+            b: str(((original or {}).get("beats") or {}).get(b) or "") for b in order
         },
     }
     got = repaired if isinstance(repaired, dict) else {}
@@ -781,7 +881,7 @@ def merge_repair(original, repaired, rewrite):
     return out
 
 
-def _usable_narration(n):
+def _usable_narration(n, topic=None):
     """A real script. An empty body or a timeout verdict is not one."""
     if not isinstance(n, dict):
         return False
@@ -790,11 +890,46 @@ def _usable_narration(n):
     beats = n.get("beats")
     if not isinstance(beats, dict):
         return False
-    return any(str(beats.get(b) or "").strip() for b in BEATS)
+    order = _lesson(topic)[0]
+    return any(str(beats.get(b) or "").strip() for b in order)
+
+
+def live_narration_system(topic):
+    """Six-beat prompt. Word targets come from the voice coefficient."""
+    _order, targets, (lo, hi), _band = _lesson(topic)
+    wps = voice_wps(_topic_voice(topic))
+    lines = [
+        "LIVE SHORT OVERRIDE. This replaces the four-beat word counts above.",
+        "Beats, in order: hook, pehchan, matlab, udaharan, galti, karein.",
+        "hook = the problem. The punchy hook_line is on screen from the first frame.",
+        "pehchan = how to recognise it. matlab = what it means.",
+        "udaharan = one worked example with concrete numbers. On an evergreen topic, "
+        "label that figure as उदाहरण in the same sentence.",
+        "galti = one common mistake and the fix.",
+        "karein = the confirmation or risk check, then one takeaway. Do not speak a CTA.",
+        "Keep sentence punctuation (। . ?) so the voice pauses. Do not write run-on lines.",
+        f"Pace coefficient: {wps:.2f} words/second. The estimate must land in 75-90 seconds.",
+        f"That is {lo}-{hi} words total.",
+    ]
+    for beat, target in targets.items():
+        blo, bhi = beat_word_window(target)
+        lines.append(f"- {beat}: target exactly {target} words. Accept {blo}-{bhi} (±20%).")
+    example = ", ".join(
+        f'"{beat}":"<exactly {target} words{"" if beat != "hook" else ", first sentence is hook_line"}>"'
+        for beat, target in targets.items()
+    )
+    lines.append(
+        '{"title":"सेटअप का नियम","hook_line":"यह सेटअप गलत क्यों?",'
+        f'"beats":{{{example}}}}}'
+    )
+    return NARR_SYSTEM + "\n\n" + "\n".join(lines)
 
 
 def narration(topic, c, spec=None):
     market_data.sync_topic_numbers(topic)
+    if _live_lesson(c) and not topic.get("_atr"):
+        topic["_live_short"] = True
+        topic["_voice"] = dict((c or {}).get("voice") or {})
     if topic.get("_atr"):
         # The calm-rate script is fixed to the chart numbers. A 160-word draft
         # would run long, and speeding the voice up is not allowed.
@@ -843,7 +978,7 @@ def narration(topic, c, spec=None):
 
     def _gate(candidate):
         fails = check_narration(candidate, topic)
-        vague = scene_pace.vague_beats(candidate.get("beats"))
+        vague = scene_pace.vague_beats(candidate.get("beats"), order=_lesson(topic)[0])
         if vague:
             fails.append("vague explanation (no number, level or step): " + ", ".join(vague))
         content = _content_ok(topic, candidate, spec) if not fails else None
@@ -871,8 +1006,9 @@ def narration(topic, c, spec=None):
             kind = "full"
         calls += 1
         try:
+            system = live_narration_system(topic) if topic.get("_live_short") else NARR_SYSTEM
             n = claude_json(
-                NARR_SYSTEM, user_msg, model=model, max_tokens=2000,
+                system, user_msg, model=model, max_tokens=2200,
                 retries=1, attempts=1,
             )
         except SystemExit:
@@ -881,12 +1017,12 @@ def narration(topic, c, spec=None):
             last = f"empty or timeout: {e}"
             print(f"[retry] narration call {calls}/{NARRATION_CALL_CAP}: {last}")
             continue
-        if not _usable_narration(n):
+        if not _usable_narration(n, topic):
             last = "empty or timeout response"
             print(f"[retry] narration call {calls}/{NARRATION_CALL_CAP}: {last}")
             continue
         if kind == "repair":
-            n = merge_repair(draft, n, rewrite)
+            n = merge_repair(draft, n, rewrite, topic)
             repair_done = True
         draft = n
         fails = _gate(n)
@@ -975,7 +1111,7 @@ def _reset_voice_state():
 
 
 def _switch_to_edge(reason):
-    """One warning, then every remaining beat uses Edge. Paid and free audio are not mixed."""
+    """Preview-only. A live slot must call _credits_stop instead of this."""
     global ELEVEN_EXHAUSTED, VOICE_FALLBACK_REASON
     ELEVEN_EXHAUSTED = True
     if not VOICE_FALLBACK_REASON:
@@ -983,22 +1119,26 @@ def _switch_to_edge(reason):
         eleven_voice.log_fallback(VOICE_FALLBACK_REASON)
 
 
-def _voice_engine(c):
-    """Config engine. Missing means Edge, so a secret cannot select ElevenLabs."""
-    return str(((c or {}).get("voice") or {}).get("engine") or "edge").strip().lower()
+def _credits_stop(reason):
+    """Live ElevenLabs cannot continue. No Edge audio, no second upload."""
+    print(f"[credits] STOP: {reason}", flush=True)
+    print("[STOP] live slot skipped; buffer may fill. No Edge fallback.", flush=True)
+    try:
+        eleven_voice.write_voice_meta(RUN, "elevenlabs", str(reason), elevenlabs_attempted=True)
+        credit_log.set_tts_engine("elevenlabs", str(reason))
+    except Exception:  # noqa: BLE001 — the stop line matters more than the ledger row
+        pass
+    die(f"[credits] STOP: {reason}")
 
 
-def preflight_eleven_credits(texts, c=None):
+def preflight_eleven_credits(texts):
     """Fall back before synthesis when this Short's characters will not fit.
 
     GET /v1/user/subscription is not an auth check. A scoped key may be unable
     to read it, so 401/403 here does not fail the run. A quota-shaped body does
     switch to Edge. The TTS request remains the authority for a bad key.
-    The subscription read runs only when voice.engine is elevenlabs.
     """
     global ELEVEN_REMAINING
-    if _voice_engine(c if c is not None else {"voice": cfg().get("voice") or {}}) != "elevenlabs":
-        return
     key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
     if not key or ELEVEN_EXHAUSTED:
         return
@@ -1009,21 +1149,21 @@ def preflight_eleven_credits(texts, c=None):
             headers={"xi-api-key": key, "Accept": "application/json"},
             timeout=20,
         )
-    except Exception as exc:  # noqa: BLE001 — an API error uses Edge; it does not skip the slot
-        _switch_to_edge(f"subscription pre-check failed ({type(exc).__name__})")
+    except Exception as exc:  # noqa: BLE001 — a live slot stops; it does not speak Edge
+        _credits_stop(f"subscription pre-check failed ({type(exc).__name__})")
         return
     body = eleven_voice.parse_response(response)
     status = getattr(response, "status_code", 0)
     kind = eleven_voice.classify(status, body)
     if kind == "quota":
-        _switch_to_edge(eleven_voice.describe(status, body))
+        _credits_stop(eleven_voice.describe(status, body))
         return
     if status != 200:
         # A scoped key may 401/403 on the subscription read. TTS stays the auth check.
         if kind in ("auth", "permission"):
             print(f"[note] ElevenLabs subscription pre-check HTTP {status}; TTS remains the auth check")
             return
-        _switch_to_edge(f"subscription pre-check failed ({eleven_voice.describe(status, body)})")
+        _credits_stop(f"subscription pre-check failed ({eleven_voice.describe(status, body)})")
         return
     remaining = eleven_voice.subscription_remaining(body)
     if remaining is None:
@@ -1032,29 +1172,25 @@ def preflight_eleven_credits(texts, c=None):
     credit_log.set_eleven_remaining(remaining)
     import speak
     need = sum(len(speak.speakable(text or "")) for text in texts)
-    floor = eleven_voice.LIVE_EDGE_FLOOR
+    floor = eleven_voice.LIVE_CREDIT_FLOOR
     if remaining < floor:
-        _switch_to_edge(
+        _credits_stop(
             f"pre-check remaining={remaining} is below the {floor} character floor"
         )
         return
     if need > 0 and remaining < need:
-        _switch_to_edge(f"pre-check remaining={remaining} characters, this Short needs {need}")
+        _credits_stop(
+            f"pre-check remaining={remaining} characters, this Short needs {need}"
+        )
 
 
 def _eleven(text, path, c):
-    """Call ElevenLabs. Quota raises QuotaFallback. Auth and permission die.
-
-    voice.engine must be elevenlabs. ELEVENLABS_VOICE_ID in the environment is
-    not a voice and is not enough to place a request.
-    """
+    """Call ElevenLabs. Quota raises QuotaFallback. Auth and permission die."""
     import time
     import requests
 
-    if _voice_engine(c) != "elevenlabs":
-        return False
     key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
-    voice = str((c.get("voice") or {}).get("voice_id") or "").strip()
+    voice = eleven_voice.configured_voice_id(c)
     if not key:
         return False
 
@@ -1134,10 +1270,9 @@ def _edge_voice_rate(c):
     return eleven_voice.PREVIEW_EDGE_VOICE, eleven_voice.PREVIEW_EDGE_RATE
 
 
-def _paid_voice_this_beat(c):
+def _paid_voice_this_beat():
     return (
-        _voice_engine(c) == "elevenlabs"
-        and eleven_voice.paid_voice_allowed()
+        eleven_voice.paid_voice_allowed()
         and bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
         and not ELEVEN_EXHAUSTED
     )
@@ -1153,7 +1288,7 @@ def tts(text, path, c):
     engine_file = path.with_suffix(".engine")
     cached_engine = engine_file.read_text(encoding="utf-8").strip().lower() if engine_file.exists() else ""
     eleven_key = bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
-    allow_paid = _paid_voice_this_beat(c)
+    allow_paid = _paid_voice_this_beat()
     fresh = path.exists() and path.stat().st_size > 1000
     # Reuse paid audio only while this run is still on ElevenLabs.
     # After a credit fallback, an old paid file is discarded and Edge is used.
@@ -1200,45 +1335,34 @@ def tts(text, path, c):
     die(f"TTS fail: {path.name}")
 
 
-def synthesize_short_voices(spoken, c):
-    """Speak every beat on one engine. A quota error redoes the whole run on Edge."""
+def synthesize_short_voices(spoken, c, beats=None):
+    """Speak the requested beats. A live quota or credit error stops the slot."""
     global ENGINES
+    beats = tuple(beats) if beats else tuple(b for b in BEATS if b in (spoken or {}))
     if (RUN / "narration_block.json").exists():
         die("narration blocked; refusing TTS")
     _reset_voice_state()
-    # Subscription GET is free, and only when config selects ElevenLabs.
-    # The workflow still injects ELEVENLABS_API_KEY. That secret is not a switch.
-    if _voice_engine(c) == "elevenlabs" and eleven_voice.paid_voice_allowed():
-        preflight_eleven_credits([spoken[b] for b in BEATS], c)
+    if eleven_voice.paid_voice_allowed() and str(((c or {}).get("voice") or {}).get("engine") or "elevenlabs").lower() == "elevenlabs":
+        eleven_voice.ensure_library_voice(c)
+        preflight_eleven_credits([spoken[b] for b in beats])
 
     def once():
         global ENGINES
         ENGINES = []
-        for beat in BEATS:
+        for beat in beats:
             tts(spoken[beat], RUN / f"tts_{beat}.mp3", c)
 
     try:
         once()
     except eleven_voice.QuotaFallback as exc:
-        _switch_to_edge(exc.reason)
-        for beat in BEATS:
-            audio = RUN / f"tts_{beat}.mp3"
-            audio.unlink(missing_ok=True)
-            audio.with_suffix(".engine").unlink(missing_ok=True)
-        once()
+        _credits_stop(exc.reason)
     engine = "edge" if "edge" in ENGINES else "elevenlabs"
     key_set = bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
-    # The secret and a public slot do not count as an attempt while engine is edge.
-    attempted = (
-        _voice_engine(c) == "elevenlabs"
-        and key_set
-        and eleven_voice.paid_voice_allowed()
-    )
     eleven_voice.write_voice_meta(
         RUN,
         engine,
         VOICE_FALLBACK_REASON,
-        elevenlabs_attempted=attempted,
+        elevenlabs_attempted=key_set and eleven_voice.paid_voice_allowed(),
     )
     # The whisper sync gate runs later on this audio, Edge or ElevenLabs.
     credit_log.set_tts_engine(engine, VOICE_FALLBACK_REASON)
@@ -1250,216 +1374,6 @@ def duration(path):
     out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of",
                           "default=nw=1:nk=1", str(path)], capture_output=True, text=True)
     return float(out.stdout.strip())
-
-
-def measure_spoken(spoken, c):
-    """Trim each beat the way the timeline does. Returns seconds per beat."""
-    synthesize_short_voices(spoken, c)
-    raw = {}
-    for beat in BEATS:
-        mp3 = RUN / f"tts_{beat}.mp3"
-        clean = RUN / f"voice_clean_{beat}.wav"
-        subprocess.run([
-            "ffmpeg", "-v", "error", "-y", "-i", str(mp3),
-            "-af",
-            "silenceremove=start_periods=1:start_duration=0.10:start_threshold=-55dB,"
-            "areverse,silenceremove=start_periods=1:start_duration=0.10:start_threshold=-55dB,areverse",
-            "-ar", "44100", "-ac", "2", str(clean),
-        ], check=True)
-        seconds = duration(clean)
-        if seconds < 1.0:
-            die(f"TTS beat {beat} became too short after silence trim: {seconds:.2f}s")
-        raw[beat] = seconds
-    return raw
-
-
-def voice_timeline(raw_durations):
-    """Beat spans. A 0.02s seam sits between beats. Speech speed is not changed."""
-    seam = 0.02
-    beat_times, total = {}, 0.0
-    for beat in BEATS:
-        pad = seam if beat != BEATS[-1] else 0.0
-        span = raw_durations[beat] + pad
-        beat_times[beat] = (total, total + span)
-        total += span
-    return beat_times, total
-
-
-def _fit_target_sum(targets, ranges, total_lo, total_hi):
-    """Keep the repaired counts inside the narration total window."""
-    def total():
-        return sum(targets[beat] for beat in BEATS)
-
-    long_first = sorted(BEATS, key=lambda beat: targets[beat], reverse=True)
-    short_first = list(reversed(long_first))
-    while total() > total_hi:
-        moved = False
-        for beat in long_first:
-            lo, _hi = ranges[beat]
-            if targets[beat] > lo:
-                targets[beat] -= 1
-                moved = True
-                break
-        if not moved:
-            break
-    while total() < total_lo:
-        moved = False
-        for beat in short_first:
-            _lo, hi = ranges[beat]
-            if targets[beat] < hi:
-                targets[beat] += 1
-                moved = True
-                break
-        if not moved:
-            break
-
-
-def duration_word_targets(spoken, raw_durations, seconds, topic=None):
-    """Move the longest beats down, or the shortest beats up, toward a 53s read."""
-    words = {beat: len(str((spoken or {}).get(beat) or "").split()) for beat in BEATS}
-    scale = VOICE_AIM_SECONDS / max(seconds, 0.1)
-    (total_lo, total_hi), ranges = _narration_bounds(topic)
-    targets = {}
-    for beat in BEATS:
-        lo, hi = ranges[beat]
-        want = int(round(words[beat] * scale))
-        targets[beat] = max(lo, min(hi, want))
-    _fit_target_sum(targets, ranges, total_lo, total_hi)
-    if seconds > VOICE_SECONDS[1]:
-        order = sorted(BEATS, key=lambda beat: raw_durations[beat], reverse=True)
-    else:
-        order = sorted(BEATS, key=lambda beat: raw_durations[beat])
-    rewrite = [beat for beat in order if targets[beat] != words[beat]]
-    if not rewrite:
-        beat = order[0]
-        lo, hi = ranges[beat]
-        if seconds > VOICE_SECONDS[1] and words[beat] > lo:
-            targets[beat] = lo
-            rewrite = [beat]
-        elif seconds < VOICE_SECONDS[0] and words[beat] < hi:
-            targets[beat] = hi
-            rewrite = [beat]
-        _fit_target_sum(targets, ranges, total_lo, total_hi)
-        rewrite = [beat for beat in order if targets[beat] != words[beat]] or rewrite
-    return rewrite, targets
-
-
-def duration_repair_instructions(draft, rewrite, targets, seconds):
-    """One repair: current words against the count that should land near 53s."""
-    counts = beat_word_counts(draft)
-    longer = seconds > VOICE_SECONDS[1]
-    lines = [
-        f"The spoken voice is {seconds:.1f}s. It must land in 42-62 seconds.",
-        "Do not change the speaking speed. Change only the number of words.",
-        f"Aim near {VOICE_AIM_SECONDS:.0f} seconds.",
-        "Rewrite ONLY the beats listed under REWRITE.",
-        "Copy every KEEP beat verbatim, character for character.",
-        "Return one JSON object with title, hook_line, and all four beats.",
-    ]
-    for beat in BEATS:
-        current = counts[beat]
-        text = str((draft.get("beats") or {}).get(beat) or "")
-        if beat in rewrite:
-            side = "one of the longest" if longer else "one of the shortest"
-            lines.append(
-                f"REWRITE {beat}: current {current} words, and it is {side}. "
-                f"Target exactly {targets[beat]} words."
-            )
-        else:
-            lines.append(f"KEEP {beat} VERBATIM ({current} words): {text}")
-    return "\n".join(lines)
-
-
-def _clear_spoken_audio():
-    for beat in BEATS:
-        for name in (f"tts_{beat}.mp3", f"tts_{beat}.engine", f"voice_clean_{beat}.wav"):
-            (RUN / name).unlink(missing_ok=True)
-
-
-def _duration_detail(spoken, raw_durations):
-    return ", ".join(
-        f"{beat}={raw_durations[beat]:.1f}s/{len(str(spoken.get(beat) or '').split())}w"
-        for beat in BEATS
-    )
-
-
-def fit_spoken_duration(spoken, narration, topic, c, spec=None):
-    """Speak the beats. Outside 42-62s, one word repair, then speak again.
-
-    No atempo, no template. The repair counts as one DeepSeek call inside the cap.
-    """
-    raw = measure_spoken(spoken, c)
-    beat_times, total = voice_timeline(raw)
-    lo, hi = VOICE_SECONDS
-    if lo <= total <= hi:
-        return spoken, narration, raw, beat_times, total
-    used = int((credit_log._read() or {}).get("deepseek_calls") or 0)
-    if credit_log.call_cap() - used < 1:
-        die(
-            "voice duration outside 42-62s; refusing artificial speed change: "
-            f"{total:.1f}s — {_duration_detail(spoken, raw)}"
-        )
-    rewrite, targets = duration_word_targets(spoken, raw, total, topic)
-    if not rewrite:
-        die(
-            "voice duration outside 42-62s; refusing artificial speed change: "
-            f"{total:.1f}s — {_duration_detail(spoken, raw)}"
-        )
-    user = json.dumps({
-        "topic": topic.get("topic"),
-        "category": topic.get("cat"),
-        "facts": topic.get("facts"),
-    }, ensure_ascii=False)
-    user += "\n\n" + duration_repair_instructions(narration, rewrite, targets, total)
-    try:
-        repaired = claude_json(
-            NARR_SYSTEM, user, model=c["models"]["script_model"], max_tokens=2000,
-            retries=1, attempts=1,
-        )
-    except SystemExit:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        die(
-            "voice duration repair failed without a template fallback: "
-            f"{total:.1f}s — {exc}"
-        )
-    if not _usable_narration(repaired):
-        die(
-            "voice duration repair returned an empty script; "
-            f"refusing artificial speed change: {total:.1f}s"
-        )
-    merged = merge_repair(narration, repaired, rewrite)
-    fails = check_narration(merged, topic)
-    vague = scene_pace.vague_beats(merged.get("beats"))
-    if vague:
-        fails.append("vague explanation (no number, level or step): " + ", ".join(vague))
-    content = _content_ok(topic, merged, spec) if not fails else None
-    if content and not content["passed"]:
-        fails.append("self-review below bar: " + content["summary"])
-    if fails:
-        die(
-            "voice duration repair missed the narration gate; "
-            "refusing artificial speed change and the topic-card template: "
-            + "; ".join(fails)
-        )
-    narration["beats"] = merged["beats"]
-    narration["title"] = merged["title"]
-    narration["hook_line"] = merged["hook_line"]
-    narration["review_attempts"] = int(narration.get("review_attempts") or 1) + 1
-    narration["narration_fallback"] = False
-    narration["source"] = "llm"
-    spoken = {beat: narration["beats"][beat] for beat in BEATS}
-    (RUN / "narration.json").write_text(
-        json.dumps(narration, ensure_ascii=False, indent=2), encoding="utf-8")
-    _clear_spoken_audio()
-    raw = measure_spoken(spoken, c)
-    beat_times, total = voice_timeline(raw)
-    if total < lo or total > hi:
-        die(
-            "voice duration outside 42-62s after one repair; refusing artificial speed change: "
-            f"{total:.1f}s — {_duration_detail(spoken, raw)}"
-        )
-    return spoken, narration, raw, beat_times, total
 
 
 # ---------------------------------------------------------------- captions
@@ -1810,14 +1724,14 @@ def plan_cues(spoken, beat_times, audio_words=None):
             for word in audio_words
         )
     key = (
-        tuple((beat, (spoken or {}).get(beat) or "", (beat_times or {}).get(beat)) for beat in BEATS),
+        tuple((beat, (spoken or {}).get(beat) or "", (beat_times or {}).get(beat)) for beat in timed_beats(beat_times)),
         word_key,
     )
     cached = _CUE_CACHE.get(key)
     if cached is not None:
         return cached
     cues = []
-    for beat in BEATS:
+    for beat in timed_beats(beat_times):
         if beat not in (beat_times or {}):
             continue
         t0, t1 = (float(v) for v in beat_times[beat])
@@ -1895,7 +1809,7 @@ def _script_near(spoken, beat_times, audio_words, t, radius=0.85):
     """
     t = float(t)
     parts = []
-    for beat in BEATS:
+    for beat in timed_beats(beat_times):
         if beat not in (beat_times or {}):
             continue
         t0, t1 = (float(v) for v in beat_times[beat])
@@ -1937,7 +1851,7 @@ def number_faults_for(scenes, spoken, beat_times, audio_words=None, topic=None):
     """Sample each second. Caption and spoken numbers must be on that frame."""
     ignore = set()
     if topic is not None and hook_check.allows_example_numbers(topic):
-        full = " ".join(str((spoken or {}).get(beat) or "") for beat in BEATS)
+        full = " ".join(str((spoken or {}).get(beat) or "") for beat in timed_beats(beat_times))
         ignore = hook_check.example_labelled_numbers(full)
     frames = [s.get("frame") for s in scenes]
     if not frames or any(frame is None for frame in frames):
@@ -2233,7 +2147,7 @@ def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, h
         join_scenes(clips, durations, RUN / "silent.mp4", fps)
     # voice: each beat's audio padded to its beat length
     parts = []
-    for b in BEATS:
+    for b in timed_beats(beat_times):
         t0, t1 = beat_times[b]
         wav = RUN / f"voice_{b}.wav"
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(beat_audio[b]), "-af",
@@ -2287,19 +2201,26 @@ def write_compat(topic, n, spoken, beat_times):
         facts += (f"\n- SOURCE: {spec.get('source')} as of {spec.get('as_of')} "
                   f"(monthly closes, no interpolated points).")
     cta = engagement.engagement_question(topic)
+    body_beats = timed_beats(beat_times)
+    segments = []
+    for x in body_beats:
+        if x == "hook":
+            continue
+        segments.append(f"[SEGMENT {x.upper()}]\n{b.get(x, '')}")
     script = (f"TITLE:\n{n['title']}\n\nHOOK (0-3 sec):\n{b['hook']}\n\nBODY:\n"
-              f"[SEGMENT 1: PEHCHAN]\n{b['pehchan']}\n\n[SEGMENT 2: MATLAB]\n{b['matlab']}\n\n"
-              f"[SEGMENT 3: KYA KAREIN]\n{b['karein']}\n\nCTA:\n{cta}\n\nDISCLAIMER LINE:\n{DISCLAIMER}\n\n"
+              + "\n\n".join(segments)
+              + f"\n\nCTA:\n{cta}\n\nDISCLAIMER LINE:\n{DISCLAIMER}\n\n"
               f"FACT LEDGER:\n{facts}\n")
     save("script.txt", script)
-    save("spoken.txt", " ".join(spoken[x] for x in BEATS))
+    save("spoken.txt", " ".join(spoken[x] for x in body_beats))
     shots = []
     hook_line = n.get("hook_line") or ""
-    for i, x in enumerate(BEATS, 1):
+    for i, x in enumerate(body_beats, 1):
         t0, t1 = beat_times[x]
-        on_screen = hook_line if x == "hook" else topic["beats"][x][0]
+        head, sub = card_pair(topic, x)
+        on_screen = hook_line if x == "hook" else head
         shots.append({"shot_id": i, "start_sec": round(t0, 2), "end_sec": round(t1, 2), "visual_type": "chart",
-                      "on_screen_text": on_screen, "sub_text": topic["beats"][x][1],
+                      "on_screen_text": on_screen, "sub_text": sub,
                       "spoken_line": spoken[x],
                       "chart_data": {"template": topic["key"], "mode": spec.get("mode"),
                                      "source": spec.get("source"), "as_of": spec.get("as_of")},
@@ -2336,7 +2257,7 @@ def _sync_report(topic, narration, scenes, beat_audio, beat_times, spec):
     import sync_gate
     try:
         sources = {}
-        for beat in BEATS:
+        for beat in timed_beats(beat_times):
             mp3 = RUN / f"tts_{beat}.mp3"
             if mp3.exists():
                 sources[beat] = mp3
@@ -2393,6 +2314,201 @@ def load_topic():
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+def _trim_rendered(beats):
+    raw = {}
+    for beat in beats:
+        mp3 = RUN / f"tts_{beat}.mp3"
+        clean = RUN / f"voice_clean_{beat}.wav"
+        subprocess.run([
+            "ffmpeg", "-v", "error", "-y", "-i", str(mp3),
+            "-af",
+            "silenceremove=start_periods=1:start_duration=0.10:start_threshold=-55dB,"
+            "areverse,silenceremove=start_periods=1:start_duration=0.10:start_threshold=-55dB,areverse",
+            "-ar", "44100", "-ac", "2", str(clean),
+        ], check=True)
+        seconds = duration(clean)
+        if seconds < 1.0:
+            die(f"TTS beat {beat} became too short after silence trim: {seconds:.2f}s")
+        raw[beat] = seconds
+    return raw
+
+
+def _timeline(raw, order):
+    seam = 0.02
+    beat_times, total = {}, 0.0
+    for beat in order:
+        pad = seam if beat != order[-1] else 0.0
+        span = raw[beat] + pad
+        beat_times[beat] = (total, total + span)
+        total += span
+    return beat_times, total
+
+
+def _duration_detail(spoken, raw, order):
+    return ", ".join(
+        f"{beat}={raw[beat]:.1f}s/{len(str(spoken.get(beat) or '').split())}w" for beat in order
+    )
+
+
+def _dry_fails(narration, topic, spec):
+    fails = check_narration(narration, topic)
+    order = _lesson(topic)[0]
+    vague = scene_pace.vague_beats(narration.get("beats"), order=order)
+    if vague:
+        fails.append("vague explanation (no number, level or step): " + ", ".join(vague))
+    if not fails:
+        content = _content_ok(topic, narration, spec)
+        if content and not content["passed"]:
+            fails.append("self-review below bar: " + content["summary"])
+    if topic.get("_live_short"):
+        wps = max(voice_wps(_topic_voice(topic)), 0.1)
+        words = sum(len(str((narration.get("beats") or {}).get(b) or "").split()) for b in order)
+        seconds = words / wps
+        if not (ESTIMATE_SECONDS[0] <= seconds <= ESTIMATE_SECONDS[1]):
+            fails.append(
+                f"estimated duration {seconds:.1f}s outside 75-90 at {wps:.2f} words/s"
+            )
+    return fails
+
+
+def _one_beat_repair(narration, topic, c, spec, why):
+    """One DeepSeek rewrite of the failing beats. None when the cap is spent."""
+    used = int((credit_log._read() or {}).get("deepseek_calls") or 0)
+    if credit_log.call_cap() - used < 1:
+        return None
+    rewrite = beats_to_rewrite(narration, topic, why)
+    if not rewrite:
+        return None
+    user = json.dumps({
+        "topic": topic.get("topic"),
+        "category": topic.get("cat"),
+        "facts": topic.get("facts"),
+    }, ensure_ascii=False)
+    user += "\n\n" + repair_instructions(narration, rewrite, topic)
+    user += "\n\n" + why
+    system = live_narration_system(topic) if topic.get("_live_short") else NARR_SYSTEM
+    try:
+        repaired = claude_json(
+            system, user, model=c["models"]["script_model"], max_tokens=2200,
+            retries=1, attempts=1,
+        )
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        die(f"beat repair failed without a template fallback: {exc}")
+    if not _usable_narration(repaired, topic):
+        die("beat repair returned an empty script; refusing a template and a speed change")
+    merged = merge_repair(narration, repaired, rewrite, topic)
+    narration["beats"] = merged["beats"]
+    narration["title"] = merged["title"]
+    narration["hook_line"] = merged["hook_line"]
+    narration["review_attempts"] = int(narration.get("review_attempts") or 1) + 1
+    narration["narration_fallback"] = False
+    narration["source"] = "llm"
+    return rewrite
+
+
+def fit_estimated_duration(narration, topic, c, spec):
+    """Text gates, including the 75-90s estimate, before any TTS request."""
+    fails = _dry_fails(narration, topic, spec)
+    if not fails:
+        return narration
+    why = "; ".join(fails)
+    print(f"[duration] dry check failed before TTS: {why}")
+    if _one_beat_repair(narration, topic, c, spec, why) is None:
+        die("estimated duration outside 75-90s and the DeepSeek cap is spent; no TTS")
+    fails = _dry_fails(narration, topic, spec)
+    if fails:
+        die(
+            "dry text check still failed after one repair; refusing TTS and the topic-card template: "
+            + "; ".join(fails)
+        )
+    (RUN / "narration.json").write_text(
+        json.dumps(narration, ensure_ascii=False, indent=2), encoding="utf-8")
+    return narration
+
+
+def _rerender_beats(spoken, c, beats):
+    """Speak only the beats whose words changed. Leave the others on disk."""
+    import speak
+    need = sum(len(speak.speakable(str(spoken.get(beat) or ""))) for beat in beats)
+    floor = eleven_voice.LIVE_CREDIT_FLOOR
+    if ELEVEN_REMAINING is not None and ELEVEN_REMAINING - need < floor:
+        _credits_stop(
+            f"re-render of {len(beats)} beat(s) needs {need} characters and would leave "
+            f"{ELEVEN_REMAINING - need} below {floor}"
+        )
+    for beat in beats:
+        for name in (f"tts_{beat}.mp3", f"tts_{beat}.engine", f"voice_clean_{beat}.wav"):
+            (RUN / name).unlink(missing_ok=True)
+        try:
+            tts(spoken[beat], RUN / f"tts_{beat}.mp3", c)
+        except eleven_voice.QuotaFallback as exc:
+            _credits_stop(exc.reason)
+    return _trim_rendered(beats)
+
+
+def prepare_spoken(spoken, narration, topic, c, spec):
+    """Render once after the dry check. A live miss re-speaks only the changed beats."""
+    order = LIVE_ORDER if topic.get("_live_short") else tuple(b for b in BEATS if b in spoken)
+    if topic.get("_live_short"):
+        eleven_voice.ensure_library_voice(c)
+        topic["_voice"] = dict((c or {}).get("voice") or {})
+        narration = fit_estimated_duration(narration, topic, c, spec)
+        spoken = {beat: narration["beats"][beat] for beat in order}
+    (RUN / "tts_text.txt").unlink(missing_ok=True)
+    before = dict(spoken)
+    synthesize_short_voices(spoken, c, beats=order)
+    raw = _trim_rendered(order)
+    beat_times, total = _timeline(raw, order)
+    if not topic.get("_live_short"):
+        if total < 45.0:
+            print(f"[duration] natural speech is {total:.1f}s; no slow-motion stretching")
+        if total < 42.0 or total > 62.0:
+            detail = _duration_detail(spoken, raw, order)
+            die(f"voice duration outside 42-62s; refusing artificial speed change: {total:.1f}s — {detail}")
+        audio = {beat: RUN / f"voice_clean_{beat}.wav" for beat in order}
+        return spoken, narration, audio, raw, beat_times, total
+    lo, hi = LIVE_VOICE_SECONDS
+    if lo <= total <= hi:
+        audio = {beat: RUN / f"voice_clean_{beat}.wav" for beat in order}
+        return spoken, narration, audio, raw, beat_times, total
+    why = (
+        f"The spoken voice is {total:.1f}s. It must land in 70-95 seconds. "
+        "Do not change the speaking speed. Change only the number of words."
+    )
+    print(f"[duration] {total:.1f}s outside 70-95; one repair, then only the changed beats")
+    if _one_beat_repair(narration, topic, c, spec, why) is None:
+        die(
+            "voice duration outside 70-95s; refusing artificial speed change: "
+            f"{total:.1f}s — {_duration_detail(spoken, raw, order)}"
+        )
+    spoken = {beat: narration["beats"][beat] for beat in order}
+    fails = _dry_fails(narration, topic, spec)
+    if fails:
+        die(
+            "duration repair missed the text gate; refusing another render and the template: "
+            + "; ".join(fails)
+        )
+    changed = [beat for beat in order if spoken[beat] != before[beat]]
+    if not changed:
+        die(
+            "voice duration outside 70-95s and the repair changed no beats; "
+            f"refusing artificial speed change: {total:.1f}s"
+        )
+    raw.update(_rerender_beats(spoken, c, changed))
+    beat_times, total = _timeline(raw, order)
+    if total < lo or total > hi:
+        die(
+            "voice duration outside 70-95s after one repair; refusing artificial speed change: "
+            f"{total:.1f}s — {_duration_detail(spoken, raw, order)}"
+        )
+    (RUN / "narration.json").write_text(
+        json.dumps(narration, ensure_ascii=False, indent=2), encoding="utf-8")
+    audio = {beat: RUN / f"voice_clean_{beat}.wav" for beat in order}
+    return spoken, narration, audio, raw, beat_times, total
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--qa", action="store_true", help="no LLM/voice: frames + thumbnail only")
@@ -2427,8 +2543,9 @@ def main():
     elif spec.get("mode") == "series":
         print(f"[market_data] {spec.get('source')} as of {spec.get('as_of')}")
 
+    lesson = LIVE_ORDER if _live_lesson(c) and not spec.get("atr") else BEATS
     beat_pngs = {}
-    for b in BEATS:
+    for b in lesson:
         pics = beat_images(topic, b)
         paths = tuple(RUN / f"b_{b}_{'ABC'[i]}.png" for i in range(len(pics)))
         for im, p in zip(pics, paths):
@@ -2444,22 +2561,23 @@ def main():
     require_llm_narration(n, source)
     # CTA/disclaimer stay on-screen; do not spend TTS credits speaking them.
     spoken = dict(n["beats"])
-    # Trim only the outer TTS silence. A timeline outside 42-62s gets one
-    # word-count repair and a second speak. The speed is never changed.
-    (RUN / "tts_text.txt").unlink(missing_ok=True)
-    spoken, n, raw_durations, beat_times, t = fit_spoken_duration(spoken, n, topic, c, spec)
-    beat_audio = {b: RUN / f"voice_clean_{b}.wav" for b in BEATS}
+    # Trim only the outer TTS silence. Sentence punctuation stays, so pauses
+    # inside a beat are kept. A live miss re-speaks only the changed beats.
+    # Speech speed is never changed.
+    spoken, n, beat_audio, raw_durations, beat_times, t = prepare_spoken(
+        spoken, n, topic, c, spec)
     raw_total = sum(raw_durations.values())
-    if t < 45.0:
+    order = timed_beats(beat_times)
+    if t < 45.0 and not topic.get("_live_short"):
         print(f"[duration] natural speech is {t:.1f}s; no slow-motion stretching")
     ok(f"voice: trimmed speech {raw_total:.1f}s -> final {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
-    switch = {b: cue_frac(topic["key"], spoken[b]) for b in BEATS if len(beat_pngs[b]) == 3}
+    switch = {b: cue_frac(topic["key"], spoken[b]) for b in order if len(beat_pngs.get(b) or ()) == 3}
     if switch:
         ok("3rd picture at " + ", ".join(f"{b} {f:.0%}" for b, f in switch.items()))
     cta = engagement.engagement_question(topic)
     hook_line = n.get("hook_line") or ""
-    scenes = scene_pace.plan_scenes(beat_times)
-    groups = {b: [] for b in BEATS}
+    scenes = scene_pace.plan_scenes(beat_times, beats=order)
+    groups = {b: [] for b in order}
     for scene in scenes:
         groups[scene["beat"]].append(scene)
     paced = {}
@@ -2536,7 +2654,11 @@ def main():
     # If duration is outside the publishing window, fail and regenerate narration.
     final_path = RUN / "final.mp4"
     final_dur = duration(final_path)
-    if final_dur < 45.0 or final_dur > 62.0:
+    if topic.get("_live_short"):
+        lo, hi = LIVE_VOICE_SECONDS
+        if final_dur < lo or final_dur > hi:
+            die(f"final.mp4 duration outside 70-95s; refusing post-render speed change: {final_dur:.1f}s")
+    elif final_dur < 45.0 or final_dur > 62.0:
         die(f"final.mp4 duration outside 45-62s; refusing post-render speed change: {final_dur:.1f}s")
 
     write_compat(topic, n, spoken, beat_times)

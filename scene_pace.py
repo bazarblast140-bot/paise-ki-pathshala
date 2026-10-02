@@ -151,7 +151,7 @@ def beat_times_from_overlays(overlays):
     spans = {}
     for event in overlays or []:
         beat = event.get("beat")
-        if beat not in BEATS:
+        if beat not in ("hook", "pehchan", "matlab", "udaharan", "galti", "karein"):
             continue
         start = float(event.get("start") or 0)
         end = float(event.get("end") or 0)
@@ -160,4 +160,5 @@ def beat_times_from_overlays(overlays):
         else:
             spans[beat][0] = min(spans[beat][0], start)
             spans[beat][1] = max(spans[beat][1], end)
-    return {b: tuple(spans[b]) for b in BEATS if b in spans}
+    order = ("hook", "pehchan", "matlab", "udaharan", "galti", "karein")
+    return {b: tuple(spans[b]) for b in order if b in spans}

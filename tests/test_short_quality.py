@@ -79,9 +79,8 @@ class HookCheckTests(unittest.TestCase):
             narration = board_short.fallback_narration(topic)
             fails = board_short.check_narration(narration, topic)
             words = len(" ".join(narration["beats"][b] for b in ("hook", "pehchan", "matlab", "karein")).split())
-            lo, hi = board_short.TOTAL_WORDS
-            self.assertGreaterEqual(words, lo, topic["key"])
-            self.assertLessEqual(words, hi, topic["key"])
+            self.assertGreaterEqual(words, 160, topic["key"])
+            self.assertLessEqual(words, 180, topic["key"])
             self.assertGreaterEqual(len(narration["title"]), 8, topic["key"])
             self.assertLessEqual(len(narration["title"]), 90, topic["key"])
             self.assertEqual(fails, [], f"{topic['key']}: {fails}")

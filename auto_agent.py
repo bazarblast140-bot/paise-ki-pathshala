@@ -76,6 +76,18 @@ def external_publish_failure(log_text):
     return False
 
 
+def short_duration_window():
+    """Live six-beat Shorts are 70-95s. Buffer QA stays on 45-70s."""
+    lo, hi, label = 45.0, 70.0, "45-70s"
+    try:
+        beats = json.loads((RUN / "narration.json").read_text(encoding="utf-8")).get("beats") or {}
+        if str(beats.get("udaharan") or "").strip() and str(beats.get("galti") or "").strip():
+            return 70.0, 95.0, "70-95s"
+    except (OSError, ValueError, AttributeError):
+        pass
+    return lo, hi, label
+
+
 def board_quality(fmt="short"):
     """Cheap local visual + final-video QA; no AI/API/credit use."""
     try:
@@ -126,8 +138,10 @@ def board_quality(fmt="short"):
         expected = (1080, 1920) if fmt == "short" else (1920, 1080)
         if (video.get("width"), video.get("height")) != expected:
             return False, f"wrong final resolution {video.get('width')}x{video.get('height')}"
-        if fmt == "short" and not 45 <= dur <= 70:
-            return False, f"short duration {dur:.1f}s outside 45-70s QA window"
+        if fmt == "short":
+            lo, hi, label = short_duration_window()
+            if not lo <= dur <= hi:
+                return False, f"short duration {dur:.1f}s outside {label} QA window"
         if fmt != "short" and dur < 60:
             return False, f"long duration {dur:.1f}s unexpectedly short"
         # Sample the video at 5s intervals. Blank/near-static output is rejected.

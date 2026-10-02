@@ -79,9 +79,9 @@ def chunk(text, limit=MAX_CHARS):
 
 
 def tts_request(text, c, key, prev=None, nxt=None, retries=3):
-    if str((c.get("voice") or {}).get("engine") or "edge").strip().lower() != "elevenlabs":
-        die("ElevenLabs TTS is disabled while voice.engine is edge")
-    vid = c["voice"]["voice_id"]
+    vid = eleven_voice.configured_voice_id(c)
+    if not vid:
+        die("ELEVENLABS_API_KEY is set but config voice_id and ELEVENLABS_VOICE_ID are empty")
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{vid}"
     payload = {
         "text": text,
@@ -167,9 +167,10 @@ def synthesize(text, c):
     engine = str(c["voice"].get("engine", "edge")).strip().lower()
     if engine not in ("edge", "elevenlabs"):
         die(f"Unknown voice.engine '{engine}' in config.json — use 'edge' or 'elevenlabs'.")
-    # A present API key does not override voice.engine. Edge never calls ElevenLabs.
 
     key = os.environ.get("ELEVENLABS_API_KEY")
+    if engine == "elevenlabs" and eleven_voice.paid_voice_allowed():
+        eleven_voice.ensure_library_voice(c)
     if engine == "elevenlabs":
         if not key:
             print("[warn] ELEVENLABS_API_KEY not set — falling back to free Edge TTS.")
@@ -207,12 +208,12 @@ def synthesize(text, c):
     try:
         render_all(engine)
     except eleven_voice.QuotaFallback as exc:
-        # Credit/payment only. Auth and permission already exited inside tts_request.
-        eleven_voice.log_fallback(exc.reason)
-        render_all("edge")
-        eleven_voice.write_voice_meta(RUN, "edge", exc.reason, elevenlabs_attempted=True)
-        credit_log.set_tts_engine("edge")
-        return
+        # A live slot stops. It does not spend the rest of the script on Edge.
+        print(f"[credits] STOP: {exc.reason}", flush=True)
+        print("[STOP] live slot skipped; buffer may fill. No Edge fallback.", flush=True)
+        eleven_voice.write_voice_meta(RUN, "elevenlabs", exc.reason, elevenlabs_attempted=True)
+        credit_log.set_tts_engine("elevenlabs", exc.reason)
+        die(f"[credits] STOP: {exc.reason}")
     eleven_voice.write_voice_meta(
         RUN, engine, "", elevenlabs_attempted=(engine == "elevenlabs"))
     credit_log.set_tts_engine(engine)

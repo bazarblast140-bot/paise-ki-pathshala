@@ -2,15 +2,28 @@
 from engagement import engagement_question
 
 BEATS = ("hook", "pehchan", "matlab", "karein")
+ORDER = ("hook", "pehchan", "matlab", "udaharan", "galti", "karein")
+_EXTRA = {
+    "udaharan": ("उदाहरण", "एक ठोस केस"),
+    "galti": ("आम गलती", "इसे ऐसे सुधारें"),
+}
+
+
+def _lines(topic, beat):
+    pair = (topic.get("beats") or {}).get(beat)
+    if isinstance(pair, (list, tuple)) and len(pair) >= 2:
+        return str(pair[0]), str(pair[1])
+    return _EXTRA.get(beat, (beat, beat))
 
 
 def overlay_plan(topic, beat_times, hook_line, cta=None):
     """List of {role, beat, text, start, end}. Times are seconds."""
     cta = cta or engagement_question(topic)
     events = []
-    for beat in BEATS:
+    beats = [b for b in ORDER if b in (beat_times or {})] or list(BEATS)
+    for beat in beats:
         t0, t1 = beat_times[beat]
-        head, sub = topic["beats"][beat]
+        head, sub = _lines(topic, beat)
         if beat == "hook":
             # Spoken and shown from the first frame. The hook beat is longer than
             # 2s; the opening line is on screen for that whole beat, including 0-2s.
@@ -61,4 +74,5 @@ def beats_have_key_text(events):
         if event.get("role") in ("hook", "key") and str(event.get("text") or "").strip():
             if float(event.get("end", 0)) > float(event.get("start", 0)):
                 covered.add(event.get("beat"))
-    return set(BEATS) <= covered
+    required = set(BEATS) | {event.get("beat") for event in events or [] if event.get("beat") in ORDER}
+    return required <= covered

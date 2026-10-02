@@ -148,42 +148,20 @@ class ShortFallbackTests(unittest.TestCase):
     def test_default_voice_choice_is_unchanged(self):
         import common
         data = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
-        self.assertEqual(data["voice"]["engine"], "edge")
-        self.assertEqual(data["voice"]["voice_id"], "7qBNUtXRGP0jPi0H4r8k")
-        self.assertEqual(data["voice"]["edge_voice"], "hi-IN-MadhurNeural")
-        self.assertEqual(data["voice"]["edge_rate"], "+0%")
+        self.assertEqual(data["voice"]["engine"], "elevenlabs")
+        self.assertEqual(data["voice"]["voice_id"], "qsz5tTEjPvsiIJZIpM8S")
+        self.assertNotEqual(data["voice"]["voice_id"], "7qBNUtXRGP0jPi0H4r8k")
         with mock.patch.dict(os.environ, {"VIDEO_FORMAT": "short"}):
             merged = common.cfg()
-        self.assertEqual(merged["voice"]["engine"], "edge")
-        # Shorts use the Hindi narrator. The long-form id above stays put.
-        self.assertEqual(merged["voice"]["voice_name"], "Kamal")
-        self.assertEqual(merged["voice"]["voice_id"], "qsz5tTEjPvsiIJZIpM8S")
+        self.assertEqual(merged["voice"]["engine"], "elevenlabs")
+        self.assertEqual(merged["voice"]["voice_name"], "Rudra")
+        self.assertEqual(merged["voice"]["voice_id"], "ypnkIsDASPgHZuanrF0q")
+        self.assertEqual(merged["voice"]["words_per_second"], 2.8)
+        self.assertEqual(merged["voice"]["fallback_voice_id"], "qsz5tTEjPvsiIJZIpM8S")
         self.assertEqual(merged["voice"]["edge_voice"], "hi-IN-MadhurNeural")
         self.assertEqual(merged["voice"]["edge_rate"], "+0%")
 
-    def test_run_voice_does_not_call_elevenlabs_when_engine_is_edge(self):
-        import run_voice
-
-        def post(*_args, **_kwargs):
-            raise AssertionError("ElevenLabs must not be called when engine is edge")
-
-        cfg = {"voice": {
-            "engine": "edge",
-            "voice_id": "7qBNUtXRGP0jPi0H4r8k",
-            "model": "eleven_multilingual_v2",
-            "stability": 0.5,
-            "style": 0.0,
-        }}
-        err = io.StringIO()
-        with mock.patch.dict(os.environ, {
-            "ELEVENLABS_API_KEY": "test-key",
-            "ELEVENLABS_VOICE_ID": "7qBNUtXRGP0jPi0H4r8k",
-        }), mock.patch("requests.post", post), redirect_stderr(err):
-            with self.assertRaises(SystemExit):
-                run_voice.tts_request("नमस्ते नियम", cfg, "test-key")
-        self.assertIn("edge", err.getvalue().lower())
-
-    def test_quota_on_a_later_beat_redoes_the_whole_run_on_edge(self):
+    def test_quota_on_a_later_beat_stops_the_live_slot(self):
         posts = {"n": 0, "urls": []}
 
         def post(url, **_kwargs):
@@ -211,14 +189,10 @@ class ShortFallbackTests(unittest.TestCase):
              mock.patch("requests.post", post), \
              mock.patch.object(self.board, "_edge", edge), \
              redirect_stdout(buf):
-            engine = self.board.synthesize_short_voices(self._spoken(), VOICE)
+            with self.assertRaises(SystemExit):
+                self.board.synthesize_short_voices(self._spoken(), VOICE)
             run = Path(tmp)
             meta = json.loads((run / "voice_meta.json").read_text(encoding="utf-8"))
-            engines = {
-                (run / f"tts_{beat}.engine").read_text(encoding="utf-8").strip()
-                for beat in self.board.BEATS
-            }
-            audio = [(run / f"tts_{beat}.mp3").read_bytes()[:1] for beat in self.board.BEATS]
             text = buf.getvalue()
             published = run / "published.json"
             published.write_text("[]\n", encoding="utf-8")
@@ -229,21 +203,17 @@ class ShortFallbackTests(unittest.TestCase):
                     **eleven_voice.ledger_voice_kwargs(run),
                 )
             entry = json.loads(published.read_text(encoding="utf-8"))[-1]
-            engine_txt = (run / "voice_engine.txt").read_text(encoding="utf-8").strip()
 
-        self.assertEqual(engine, "edge")
         self.assertEqual(posts["n"], 2)
         self.assertTrue(all("7qBNUtXRGP0jPi0H4r8k" in url for url in posts["urls"]))
-        self.assertEqual(engines, {"edge"})
-        self.assertEqual(audio, [b"e", b"e", b"e", b"e"])
-        self.assertEqual(edge.calls[0][0], "hi-IN-SwaraNeural")
-        self.assertEqual(meta["engine"], "edge")
+        self.assertEqual(edge.calls, [])
+        self.assertEqual(meta["engine"], "elevenlabs")
         self.assertTrue(meta["elevenlabs_attempted"])
         self.assertIn("insufficient_credits", meta["fallback_reason"])
-        self.assertIn("::warning title=ElevenLabs quota::", text)
-        self.assertIn("[warn]", text)
-        self.assertEqual(engine_txt, "edge")
-        self.assertEqual(entry["voice_engine"], "edge")
+        self.assertIn("[credits] STOP", text)
+        self.assertIn("[STOP]", text)
+        self.assertNotIn("Edge TTS", text)
+        self.assertEqual(entry["voice_engine"], "elevenlabs")
         self.assertIn("insufficient_credits", entry["voice_fallback"])
         self.assertEqual(entry["video_id"], "abc123")
         self.assertEqual(entry["slot"], "08:30")
@@ -270,11 +240,13 @@ class ShortFallbackTests(unittest.TestCase):
              mock.patch("requests.post", post), \
              mock.patch.object(self.board, "_edge", edge), \
              redirect_stdout(buf):
-            engine = self.board.synthesize_short_voices(self._spoken(text), VOICE)
+            with self.assertRaises(SystemExit):
+                self.board.synthesize_short_voices(self._spoken(text), VOICE)
             meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
-        self.assertEqual(engine, "edge")
+        self.assertEqual(edge.calls if hasattr(edge, "calls") else [], [])
         self.assertIn("pre-check remaining=10", meta["fallback_reason"])
-        self.assertIn("::warning title=ElevenLabs quota::", buf.getvalue())
+        self.assertIn("[credits] STOP", buf.getvalue())
+        self.assertIn("1000", buf.getvalue())
         self.assertTrue(meta["elevenlabs_attempted"])
 
     def test_subscription_auth_error_does_not_skip_tts(self):
@@ -321,9 +293,10 @@ class ShortFallbackTests(unittest.TestCase):
              mock.patch("requests.post", post), \
              mock.patch.object(self.board, "_edge", edge), \
              redirect_stdout(buf):
-            engine = self.board.synthesize_short_voices(self._spoken(), VOICE)
-        self.assertEqual(engine, "edge")
-        self.assertIn("::warning title=ElevenLabs quota::", buf.getvalue())
+            with self.assertRaises(SystemExit):
+                self.board.synthesize_short_voices(self._spoken(), VOICE)
+        self.assertIn("[credits] STOP", buf.getvalue())
+        self.assertNotIn("Edge TTS", buf.getvalue())
 
     def test_invalid_key_is_a_hard_error(self):
         def post(_url, **_kwargs):
@@ -449,12 +422,13 @@ class LongFormTests(unittest.TestCase):
              mock.patch("requests.post", quota), \
              mock.patch.object(run_voice, "edge_request", edge), \
              redirect_stdout(buf):
-            run_voice.synthesize("ek chhota vakya.", VOICE)
+            with self.assertRaises(SystemExit):
+                run_voice.synthesize("ek chhota vakya.", VOICE)
             meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
-        self.assertEqual(edge.calls, 1)
-        self.assertEqual(meta["engine"], "edge")
+        self.assertEqual(edge.calls, 0)
+        self.assertEqual(meta["engine"], "elevenlabs")
         self.assertIn("insufficient_credits", meta["fallback_reason"])
-        self.assertIn("::warning title=ElevenLabs quota::", buf.getvalue())
+        self.assertIn("[credits] STOP", buf.getvalue())
         self.assertIn("[OK] narration: elevenlabs", buf.getvalue())
 
         edge.calls = 0

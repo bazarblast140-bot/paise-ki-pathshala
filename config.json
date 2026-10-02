@@ -59,15 +59,17 @@
     "verify_retry_max_tokens": 32000
   },
   "voice": {
-    "engine": "edge",
+    "engine": "elevenlabs",
     "edge_voice": "hi-IN-MadhurNeural",
     "edge_rate": "+0%",
     "edge_pitch": "+0Hz",
-    "voice_id": "7qBNUtXRGP0jPi0H4r8k",
+    "voice_id": "qsz5tTEjPvsiIJZIpM8S",
+    "voice_name": "Kamal",
+    "words_per_second": 2.0,
     "model": "eleven_multilingual_v2",
     "stability": 0.50,
     "style": 0.0,
-    "speed": 1.10,
+    "speed": 1.0,
     "similarity_boost": 0.8
   },
   "pipeline": {
@@ -85,21 +87,28 @@
     "short": {
       "video": {
         "resolution": "1080x1920",
-        "target_minutes": 0.88,
-        "words_per_minute": 118,
-        "target_word_count": 104
+        "target_minutes": 1.38,
+        "words_per_minute": 168,
+        "target_word_count": 231
       },
       "voice": {
-        "_note": "Kamal (qsz5tTEjPvsiIJZIpM8S) is a Hindi male narrator in the ElevenLabs voice library: calm, not the energetic Krishna voice. It is not one of the default premade voices, so this id is configurable — if the account cannot use that library voice, set formats.short.voice.voice_id. Stability 0.78, style 0 and speed 1.0 keep delivery slow and clear. Edge hi-IN-MadhurNeural at +0% is the male fallback. Do not raise edge_rate above +10%. Swara is not used for Shorts.",
+        "_note": "Live Shorts use Rudra (ypnkIsDASPgHZuanrF0q), an ElevenLabs library voice. words_per_second is the one coefficient the word targets are derived from. If Rudra is not on the account, ensure-voice looks it up (search Rudra) and adds it as Rudra PKP. Kamal is the fallback voice, never Edge, and never Bunty 7qBNUtXRGP0jPi0H4r8k. Buffer Shorts stay on Edge Madhur.",
+        "engine": "elevenlabs",
         "edge_voice": "hi-IN-MadhurNeural",
         "edge_rate": "+0%",
-        "voice_id": "qsz5tTEjPvsiIJZIpM8S",
-        "voice_name": "Kamal",
+        "voice_id": "ypnkIsDASPgHZuanrF0q",
+        "voice_name": "Rudra",
+        "words_per_second": 2.8,
+        "shared_voice_search": "Rudra",
+        "library_new_name": "Rudra PKP",
+        "fallback_voice_id": "qsz5tTEjPvsiIJZIpM8S",
+        "fallback_voice_name": "Kamal",
+        "fallback_words_per_second": 2.0,
         "model": "eleven_multilingual_v2",
-        "stability": 0.78,
-        "similarity_boost": 0.75,
-        "style": 0.0,
-        "speed": 1.0
+        "stability": 0.50,
+        "similarity_boost": 0.8,
+        "style": 0.25,
+        "speed": 0.90
       },
       "pipeline": {
         "word_count_tolerance": 0.3
