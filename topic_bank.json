@@ -2951,7 +2951,7 @@
   {
    "id": 79,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "intraday_risk_reward",
    "cat": "INTRADAY",
    "topic": "छोटा target, बड़ा ख़र्च — charges intraday 1:2 को कैसे खाते हैं",
@@ -2985,7 +2985,8 @@
     "बहुत छोटे target पर charges का हिस्सा बड़ा",
     "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Intraday Risk Reward"
+   "seo": "Intraday Risk Reward",
+   "used_short_at": "2026-10-02T08:48:22Z"
   },
   {
    "id": 80,
