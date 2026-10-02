@@ -377,6 +377,10 @@ class CaptionSentenceCardTests(unittest.TestCase):
             "matlab": "इसका मतलब: वापसी छोटे हुए पैसे पर गिनी जाती है। उदाहरण: 10% नुकसान के बाद 11% चाहिए। यह 10% नहीं, 11% है।",
             "karein": "50% गिरने के बाद 100% वापसी चाहिए। 20% पर 25% चाहिए। इसलिए एसएल छोटा रखें, ताकि पूंजी बचे।",
         }
+        # A following figure stays on its own cue. Joining it onto "2% ="
+        # puts ₹4,000 on the caption before that scene's card has it.
+        example = board_short._cue_texts("उदाहरण: ₹2,00,000 का 2% = ₹4,000।")
+        self.assertFalse(any("2%" in cue and "4,000" in cue for cue in example), example)
         for script in (spoken, loss):
             times = _beat_clock(script)
             audio = []

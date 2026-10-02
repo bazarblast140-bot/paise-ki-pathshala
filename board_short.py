@@ -2662,8 +2662,14 @@ def _cue_texts(text):
             cur = [last]
     merged = []
     for part in out:
-        if merged and len(part.split()) == 1:
-            combo = merged[-1] + " " + part
+        # A one-word orphan can join the previous line. A figure, or the first
+        # word of the next sentence, must not: that is how "2% =" started
+        # showing ₹4,000 while the card had already cut it.
+        orphan = len(part.split()) == 1 and not re.search(r"\d", part)
+        previous = merged[-1] if merged else ""
+        boundary = bool(re.search(r"[।.!?？]$", previous.strip()))
+        if merged and orphan and not boundary:
+            combo = previous + " " + part
             if len(_wrap_caption(combo)) <= 2:
                 merged[-1] = combo
                 continue
@@ -3039,15 +3045,15 @@ def _scene_clause(sent, t1):
 
 
 def scene_cards_for(spoken, beat_times, scenes, audio_words=None):
-    """One card per scene, from that scene's own caption sentence.
+    """One card per scene, from the caption cues on screen during that scene.
 
-    The card is the full sentence, with every number in it. A digit that is
-    still unspoken is left off, and the cut does not end on a comma or a
-    conjunction. Dedupe is only inside the scene, so a later scene that says
-    the figure again still shows it.
+    The card shows those cue sentences in full, so every caption number is an
+    on-screen value. A cue that has not started is not painted, and the text
+    does not end on a comma or a conjunction. Dedupe is only inside the scene,
+    so a later scene that says the figure again still shows it.
     """
     import sync_gate
-    sentences = _timed_sentences(_script_word_times(spoken, beat_times, audio_words))
+    cues = plan_cues(spoken, beat_times, audio_words)
     texts = {}
     figures = {}
     for scene in scenes or []:
@@ -3055,21 +3061,27 @@ def scene_cards_for(spoken, beat_times, scenes, audio_words=None):
         t0, t1 = float(scene["start"]), float(scene["end"])
         parts = []
         latest = ""
-        for sent in sentences:
-            if not sent:
+        for cue in cues:
+            c0, c1 = float(cue["t0"]), float(cue["t1"])
+            text = _trim_card_clause(cue.get("text") or "")
+            if not text:
                 continue
-            starts = [float(start) for _b, _w, start in sent]
-            if any(t0 - 1e-6 <= start < t1 - 1e-6 for start in starts):
-                clause = _scene_clause(sent, t1)
-                if clause and clause not in parts:
-                    parts.append(clause)
-            if starts and min(starts) < t1 - 1e-9:
-                fallback = _scene_clause(sent, t1)
-                if fallback:
-                    latest = fallback
+            if c0 < t1 - 1e-9:
+                latest = text
+            spoken_at = cue.get("word_start")
+            spoken_in = (
+                spoken_at is not None
+                and t0 - 1e-6 <= float(spoken_at) < t1 - 1e-6
+            )
+            # Visible caption, or a figure already said whose cue was clamped
+            # to the next beat. A cue that has not started stays off this card.
+            visible = c1 > t0 + 1e-6 and c0 < t1 - 1e-6
+            if spoken_in or visible:
+                if text not in parts:
+                    parts.append(text)
         if not parts and latest:
             parts.append(latest)
-        blob = " ".join(parts)
+        blob = _trim_card_clause(" ".join(parts))
         texts.setdefault(beat, []).append(blob)
         raw = scene_frames._figure_tokens([blob])
         kept = []
