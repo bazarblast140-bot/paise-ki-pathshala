@@ -18,7 +18,7 @@ import short_layout
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOK = "1:2 का setup फिर भी घाटा?"
-CFG = {"models": {"script_model": "deepseek-flash"}, "voice": {"engine": "elevenlabs", "words_per_second": 2.8}}
+CFG = {"models": {"script_model": "deepseek-flash"}, "voice": {"engine": "elevenlabs", "words_per_second": 1.9}}
 
 
 def _topic():
@@ -26,7 +26,7 @@ def _topic():
     topic = next(item for item in bank["topics"] if item["key"] == "intraday_risk_reward")
     topic = json.loads(json.dumps(topic))
     topic["_live_short"] = True
-    topic["_voice"] = {"words_per_second": 2.8, "voice_id": "ypnkIsDASPgHZuanrF0q"}
+    topic["_voice"] = {"words_per_second": 1.9, "voice_id": "ypnkIsDASPgHZuanrF0q"}
     return topic
 
 
@@ -61,16 +61,27 @@ def _packed(n, salt, lead=""):
     return " ".join(parts)
 
 
-def _script(hook, udaharan, karein):
+def _targets():
+    return board_short.live_beat_targets(1.9)
+
+
+def _script(hook=None, udaharan=None, karein=None):
+    targets = _targets()
+    if hook is None:
+        hook = targets["hook"]
+    if udaharan is None:
+        udaharan = targets["udaharan"]
+    if karein is None:
+        karein = targets["karein"]
     return {
         "title": "सेटअप का हिसाब समझिए",
         "hook_line": HOOK,
         "beats": {
             "hook": _words(hook, "हुक", HOOK),
-            "pehchan": _words(36, "पहचान"),
-            "matlab": _words(40, "मतलब"),
+            "pehchan": _words(targets["pehchan"], "पहचान"),
+            "matlab": _words(targets["matlab"], "मतलब"),
             "udaharan": _words(udaharan, "उदाहरण में चार्ज 1.5 और 300" if udaharan else ""),
-            "galti": _words(42, "गलती"),
+            "galti": _words(targets["galti"], "गलती"),
             "karein": _words(karein, "करें"),
         },
     }
@@ -106,26 +117,21 @@ class UdaharanNumberTests(unittest.TestCase):
         bare = {"udaharan": "एंट्री 200 एसएल 198 है।"}
         self.assertEqual(hook_check.live_number_faults(bare, topic, ("udaharan",)), set())
         self.assertEqual(hook_check.unlabelled_example_beats(bare, ("udaharan",)), ["udaharan"])
-        fails = board_short.check_narration(
-            {"title": "सेटअप का हिसाब समझिए", "hook_line": HOOK, "beats": {
-                "hook": _words(26, "हुक", HOOK),
-                "pehchan": _words(36, "पहचान"),
-                "matlab": _words(40, "मतलब"),
-                "udaharan": bare["udaharan"] + " " + " ".join(["नियम"] * 40),
-                "galti": _words(42, "गलती"),
-                "karein": _words(39, "करें"),
-            }},
-            topic,
-        )
+        targets = _targets()
+        pad = targets["udaharan"] - len(("एंट्री 200 एसएल 198 है।").split())
+        labelled = {
+            "title": "सेटअप का हिसाब समझिए", "hook_line": HOOK, "beats": {
+                "hook": _words(targets["hook"], "हुक", HOOK),
+                "pehchan": _words(targets["pehchan"], "पहचान"),
+                "matlab": _words(targets["matlab"], "मतलब"),
+                "udaharan": bare["udaharan"] + " " + " ".join(["नियम"] * pad),
+                "galti": _words(targets["galti"], "गलती"),
+                "karein": _words(targets["karein"], "करें"),
+            },
+        }
+        fails = board_short.check_narration(labelled, topic)
         self.assertTrue(any("udaharan" in item and "उदाहरण" in item for item in fails))
-        draft = {"title": "सेटअप का हिसाब समझिए", "hook_line": HOOK, "beats": {
-            "hook": _words(26, "हुक", HOOK),
-            "pehchan": _words(36, "पहचान"),
-            "matlab": _words(40, "मतलब"),
-            "udaharan": bare["udaharan"] + " " + " ".join(["नियम"] * 40),
-            "galti": _words(42, "गलती"),
-            "karein": _words(39, "करें"),
-        }}
+        draft = json.loads(json.dumps(labelled))
         self.assertNotIn("udaharan", board_short.beats_to_rewrite(draft, topic))
         board_short.apply_live_draft(draft, topic)
         self.assertEqual(
@@ -202,10 +208,15 @@ class UdaharanNumberTests(unittest.TestCase):
         self.assertIn("verbatim", calls[0]["system"])
         counts = {beat: len(script["beats"][beat].split()) for beat in board_short.LIVE_ORDER}
         total = sum(counts.values())
-        self.assertGreaterEqual(total, 200)
-        self.assertLessEqual(total, 270)
-        self.assertLessEqual(counts["hook"], 34)
-        self.assertGreaterEqual(counts["hook"], 18)
+        self.assertGreaterEqual(total, board_short.LIVE_TOTAL_WORDS[0])
+        self.assertLessEqual(total, board_short.LIVE_TOTAL_WORDS[1])
+        hook_lo, hook_hi = board_short.beat_word_window(
+            _targets()["hook"], board_short.LIVE_BEAT_TOLERANCE)
+        self.assertLessEqual(counts["hook"], hook_hi)
+        self.assertGreaterEqual(counts["hook"], hook_lo)
+        self.assertIn("140-175", calls[0]["system"])
+        self.assertIn("1.90", calls[0]["system"])
+        self.assertNotIn("200-270", calls[0]["system"])
         self.assertTrue(script["beats"]["hook"].startswith(HOOK))
         self.assertIn(example.strip("।"), script["beats"]["udaharan"])
         self.assertTrue(script.get("_trim_notes"))
@@ -218,8 +229,8 @@ class UdaharanNumberTests(unittest.TestCase):
 
     def test_an_invented_number_is_still_blocked_without_a_second_call(self):
         topic = _topic()
-        bad = _script(hook=26, udaharan=48, karein=39)
-        bad["beats"]["udaharan"] = _words(48, "उदाहरण में चार्ज 300")
+        bad = _script()
+        bad["beats"]["udaharan"] = _words(_targets()["udaharan"], "उदाहरण में चार्ज 300")
         calls = []
 
         def fake(system, user, model=None, max_tokens=2000, retries=3, attempts=None):
@@ -319,9 +330,9 @@ class UdaharanNumberTests(unittest.TestCase):
 
     def test_missing_udaharan_label_is_inserted_before_the_gate(self):
         topic = _topic()
-        script = _script(hook=26, udaharan=48, karein=39)
-        script["beats"]["udaharan"] = "एंट्री 200 है। रिस्क 2 है। " + " ".join(["नियम"] * 42)
-        script["beats"]["galti"] = "रिस्क 4 बिना लेबल। " + " ".join(["गलती"] * 38)
+        script = _script()
+        script["beats"]["udaharan"] = "एंट्री 200 है। रिस्क 2 है। " + " ".join(["नियम"] * 24)
+        script["beats"]["galti"] = "रिस्क 4 बिना लेबल। " + " ".join(["गलती"] * 22)
         board_short.apply_live_draft(script, topic)
         self.assertTrue(script["beats"]["udaharan"].startswith("उदाहरण "))
         self.assertIn("उदाहरण रिस्क 2", script["beats"]["udaharan"])

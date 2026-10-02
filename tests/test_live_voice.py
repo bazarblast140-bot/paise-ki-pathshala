@@ -8,7 +8,7 @@ import json
 import os
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -51,12 +51,12 @@ def _rudra_voice():
         "engine": "elevenlabs",
         "voice_id": RUDRA,
         "voice_name": "Rudra",
-        "words_per_second": 2.8,
+        "words_per_second": 1.9,
         "shared_voice_search": "Rudra",
         "library_new_name": "Rudra PKP",
         "fallback_voice_id": KAMAL,
         "fallback_voice_name": "Kamal",
-        "fallback_words_per_second": 2.0,
+        "fallback_words_per_second": 1.9,
         "model": "eleven_multilingual_v2",
         "stability": 0.5,
         "similarity_boost": 0.8,
@@ -76,13 +76,37 @@ def _words(n, salt, lead=""):
     return " ".join(parts + ["नियम"] * (n - len(parts)))
 
 
+def _packed(n, salt, lead=""):
+    """n words in short sentences so a long beat can be trimmed from the end."""
+    counters = [
+        "एक", "दो", "तीन", "चार", "पांच", "छह", "सात", "आठ", "नौ", "दस",
+        "ग्यारह", "बारह", "तेरह", "चौदह", "पंद्रह", "सोलह", "सत्रह", "अठारह",
+    ]
+    lead = " ".join(str(lead).split())
+    parts = []
+    count = len(lead.split()) if lead else 0
+    if lead:
+        if lead[-1] not in "।?!":
+            lead += "।"
+        parts.append(lead)
+    index = 0
+    while count < n:
+        need = min(4, n - count)
+        mark = counters[index % len(counters)]
+        words = [salt, mark, "नियम", "कदम"][:need]
+        parts.append(" ".join(words) + "।")
+        count += need
+        index += 1
+    return " ".join(parts)
+
+
 def _live_topic():
     return {
         "key": "hammer",
         "cat": "CANDLESTICK",
         "topic": "Hammer कैंडल — डाउनट्रेंड के बाद लंबी निचली wick",
         "_live_short": True,
-        "_voice": {"words_per_second": 2.8, "voice_id": RUDRA},
+        "_voice": {"words_per_second": 1.9, "voice_id": RUDRA},
         "thumb": ["ये कैंडल दिखे", "तो गिरावट ख़त्म?"],
         "beats": {
             "hook": ["नीचे लंबी wick", "गिरावट के बाद ख़रीदार लौटे?"],
@@ -95,7 +119,7 @@ def _live_topic():
 
 
 def _live_script(counts=None, salts=None):
-    targets = board_short.live_beat_targets(2.8)
+    targets = board_short.live_beat_targets(1.9)
     counts = counts or targets
     salts = salts or {
         "hook": "हुक",
@@ -228,7 +252,7 @@ class EnsureVoiceTests(unittest.TestCase):
         self.assertEqual(got, KAMAL)
         self.assertEqual(voice["voice_id"], KAMAL)
         self.assertEqual(voice["voice_name"], "Kamal")
-        self.assertEqual(voice["words_per_second"], 2.0)
+        self.assertEqual(voice["words_per_second"], 1.9)
         self.assertFalse(any(item[0] == "POST" for item in urls))
 
     def test_non_404_keeps_the_configured_id(self):
@@ -243,27 +267,37 @@ class EnsureVoiceTests(unittest.TestCase):
 
 class CalibrationTests(unittest.TestCase):
     def test_targets_come_from_the_coefficient(self):
-        targets = board_short.live_beat_targets(2.8)
+        targets = board_short.live_beat_targets(1.9)
         self.assertEqual(targets, {
-            "hook": 26, "pehchan": 36, "matlab": 40,
-            "udaharan": 48, "galti": 42, "karein": 39,
+            "hook": 18, "pehchan": 24, "matlab": 27,
+            "udaharan": 33, "galti": 29, "karein": 26,
         })
-        self.assertEqual(sum(targets.values()), 231)
-        self.assertEqual(board_short.live_word_window(2.8), (210, 252))
-        self.assertTrue(75.0 <= 231 / 2.8 <= 90.0)
+        self.assertEqual(sum(targets.values()), 157)
+        self.assertEqual(board_short.LIVE_TOTAL_WORDS, (130, 185))
+        self.assertEqual(board_short.LIVE_WORD_TARGET, (140, 175))
+        self.assertEqual(board_short.live_word_window(1.9), (143, 171))
+        self.assertTrue(75.0 <= 157 / 1.9 <= 90.0)
         for beat, target in targets.items():
-            lo, hi = board_short.beat_word_window(target)
+            lo, hi = board_short.beat_word_window(target, board_short.LIVE_BEAT_TOLERANCE)
             self.assertLessEqual(lo, target)
             self.assertGreaterEqual(hi, target)
-            self.assertAlmostEqual((hi - lo) / target, 0.4, delta=0.08)
+            self.assertAlmostEqual((hi - lo) / target, 0.6, delta=0.15)
 
-        kamal = board_short.live_beat_targets(2.0)
-        self.assertEqual(sum(kamal.values()), 165)
+        faster = board_short.live_beat_targets(2.0)
+        self.assertEqual(sum(faster.values()), 165)
         self.assertEqual(board_short.live_word_window(2.0), (150, 180))
+        self.assertEqual(board_short.voice_wps({"voice": {"voice_id": KAMAL}}), 1.9)
+        self.assertEqual(board_short.voice_wps({"voice": {}}), 1.9)
         self.assertEqual(board_short.BEAT_WORD_TARGET, {
             "hook": 25, "pehchan": 42, "matlab": 50, "karein": 46,
         })
         self.assertEqual(board_short.TOTAL_WORDS, (150, 190))
+        prompt = board_short.live_narration_system(_live_topic())
+        self.assertIn("140-175", prompt)
+        self.assertIn("130-185", prompt)
+        self.assertIn("1.90 words/second", prompt)
+        self.assertNotIn("200-270", prompt)
+        self.assertNotIn("2.80", prompt)
 
     def test_live_gate_uses_the_derived_window_and_catches_a_duplicate(self):
         topic = _live_topic()
@@ -331,13 +365,142 @@ class DryRenderTests(unittest.TestCase):
         self.assertEqual(calls["n"], 1)
         self.assertEqual(out["beats"]["udaharan"], good["beats"]["udaharan"])
 
+    def test_255_words_on_rudra_blocks_tts(self):
+        topic = _live_topic()
+        # The failed run was 255 words with sentence breaks. Trimming to the
+        # 185-word text ceiling still estimates at about 97s, so TTS stays blocked.
+        counts = {
+            "hook": 40, "pehchan": 42, "matlab": 44,
+            "udaharan": 48, "galti": 42, "karein": 39,
+        }
+        script = _live_script()
+        for beat, count in counts.items():
+            lead = HOOK_LINE if beat == "hook" else ""
+            script["beats"][beat] = _packed(count, "शब्द", lead)
+        words, wps, seconds = board_short._live_estimate(script, topic)
+        self.assertEqual(words, 255)
+        self.assertEqual(wps, 1.9)
+        self.assertAlmostEqual(seconds, 134.2, places=1)
+        self.assertGreater(seconds, 95.0)
+        seen = []
+
+        def synthesize(*_args, **_kwargs):
+            seen.append("tts")
+
+        def post(*_args, **_kwargs):
+            seen.append("post")
+            raise AssertionError("ElevenLabs must not be called")
+
+        err = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(board_short.credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.object(board_short.eleven_voice, "ensure_library_voice", return_value=RUDRA), \
+             mock.patch.object(board_short, "synthesize_short_voices", synthesize), \
+             mock.patch.object(board_short, "tts", synthesize), \
+             mock.patch("requests.post", post), \
+             redirect_stdout(io.StringIO()), \
+             redirect_stderr(err):
+            with self.assertRaises(SystemExit):
+                board_short.prepare_spoken(
+                    dict(script["beats"]), script, topic, {**CFG, "voice": _rudra_voice()}, {})
+        self.assertEqual(seen, [])
+        self.assertIn("0 characters", err.getvalue())
+        self.assertIn("outside 70-95", err.getvalue())
+
+    def test_about_160_words_allows_one_full_render(self):
+        topic = _live_topic()
+        script = _live_script()
+        script["beats"]["karein"] += " कदम नियम वाक्य"
+        words, _wps, seconds = board_short._live_estimate(script, topic)
+        self.assertEqual(words, 160)
+        self.assertTrue(70.0 <= seconds <= 95.0)
+        seen = []
+
+        def synthesize(_spoken, _c, beats=None):
+            seen.append(("speak-all", tuple(beats)))
+            return "elevenlabs"
+
+        def tts(*_args, **_kwargs):
+            raise AssertionError("an in-range estimate must not re-render beats")
+
+        def trim(beats):
+            return {beat: 14.0 for beat in beats}
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(board_short.credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.object(board_short.eleven_voice, "ensure_library_voice", return_value=RUDRA), \
+             mock.patch.object(board_short, "_content_ok", return_value={"passed": True, "summary": "ok"}), \
+             mock.patch.object(board_short, "synthesize_short_voices", synthesize), \
+             mock.patch.object(board_short, "_trim_rendered", trim), \
+             mock.patch.object(board_short, "tts", tts), \
+             redirect_stdout(io.StringIO()):
+            _spoken, _narr, _audio, _raw, _times, total = board_short.prepare_spoken(
+                dict(script["beats"]), script, topic, {**CFG, "voice": _rudra_voice()}, {})
+        self.assertEqual(seen, [("speak-all", board_short.LIVE_ORDER)])
+        self.assertTrue(70.0 <= total <= 95.0)
+
+    def test_duration_trim_passes_below_130_words_when_audio_is_in_range(self):
+        topic = _live_topic()
+        targets = board_short.live_beat_targets(1.9)
+        script = _live_script()
+        salts = {
+            "hook": "हुक", "pehchan": "पहचान", "matlab": "मतलब",
+            "udaharan": "उदाहरण", "galti": "गलती", "karein": "करें",
+        }
+        for beat, target in targets.items():
+            lead = HOOK_LINE if beat == "hook" else ""
+            script["beats"][beat] = _packed(target, salts[beat], lead)
+        spoken = dict(script["beats"])
+        words_before = sum(len(spoken[beat].split()) for beat in board_short.LIVE_ORDER)
+        self.assertGreaterEqual(words_before, 140)
+        self.assertLessEqual(words_before, 175)
+        seen = []
+        trims = {"n": 0}
+
+        def synthesize(_spoken, _c, beats=None):
+            seen.append(("speak-all", tuple(beats)))
+            return "elevenlabs"
+
+        def trim(beats):
+            trims["n"] += 1
+            if trims["n"] == 1:
+                return {beat: 20.0 for beat in beats}
+            seen.append(("beats", tuple(beats)))
+            return {beat: 13.0 for beat in beats}
+
+        def tts(_text, path, _c):
+            path.write_bytes(b"e" * 2000)
+
+        board_short.ELEVEN_REMAINING = 5000
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(board_short.credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.object(board_short.eleven_voice, "ensure_library_voice", return_value=RUDRA), \
+             mock.patch.object(board_short, "claude_json", side_effect=AssertionError("duration trim must not call the model")), \
+             mock.patch.object(board_short, "_content_ok", return_value={"passed": True, "summary": "ok"}), \
+             mock.patch.object(board_short, "synthesize_short_voices", synthesize), \
+             mock.patch.object(board_short, "_trim_rendered", trim), \
+             mock.patch.object(board_short, "tts", tts), \
+             redirect_stdout(io.StringIO()):
+            spoken_out, narr, _audio, _raw, _times, total = board_short.prepare_spoken(
+                spoken, script, topic, {**CFG, "voice": _rudra_voice()}, {})
+        words_after = sum(len(str(spoken_out[beat]).split()) for beat in board_short.LIVE_ORDER)
+        self.assertLess(words_after, 130)
+        self.assertTrue(board_short._dry_fails(narr, topic, {}))
+        self.assertEqual(seen[0], ("speak-all", board_short.LIVE_ORDER))
+        self.assertEqual(len([item for item in seen if item[0] == "speak-all"]), 1)
+        self.assertGreaterEqual(len(seen[1][1]), 1)
+        self.assertTrue(70.0 <= total <= 95.0)
+
     def test_real_miss_rerenders_only_the_changed_beat(self):
         topic = _live_topic()
         script = _live_script()
         # Extra sentences keep the beats inside ±30%. A long render trims them
         # in code and re-speaks only those beats. The model is not called.
-        script["beats"]["pehchan"] += "। यह अतिरिक्त पंक्ति हटाओ अभी कदम नियम वाक्य।"
-        script["beats"]["matlab"] += "। यह दूसरी अतिरिक्त पंक्ति हटाओ अभी कदम नियम।"
+        script["beats"]["pehchan"] += "। अतिरिक्त पंक्ति हटाओ।"
+        script["beats"]["matlab"] += "। दूसरी पंक्ति हटाओ।"
         spoken = dict(script["beats"])
         seen = []
         trims = {"n": 0}

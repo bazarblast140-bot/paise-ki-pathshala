@@ -88,22 +88,22 @@
       "video": {
         "resolution": "1080x1920",
         "target_minutes": 1.38,
-        "words_per_minute": 168,
-        "target_word_count": 231
+        "words_per_minute": 114,
+        "target_word_count": 157
       },
       "voice": {
-        "_note": "Live Shorts use Rudra (ypnkIsDASPgHZuanrF0q), an ElevenLabs library voice. words_per_second is the one coefficient the word targets are derived from. If Rudra is not on the account, ensure-voice looks it up (search Rudra) and adds it as Rudra PKP. Kamal is the fallback voice, never Edge, and never Bunty 7qBNUtXRGP0jPi0H4r8k. Buffer Shorts stay on Edge Madhur.",
+        "_note": "Live Shorts use Rudra (ypnkIsDASPgHZuanrF0q), an ElevenLabs library voice. words_per_second is the one coefficient the word targets are derived from. Rudra at speed 0.90 was measured at about 1.9 words/s (255 words ran 133.9s). Kamal fallback_words_per_second 1.9 is an unmeasured conservative estimate. If Rudra is not on the account, ensure-voice looks it up (search Rudra) and adds it as Rudra PKP. Kamal is the fallback voice, never Edge, and never Bunty 7qBNUtXRGP0jPi0H4r8k. Buffer Shorts stay on Edge Madhur.",
         "engine": "elevenlabs",
         "edge_voice": "hi-IN-MadhurNeural",
         "edge_rate": "+0%",
         "voice_id": "ypnkIsDASPgHZuanrF0q",
         "voice_name": "Rudra",
-        "words_per_second": 2.8,
+        "words_per_second": 1.9,
         "shared_voice_search": "Rudra",
         "library_new_name": "Rudra PKP",
         "fallback_voice_id": "qsz5tTEjPvsiIJZIpM8S",
         "fallback_voice_name": "Kamal",
-        "fallback_words_per_second": 2.0,
+        "fallback_words_per_second": 1.9,
         "model": "eleven_multilingual_v2",
         "stability": 0.50,
         "similarity_boost": 0.8,
