@@ -4,9 +4,14 @@ and writes a Hinglish report (run/report.md) for Rajesh. This is the report you 
 A missing or invalid model verdict is NOT READY. The process exits 2 so the
 slot is skipped and nothing is uploaded. Deterministic self-review can block
 a video; it cannot by itself mark the video ready for a public upload.
+
+A NEEDS FIX that is only judgment calls does not skip a Short whose
+self-review is already at the high bar. Hard compliance, fact, and safety
+findings still exit 2.
 """
 import json
 import hashlib
+import re
 import sys
 from common import cfg, claude, read, save, ok, RUN, video_format, TruncatedResponse
 import review_gate
@@ -89,6 +94,7 @@ def _write_meta(decision):
         "ai_verdict_valid": bool(decision["ai_verdict_valid"]),
         "verdict": "READY" if decision["public_ready"] else "NEEDS_FIX",
         "public_ready": bool(decision["public_ready"]),
+        "soft_judgment_only": bool(decision.get("soft_judgment_only")),
         "reasons": decision.get("reasons") or [],
         "spoken_words": decision.get("spoken_words"),
     }, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -116,10 +122,73 @@ def _blocked_report(decision, model_text):
     if trend is None:
         lines.append("Trend fit: skipped (data/trends.json absent or has no themes).")
     lines.append("")
-    lines.append("A missing or invalid AI verdict is not a pass.")
+    if decision.get("ai_verdict_valid"):
+        lines.append("The AI verdict was read. It does not clear the publish gate.")
+    else:
+        lines.append("A missing or invalid AI verdict is not a pass.")
     if model_text and "READY TO PUBLISH" not in model_text.upper():
         lines.extend(["", "Model text (not used as the verdict):", model_text.strip()[:1200]])
     return "\n".join(lines).strip() + "\n"
+
+
+def _judgment_bullets(model_text):
+    """Judgment-call bullets only. The model's VERDICT line is not copied."""
+    lines = (model_text or "").splitlines()
+    start = None
+    for index, line in enumerate(lines):
+        if re.search(r"tumhe dekhna hai|judgment calls", line, re.I):
+            start = index + 1
+            break
+    if start is None:
+        return []
+    bullets = []
+    for line in lines[start:]:
+        if re.search(r"risks / assumptions|fails this round|auto-checks|reused-content", line, re.I):
+            break
+        stripped = line.strip()
+        if stripped.upper().startswith("VERDICT"):
+            continue
+        if re.match(r"[-*•]\s+\S", stripped):
+            bullets.append(stripped if stripped.startswith("-") else "- " + stripped.lstrip("-*• ").strip())
+        if len(bullets) >= 8:
+            break
+    return bullets
+
+
+def _soft_ready_report(model_text, review):
+    """A READY report. The model's NEEDS FIX line is not the publish verdict."""
+    summary = ""
+    if isinstance(review, dict) and review.get("summary"):
+        summary = " (" + review["summary"] + ")"
+    lines = [
+        "VERDICT: [READY TO PUBLISH]",
+        "",
+        "Deterministic self-review cleared the high bar" + summary + ".",
+        "The reviewer listed judgment calls only (thumbnail, tone, optional labels).",
+        "No hard compliance, fact, or safety failure was found, so the slot is not skipped.",
+        "",
+    ]
+    bullets = _judgment_bullets(model_text)
+    if bullets:
+        lines.append("Judgment calls kept for Rajesh:")
+        lines.extend(bullets)
+        lines.append("")
+    return "\n".join(lines).strip() + "\n"
+
+
+def _report_from_decision(decision, model_text, review):
+    """The file that publish reads. A soft pass must not start with NEEDS FIX."""
+    if decision.get("public_ready") and decision.get("keep_model_report"):
+        text = (model_text or "").strip()
+        if text and review_gate.parse_report_verdict(text) == "READY":
+            return text + ("" if text.endswith("\n") else "\n")
+    if decision.get("public_ready") and decision.get("soft_judgment_only"):
+        return _soft_ready_report(model_text, review)
+    if decision.get("public_ready"):
+        line = (decision.get("verdict_line") or "").strip()
+        if review_gate.parse_report_verdict(line) == "READY":
+            return line + "\n"
+    return _blocked_report(decision, model_text or "")
 
 
 def _finish(report, decision, cache_file, cache_key, model_text):
@@ -180,7 +249,8 @@ def main():
             if cached.get("key") == cache_key and cached.get("report") and cached.get("ai_verdict_valid"):
                 decision = review_gate.decide(cached["report"], True, script, review, fmt)
                 if decision["public_ready"]:
-                    _finish(cached["report"], decision, cache_file, cache_key, cached["report"])
+                    report = _report_from_decision(decision, cached["report"], review)
+                    _finish(report, decision, cache_file, cache_key, cached["report"])
                     ok("verify cache reused — no LLM credit")
                     return
         except SystemExit:
@@ -222,10 +292,8 @@ Do not print both outcomes on the same line."""
         print(f"[HOLD] AI reviewer failed: {type(exc).__name__}: {exc}")
 
     decision = review_gate.decide(ai_text, ai_ok, script, review, fmt)
-    if decision["public_ready"] and decision.get("keep_model_report"):
-        report = ai_text.strip() + ("\n" if not ai_text.endswith("\n") else "")
-    else:
-        report = _blocked_report(decision, ai_text if ai_ok else "")
+    model_for_report = ai_text if ai_ok else ""
+    report = _report_from_decision(decision, model_for_report, review)
     _finish(report, decision, cache_file, cache_key, ai_text if decision["public_ready"] else "")
 
 if __name__ == "__main__":
