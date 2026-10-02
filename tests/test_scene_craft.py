@@ -222,6 +222,65 @@ class AtrLessonTests(unittest.TestCase):
         self.assertIn("zoomin", names)
         self.assertLessEqual(board_short.SCENE_FADE_S, 0.45)
 
+    def test_shaped_lines_survive_every_transition(self):
+        """Mid-wipe text is one pre-shaped sprite. A cropped sprite must fail."""
+        import numpy as np
+        from PIL import Image, ImageDraw, features
+
+        import scene_transition
+
+        self.assertTrue(features.check("raqm"))
+        bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))["topics"]
+        topic = next(t for t in bank if t["key"] == "atr_sl")
+        spec = market_data.spec_for_topic(topic, today=TODAY)
+        frames = []
+        for beat, n in (("hook", 3), ("pehchan", 2), ("matlab", 2), ("karein", 5)):
+            made, _flags = scene_frames.frames_for(topic, beat, n, spec)
+            frames.extend(made)
+        ctas = [frame for frame in frames if frame.scene_kind == "cta"]
+        self.assertGreaterEqual(len(ctas), 2)
+        differ = float(np.abs(np.asarray(ctas[0]).astype(int) - np.asarray(ctas[1]).astype(int)).mean())
+        self.assertGreater(differ, 0.4)
+        probe = ImageDraw.Draw(Image.new("RGB", (4, 4)))
+        for frame in frames:
+            self.assertIsNotNone(frame.plate)
+            texts = [layer for layer in frame.text_layers if layer.get("text") and not layer.get("faint")]
+            self.assertTrue(texts)
+            for layer in texts:
+                self.assertTrue(layer["shaped"])
+                self.assertIsInstance(layer["image"], Image.Image)
+                self.assertEqual(layer["image"].mode, "RGBA")
+                ink = np.asarray(layer["image"])
+                cols = np.flatnonzero(ink[:, :, 3].max(axis=0) > 20)
+                self.assertGreater(cols.size, 2)
+                ink_w = int(cols[-1] - cols[0] + 1)
+                box = probe.textbbox((0, 0), layer["text"], font=scene_frames._font(layer["size"]))
+                expect = box[2] - box[0]
+                self.assertGreater(expect, 0)
+                self.assertAlmostEqual(ink_w, expect, delta=max(12, expect * 0.2))
+        names = board_short.SCENE_TRANSITIONS
+        for i in range(len(frames) - 1):
+            for t in (0.5, 0.82):
+                notes = scene_transition.sliced_glyph_notes(
+                    frames[i], frames[i + 1], t, names[i % len(names)])
+                self.assertEqual(notes, [], f"{names[i % len(names)]} t={t} {notes}")
+        self.assertEqual(scene_transition.mode_for("smoothleft")[0], "wipe")
+        self.assertEqual(scene_transition.mode_for("zoomin")[0], "scale")
+        self.assertEqual(scene_transition.mode_for("slideleft")[0], "slide")
+        takeaway = next(frame for frame in frames if frame.scene_kind == "takeaway")
+        layer = next(
+            item for item in takeaway.text_layers
+            if item.get("text") and not item.get("faint") and not item.get("persist")
+        )
+        plate = scene_transition.blend_plates(takeaway.plate, ctas[0].plate, 0.5, "wipeleft")
+        rendered = plate.copy()
+        sprite = layer["image"]
+        half = sprite.crop((0, 0, max(1, sprite.size[0] // 2), sprite.size[1]))
+        rendered.paste(half, layer["xy"], half)
+        self.assertLess(scene_transition.ink_column_coverage(layer, plate, rendered), 0.85)
+        whole = scene_transition.composite(takeaway, ctas[0], 0.5, "wipeleft")
+        self.assertGreater(scene_transition.ink_column_coverage(layer, plate, whole), 0.85)
+
 
 class BedTests(unittest.TestCase):
     def test_bed_is_in_the_ducking_window_and_licensed(self):

@@ -37,6 +37,7 @@ import hook_sfx
 import market_data
 import scene_frames
 import scene_pace
+import scene_transition
 import self_review
 import short_layout
 import slot_guard
@@ -1007,9 +1008,9 @@ def build_ass(topic, beat_times, spoken, hook_line, cta):
 
 # ---------------------------------------------------------------- assembly
 X264 = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p"]
-# Slide, wipe, and scale. Not a Ken Burns hold. The fade is overlap only:
-# each clip except the last is longer by FADE so the joined picture stays
-# the same length as the voice.
+# Slide, wipe, and scale. Not a Ken Burns hold. ATR scenes move the plate
+# only; each Devanagari line is one pre-shaped sprite and is faded whole.
+# The overlap keeps the joined picture the same length as the voice.
 SCENE_FADE_S = 0.28
 SCENE_TRANSITIONS = ("slideleft", "wipeleft", "zoomin", "slideright", "wipedown", "smoothleft")
 
@@ -1077,24 +1078,45 @@ def join_scenes(clips, durations, out, fps=30):
     subprocess.run(cmd, check=True)
 
 
+def _layered(frames):
+    return bool(frames) and all(
+        frame is not None
+        and getattr(frame, "plate", None) is not None
+        and getattr(frame, "text_layers", None) is not None
+        for frame in frames
+    )
+
+
 def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, hook_line="",
              scenes=None):
     scenes = scenes or scene_pace.plan_scenes(beat_times)
-    clips = []
     durations = []
-    for i, scene in enumerate(scenes):
-        png = scene.get("png")
-        if not png:
-            pics = beat_pngs[scene["beat"]]
-            png = pics[min(scene["index"], len(pics) - 1)]
-            scene["png"] = str(png)
-        dur = float(scene["end"]) - float(scene["start"])
-        pad = SCENE_FADE_S if i < len(scenes) - 1 else 0.0
-        out = RUN / f"scene_{i:02d}.mp4"
-        still_clip(png, dur + pad, out, fps)
-        clips.append(out)
-        durations.append(dur)
-    join_scenes(clips, durations, RUN / "silent.mp4", fps)
+    frames = []
+    for scene in scenes:
+        durations.append(float(scene["end"]) - float(scene["start"]))
+        frames.append(scene.get("frame"))
+    if _layered(frames):
+        faults = scene_transition.transition_faults(frames, SCENE_TRANSITIONS)
+        if faults:
+            die("shaped text was sliced at a transition: " + "; ".join(faults[:4]))
+        scene_transition.write_timeline(
+            frames, durations, RUN / "silent.mp4", fps=fps,
+            transitions=SCENE_TRANSITIONS, fade_s=SCENE_FADE_S,
+            overlay=scene_frames.paint_progress,
+        )
+    else:
+        clips = []
+        for i, scene in enumerate(scenes):
+            png = scene.get("png")
+            if not png:
+                pics = beat_pngs[scene["beat"]]
+                png = pics[min(scene["index"], len(pics) - 1)]
+                scene["png"] = str(png)
+            pad = SCENE_FADE_S if i < len(scenes) - 1 else 0.0
+            out = RUN / f"scene_{i:02d}.mp4"
+            still_clip(png, durations[i] + pad, out, fps)
+            clips.append(out)
+        join_scenes(clips, durations, RUN / "silent.mp4", fps)
     # voice: each beat's audio padded to its beat length
     parts = []
     for b in BEATS:
@@ -1316,6 +1338,9 @@ def main():
         kinds = scene_frames.kinds_for(beat, len(group)) if spec.get("atr") else [""] * len(group)
         paths = []
         for i, (scene, frame, flag) in enumerate(zip(group, frames, flags)):
+            if getattr(frame, "text_layers", None) is not None and getattr(frame, "plate", None) is not None:
+                scene["frame"] = frame
+                scene_frames.set_progress(frame, (scenes.index(scene) + 1) / len(scenes))
             path = RUN / f"sc_{beat}_{i}.png"
             frame.save(path)
             scene["png"] = str(path)
