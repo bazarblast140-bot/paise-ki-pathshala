@@ -393,6 +393,9 @@ class MarginRecheckTests(unittest.TestCase):
         self.assertEqual(board_short.beats_below_minimum(script, topic), [])
 
     def test_real_build_rechecks_windows_after_the_margin_trim(self):
+        import scene_frames
+        if not Path(scene_frames._FONT).is_file():
+            self.skipTest("Noto Devanagari font is not installed")
         topic, script = self._long_script()
         seen = []
 

@@ -125,11 +125,23 @@ def _paint_layers(base, frame, alpha, persist=False):
         base.paste(sprite, layer["xy"], sprite)
 
 
+def _plate(frame):
+    """Background to move. A plain PIL image is its own plate."""
+    plate = getattr(frame, "plate", None)
+    if plate is None:
+        return frame.convert("RGB")
+    return plate
+
+
 def composite(a, b, t, mode="wipe", direction="left"):
-    """RGB frame at transition progress t. Plates move; sprites only fade."""
+    """RGB frame at transition progress t. Plates move; sprites only fade.
+
+    Layered scenes carry a plate plus text sprites. A generic four-beat card
+    is a plain Image. That picture is the plate, and it has no sprites to paint.
+    """
     mode, direction = _normalize(mode, direction)
     u = ease(t)
-    base = blend_plates(a.plate, b.plate, u, mode, direction)
+    base = blend_plates(_plate(a), _plate(b), u, mode, direction)
     _paint_layers(base, a, outgoing_alpha(u), persist=False)
     _paint_layers(base, b, incoming_alpha(u), persist=False)
     _paint_layers(base, b if u >= 0.5 else a, 1.0, persist=True)
@@ -177,7 +189,7 @@ def sliced_glyph_notes(a, b, t=0.5, mode="wipe", direction="left"):
     """
     mode, direction = _normalize(mode, direction)
     u = ease(t)
-    plate = blend_plates(a.plate, b.plate, u, mode, direction)
+    plate = blend_plates(_plate(a), _plate(b), u, mode, direction)
     rendered = composite(a, b, t, mode, direction)
     notes = []
     visible = ((a, outgoing_alpha(u)), (b, incoming_alpha(u)))
