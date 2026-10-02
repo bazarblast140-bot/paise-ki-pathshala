@@ -14,6 +14,7 @@ import board_kit as K
 
 ROOT = pathlib.Path(__file__).resolve().parent
 CACHE_PATH = ROOT / "data" / "index_monthly.json"
+ATR_DAILY_PATH = ROOT / "data" / "hdfc_atr_daily.json"
 
 INDEX_NAMES = {"NIFTY 50", "SENSEX", "NIFTY BANK"}
 SOURCE_NAME = "Yahoo Finance"
@@ -208,39 +209,70 @@ def _non_numeric(reason):
     }
 
 
-def atr_lesson(cache=None, today=None, name="HDFC BANK", period=14, multiple=1.5):
-    """ATR from real monthly closes. The printed ATR is the figure the chart uses.
+def load_atr_daily(path=None):
+    """Checked-in daily OHLC for the ATR lesson. No live fetch."""
+    return json.loads(pathlib.Path(path or ATR_DAILY_PATH).read_text(encoding="utf-8"))
 
-    Distance is 1.5 times that printed ATR, not a second rounding of the raw mean.
-    Candles later use these closes only: body from close to close, no invented wick.
-    Returns None when the series is missing or the stock print is too recent.
+
+def _daily_bars(daily):
+    """Real sessions only. Zero-volume prints are not candles."""
+    out = []
+    for bar in (daily or {}).get("bars") or []:
+        if int(bar.get("volume") or 0) <= 0:
+            continue
+        out.append(bar)
+    return out
+
+
+def atr_lesson(cache=None, today=None, name="HDFC BANK", period=14, multiple=1.5, daily=None):
+    """14-day true-range ATR from real daily OHLC.
+
+    The print is the newest session on or before the three-month line, so it
+    is old enough to show and as fresh as that rule allows. Distance is 1.5
+    times the printed ATR. Candles are the stored open/high/low/close, never
+    an invented wick. Returns None when the file is missing or too short.
+    `cache` is unused; the monthly file is a different series.
     """
     today = today or date.today()
-    if cache is None:
+    if daily is None:
         try:
-            cache = load_cache()
+            daily = load_atr_daily()
         except (OSError, ValueError):
             return None
-    series = series_from_cache(name, cache)
-    if not series or len(series["points"]) < period + 1:
+    cutoff = months_before(today, 3)
+    bars = [b for b in _daily_bars(daily) if parse_point_date(b["date"]) <= cutoff]
+    if len(bars) < period + 1:
         return None
-    ok, _err = _stock_series_allowed("stock", series["points"], series["as_of"], today)
-    if not ok:
+    last = bars[-1]
+    if not stock_price_is_old_enough(last["date"], today):
         return None
-    points = series["points"][-(period + 1):]
-    closes = [float(p["close"]) for p in points]
-    changes = [abs(closes[i] - closes[i - 1]) for i in range(1, len(closes))]
-    atr_text = f"{(sum(changes) / len(changes)):.1f}"
+    window = bars[-(period + 1):]
+    ranges = []
+    for i in range(1, len(window)):
+        prev = float(window[i - 1]["close"])
+        high = float(window[i]["high"])
+        low = float(window[i]["low"])
+        ranges.append(max(high - low, abs(high - prev), abs(low - prev)))
+    atr_text = f"{(sum(ranges) / len(ranges)):.1f}"
     atr = float(atr_text)
     dist_text = f"{atr * float(multiple):.1f}"
     dist = float(dist_text)
-    entry_text = f"{closes[-1]:.1f}"
+    entry_text = f"{float(last['close']):.1f}"
     entry = float(entry_text)
+    qty = 100
+    risk = float(dist_text) * qty
+    risk_text = str(int(round(risk))) if abs(risk - round(risk)) < 1e-6 else f"{risk:.1f}"
+    close = float(last["close"])
+    adj = float(last.get("adj_close") if last.get("adj_close") is not None else close)
+    wick = [b for b in bars if "2026-06-15" <= str(b["date"])[:10] <= "2026-06-23"]
+    hit = next((b for b in wick if str(b["date"])[:10] == "2026-06-19"), None)
+    tight = f"{float(hit['high']) - 1.0:.1f}" if hit else None
+    points = [{"date": str(b["date"])[:10], "close": float(b["close"])} for b in window]
     return {
         "name": name,
-        "name_hi": "HDFC बैंक" if name == "HDFC BANK" else name,
-        "source": SOURCE_NAME,
-        "as_of": series["as_of"],
+        "name_hi": "एचडीएफसी बैंक" if name == "HDFC BANK" else name,
+        "source": (daily or {}).get("source") or SOURCE_NAME,
+        "as_of": str(last["date"])[:10],
         "period": int(period),
         "multiple": f"{float(multiple):.1f}",
         "atr": atr_text,
@@ -248,7 +280,13 @@ def atr_lesson(cache=None, today=None, name="HDFC BANK", period=14, multiple=1.5
         "entry": entry_text,
         "sl": f"{entry - dist:.1f}",
         "target": f"{entry + dist:.1f}",
+        "qty": qty,
+        "risk": risk_text,
         "points": points,
+        "window": window,
+        "wick_bars": wick,
+        "tight": tight,
+        "close_matches_adj": abs(close - adj) < 0.05,
     }
 
 
@@ -261,16 +299,17 @@ def apply_atr_card(topic, lesson):
         f"ATR {lesson['period']} candles की औसत हलचल",
         f"ATR {lesson['atr']} और {lesson['multiple']} गुना = {lesson['distance']} पॉइंट",
         f"entry {lesson['entry']}, SL {lesson['sl']}, ऊपर रेखा {lesson['target']}",
+        f"मात्रा {lesson['qty']}, जोखिम {lesson['risk']} रुपये",
         f"SOURCE {lesson['source']} as of {lesson['as_of']}",
-        "ज़्यादा दूरी = कम मात्रा, जोखिम वही",
+        "ज़्यादा दूरी = कम मात्रा, जोखिम रुपये में",
         "ATR दिशा नहीं बताता, सिर्फ़ हलचल",
         "ये शिक्षा है, किसी शेयर की खरीद-बिक्री सलाह नहीं",
     ]
     topic["beats"] = {
         "hook": ["तंग SL क्यों कटता है?", "सामान्य हलचल से तंग रेखा कटती है"],
-        "pehchan": ["नियम", f"{lesson['period']} महीने की औसत = ATR {lesson['atr']}"],
+        "pehchan": ["नियम", f"{lesson['period']} दिन की औसत = ATR {lesson['atr']}"],
         "matlab": ["हिसाब", f"{lesson['multiple']} × {lesson['atr']} = {lesson['distance']} पॉइंट"],
-        "karein": ["गलती", "दूरी बढ़े तो मात्रा घटाओ"],
+        "karein": ["गलती", f"मात्रा {lesson['qty']}, जोखिम {lesson['risk']}"],
     }
     return topic
 
@@ -285,16 +324,20 @@ def spec_for_topic(topic, today=None, fetcher=None, cache=None):
     today = today or date.today()
     key = str((topic or {}).get("key") or "")
     if key == "atr_sl":
-        if cache is None:
-            try:
-                cache = load_cache()
-            except (OSError, ValueError) as exc:
-                cache = {"series": {}}
-                print(f"[market_data] cache unreadable: {exc}")
-        lesson = atr_lesson(cache=cache, today=today)
-        full = series_from_cache("HDFC BANK", cache) if lesson else None
-        if not lesson or not full or values_are_fabricated(lesson["points"], full["points"]):
-            return _non_numeric("ATR lesson has no real monthly closes old enough to show")
+        try:
+            daily = load_atr_daily()
+        except (OSError, ValueError) as exc:
+            print(f"[market_data] ATR daily file unreadable: {exc}")
+            return _non_numeric("ATR lesson has no real daily bars old enough to show")
+        lesson = atr_lesson(today=today, daily=daily)
+        source = [
+            {"date": str(b["date"])[:10], "close": float(b["close"])}
+            for b in _daily_bars(daily)
+            if lesson and parse_point_date(b["date"]) <= parse_point_date(lesson["as_of"])
+        ]
+        if (not lesson or not lesson.get("close_matches_adj")
+                or values_are_fabricated(lesson["points"], source)):
+            return _non_numeric("ATR lesson has no post-adjustment daily close old enough to show")
         return {
             "mode": "series",
             "source": lesson["source"],

@@ -231,16 +231,26 @@ def score_content(topic, narration, spec=None, trends=None):
     return _reject_fallback(narration, _pack({"hook": hook, "accuracy": accuracy, "trend": trend}, notes))
 
 
-def score_craft(narration, overlays=None, scenes=None):
-    """0 when a scene sits too long, there are too few scenes, or a beat is vague.
+def score_craft(narration, overlays=None, scenes=None, labels=None):
+    """0 when a scene sits too long, there are too few scenes, a beat is vague, or a label leaves the 6% margin.
 
     scenes=None derives the cut list from the on-screen beat spans, which is what
     the renderer does. An explicit static list is scored as given.
+    labels=None skips the safe-area check. A list of boxes fails if any box
+    crosses the 6% frame margin.
     """
     notes = []
     vague = scene_pace.vague_beats((narration or {}).get("beats"))
     if vague:
         notes.append("vague explanation (no number, level or step): " + ", ".join(vague))
+    if labels is not None:
+        import safe_area
+        ok_boxes, bad = safe_area.check_boxes(labels)
+        if not ok_boxes:
+            sample = ", ".join(
+                f"({b[0]:.0f},{b[1]:.0f},{b[2]:.0f},{b[3]:.0f})" for b in bad[:3]
+            )
+            notes.append(f"label outside the 6% safe area: {sample}")
     if scenes is None:
         times = scene_pace.beat_times_from_overlays(overlays or [])
         if len(times) < len(scene_pace.BEATS):
@@ -259,7 +269,7 @@ def score_craft(narration, overlays=None, scenes=None):
     return 100, []
 
 
-def full_review(topic, narration, spec, overlays, trends=None, scenes=None):
+def full_review(topic, narration, spec, overlays, trends=None, scenes=None, labels=None):
     """All parts, including the visual and the craft cut. public_ok follows `passed`."""
     if trends is None:
         trends = load_trends()
@@ -267,7 +277,7 @@ def full_review(topic, narration, spec, overlays, trends=None, scenes=None):
     visual, vis_notes = score_visual(spec, overlays)
     accuracy, acc_notes = score_accuracy(narration, topic, spec)
     trend, trend_notes = score_trend(topic, trends)
-    craft, craft_notes = score_craft(narration, overlays, scenes)
+    craft, craft_notes = score_craft(narration, overlays, scenes, labels)
     notes = hook_notes + vis_notes + acc_notes + trend_notes + craft_notes
     packed = _pack(
         {"hook": hook, "visual": visual, "accuracy": accuracy, "trend": trend, "craft": craft},

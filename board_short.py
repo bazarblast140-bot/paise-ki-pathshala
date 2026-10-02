@@ -187,17 +187,26 @@ def check_narration(n, topic):
             fails.append(f"beat '{b}' khaali")
     text = " ".join(str(beats.get(b) or "") for b in BEATS)
     words = len(text.split())
-    if not 160 <= words <= 180:
-        fails.append(f"{words} words (160-180 chahiye)")
-
-    # Every beat must carry enough information to teach one step. This prevents
-    # a very short hook + generic filler from making the lesson feel disconnected.
-    beat_ranges = {
-        "hook": (22, 28),
-        "pehchan": (38, 46),
-        "matlab": (46, 54),
-        "karein": (42, 50),
-    }
+    # The ATR short is spoken at a calm rate, so its script is shorter.
+    # Every other topic still has to land in the 160-180 teaching band.
+    if topic.get("_atr"):
+        if not 90 <= words <= 140:
+            fails.append(f"{words} words (90-140 for the calm ATR short)")
+        beat_ranges = {
+            "hook": (18, 26),
+            "pehchan": (20, 34),
+            "matlab": (18, 36),
+            "karein": (24, 40),
+        }
+    else:
+        if not 160 <= words <= 180:
+            fails.append(f"{words} words (160-180 chahiye)")
+        beat_ranges = {
+            "hook": (22, 28),
+            "pehchan": (38, 46),
+            "matlab": (46, 54),
+            "karein": (42, 50),
+        }
     for b, (lo, hi) in beat_ranges.items():
         bw = len(str(beats.get(b) or "").split())
         if not lo <= bw <= hi:
@@ -367,36 +376,33 @@ def _ensure_concrete(beats, hook_line):
 
 
 def atr_narration(topic):
-    """Adult ATR lesson. Every figure is the one drawn from the monthly closes."""
+    """Calm ATR lesson sized for a normal speaking rate, not a sped-up voice.
+
+    Every figure is the daily true-range lesson. Devanagari abbreviations stay
+    one spoken word. The written script is short so Edge at +0% lands near a minute.
+    """
     lesson = topic["_atr"]
     name = lesson["name_hi"]
     hook_line = "तंग एसएल बार-बार कटता क्यों है?"
-    # Letters stay one Devanagari word so the voice does not spell A-T-R.
-    # Each chart figure is spoken once. The written word count is unchanged.
     beats = {
         "hook": (
-            f"{hook_line} भाव की सामान्य हलचल से तंग रेखा कट जाती है। "
+            f"{hook_line} भाव की सामान्य हलचल तंग रेखा को काट देती है। "
             f"एटीआर इसी हलचल को नापता है।"
         ),
         "pehchan": (
             f"नियम यह है। एटीआर पिछले {lesson['period']} कैंडल की औसत हलचल है। "
-            f"एचडीएफसी बैंक के महीने के भाव पर एटीआर {lesson['atr']} है। "
-            f"स्रोत जून {lesson['as_of'][:4]} का है। "
-            f"यह दिशा नहीं बताता, सिर्फ़ हलचल बताता है। हर महीने का बदलाव इसी औसत में जुड़ता है।"
+            f"एचडीएफसी बैंक का एटीआर {lesson['atr']} है। "
+            f"यह दिशा नहीं बताता, सिर्फ़ हलचल बताता है।"
         ),
         "matlab": (
-            f"उदाहरण एचडीएफसी बैंक का आखिरी भाव {lesson['entry']} है। "
-            f"दूरी {lesson['multiple']} गुना एटीआर रखी जाती है। "
+            f"आखिरी भाव {lesson['entry']} एंट्री है। "
             f"{lesson['multiple']} गुना {lesson['atr']} बराबर {lesson['distance']} पॉइंट। "
-            f"एंट्री रेखा वही भाव है। एसएल रेखा {lesson['sl']} पर है। "
-            f"ऊपर वाली रेखा {lesson['target']} पर है। ये रेखाएँ शिक्षा हैं, सलाह नहीं। "
-            f"स्क्रीन पर एंट्री, फिर एसएल, फिर दूरी क्रम से बनती है।"
+            f"एसएल {lesson['sl']} पर है। ऊपर वाली रेखा {lesson['target']} पर है।"
         ),
         "karein": (
-            f"गलती यह है कि एसएल को एटीआर से तंग रखना। "
-            f"{lesson['atr']} की हलचल में तंग रेखा शोर में कटती है। "
-            f"दूरी {lesson['distance']} पॉइंट हो तो मात्रा कम होती है, जोखिम वही रहता है। "
-            f"एसएल की दूरी एटीआर का {lesson['multiple']} गुना है। यह शिक्षा है, सलाह नहीं।"
+            f"गलती तंग एसएल है। {lesson['atr']} की हलचल में तंग रेखा कटती है। "
+            f"दूरी {lesson['distance']} हो और मात्रा {lesson['qty']} हो तो जोखिम {lesson['risk']} रुपये रहता है। "
+            f"यह शिक्षा है, सलाह नहीं।"
         ),
     }
     title = f"ATR से SL — {name} पर दूरी {lesson['distance']}"
@@ -579,6 +585,22 @@ def require_llm_narration(n, source):
 
 def narration(topic, c, spec=None):
     market_data.sync_topic_numbers(topic)
+    if topic.get("_atr"):
+        # The calm-rate script is fixed to the chart numbers. A 160-word draft
+        # would run long, and speeding the voice up is not allowed.
+        n = atr_narration(topic)
+        fails = check_narration(n, topic)
+        vague = scene_pace.vague_beats(n.get("beats"))
+        if vague:
+            fails.append("vague explanation (no number, level or step): " + ", ".join(vague))
+        content = _content_ok(topic, n, spec) if not fails else None
+        if fails or not content["passed"]:
+            why = fails or [content["summary"]]
+            die("ATR narration failed its gate: " + "; ".join(why))
+        n["review_attempts"] = 1
+        (RUN / "narration.json").write_text(json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
+        ok("narration: calm ATR script")
+        return n, "fallback"
     cache = RUN / "narration.json"
     if cache.exists():
         try:
@@ -986,6 +1008,11 @@ def build_ass(topic, beat_times, spoken, hook_line, cta):
 
 # ---------------------------------------------------------------- assembly
 X264 = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p"]
+# Slide, wipe, and scale. Not a Ken Burns hold. The fade is overlap only:
+# each clip except the last is longer by FADE so the joined picture stays
+# the same length as the voice.
+SCENE_FADE_S = 0.28
+SCENE_TRANSITIONS = ("slideleft", "wipeleft", "zoomin", "slideright", "wipedown", "smoothleft")
 
 
 def beat_clip(pngs, dur, out, fps=30, switch=0.58):
@@ -1024,22 +1051,51 @@ def still_clip(png, dur, out, fps=30):
                     "-t", f"{dur:.3f}", "-r", str(fps), *X264, str(out)], check=True)
 
 
+def join_scenes(clips, durations, out, fps=30):
+    """Slide, wipe, or scale between stills. Output length equals the sum of the scene durations."""
+    durations = [float(d) for d in durations]
+    if len(clips) <= 1:
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(clips[0]), "-c", "copy", str(out)], check=True)
+        return
+    cmd = ["ffmpeg", "-v", "error", "-y"]
+    for clip in clips:
+        cmd += ["-i", str(clip)]
+    filters = []
+    prev = "[0:v]"
+    for i in range(1, len(clips)):
+        offset = max(0.0, sum(durations[:i]) - 0.02)
+        name = SCENE_TRANSITIONS[(i - 1) % len(SCENE_TRANSITIONS)]
+        label = "[v]" if i == len(clips) - 1 else f"[x{i}]"
+        filters.append(
+            f"{prev}[{i}:v]xfade=transition={name}:duration={SCENE_FADE_S:.3f}:offset={offset:.3f}{label}"
+        )
+        prev = label
+    cmd += [
+        "-filter_complex", ";".join(filters),
+        "-map", "[v]", "-r", str(fps), "-t", f"{sum(durations):.3f}",
+        *X264, str(out),
+    ]
+    subprocess.run(cmd, check=True)
+
+
 def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, hook_line="",
              scenes=None):
     scenes = scenes or scene_pace.plan_scenes(beat_times)
     clips = []
+    durations = []
     for i, scene in enumerate(scenes):
         png = scene.get("png")
         if not png:
             pics = beat_pngs[scene["beat"]]
             png = pics[min(scene["index"], len(pics) - 1)]
             scene["png"] = str(png)
+        dur = float(scene["end"]) - float(scene["start"])
+        pad = SCENE_FADE_S if i < len(scenes) - 1 else 0.0
         out = RUN / f"scene_{i:02d}.mp4"
-        still_clip(png, float(scene["end"]) - float(scene["start"]), out, fps)
-        clips.append(out.name)
-    (RUN / "clips.txt").write_text("\n".join(f"file '{c}'" for c in clips), encoding="utf-8")
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", "clips.txt",
-                    "-c", "copy", "silent.mp4"], cwd=RUN, check=True)
+        still_clip(png, dur + pad, out, fps)
+        clips.append(out)
+        durations.append(dur)
+    join_scenes(clips, durations, RUN / "silent.mp4", fps)
     # voice: each beat's audio padded to its beat length
     parts = []
     for b in BEATS:
@@ -1252,26 +1308,39 @@ def main():
     for scene in scenes:
         groups[scene["beat"]].append(scene)
     paced = {}
+    label_boxes = []
+    labels_ready = True
     for beat, group in groups.items():
         if not group:
             continue
         frames, flags = scene_frames.frames_for(topic, beat, len(group), spec)
+        kinds = scene_frames.kinds_for(beat, len(group)) if spec.get("atr") else [""] * len(group)
         paths = []
         for i, (scene, frame, flag) in enumerate(zip(group, frames, flags)):
             path = RUN / f"sc_{beat}_{i}.png"
             frame.save(path)
             scene["png"] = str(path)
+            scene["kind"] = kinds[i] if kinds[i] else getattr(frame, "scene_kind", "")
             scene["callout"] = bool(scene.get("callout") or flag)
+            boxes = getattr(frame, "label_boxes", None)
+            if boxes is None:
+                labels_ready = False
+            elif labels_ready:
+                label_boxes.extend(boxes)
             paths.append(path)
         paced[beat] = tuple(paths)
     visual_gate(paced)
     ok(f"scenes: {len(scenes)} cuts, longest {max(s['end'] - s['start'] for s in scenes):.2f}s")
     overlays = short_layout.overlay_plan(topic, beat_times, hook_line, cta)
-    review = self_review.full_review(topic, n, spec, overlays, scenes=scenes)
+    review = self_review.full_review(
+        topic, n, spec, overlays, scenes=scenes,
+        labels=(label_boxes if labels_ready else None),
+    )
     review["narration_source"] = source
     review["attempts"] = n.get("review_attempts") or self_review.MAX_ATTEMPTS
     review["scenes"] = [
-        {"beat": s["beat"], "start": round(s["start"], 2), "end": round(s["end"], 2),
+        {"beat": s["beat"], "kind": s.get("kind") or "",
+         "start": round(s["start"], 2), "end": round(s["end"], 2),
          "callout": bool(s.get("callout"))}
         for s in scenes
     ]

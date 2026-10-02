@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import board_short
 import market_data
+import safe_area
 import scene_frames
 import scene_pace
 import self_review
@@ -86,22 +87,42 @@ class CraftGateTests(unittest.TestCase):
 
 
 class AtrLessonTests(unittest.TestCase):
-    def test_chart_numbers_match_the_monthly_closes(self):
+    def _true_ranges(self, window):
+        ranges = []
+        for i in range(1, len(window)):
+            prev = float(window[i - 1]["close"])
+            high, low = float(window[i]["high"]), float(window[i]["low"])
+            ranges.append(max(high - low, abs(high - prev), abs(low - prev)))
+        return ranges
+
+    def test_chart_numbers_match_the_daily_true_range(self):
         lesson = market_data.atr_lesson(today=TODAY)
         self.assertEqual(lesson["source"], "Yahoo Finance")
-        self.assertEqual(lesson["as_of"], "2026-06-04")
+        # 2026-10-01 is three months after 2026-07-01, the newest print the rule allows.
+        self.assertEqual(lesson["as_of"], "2026-07-01")
+        self.assertNotEqual(lesson["as_of"], "2026-06-04")
+        self.assertTrue(market_data.stock_price_is_old_enough(lesson["as_of"], TODAY))
         self.assertEqual(lesson["name"], "HDFC BANK")
         self.assertEqual(len(lesson["points"]), 15)
-        closes = [p["close"] for p in lesson["points"]]
-        changes = [abs(closes[i] - closes[i - 1]) for i in range(1, len(closes))]
-        self.assertEqual(lesson["atr"], f"{sum(changes) / len(changes):.1f}")
+        self.assertEqual(lesson["atr"], f"{sum(self._true_ranges(lesson['window'])) / 14:.1f}")
+        self.assertNotEqual(lesson["atr"], "36.7")
         self.assertEqual(lesson["distance"], f"{float(lesson['atr']) * 1.5:.1f}")
-        self.assertEqual(lesson["entry"], f"{closes[-1]:.1f}")
+        self.assertEqual(lesson["entry"], f"{lesson['points'][-1]['close']:.1f}")
         self.assertEqual(lesson["sl"], f"{float(lesson['entry']) - float(lesson['distance']):.1f}")
         self.assertEqual(lesson["target"], f"{float(lesson['entry']) + float(lesson['distance']):.1f}")
-        cache = market_data.load_cache()
-        source = market_data.series_from_cache("HDFC BANK", cache)["points"]
+        self.assertTrue(lesson["close_matches_adj"])
+        self.assertNotIn("2026-06-26", [p["date"] for p in lesson["points"]])
+        daily = market_data.load_atr_daily()
+        source = [
+            {"date": b["date"], "close": b["close"]}
+            for b in daily["bars"] if b["volume"] > 0 and b["date"] <= lesson["as_of"]
+        ]
         self.assertFalse(market_data.values_are_fabricated(lesson["points"], source))
+        fresh = market_data.atr_lesson(today=date(2026, 10, 2))
+        self.assertEqual(fresh["as_of"], "2026-07-02")
+        self.assertEqual(fresh["entry"], "795.9")
+        self.assertTrue(fresh["close_matches_adj"])
+        self.assertTrue(market_data.stock_price_is_old_enough(fresh["as_of"], date(2026, 10, 2)))
 
     def test_script_uses_those_numbers_and_teaches_in_order(self):
         bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))["topics"]
@@ -125,6 +146,8 @@ class AtrLessonTests(unittest.TestCase):
         self.assertIn(lesson["target"], narration["beats"]["matlab"])
         self.assertIn("गलती", narration["beats"]["karein"])
         self.assertIn("सलाह नहीं", narration["beats"]["karein"])
+        self.assertIn(str(lesson["qty"]), narration["beats"]["karein"])
+        self.assertIn(lesson["risk"], narration["beats"]["karein"])
         frames, flags = scene_frames.frames_for(topic, "matlab", 4, spec)
         self.assertEqual(len(frames), 4)
         self.assertTrue(any(flags))
@@ -139,13 +162,65 @@ class AtrLessonTests(unittest.TestCase):
     def test_short_voice_is_the_calm_male_narrator(self):
         with patch.dict(os.environ, {"VIDEO_FORMAT": "short"}):
             voice = __import__("common").cfg()["voice"]
-        self.assertEqual(voice["voice_name"], "Daniel")
-        self.assertEqual(voice["voice_id"], "onwK4e9ZLuTAKqWW03F9")
+        self.assertEqual(voice["voice_name"], "Kamal")
+        self.assertEqual(voice["voice_id"], "qsz5tTEjPvsiIJZIpM8S")
+        self.assertNotEqual(voice["voice_id"], "onwK4e9ZLuTAKqWW03F9")
         self.assertEqual(voice["model"], "eleven_multilingual_v2")
-        self.assertGreaterEqual(voice["stability"], 0.65)
-        self.assertLessEqual(voice["style"], 0.15)
+        self.assertGreaterEqual(voice["stability"], 0.7)
+        self.assertLessEqual(voice["style"], 0.05)
+        self.assertLessEqual(voice["speed"], 1.05)
         self.assertEqual(voice["edge_voice"], "hi-IN-MadhurNeural")
+        rate = int(str(voice["edge_rate"]).replace("%", "").replace("+", ""))
+        self.assertGreaterEqual(rate, 0)
+        self.assertLessEqual(rate, 10)
         self.assertNotIn("Swara", voice["edge_voice"])
+
+    def test_scene_types_are_different_and_the_chart_is_rare(self):
+        bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))["topics"]
+        topic = next(t for t in bank if t["key"] == "atr_sl")
+        spec = market_data.spec_for_topic(topic, today=TODAY)
+        times = {"hook": (0.0, 9.0), "pehchan": (9.0, 20.0), "matlab": (20.0, 34.0), "karein": (34.0, 52.0)}
+        groups = {}
+        for scene in scene_pace.plan_scenes(times):
+            groups.setdefault(scene["beat"], []).append(scene)
+        kinds = []
+        for beat, group in groups.items():
+            planned = scene_frames.kinds_for(beat, len(group))
+            frames, _flags = scene_frames.frames_for(topic, beat, len(group), spec)
+            self.assertEqual([f.scene_kind for f in frames], planned)
+            kinds.extend(planned)
+            for frame in frames:
+                ok, bad = safe_area.check_boxes(frame.label_boxes)
+                self.assertTrue(ok, bad)
+                self.assertTrue(frame.label_boxes)
+        self.assertTrue({"hook", "problem", "formula", "ladder", "split", "size", "takeaway", "cta"} <= set(kinds))
+        charts = [k for k in kinds if k in scene_frames.CHART_KINDS]
+        self.assertLessEqual(len(charts), 3)
+        self.assertGreaterEqual(len(charts), 1)
+
+    def test_a_label_outside_the_margin_fails_the_gate(self):
+        topic = _hammer()
+        narration = board_short.fallback_narration(topic)
+        spec = {"mode": "schematic", "series": [], "fabricated": False}
+        overlays = short_layout.overlay_plan(
+            topic, {"hook": (0.0, 8.0), "pehchan": (8.0, 18.0), "matlab": (18.0, 32.0), "karein": (32.0, 48.0)},
+            narration["hook_line"])
+        leaked = self_review.full_review(
+            topic, narration, spec, overlays, trends={}, labels=[(0, 0, 40, 40)])
+        self.assertEqual(leaked["parts"]["craft"], 0)
+        self.assertFalse(leaked["public_ok"])
+        self.assertIn("6%", leaked["summary"])
+        self.assertEqual(self_review.PART_BAR, 60)
+        self.assertEqual(self_review.OVERALL_BAR, 75)
+        clean = self_review.full_review(topic, narration, spec, overlays, trends={})
+        self.assertEqual(clean["parts"]["craft"], 100)
+
+    def test_transitions_include_slide_wipe_and_scale(self):
+        names = board_short.SCENE_TRANSITIONS
+        self.assertIn("slideleft", names)
+        self.assertIn("wipeleft", names)
+        self.assertIn("zoomin", names)
+        self.assertLessEqual(board_short.SCENE_FADE_S, 0.45)
 
 
 class BedTests(unittest.TestCase):
