@@ -18,6 +18,22 @@ import board_short
 import credit_log
 
 
+def select_by_keys(keys, bank=None):
+    """Topics named by key, in that order. The bank file is not written."""
+    if bank is None:
+        bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))
+    by_key = {item.get("key"): item for item in (bank.get("topics") or [])}
+    picked = []
+    missing = []
+    for key in keys:
+        item = by_key.get(key)
+        if not item:
+            missing.append(key)
+            continue
+        picked.append(json.loads(json.dumps(item)))
+    return picked, missing
+
+
 def select_upcoming(count, bank=None):
     """N different unused Short topics. The bank file is not written."""
     if bank is None:
@@ -124,6 +140,7 @@ def evaluate_topic(topic, c):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Live narration text check. Stops before TTS.")
     parser.add_argument("--topics", type=int, default=3)
+    parser.add_argument("--topic-keys", default="", help="Comma-separated keys. Empty picks upcoming topics.")
     args = parser.parse_args(argv)
     os.environ["VIDEO_FORMAT"] = "short"
     os.environ["DRY_RUN"] = "1"
@@ -134,11 +151,18 @@ def main(argv=None):
     published = ROOT / "data" / "published.json"
     bank_before = bank_path.read_bytes()
     published_before = published.read_bytes() if published.exists() else None
-    count = max(1, int(args.topics))
-    topics = select_upcoming(count)
-    if len(topics) < count:
-        print(f"FAIL only {len(topics)} upcoming topics, wanted {count}")
-        return 1
+    raw_keys = [piece.strip() for piece in str(args.topic_keys or "").split(",") if piece.strip()]
+    if raw_keys:
+        topics, missing = select_by_keys(raw_keys)
+        if missing:
+            print(f"FAIL unknown topic keys: {', '.join(missing)}")
+            return 1
+    else:
+        count = max(1, int(args.topics))
+        topics = select_upcoming(count)
+        if len(topics) < count:
+            print(f"FAIL only {len(topics)} upcoming topics, wanted {count}")
+            return 1
     c = cfg()
     failed = 0
     for topic in topics:

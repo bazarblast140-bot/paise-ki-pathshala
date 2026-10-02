@@ -7,8 +7,12 @@ name: Narration dry run
 on:
   workflow_dispatch:
     inputs:
+      topic_keys:
+        description: "Comma-separated topic keys. Leave empty to narrate upcoming topics."
+        type: string
+        default: ""
       topics:
-        description: "How many upcoming topics to narrate"
+        description: "How many different upcoming topics to narrate"
         type: number
         default: 3
 
@@ -39,4 +43,4 @@ jobs:
           DEEPSEEK_MAX_CALLS: "4"
           VIDEO_FORMAT: short
           DRY_RUN: "1"
-        run: python narration_dry_run.py --topics "${{ github.event.inputs.topics || 3 }}"
+        run: python narration_dry_run.py --topics "${{ github.event.inputs.topics || 3 }}" --topic-keys "${{ github.event.inputs.topic_keys }}"

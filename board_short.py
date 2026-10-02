@@ -968,11 +968,13 @@ def _drop_index(sentences, beat, example, lo):
     return None
 
 
-def apply_live_draft(narration, topic, total_hi=None):
+def apply_live_draft(narration, topic, total_hi=None, locked=()):
     """Insert उदाहरण, then drop whole sentences from the end of long beats.
 
     The model is not asked to shorten a script that this pass can finish.
     A beat that is still outside its window, including a long hook, is repaired.
+    `locked` beats are not used to shorten the total: a beat that would fall
+    under its minimum is left alone and another beat is trimmed instead.
     """
     if not isinstance(narration, dict):
         return narration
@@ -995,11 +997,14 @@ def apply_live_draft(narration, topic, total_hi=None):
             beats[beat] = _join_sentences(sentences)
             notes.append(f"{beat}: inserted उदाहरण at the start of the example sentence")
     ranges = {beat: beat_word_window(targets[beat], LIVE_BEAT_TOLERANCE) for beat in order}
+    locked = {beat for beat in (locked or ()) if beat}
 
     def counts():
         return {beat: len(str(beats.get(beat) or "").split()) for beat in order}
 
-    def trim_once(beat):
+    def trim_once(beat, honor_lock=False):
+        if honor_lock and beat in locked:
+            return False
         lo, _hi = ranges[beat]
         sentences = _split_sentences(beats.get(beat) or "")
         index = _drop_index(sentences, beat, example, lo)
@@ -1023,8 +1028,14 @@ def apply_live_draft(narration, topic, total_hi=None):
                 break
     while sum(counts().values()) > hi_total and guard < 80:
         guard += 1
-        ranked = sorted(order, key=lambda beat: counts()[beat] - targets[beat], reverse=True)
-        if not any(trim_once(beat) for beat in ranked):
+        # Most room above the minimum first. A beat that cannot spare a
+        # sentence without falling under its minimum is skipped.
+        ranked = sorted(
+            order,
+            key=lambda beat: counts()[beat] - ranges[beat][0],
+            reverse=True,
+        )
+        if not any(trim_once(beat, honor_lock=True) for beat in ranked):
             break
     for note in notes:
         print(f"[trim] {note}", flush=True)
@@ -1081,13 +1092,71 @@ def drop_disallowed_sentences(narration, topic):
     return True
 
 
+def narration_gate_failures(n, topic, extra=""):
+    """Every hook/teaching failure string, including ones passed in from the last call.
+
+    Self-review and the duration estimate are not recomputed here. When the
+    previous gate already produced them, they arrive in `extra`.
+    """
+    fails = list(check_narration(n or {}, topic or {}))
+    order = _lesson(topic)[0]
+    vague = scene_pace.vague_beats((n or {}).get("beats"), order=order)
+    if vague:
+        fails.append("vague explanation (no number, level or step): " + ", ".join(vague))
+    for piece in re.split(r";\s*", str(extra or "")):
+        piece = " ".join(piece.split())
+        if piece and piece not in fails:
+            fails.append(piece)
+    return fails
+
+
+def route_gate_failure(message, order, narration=None, topic=None):
+    """Map one gate failure to the beats it names, or ['all'] for the whole script.
+
+    A message that names a beat rewrites that beat. A message that names none
+    is script-level, except a disallowed number, a forbidden word, or 'लगते',
+    which are traced to the beat that contains them. 'sirf X me bolo' names
+    the beat that must keep the value, so the earlier beats are rewritten.
+    """
+    text = " ".join(str(message or "").split())
+    order = tuple(order or ())
+    keeper = re.search(r"sirf '([A-Za-z_]+)' me bolo", text)
+    if keeper and keeper.group(1) in order:
+        early = [beat for beat in ("hook", "pehchan", "matlab") if beat in order and beat != keeper.group(1)]
+        return early or [beat for beat in order if beat != keeper.group(1)]
+    named = [beat for beat in order if re.search(rf"(?<![A-Za-z_]){re.escape(beat)}(?![A-Za-z_])", text)]
+    if named:
+        return named
+    beats = ((narration or {}).get("beats") or {}) if isinstance(narration, dict) else {}
+    if "ye numbers topic me nahi" in text:
+        wanted = set()
+        for match in re.finditer(r"'([^']*)'|\"([^\"]*)\"", text):
+            token = match.group(1) if match.group(1) is not None else match.group(2)
+            wanted |= hook_check.extract_numbers(token)
+        found = [
+            beat for beat in order
+            if hook_check.extract_numbers(str(beats.get(beat) or "")) & wanted
+        ]
+        return found or ["all"]
+    if text.startswith("mana shabd"):
+        words = re.findall(r"'([^']+)'", text)
+        found = [
+            beat for beat in order
+            if any(word.lower() in str(beats.get(beat) or "").lower() for word in words)
+        ]
+        return found or ["all"]
+    if "लगते" in text:
+        found = [beat for beat in order if "लगते" in str(beats.get(beat) or "")]
+        return found or ["all"]
+    return ["all"]
+
+
 def beats_to_rewrite(n, topic, extra=""):
     """Beats the model may rewrite.
 
-    A live short rewrites a beat that is still outside its window after the
-    trim, including a hook that stayed long because its first question is kept.
-    A beat that is only too short is still included. A beat that still contains
-    a disallowed number is rewritten too, inside the same call budget.
+    A live short rewrites whatever the hook/teaching gate just failed. Every
+    failure string maps to the beat it names, or to every beat when the
+    failure is script-level. The loop does not stop while any failure remains.
     """
     order, targets, total_window, _band = _lesson(topic)
     if topic.get("_atr"):
@@ -1095,20 +1164,18 @@ def beats_to_rewrite(n, topic, extra=""):
     beats = (n or {}).get("beats") or {}
     counts = {b: len(str(beats.get(b) or "").split()) for b in order}
     if topic.get("_live_short"):
+        fails = narration_gate_failures(n, topic, extra)
+        if not fails:
+            return []
         rewrite = []
-        for beat in order:
-            lo, hi = beat_word_window(targets[beat], LIVE_BEAT_TOLERANCE)
-            if counts[beat] < lo or counts[beat] > hi:
-                rewrite.append(beat)
-        total = sum(counts.values())
-        if total < total_window[0]:
-            for beat in order:
-                if counts[beat] < targets[beat] and beat not in rewrite:
+        for message in fails:
+            targets_for = route_gate_failure(message, order, n, topic)
+            if "all" in targets_for:
+                return list(order)
+            for beat in targets_for:
+                if beat in order and beat not in rewrite:
                     rewrite.append(beat)
-        for beat in _number_beats(n, topic, order):
-            if beat not in rewrite:
-                rewrite.append(beat)
-        return rewrite
+        return rewrite or list(order)
     rewrite = []
     for beat in order:
         lo, hi = beat_word_window(targets[beat])
@@ -1145,8 +1212,8 @@ def beats_to_rewrite(n, topic, extra=""):
     return rewrite
 
 
-def repair_instructions(draft, rewrite, topic=None):
-    """Tell the model the current count, the exact target, and which beats are vague."""
+def repair_instructions(draft, rewrite, topic=None, failures=None):
+    """Tell the model the current count, the exact target, and the gate failure."""
     order, targets, _window, _band = _lesson(topic)
     counts = {b: len(str(((draft or {}).get("beats") or {}).get(b) or "").split()) for b in order}
     vague = set(scene_pace.vague_beats((draft or {}).get("beats"), order=order))
@@ -1176,6 +1243,9 @@ def repair_instructions(draft, rewrite, topic=None):
                 + hook_check.worked_example_sentence(topic)
             )
     tol = LIVE_BEAT_TOLERANCE if (topic or {}).get("_live_short") else None
+    gate_fails = list(failures) if failures is not None else (
+        narration_gate_failures(draft, topic) if topic is not None else []
+    )
     for beat in order:
         target = targets[beat]
         lo, hi = beat_word_window(target, tol)
@@ -1205,6 +1275,13 @@ def repair_instructions(draft, rewrite, topic=None):
                         f" Disallowed numbers: {bad}. Remove every one of them. "
                         "Use only the allowed list."
                     )
+            exact = [
+                message for message in gate_fails
+                if beat in route_gate_failure(message, order, draft, topic)
+                or "all" in route_gate_failure(message, order, draft, topic)
+            ]
+            if exact:
+                line += " Exact failure: " + " | ".join(exact)
             lines.append(line)
         else:
             lines.append(
@@ -1307,6 +1384,84 @@ def live_narration_system(topic):
     return NARR_SYSTEM + "\n\n" + "\n".join(lines)
 
 
+def topic_key_figure(topic):
+    """A figure already written on the card, for the vague-beat fallback."""
+    blob = hook_check._topic_blob(topic)
+    percent = re.search(r"\d[\d,]*(?:\.\d+)?\s*%", blob)
+    if percent:
+        return re.sub(r"\s+", "", percent.group(0))
+    signed = re.search(r"[+\-]?\d[\d,]*(?:\.\d+)?R\b", blob)
+    if signed:
+        return signed.group(0)
+    allowed = [number for number in hook_check.allowed_numbers(topic) if number not in {"1", "2", "3"}]
+    if not allowed:
+        allowed = list(hook_check.allowed_numbers(topic))
+
+    def sort_key(value):
+        try:
+            return (0, -len(str(value)), float(value))
+        except (TypeError, ValueError):
+            return (1, 0, str(value))
+
+    allowed.sort(key=sort_key)
+    return allowed[0] if allowed else ""
+
+
+def anchor_vague_takeaway(narration, topic):
+    """After the repairs, give a still-vague karein or galti one concrete sentence.
+
+    The sentence reuses a figure from the topic. It is kept only when the beat
+    and the total stay inside their windows.
+    """
+    if not isinstance(narration, dict):
+        return False
+    if not (topic or {}).get("_live_short") or (topic or {}).get("_atr"):
+        return False
+    order, targets, (total_lo, total_hi), _band = _lesson(topic)
+    beats = narration.setdefault("beats", {})
+    vague = scene_pace.vague_beats(beats, order=order)
+    chosen = [beat for beat in ("galti", "karein") if beat in vague]
+    figure = topic_key_figure(topic)
+    if not chosen or not figure:
+        return False
+    example = hook_check.worked_example_sentence(topic)
+    notes = []
+    for beat in chosen:
+        sentence = f"अगले हफ़्ते से हर trade के बाद {figure} लिखिए।"
+        if beat == "galti":
+            sentence = "उदाहरण " + sentence
+        lo, hi = beat_word_window(targets[beat], LIVE_BEAT_TOLERANCE)
+        current = str(beats.get(beat) or "")
+        original = current
+        guard = 0
+        while len(f"{current} {sentence}".split()) > hi and guard < 20:
+            guard += 1
+            parts = _split_sentences(current)
+            index = _drop_index(parts, beat, example, lo)
+            if index is None:
+                break
+            parts.pop(index)
+            current = _join_sentences(parts)
+        trial = " ".join(f"{current} {sentence}".split())
+        if not lo <= len(trial.split()) <= hi:
+            continue
+        beats[beat] = trial
+        total = sum(len(str(beats.get(name) or "").split()) for name in order)
+        if not total_lo <= total <= total_hi:
+            beats[beat] = original
+            continue
+        notes.append(f"{beat}: added '{sentence}'")
+    if not notes:
+        return False
+    bucket = narration.setdefault("_trim_notes", [])
+    if isinstance(bucket, list):
+        bucket.extend(notes)
+    for note in notes:
+        print(f"[trim] {note}", flush=True)
+    topic["_spoken_beats"] = {beat: str(beats.get(beat) or "") for beat in order}
+    return True
+
+
 def narration(topic, c, spec=None):
     market_data.sync_topic_numbers(topic)
     if _live_lesson(c) and not topic.get("_atr"):
@@ -1372,16 +1527,33 @@ def narration(topic, c, spec=None):
             fails.append("self-review below bar: " + content["summary"])
         return fails
 
-    # Call 1 is a full script. The next contentful call rewrites only the
-    # failing beats. An empty or timed-out body stays on this loop and never
-    # becomes the topic-card template. The loop stops at 4 DeepSeek calls.
+    def _accept(script, calls_used):
+        ok(f"narration OK (call {calls_used})")
+        script["review_attempts"] = calls_used
+        script["narration_fallback"] = False
+        script["source"] = "llm"
+        cache.write_text(json.dumps(script, ensure_ascii=False, indent=2), encoding="utf-8")
+        return script, "llm"
+
+    # Call 1 is a full script. Later calls rewrite only the beats the gate
+    # named. An empty body never becomes the topic-card template. A live
+    # short uses all 4 calls while any failure remains. Four-beat scripts
+    # still stop after one contentful repair.
     while calls < NARRATION_CALL_CAP:
         rewrite = None
         if draft is not None and not repair_done:
             rewrite = beats_to_rewrite(draft, topic, last)
-            if topic.get("_live_short") and not rewrite:
+            if topic.get("_live_short") and not topic.get("_atr") and not rewrite:
+                pending = narration_gate_failures(draft, topic, last)
+                if not pending:
+                    if not _gate(draft):
+                        return _accept(draft, calls)
+                rewrite = list(_lesson(topic)[0])
+            elif not rewrite:
                 break
-            user_msg = msg + "\n\n" + repair_instructions(draft, rewrite, topic)
+            user_msg = msg + "\n\n" + repair_instructions(
+                draft, rewrite, topic, failures=narration_gate_failures(draft, topic, last),
+            )
             kind = "repair"
         else:
             extra = ""
@@ -1430,16 +1602,21 @@ def narration(topic, c, spec=None):
             draft = n
             fails = _gate(n)
         if not fails:
-            ok(f"narration OK (call {calls})")
-            n["review_attempts"] = calls
-            n["narration_fallback"] = False
-            n["source"] = "llm"
-            cache.write_text(json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
-            return n, "llm"
+            return _accept(n, calls)
         last = "; ".join(fails)
         print(f"[retry] narration call {calls}/{NARRATION_CALL_CAP}: {last}")
         if kind == "repair" and not (topic.get("_live_short") and not topic.get("_atr")):
             break
+    if (
+        topic.get("_live_short")
+        and not topic.get("_atr")
+        and isinstance(draft, dict)
+        and anchor_vague_takeaway(draft, topic)
+    ):
+        fails = _gate(draft)
+        if not fails:
+            return _accept(draft, calls)
+        last = "; ".join(fails)
     reason = (
         "LLM narration failed the hook/teaching gate; "
         "refusing the topic-card template (no upload, no paid voice)"
@@ -2775,11 +2952,27 @@ def _estimate_note(narration, topic):
     )
 
 
+def beats_below_minimum(narration, topic):
+    """Live beats whose word count is under the window. Empty when none are."""
+    if not (topic or {}).get("_live_short") or (topic or {}).get("_atr"):
+        return []
+    order, targets, _, _ = _lesson(topic)
+    beats = (narration or {}).get("beats") or {}
+    under = []
+    for beat in order:
+        lo, _hi = beat_word_window(targets[beat], LIVE_BEAT_TOLERANCE)
+        if len(str(beats.get(beat) or "").split()) < lo:
+            under.append(beat)
+    return under
+
+
 def tighten_duration_margin(narration, topic):
     """Before TTS, a live estimate over 90s is trimmed toward 170 words.
 
     The prompt still aims at 140-175. This pass is free: no model call and no
     voice request. The hook's first question and the udaharan core stay.
+    After the trim the beat windows are checked again. A beat that fell under
+    its minimum is locked and a different beat is trimmed instead.
     """
     if not isinstance(narration, dict):
         return narration
@@ -2793,7 +2986,18 @@ def tighten_duration_margin(narration, topic):
         f"{LIVE_ESTIMATE_MARGIN_S:.0f}s; trimming toward {LIVE_MARGIN_WORDS} words",
         flush=True,
     )
+    saved = json.loads(json.dumps(narration.get("beats") or {}))
     apply_live_draft(narration, topic, total_hi=LIVE_MARGIN_WORDS)
+    under = beats_below_minimum(narration, topic)
+    if under:
+        print(
+            f"[duration] {', '.join(under)} fell under the minimum; trimming a different beat",
+            flush=True,
+        )
+        narration["beats"] = json.loads(json.dumps(saved))
+        apply_live_draft(narration, topic, total_hi=LIVE_MARGIN_WORDS, locked=under)
+        if beats_below_minimum(narration, topic):
+            narration["beats"] = json.loads(json.dumps(saved))
     return narration
 
 
@@ -2823,7 +3027,9 @@ def _one_beat_repair(narration, topic, c, spec, why):
         "category": topic.get("cat"),
         "facts": topic.get("facts"),
     }, ensure_ascii=False)
-    user += "\n\n" + repair_instructions(narration, rewrite, topic)
+    user += "\n\n" + repair_instructions(
+        narration, rewrite, topic, failures=narration_gate_failures(narration, topic, why),
+    )
     user += "\n\n" + why
     system = live_narration_system(topic) if topic.get("_live_short") else NARR_SYSTEM
     try:
@@ -2867,6 +3073,13 @@ def fit_estimated_duration(narration, topic, c, spec):
     fails = _collect_dry_fails(narration, topic, spec)
     if not fails:
         tighten_duration_margin(narration, topic)
+        under = beats_below_minimum(narration, topic)
+        if under:
+            die(
+                "margin trim left "
+                + ", ".join(under)
+                + " under the beat minimum; refusing TTS with 0 characters spent"
+            )
         return narration
     why = "; ".join(fails)
     print(f"[duration] dry check failed before TTS: {why}")
@@ -2888,6 +3101,13 @@ def fit_estimated_duration(narration, topic, c, spec):
             + "; ".join(fails)
         )
     tighten_duration_margin(narration, topic)
+    under = beats_below_minimum(narration, topic)
+    if under:
+        die(
+            "margin trim left "
+            + ", ".join(under)
+            + " under the beat minimum; refusing TTS with 0 characters spent"
+        )
     (RUN / "narration.json").write_text(
         json.dumps(narration, ensure_ascii=False, indent=2), encoding="utf-8")
     return narration
