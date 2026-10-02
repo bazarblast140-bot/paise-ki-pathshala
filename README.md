@@ -291,34 +291,37 @@ Reel pehle se nahi daali.
 
 Monetization thresholds + checklist: `MONETIZATION.md`.
 
-## Schedule (build ahead, 3 slots)
+## Schedule (build 12–14h ahead, 3 slots)
 
-GitHub cron late hota hai, `:00` / `:30` gira deta hai, aur **22:30–01:30 UTC** par aksar run banata hi nahi. Isliye 8 trigger din bhar odd minutes par hain, us window ke bahar. YouTube `publishAt` slot ka public time hai. Ek run agla **khali** slot leta hai jo abhi se lagbhag **14 ghante** ke andar ho (hold aur filled skip). Missed slot doosre slot par roll nahi hota aur turant public nahi hota. Din me public posts 3 hi rehte hain.
+GitHub cron late hota hai, `:00` / `:30` gira deta hai, aur **22:30–01:30 UTC** par aksar run banata hi nahi. Isliye 9 trigger odd minutes par hain, us window ke bahar. Har slot ki 3 chances uske publish se **12–14 ghante** pehle hain. YouTube `publishAt` slot ka public time hai. Ek run sabse pehla **khali** future slot leta hai jo abhi se kam se kam **2 ghante** aur zyada se zyada **26 ghante** door ho (hold aur filled skip). Missed slot doosre slot par roll nahi hota aur turant public nahi hota. Din me public posts 3 hi rehte hain. Steady state me kam se kam 2 future slot pehle se private + publishAt par hone chahiye.
 
-| UTC cron | IST | Kis slot ke liye (≥2h lead) |
+| UTC cron | IST | 12–14h target |
 |---|---|---|
-| `17 2 * * *` | 07:47 | 16:00 (8h13m), 21:00 (13h13m) |
-| `43 4 * * *` | 10:13 | 16:00 (5h47m), 21:00 (10h47m) |
-| `7 7 * * *` | 12:37 | 16:00 (3h23m), 21:00 (8h23m) |
-| `13 13 * * *` | 18:43 | 21:00 (2h17m), agla 08:30 (13h47m) |
-| `47 15 * * *` | 21:17 | agla 08:30 (11h13m) |
-| `23 17 * * *` | 22:53 | agla 08:30 (9h37m) |
-| `41 19 * * *` | 01:11 | agla 08:30 (7h19m) |
-| `17 21 * * *` | 02:47 | agla 08:30 (5h43m), 16:00 (13h13m) |
+| `47 1 * * *` | 07:17 | 21:00 (13h43m) |
+| `23 2 * * *` | 07:53 | 21:00 (13h07m) |
+| `13 3 * * *` | 08:43 | 21:00 (12h17m) |
+| `7 13 * * *` | 18:37 | agla 08:30 (13h53m) — 3 Oct 08:30, 2 Oct ki shaam |
+| `47 13 * * *` | 19:17 | agla 08:30 (13h13m) |
+| `23 14 * * *` | 19:53 | agla 08:30 (12h37m) |
+| `37 20 * * *` | 02:07 | 16:00 (13h53m) |
+| `13 21 * * *` | 02:43 | 16:00 (13h17m) |
+| `47 21 * * *` | 03:17 | 16:00 (12h43m) |
 
-08:30 IST = 03:00 UTC. 16:00 IST = 10:30 UTC. 21:00 IST = 15:30 UTC.
+08:30 IST = 03:00 UTC. 16:00 IST = 10:30 UTC. 21:00 IST = 15:30 UTC. 21:00 se agla 08:30 = 11.5h.
 
-Slot watch (alert): `19 3` (08:49 IST), `19 11` (16:49 IST), `19 16` (21:49 IST). Khali slot par extra instant-public video nahi; fill sirf tab jab agla khali slot 14h me ho.
+Slot watch (alert): `19 3` (08:49 IST), `19 11` (16:49 IST), `19 16` (21:49 IST). Khali slot par extra instant-public video nahi; fill sirf tab jab agla khali slot 26h lookahead me ho.
 
 ## Health check (build se pehle)
 
-Workflow: **Health check** (`.github/workflows/health-check.yml`). Actions cron UTC hai; IST = UTC+5:30. Check us slot ke sabse pehle build se pehle chalti hai, odd minute par, 22:30–01:30 UTC ke bahar:
+Workflow: **Health check** (`.github/workflows/health-check.yml`). Actions cron UTC hai; IST = UTC+5:30. Check us slot ke sabse pehle 12–14h build se pehle chalti hai, odd minute par, 22:30–01:30 UTC ke bahar:
 
 | Check (IST) | UTC cron | Slot |
 |---|---|---|
 | 17:17 | `47 11 * * *` | 08:30 |
-| 01:23 | `53 19 * * *` | 16:00 |
-| 03:17 | `47 21 * * *` | 21:00 |
+| 00:53 | `23 19 * * *` | 16:00 |
+| 02:53 | `23 21 * * *` | 21:00 |
+
+Agar ledger me **2 se kam** future slot private + publishAt par hon, yehi workflow `health-alert` issue kholta hai (hold aur withdrawn count nahi hote).
 
 `workflow_dispatch` bhi hai (slot = auto / 08:30 / 16:00 / 21:00). Sirf read: YouTube **refresh** (access token discard, koi Data API call nahi), DeepSeek `GET /user/balance`, Kimi balance **agar key set ho**, Anthropic `GET /v1/models` **agar key set ho**, ElevenLabs `GET /v1/user/subscription`, Instagram `debug_token` (warna ek `fields=id` read). Koi upload / publish / Reel post nahi.
 

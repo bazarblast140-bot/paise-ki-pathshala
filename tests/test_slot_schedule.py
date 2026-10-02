@@ -18,14 +18,14 @@ import slot_guard as SG
 IST = SG.IST
 ROOT = Path(__file__).resolve().parent.parent
 WF = ROOT / ".github" / "workflows"
-HORIZON = int(SG.MAX_LOOKAHEAD.total_seconds() // 60)
 
 
 class CronTests(unittest.TestCase):
-    def test_eight_odd_minute_triggers_outside_the_busy_window(self):
-        self.assertEqual(SG.MAX_LOOKAHEAD.total_seconds(), 14 * 3600)
-        self.assertEqual(len(SG.PUBLISH_CRONS), 8)
-        self.assertEqual(len({cron for cron, _slot in SG.PUBLISH_CRONS}), 8)
+    def test_build_crons_are_odd_minutes_outside_the_busy_window(self):
+        self.assertEqual(SG.MIN_LEAD.total_seconds(), 2 * 3600)
+        self.assertEqual(SG.MAX_LOOKAHEAD.total_seconds(), 26 * 3600)
+        self.assertEqual(len(SG.PUBLISH_CRONS), 9)
+        self.assertEqual(len({cron for cron, _slot in SG.PUBLISH_CRONS}), 9)
         for cron, _slot in SG.PUBLISH_CRONS:
             minute = int(cron.split()[0])
             self.assertNotIn(minute, (0, 30), cron)
@@ -37,21 +37,15 @@ class CronTests(unittest.TestCase):
         for dropped in ('"47 23 * * *"', '"17 0 * * *"', '"23 1 * * *"'):
             self.assertNotIn(dropped, publish)
 
-    def test_each_slot_has_three_chances_at_least_two_hours_ahead(self):
+    def test_each_slot_has_three_chances_twelve_to_fourteen_hours_ahead(self):
         for slot in SG.SLOTS:
-            leads = sorted(lead for _cron, lead in SG.covering_leads(slot, min_minutes=120))
+            band = SG.covering_leads(slot, min_minutes=12 * 60, max_minutes=14 * 60)
+            leads = sorted(lead for _cron, lead in band)
             self.assertGreaterEqual(len(leads), 3, (slot, leads))
-            self.assertGreaterEqual(leads[0], 120, slot)
-        # 21:00 is the night slot. At least one chance is earlier in the day,
-        # not only in the last couple of hours before 15:30 UTC.
-        night = [lead for _cron, lead in SG.covering_leads("21:00", min_minutes=120)]
-        self.assertTrue(any(lead >= 6 * 60 for lead in night), night)
-        # 08:30 is armed the previous afternoon/evening, never in the crush.
-        morning = [cron for cron, _lead in SG.covering_leads("08:30", min_minutes=120)]
-        self.assertGreaterEqual(len(morning), 3)
-        for cron in morning:
-            self.assertFalse(SG.cron_in_busy_window(cron), cron)
-            self.assertLess(int(cron.split()[1]), 22, cron)
+            self.assertGreaterEqual(leads[0], 12 * 60, slot)
+            self.assertLessEqual(leads[-1], 14 * 60, slot)
+            for cron, _lead in band:
+                self.assertFalse(SG.cron_in_busy_window(cron), cron)
 
     def test_health_and_watch_match_the_lookahead_and_avoid_the_crush(self):
         for cron, _check, slot, lead in SG.HEALTH_SCHEDULE:
@@ -59,11 +53,11 @@ class CronTests(unittest.TestCase):
             self.assertNotIn(minute, (0, 30))
             self.assertEqual(minute % 2, 1, cron)
             self.assertFalse(SG.cron_in_busy_window(cron), cron)
-            in_window = [
+            band = [
                 item_lead for _cron, item_lead in SG.covering_leads(
-                    slot, min_minutes=int(SG.MIN_LEAD.total_seconds() // 60), max_minutes=HORIZON)
+                    slot, min_minutes=12 * 60, max_minutes=14 * 60)
             ]
-            self.assertGreater(lead, max(in_window), slot)
+            self.assertGreater(lead, max(band), slot)
             self.assertEqual(lead, SG.cron_lead_minutes(cron, slot))
         for cron, slot in SG.WATCH_CRONS:
             minute = int(cron.split()[0])
@@ -96,7 +90,7 @@ class NextSlotTests(unittest.TestCase):
         again = SG.next_unfilled(now, [])
         self.assertEqual(first, again)
         filled = [{"date_ist": "2026-10-02", "slot": "08:30", "video_id": "S5KRdVkEJf0"}]
-        # 16:00 is 10h13m away, inside the 14h lookahead, so the run moves on.
+        # 16:00 is 10h13m away, inside the 26h lookahead, so the run moves on.
         choice = SG.next_unfilled(now, filled)
         self.assertEqual(choice["slot"], "16:00")
         self.assertEqual(choice["date_ist"], "2026-10-02")
@@ -110,17 +104,19 @@ class NextSlotTests(unittest.TestCase):
         self.assertNotEqual(choice["slot"], "08:30")
 
     def test_late_1600_run_does_not_steal_tomorrow(self):
-        # 17:04 UTC = 22:34 IST. The old code scheduled the next day's 16:00.
-        # 08:30 next morning is 9h56m away (inside 14h). Tomorrow's 16:00 is 17h26m, outside.
+        # 17:04 UTC = 22:34 IST. The old code scheduled the missed 16:00 onto the next day.
+        # Earliest open slot is 08:30 (9h56m). A hold there moves on to 16:00 (17h26m, inside 26h).
         now = datetime(2026, 10, 1, 22, 34, tzinfo=IST)
         choice = SG.next_unfilled(now, [])
         self.assertEqual(choice["slot"], "08:30")
         self.assertEqual(choice["date_ist"], "2026-10-02")
-        self.assertNotEqual(choice["slot"], "16:00")
         self.assertIsNone(SG.scheduled_publish_at("16:00", now))
         self.assertIsNone(SG.scheduled_publish_at("16:00", now, date_ist="2026-10-01"))
         held = [{"date_ist": "2026-10-02", "slot": "08:30", "video_id": None, "platform": "hold"}]
-        self.assertIsNone(SG.next_unfilled(now, held))
+        moved = SG.next_unfilled(now, held)
+        self.assertEqual(moved["slot"], "16:00")
+        self.assertEqual(moved["date_ist"], "2026-10-02")
+        self.assertEqual(moved["publish_at"], "2026-10-02T10:30:00Z")
 
     def test_late_2100_run_does_not_push_the_video_to_the_next_2100(self):
         # 20:24 UTC = 01:54 IST the next morning. Old code targeted the next 21:00.
@@ -137,7 +133,7 @@ class NextSlotTests(unittest.TestCase):
         self.assertEqual(choice["slot"], "16:00")
         self.assertEqual(choice["date_ist"], "2026-10-02")
         filled = [{"date_ist": "2026-10-02", "slot": "16:00", "video_id": "abc"}]
-        # 21:00 is 8h49m away, still inside 14h.
+        # 21:00 is 8h49m away, inside 26h.
         nxt = SG.next_unfilled(now, filled)
         self.assertEqual(nxt["slot"], "21:00")
         self.assertEqual(nxt["date_ist"], "2026-10-02")
@@ -151,7 +147,7 @@ class NextSlotTests(unittest.TestCase):
         self.assertIsNone(SG.scheduled_publish_at("08:30", now, date_ist="2026-10-02"))
 
     def test_filled_or_held_slot_moves_on_only_inside_the_lookahead(self):
-        # 05:47 IST: 16:00 is 10h13m ahead (in); 21:00 is 15h13m ahead (out).
+        # 05:47 IST: 16:00 is 10h13m ahead, 21:00 is 15h13m, next 08:30 is 26h43m.
         now = datetime(2026, 10, 2, 5, 47, tzinfo=IST)
         for platform, video_id in (("youtube", "abc"), ("hold", None)):
             blocked = [{"date_ist": "2026-10-02", "slot": "08:30", "video_id": video_id, "platform": platform}]
@@ -161,12 +157,44 @@ class NextSlotTests(unittest.TestCase):
             both = blocked + [{
                 "date_ist": "2026-10-02", "slot": "16:00", "video_id": video_id, "platform": platform,
             }]
-            self.assertIsNone(SG.next_unfilled(now, both), platform)
+            third = SG.next_unfilled(now, both)
+            self.assertEqual(third["slot"], "21:00", platform)
+            full = both + [{
+                "date_ist": "2026-10-02", "slot": "21:00", "video_id": video_id, "platform": platform,
+            }]
+            self.assertIsNone(SG.next_unfilled(now, full), platform)
         # Custom horizon stops before the following slot even when the default would allow it.
         held = [{"date_ist": "2026-10-02", "slot": "08:30", "video_id": None, "platform": "hold"}]
         self.assertIsNone(SG.next_unfilled(now, held, max_lookahead=SG.timedelta(hours=6)))
         self.assertEqual(
             SG.next_unfilled(now, held, max_lookahead=SG.timedelta(hours=14))["slot"], "16:00")
+
+    def test_min_lead_is_about_two_hours(self):
+        on_time = datetime(2026, 10, 3, 6, 30, tzinfo=IST)  # exactly 2h before 08:30
+        self.assertEqual(SG.next_unfilled(on_time, [])["slot"], "08:30")
+        too_close = datetime(2026, 10, 3, 6, 31, tzinfo=IST)  # 1h59m
+        choice = SG.next_unfilled(too_close, [])
+        self.assertNotEqual(choice["slot"], "08:30")
+        self.assertEqual(choice["slot"], "16:00")
+        self.assertEqual(choice["publish_at"], "2026-10-03T10:30:00Z")
+
+    def test_oct3_0830_is_built_on_the_evening_of_oct2(self):
+        # 13:07 UTC = 18:37 IST on 2 Oct, the first 12–14h chance for 3 Oct 08:30.
+        now = datetime(2026, 10, 2, 18, 37, tzinfo=IST)
+        # 2 Oct 21:00 is still 2h23m away, so strict order fills that first.
+        self.assertEqual(SG.next_unfilled(now, [])["slot"], "21:00")
+        tonight = [{"date_ist": "2026-10-02", "slot": "21:00", "video_id": "night"}]
+        choice = SG.next_unfilled(now, tonight)
+        self.assertEqual(choice["date_ist"], "2026-10-03")
+        self.assertEqual(choice["slot"], "08:30")
+        self.assertEqual(choice["publish_at"], "2026-10-03T03:00:00Z")
+        # The next chance in the same evening moves on to 16:00, still inside 26h.
+        later = datetime(2026, 10, 2, 19, 17, tzinfo=IST)
+        queued = tonight + [{"date_ist": "2026-10-03", "slot": "08:30", "video_id": "morning"}]
+        nxt = SG.next_unfilled(later, queued)
+        self.assertEqual(nxt["date_ist"], "2026-10-03")
+        self.assertEqual(nxt["slot"], "16:00")
+        self.assertEqual(nxt["publish_at"], "2026-10-03T10:30:00Z")
 
     def test_two_simultaneous_runs_cannot_fill_the_same_slot(self):
         now = datetime(2026, 10, 4, 5, 47, tzinfo=IST)
@@ -211,7 +239,7 @@ class NextSlotTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["slot"], "08:30")
         self.assertEqual(rows[0]["date_ist"], "2026-10-04")
-        # The loser re-reads and moves on. 16:00 that day is inside 14h.
+        # The loser re-reads and moves on. 16:00 that day is inside 26h.
         self.assertEqual(skips[0][2]["slot"], "16:00")
         self.assertNotEqual(skips[0][2]["slot"], rows[0]["slot"])
 
@@ -240,7 +268,10 @@ class NextSlotTests(unittest.TestCase):
         self.assertNotIn("slot=08:30", text)
 
         buf = io.StringIO()
-        blocked = filled + [{"date_ist": "2026-10-02", "slot": "16:00", "video_id": None, "platform": "hold"}]
+        blocked = filled + [
+            {"date_ist": "2026-10-02", "slot": "16:00", "video_id": None, "platform": "hold"},
+            {"date_ist": "2026-10-02", "slot": "21:00", "video_id": "night"},
+        ]
         with mock.patch.object(SG, "_now", return_value=now), \
              mock.patch.object(SG, "_read", return_value=blocked), \
              mock.patch("sys.stdout", buf):
@@ -249,6 +280,7 @@ class NextSlotTests(unittest.TestCase):
         self.assertIn("taken=true", text)
         self.assertNotIn("slot=08:30", text)
         self.assertNotIn("slot=16:00", text)
+        self.assertNotIn("slot=21:00", text)
 
     def test_publish_date_env_wins_over_the_clock_rollover(self):
         now = datetime(2026, 10, 1, 22, 34, tzinfo=IST)
@@ -279,10 +311,12 @@ class WatchFillTests(unittest.TestCase):
     def test_empty_past_slot_does_not_request_an_extra_post_when_nothing_is_ahead(self):
         import slot_watch
         now = slot_watch.datetime(2026, 10, 1, 21, 49, tzinfo=slot_watch.IST)
-        # 08:30 is held. 16:00 is 18h11m away, outside the 14h lookahead.
+        # Every canonical slot inside 26h is held. The one after that is 34h away.
         entries = [
             {"date_ist": "2026-09-01", "slot": "08:30", "video_id": "abc", "format": "short"},
             {"date_ist": "2026-10-02", "slot": "08:30", "video_id": None, "platform": "hold"},
+            {"date_ist": "2026-10-02", "slot": "16:00", "video_id": None, "platform": "hold"},
+            {"date_ist": "2026-10-02", "slot": "21:00", "video_id": None, "platform": "hold"},
         ]
         flags, _text = self._run(now, entries)
         self.assertIn("missing=true", flags)

@@ -1,7 +1,7 @@
 name: Slot watch
 
 # Har slot ke baad dekhta hai ki us slot ka video sach me gaya ya nahi.
-# Khali mile to: Telegram. Fill tabhi jab agla khali slot 14h lookahead me ho —
+# Khali mile to: Telegram. Fill tabhi jab agla khali slot 26h lookahead me ho —
 # wahi ahead-of-slot publishAt, koi extra turant-public video nahi.
 # Missed slot doosre slot par roll nahi hota.
 # Odd minutes, 22:30–01:30 UTC ke bahar: GitHub :00/:30 aur midnight crush gira deta hai.
@@ -61,7 +61,7 @@ jobs:
           SLOT_CHECK="$SLOT_CHECK" python slot_watch.py
 
   # Khali slot ka alert alag hai. Fill sirf tab jab next unfilled slot
-  # 14h lookahead me ho. privacy=public -> private + publishAt. Instant
+  # 26h lookahead me ho (aur kam se kam 2h door). privacy=public -> private + publishAt. Instant
   # public (privacy=now) yahan nahi — usse din ka extra post ban jaata tha.
   fill:
     needs: check

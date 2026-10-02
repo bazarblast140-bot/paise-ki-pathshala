@@ -3,6 +3,7 @@ import re
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest import mock
 
 import health_check as H
 
@@ -672,6 +673,48 @@ class IssueSyncTests(unittest.TestCase):
         self.assertEqual(http.calls, [])
 
 
+class FutureSlotTests(unittest.TestCase):
+    def test_fewer_than_two_future_slots_warns_and_opens_an_alert(self):
+        now = datetime(2026, 10, 2, 12, 0, tzinfo=IST)
+        one = [{"date_ist": "2026-10-02", "slot": "16:00", "video_id": "only"}]
+        short = H.check_future_slots(now, one)
+        self.assertEqual(short.status, "warn")
+        self.assertIn("only 1", short.detail)
+        self.assertTrue(H.has_problem([short]))
+        self.assertIn("2", short.summary_hi)
+        title, body = H.render_issue([short], "16:00", now, [])
+        self.assertIn("health-alert", title)
+        self.assertIn("Future slots", title)
+        self.assertIn("private + publishAt", body)
+
+        none = H.check_future_slots(now, [])
+        self.assertEqual(none.status, "warn")
+        self.assertIn("only 0", none.detail)
+
+        held = one + [{
+            "date_ist": "2026-10-02", "slot": "21:00", "video_id": None, "platform": "hold",
+        }]
+        self.assertEqual(H.check_future_slots(now, held).status, "warn")
+        withdrawn = [
+            {"date_ist": "2026-10-02", "slot": "16:00", "video_id": "gone", "status": "withdrawn"},
+            {"date_ist": "2026-10-02", "slot": "21:00", "video_id": "live"},
+        ]
+        self.assertEqual(H.check_future_slots(now, withdrawn).status, "warn")
+
+        two = one + [{"date_ist": "2026-10-02", "slot": "21:00", "video_id": "second"}]
+        ok = H.check_future_slots(now, two)
+        self.assertEqual(ok.status, "ok")
+        self.assertIn("2 future slots", ok.detail)
+        self.assertFalse(H.has_problem([ok]))
+
+    def test_run_checks_includes_the_future_slot_warning(self):
+        now = datetime(2026, 10, 2, 12, 0, tzinfo=IST)
+        with mock.patch.object(H.slot_guard, "_read", return_value=[]):
+            checks = H.run_checks(FakeHttp([]), {}, now, provider="deepseek", engine="edge")
+        future = next(c for c in checks if c.name == "Future slots")
+        self.assertEqual(future.status, "warn")
+
+
 class WorkflowTests(unittest.TestCase):
     def on_block(self, text):
         m = re.search(r"^on:\n(.*?)(?=^\S)", text, re.M | re.S)
@@ -756,7 +799,11 @@ class MainTests(unittest.TestCase):
             ],
         ))
         buf = io.StringIO()
-        with redirect_stdout(buf):
+        scheduled = [
+            {"date_ist": "2026-10-01", "slot": "16:00", "video_id": "aaa"},
+            {"date_ist": "2026-10-01", "slot": "21:00", "video_id": "bbb"},
+        ]
+        with redirect_stdout(buf), mock.patch.object(H.slot_guard, "_read", return_value=scheduled):
             code = H.main(http=http, env=secrets_env(), now=NOW)
         self.assertEqual(code, 0)
         self.assertIn("issue closed #15", buf.getvalue())
@@ -777,7 +824,11 @@ class MainTests(unittest.TestCase):
         ))
         env = secrets_env(HEALTH_DRY_RUN="1")
         buf = io.StringIO()
-        with redirect_stdout(buf):
+        scheduled = [
+            {"date_ist": "2026-10-01", "slot": "16:00", "video_id": "aaa"},
+            {"date_ist": "2026-10-01", "slot": "21:00", "video_id": "bbb"},
+        ]
+        with redirect_stdout(buf), mock.patch.object(H.slot_guard, "_read", return_value=scheduled):
             code = H.main(http=http, env=env, now=NOW)
         self.assertEqual(code, 0)
         self.assertIn("dry-run", buf.getvalue())

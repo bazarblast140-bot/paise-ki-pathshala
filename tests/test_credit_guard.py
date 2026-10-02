@@ -285,15 +285,15 @@ class SlotPaidCallTests(unittest.TestCase):
         self.assertIn("run/credits.json", publish)
 
 
-# Slots held on main. The clock is inside the 45-minute to 14-hour window
-# for that slot, and every later slot still inside the lookahead is held too,
-# so --next stays empty. A hold on only the nearest slot would move on.
+# Slots held on main. expected is the earliest open slot inside 26h, or None
+# when every slot in that window is also held. A run aimed at the held slot
+# still exits before any paid call.
 _HELD_SLOTS = (
-    ("2026-10-02", "16:00", datetime(2026, 10, 2, 13, 0)),
-    ("2026-10-02", "21:00", datetime(2026, 10, 2, 18, 0)),
-    ("2026-10-03", "08:30", datetime(2026, 10, 3, 5, 30)),
-    ("2026-10-03", "16:00", datetime(2026, 10, 3, 13, 0)),
-    ("2026-10-03", "21:00", datetime(2026, 10, 3, 18, 0)),
+    ("2026-10-02", "16:00", datetime(2026, 10, 2, 13, 0), None),
+    ("2026-10-02", "21:00", datetime(2026, 10, 2, 18, 0), None),
+    ("2026-10-03", "08:30", datetime(2026, 10, 3, 5, 30), None),
+    ("2026-10-03", "16:00", datetime(2026, 10, 3, 13, 0), ("2026-10-04", "08:30")),
+    ("2026-10-03", "21:00", datetime(2026, 10, 3, 18, 0), ("2026-10-04", "08:30")),
 )
 
 
@@ -306,7 +306,7 @@ class RealLedgerHoldTests(unittest.TestCase):
             e for e in entries
             if isinstance(e, dict) and str(e.get("platform") or "").strip().lower() == "hold"
         ]
-        for date, slot, _when in _HELD_SLOTS:
+        for date, slot, _when, _expected in _HELD_SLOTS:
             match = [
                 e for e in holds
                 if e.get("date_ist") == date and e.get("slot") == slot and e.get("video_id") is None
@@ -316,11 +316,18 @@ class RealLedgerHoldTests(unittest.TestCase):
         posts = mock.Mock(side_effect=AssertionError("paid post"))
         gets = mock.Mock(side_effect=AssertionError("paid get"))
         claude = mock.Mock(side_effect=AssertionError("deepseek"))
-        for date, slot, naive in _HELD_SLOTS:
+        for date, slot, naive, expected in _HELD_SLOTS:
             now = naive.replace(tzinfo=slot_guard.IST)
             with self.subTest(slot=f"{date} {slot}"):
-                self.assertIsNone(slot_guard.next_unfilled(now, entries))
-                self.assertIsNone(slot_guard.next_unfilled(now, holds))
+                chosen = slot_guard.next_unfilled(now, entries)
+                from_holds = slot_guard.next_unfilled(now, holds)
+                if expected is None:
+                    self.assertIsNone(chosen)
+                    self.assertIsNone(from_holds)
+                else:
+                    self.assertEqual((chosen["date_ist"], chosen["slot"]), expected)
+                    self.assertEqual((from_holds["date_ist"], from_holds["slot"]), expected)
+                    self.assertNotEqual((chosen["date_ist"], chosen["slot"]), (date, slot))
                 out = io.StringIO()
                 err = io.StringIO()
                 with mock.patch.object(slot_guard, "_now", return_value=now), \
@@ -330,10 +337,16 @@ class RealLedgerHoldTests(unittest.TestCase):
                      redirect_stdout(out), redirect_stderr(err):
                     slot_guard.main(["--next"])
                 text = out.getvalue()
-                self.assertIn("taken=true", text)
-                self.assertNotIn(f"slot={slot}", text)
-                self.assertNotIn(f"date_ist={date}", text)
-                self.assertIn("no unfilled slot", err.getvalue())
+                self.assertNotIn(f"slot={slot}\n", text)
+                self.assertNotIn(f"date_ist={date}\n", text)
+                if expected is None:
+                    self.assertIn("taken=true", text)
+                    self.assertIn("no unfilled slot", err.getvalue())
+                else:
+                    next_date, next_slot = expected
+                    self.assertIn("taken=false", text)
+                    self.assertIn(f"slot={next_slot}", text)
+                    self.assertIn(f"date_ist={next_date}", text)
 
                 env = {
                     "PUBLISH_VISIBILITY": "public",

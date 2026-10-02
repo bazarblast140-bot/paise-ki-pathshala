@@ -7,7 +7,7 @@ name: Daily trend research
 #
 # Schedule: 11:23 UTC = 16:53 IST. Odd minute, outside 22:30–01:30 UTC.
 # 00:00 UTC was GitHub's busiest minute and landed about 3.5h late on
-# 2-Oct-2026. This fires before the 17:17 IST health check and the 18:43 IST
+# 2-Oct-2026. This fires before the 17:17 IST health check and the 18:37 IST
 # build that can fill the next 08:30 slot, so that build checks out fresh trends.
 #
 # Auth (no new secrets): YT_DATA_API_KEY if present, else the upload OAuth
@@ -16,7 +16,7 @@ name: Daily trend research
 # quota with uploads (~1,600 each). Low quota skips calls and still exits 0.
 on:
   schedule:
-    - cron: "23 11 * * *"   # 16:53 IST, before the 18:43 IST 08:30 build
+    - cron: "23 11 * * *"   # 16:53 IST, before the 18:37 IST 08:30 build
   workflow_dispatch:
     inputs:
       dry_run:
