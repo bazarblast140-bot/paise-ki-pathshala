@@ -299,7 +299,8 @@
   "video_id": "Z7PvCtS3a18",
   "format": "short",
   "topic_key": "intraday_risk_reward",
-  "note": "BACKFILL 02-Oct: old-pipeline upload whose ledger commit was skipped. Public since 2026-10-01T21:32:45Z (03:02 IST, snippet.publishedAt). Counted as the 2-Oct 08:30 slot fill. Topic #79."
+  "status": "withdrawn",
+  "note": "WITHDRAWN 02-Oct: fallback narration, never explains why 1:2 still loses (no charges/net math), leaked guardrail filler, generic PRICE-VOLUME-VWAP visuals. Was public 03:02 IST (backfilled 08:30 fill). Set private. Do not republish video id Z7PvCtS3a18."
  },
  {
   "date_ist": "2026-10-02",
