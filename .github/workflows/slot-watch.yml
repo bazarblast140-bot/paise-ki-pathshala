@@ -27,6 +27,12 @@ permissions:
 
 jobs:
   check:
+    # Wait until an in-flight publish (including its ledger commit) has finished.
+    # The fill job calls paise-ki-pathshala.yml, which uses this same group, so
+    # the group stays on this job only — the called workflow takes it next.
+    concurrency:
+      group: paise-ki-pathshala-publish
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     outputs:
       missing: ${{ steps.check.outputs.missing }}

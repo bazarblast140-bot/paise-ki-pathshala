@@ -51,7 +51,12 @@ class WorkflowTriggerTests(unittest.TestCase):
         for old in ('"0 3 * * *"', '"30 10 * * *"', '"30 15 * * *"'):
             self.assertNotIn(old, publish)
         self.assertIn("group: paise-ki-pathshala-publish", publish)
+        repair = (WF / "instagram-repair.yml").read_text(encoding="utf-8")
+        self.assertIn("group: paise-ki-pathshala-publish", repair)
+        self.assertIn("group: paise-ki-pathshala-publish", watch)
         self.assertIn("cancel-in-progress: false", publish)
+        self.assertIn("cancel-in-progress: false", repair)
+        self.assertIn("cancel-in-progress: false", watch)
         self.assertNotIn("cancel-in-progress: true", publish)
         self.assertIn("run/verify_meta.json", publish)
         self.assertIn("run/self_review.json", publish)

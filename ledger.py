@@ -45,3 +45,90 @@ def record_publish(video_id, publish_at=None, slot=None, platform="youtube", dat
     PATH.parent.mkdir(exist_ok=True)
     PATH.write_text(json.dumps(entries[-300:], indent=1) + "\n", encoding="utf-8")
     print(f"[OK] ledger: {entry['date_ist']} {slot} -> {video_id or platform}")
+
+
+def _entries():
+    try:
+        data = json.loads(PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return data if isinstance(data, list) else []
+
+
+def find_ig_media(video_id=None, topic_key=None, content_hash=None, title_norm=None) -> str:
+    """Media id already stored for this video, or "" if none.
+
+    A match is the YouTube video id, the topic key plus the content hash,
+    the same topic key (a re-render still has a new hash), or the normalized title.
+    Rows without ig_media_id do not count — a YouTube-only upload is not an IG post.
+    """
+    video_id = (video_id or "").strip()
+    topic_key = (topic_key or "").strip()
+    content_hash = (content_hash or "").strip()
+    title_norm = (title_norm or "").strip()
+    for entry in reversed(_entries()):
+        if not isinstance(entry, dict):
+            continue
+        media_id = str(entry.get("ig_media_id") or "").strip()
+        if not media_id:
+            continue
+        if video_id and entry.get("video_id") == video_id:
+            return media_id
+        same_topic = topic_key and entry.get("topic_key") == topic_key
+        if same_topic and content_hash and entry.get("content_hash") == content_hash:
+            return media_id
+        if same_topic:
+            return media_id
+        if title_norm and entry.get("title_norm") == title_norm:
+            return media_id
+    return ""
+
+
+def attach_ig_media(media_id, *, video_id=None, topic_key=None, content_hash=None, title_norm=None):
+    """Store the IG media id the moment media_publish returns.
+
+    Updates the YouTube row for this video when there is one. Otherwise appends
+    a row with slot "ig", which is not one of the three public slots.
+    """
+    media_id = str(media_id or "").strip()
+    if not media_id:
+        return
+    video_id = (video_id or "").strip() or None
+    topic_key = (topic_key or "").strip() or None
+    content_hash = (content_hash or "").strip() or None
+    title_norm = (title_norm or "").strip() or None
+    entries = _entries()
+    idx = None
+    if video_id:
+        for i, entry in enumerate(entries):
+            if isinstance(entry, dict) and entry.get("video_id") == video_id:
+                idx = i
+    if idx is None and topic_key:
+        for i, entry in enumerate(entries):
+            if isinstance(entry, dict) and entry.get("topic_key") == topic_key and not entry.get("ig_media_id"):
+                idx = i
+    if idx is not None:
+        entry = entries[idx]
+        entry["ig_media_id"] = entry.get("ig_media_id") or media_id
+        if topic_key:
+            entry["topic_key"] = topic_key
+        if content_hash:
+            entry["content_hash"] = content_hash
+        if title_norm:
+            entry["title_norm"] = title_norm
+    else:
+        when = datetime.now(IST)
+        entries.append({
+            "date_ist": when.strftime("%Y-%m-%d"),
+            "slot": "ig",
+            "video_id": video_id,
+            "format": video_format(),
+            "platform": "instagram",
+            "ig_media_id": media_id,
+            "topic_key": topic_key,
+            "content_hash": content_hash,
+            "title_norm": title_norm,
+        })
+    PATH.parent.mkdir(exist_ok=True)
+    PATH.write_text(json.dumps(entries[-300:], indent=1) + "\n", encoding="utf-8")
+    print(f"[ig] ledger media id {media_id}")

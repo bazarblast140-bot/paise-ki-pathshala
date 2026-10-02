@@ -11,6 +11,12 @@ on:
         required: false
         default: ""
 
+# Same group as the publish workflow and the slot-watch check. A Reel retry
+# waits; it does not post beside another run that is still publishing.
+concurrency:
+  group: paise-ki-pathshala-publish
+  cancel-in-progress: false
+
 permissions:
   actions: read
   contents: read

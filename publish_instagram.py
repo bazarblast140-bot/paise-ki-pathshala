@@ -17,6 +17,7 @@ Only runs for short format. Long (16:9) is skipped.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import random
@@ -535,7 +536,176 @@ def prepare_cover(thumb: Path | None) -> Path | None:
         return thumb
 
 
-def publish_reel(video_url: str, caption: str, cover_url: str = "") -> str:
+def normalize_title(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip().casefold()
+
+
+def content_hash(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()[:16]
+
+
+def video_identity(mp4: Path) -> dict:
+    """YouTube id, topic key, file hash, and normalized title. One of these is enough to refuse a second Reel."""
+    youtube_id = ""
+    uploaded = RUN / "uploaded.txt"
+    if uploaded.exists():
+        youtube_id = uploaded.read_text(encoding="utf-8").strip().split()[0]
+        if youtube_id.lower().startswith("http"):
+            youtube_id = youtube_id.rstrip("/").split("/")[-1]
+    topic = load_topic()
+    script = (RUN / "script.txt").read_text(encoding="utf-8") if (RUN / "script.txt").exists() else ""
+    sec = script_sections(script)
+    one = lambda s: re.sub(r"\s+", " ", s or "").strip()  # noqa: E731
+    title = one((sec.get("TITLE") or "").splitlines()[0] if sec.get("TITLE") else "")
+    if not title:
+        thumbs = topic.get("thumb") or [""]
+        title = one(str(thumbs[0] if thumbs else ""))
+    return {
+        "video_id": youtube_id,
+        "topic_key": str(topic.get("key") or "").strip(),
+        "content_hash": content_hash(mp4),
+        "title_norm": normalize_title(title),
+    }
+
+
+def caption_marker(ident: dict) -> str:
+    """Short id tag embedded in the caption. The topic key stays stable across a re-render."""
+    key = ident.get("topic_key") or "video"
+    tag = f"pkp:{key}"
+    if ident.get("video_id"):
+        tag += ":" + ident["video_id"]
+    elif ident.get("content_hash"):
+        tag += ":" + ident["content_hash"]
+    return tag
+
+
+def titles_match(caption: str, title_norm: str) -> bool:
+    if not title_norm or len(title_norm) < 8:
+        return False
+    lines = [ln for ln in (caption or "").splitlines() if ln.strip()]
+    if lines and normalize_title(lines[0]) == title_norm:
+        return True
+    return title_norm in normalize_title(caption)
+
+
+class LiveCheckError(RuntimeError):
+    """The live media list could not be read. Publishing must stop."""
+
+
+def fetch_recent_media() -> list:
+    """Recent IG media via the Graph API. Raises LiveCheckError — never returns a guess."""
+    ig_user = env("IG_USER_ID")
+    if not ig_user or not env("IG_ACCESS_TOKEN"):
+        raise LiveCheckError("IG_USER_ID and IG_ACCESS_TOKEN required for the live Reel check")
+    params = {"fields": "id,caption,permalink", "limit": "25"}
+    items = []
+    try:
+        for _page in range(3):
+            data = ig_call(f"{ig_user}/media", params=params)
+            if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+                raise LiveCheckError("Instagram media list did not return data; not posting")
+            items.extend(data["data"])
+            after = ((data.get("paging") or {}).get("cursors") or {}).get("after")
+            if not after:
+                break
+            params = {**params, "after": after}
+    except LiveCheckError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise LiveCheckError(redact_text(str(exc))) from exc
+    return items
+
+
+def live_match(items, ident: dict) -> str:
+    """Media id whose caption or permalink contains our marker, else the same normalized title."""
+    marker = caption_marker(ident)
+    topic_tag = f"pkp:{ident['topic_key']}" if ident.get("topic_key") else ""
+    youtube_id = ident.get("video_id") or ""
+    digest = ident.get("content_hash") or ""
+    title = ident.get("title_norm") or ""
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        blob = str(item.get("caption") or "") + "\n" + str(item.get("permalink") or "")
+        if marker and marker in blob:
+            return str(item.get("id") or "")
+        if topic_tag and topic_tag in blob:
+            return str(item.get("id") or "")
+        if youtube_id and "pkp:" in blob and youtube_id in blob:
+            return str(item.get("id") or "")
+        if digest and digest in blob:
+            return str(item.get("id") or "")
+        if titles_match(str(item.get("caption") or ""), title):
+            return str(item.get("id") or "")
+    return ""
+
+
+def existing_media(ident: dict) -> str:
+    """Ledger and the live list. A live-list failure still refuses when the ledger already has this Reel.
+
+    If the ledger has no match and the live list cannot be read, LiveCheckError — do not post.
+    """
+    import ledger
+    found = ledger.find_ig_media(
+        video_id=ident.get("video_id"),
+        topic_key=ident.get("topic_key"),
+        content_hash=ident.get("content_hash"),
+        title_norm=ident.get("title_norm"),
+    )
+    try:
+        live = live_match(fetch_recent_media(), ident)
+    except LiveCheckError:
+        if found:
+            print(f"[ig] live check failed; ledger already has {found}; not posting")
+            return found
+        raise
+    return found or live
+
+
+def persist_ig_media(media_id: str, ident: dict | None) -> None:
+    """Write the media id before any confirm poll. A later timeout must not publish again."""
+    ident = ident or {}
+    import ledger
+    ledger.attach_ig_media(
+        media_id,
+        video_id=ident.get("video_id"),
+        topic_key=ident.get("topic_key"),
+        content_hash=ident.get("content_hash"),
+        title_norm=ident.get("title_norm"),
+    )
+    (RUN / "ig_reel.txt").write_text(str(media_id), encoding="utf-8")
+
+
+def recover_published(ident: dict | None) -> str:
+    """Re-read the live list after a timeout. Empty string if it cannot be read — still do not post again."""
+    if not ident:
+        return ""
+    try:
+        return live_match(fetch_recent_media(), ident)
+    except LiveCheckError as exc:
+        print(f"[ig] live re-check failed ({exc}); not posting again")
+        return ""
+
+
+def confirm_media(media_id: str) -> bool:
+    """Best-effort check that the published id is visible. A miss is not a reason to publish again."""
+    for _ in range(3):
+        try:
+            seen = ig_call(media_id, params={"fields": "id"})
+        except Exception as exc:  # noqa: BLE001
+            print(f"[ig] confirm poll: {redact_text(str(exc))}")
+            seen = {}
+        if str((seen or {}).get("id") or "") == str(media_id):
+            return True
+        time.sleep(2)
+    return False
+
+
+def publish_reel(video_url: str, caption: str, cover_url: str = "", ident: dict | None = None) -> str:
     ig_user = env("IG_USER_ID")
     if not ig_user or not env("IG_ACCESS_TOKEN"):
         die("IG_USER_ID and IG_ACCESS_TOKEN required")
@@ -563,18 +733,26 @@ def publish_reel(video_url: str, caption: str, cover_url: str = "") -> str:
         die(f"No container id: {container}")
     print(f"  container: {container_id}")
 
-    for i in range(60):
+    finished = False
+    for _i in range(60):
         st = ig_call(container_id, params={"fields": "status_code,status"})
         code = st.get("status_code")
         print(f"  processing: {code}")
         if code == "FINISHED":
+            finished = True
             break
         if code in ("ERROR", "EXPIRED"):
             die(f"Instagram rejected video: {st}")
         time.sleep(5)
-    else:
+    if not finished:
+        found = recover_published(ident)
+        if found:
+            persist_ig_media(found, ident)
+            print(f"[ig] processing poll timed out; live list already has {found}; not posting again")
+            return found
         die("Timed out waiting for Instagram processing")
 
+    # One container publish. The media id is stored before the confirm poll.
     pub = ig_call(
         f"{ig_user}/media_publish",
         method="POST",
@@ -582,7 +760,19 @@ def publish_reel(video_url: str, caption: str, cover_url: str = "") -> str:
     )
     media_id = pub.get("id") or ""
     if not media_id:
+        found = recover_published(ident)
+        if found:
+            persist_ig_media(found, ident)
+            print(f"[ig] publish response had no id; live list already has {found}; not posting again")
+            return found
         die(f"Publish failed: {pub}")
+    persist_ig_media(media_id, ident)
+    if not confirm_media(media_id):
+        found = recover_published(ident)
+        print(f"[ig] confirm timed out for {media_id}; not posting a second Reel")
+        if found and found != media_id:
+            persist_ig_media(found, ident)
+        return media_id
     return media_id
 
 
@@ -612,6 +802,15 @@ def main() -> None:
     if not (RUN / "uploaded.txt").exists() and env("IG_CROSSPOST_FORCE") not in ("1", "true"):
         skip("YouTube upload not recorded (uploaded.txt missing) — set IG_CROSSPOST_FORCE=1 to post anyway")
 
+    ident = video_identity(mp4)
+    try:
+        already = existing_media(ident)
+    except LiveCheckError as exc:
+        die(f"live Instagram check failed ({exc}); not posting")
+    if already:
+        (RUN / "ig_reel.txt").write_text(already, encoding="utf-8")
+        skip(f"already published as Instagram media {already}")
+
     print("\n=== Instagram Reel cross-post ===")
     thumb = RUN / "thumbnail.jpg"
     cover = prepare_cover(thumb if thumb.exists() else None)
@@ -621,8 +820,12 @@ def main() -> None:
         cover_url = host_cover(cover)
         print(f"  cover: {cover_url}")
     caption = build_caption()
+    marker = caption_marker(ident)
+    if marker not in caption:
+        extra = "\n\n" + marker
+        caption = caption.rstrip()[: 2200 - len(extra)] + extra
     print(f"  caption ({len(caption)} chars): {caption[:80]}…")
-    media_id = publish_reel(url, caption, cover_url)
+    media_id = publish_reel(url, caption, cover_url, ident=ident)
     (RUN / "ig_reel.txt").write_text(media_id, encoding="utf-8")
     ok(f"IG Reel published: {media_id}")
 
