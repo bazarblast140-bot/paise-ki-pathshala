@@ -77,10 +77,13 @@ def external_publish_failure(log_text):
 
 
 def short_duration_window():
-    """Live six-beat Shorts are 70-95s. Buffer QA stays on 45-70s."""
+    """Four-beat live Shorts are 45-65s. Six-beat stays 70-95s. Buffer QA stays 45-70s."""
     lo, hi, label = 45.0, 70.0, "45-70s"
     try:
-        beats = json.loads((RUN / "narration.json").read_text(encoding="utf-8")).get("beats") or {}
+        data = json.loads((RUN / "narration.json").read_text(encoding="utf-8"))
+        if str(data.get("live_beats") or "") == "four":
+            return 45.0, 65.0, "45-65s"
+        beats = data.get("beats") or {}
         if str(beats.get("udaharan") or "").strip() and str(beats.get("galti") or "").strip():
             return 70.0, 95.0, "70-95s"
     except (OSError, ValueError, AttributeError):

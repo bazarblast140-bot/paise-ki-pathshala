@@ -33,6 +33,7 @@ def _live_topic():
         "cat": "CANDLESTICK",
         "topic": "Hammer कैंडल — डाउनट्रेंड के बाद लंबी निचली wick",
         "_live_short": True,
+        "_live_beats": "six",
         "_voice": {"words_per_second": 1.9, "voice_id": "ypnkIsDASPgHZuanrF0q"},
         "thumb": ["ये कैंडल दिखे", "तो गिरावट ख़त्म?"],
         "beats": {

@@ -277,7 +277,7 @@ def worked_example_sentence(topic):
                 return (1, str(value))
 
         shown = ", ".join(sorted(nums, key=key)[:12])
-        return f"उदाहरण: {shown}।" if shown else "उदाहरण: कार्ड का आंकड़ा ही बोलो।"
+        return f"उदाहरण: {shown}।" if shown else "उदाहरण: दिए गए तथ्य।"
     blob = _topic_blob(topic)
     entry = _labelled_level(blob, ["entry", "एंट्री", "buy"])
     stop = _labelled_level(blob, ["SL", "stop(?:-loss)?", "स्टॉप"])
@@ -311,7 +311,21 @@ def worked_example_sentence(topic):
             f"{_canon_number(qty)} शेयर पर रिस्क {_canon_number(risk_total)} और रिवॉर्ड {_canon_number(reward_total)}"
         )
     if len(parts) == 1:
-        return "उदाहरण: कार्ड पर दिया हिसाब बोलो।"
+        nums = [n for n in allowed_numbers(topic) if n not in {"1", "2", "3"}]
+        if not nums:
+            nums = list(allowed_numbers(topic))
+
+        def key(value):
+            try:
+                return (0, float(str(value).replace(",", "")))
+            except (TypeError, ValueError):
+                return (1, str(value))
+
+        shown = ", ".join(sorted(nums, key=key)[:8])
+        if shown:
+            return f"उदाहरण: {shown}।"
+        fact = next((str(x).strip().rstrip("।") for x in (topic.get("facts") or []) if str(x).strip()), "")
+        return f"उदाहरण: {fact}।" if fact else "उदाहरण: दिए गए तथ्य।"
     return " ".join(parts) + "।"
 
 

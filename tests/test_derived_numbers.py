@@ -30,6 +30,7 @@ def _journal():
     topic = next(item for item in bank["topics"] if item["key"] == "risk_journal")
     topic = json.loads(json.dumps(topic))
     topic["_live_short"] = True
+    topic["_live_beats"] = "six"
     topic["_voice"] = {"words_per_second": 1.9, "voice_id": "ypnkIsDASPgHZuanrF0q"}
     return topic
 
@@ -186,6 +187,7 @@ class DerivedNumberTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, \
              mock.patch.object(board_short, "RUN", Path(tmp)), \
              mock.patch.object(board_short.credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.object(board_short, "require_scene_frames"), \
              mock.patch.object(board_short.eleven_voice, "ensure_library_voice", return_value="ypnkIsDASPgHZuanrF0q"), \
              mock.patch.object(board_short, "claude_json", side_effect=AssertionError("margin trim must not call the model")), \
              mock.patch.object(board_short, "_content_ok", return_value={"passed": True, "summary": "ok"}), \

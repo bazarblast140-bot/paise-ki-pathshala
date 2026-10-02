@@ -106,6 +106,7 @@ def _live_topic():
         "cat": "CANDLESTICK",
         "topic": "Hammer कैंडल — डाउनट्रेंड के बाद लंबी निचली wick",
         "_live_short": True,
+        "_live_beats": "six",
         "_voice": {"words_per_second": 1.9, "voice_id": RUDRA},
         "thumb": ["ये कैंडल दिखे", "तो गिरावट ख़त्म?"],
         "beats": {
@@ -337,7 +338,12 @@ class CalibrationTests(unittest.TestCase):
 
 
 class DryRenderTests(unittest.TestCase):
+    def setUp(self):
+        self._frames = mock.patch.object(board_short, "require_scene_frames")
+        self._frames.start()
+
     def tearDown(self):
+        self._frames.stop()
         board_short._reset_voice_state()
 
     def test_estimate_miss_repairs_once_before_tts(self):
@@ -365,10 +371,10 @@ class DryRenderTests(unittest.TestCase):
         self.assertEqual(calls["n"], 1)
         self.assertEqual(out["beats"]["udaharan"], good["beats"]["udaharan"])
 
-    def test_255_words_on_rudra_blocks_tts(self):
+    def test_255_words_on_rudra_is_trimmed_before_tts(self):
         topic = _live_topic()
-        # The failed run was 255 words with sentence breaks. Trimming to the
-        # 185-word text ceiling still estimates at about 97s, so TTS stays blocked.
+        # 255 words estimate about 134s. The margin trim runs before the
+        # duration guard and aims at 170 words, which is inside 70-95s.
         counts = {
             "hook": 40, "pehchan": 42, "matlab": 44,
             "udaharan": 48, "galti": 42, "karein": 39,
@@ -384,29 +390,32 @@ class DryRenderTests(unittest.TestCase):
         self.assertGreater(seconds, 95.0)
         seen = []
 
-        def synthesize(*_args, **_kwargs):
-            seen.append("tts")
+        def synthesize(spoken, _c, beats=None):
+            seen.append(sum(len(str(spoken[beat]).split()) for beat in beats))
 
         def post(*_args, **_kwargs):
-            seen.append("post")
             raise AssertionError("ElevenLabs must not be called")
 
-        err = io.StringIO()
+        def trim(beats):
+            return {beat: 14.0 for beat in beats}
+
         with tempfile.TemporaryDirectory() as tmp, \
              mock.patch.object(board_short, "RUN", Path(tmp)), \
              mock.patch.object(board_short.credit_log, "PATH", Path(tmp) / "credits.json"), \
              mock.patch.object(board_short.eleven_voice, "ensure_library_voice", return_value=RUDRA), \
+             mock.patch.object(board_short, "require_scene_frames"), \
+             mock.patch.object(board_short, "_content_ok", return_value={"passed": True, "summary": "ok"}), \
              mock.patch.object(board_short, "synthesize_short_voices", synthesize), \
-             mock.patch.object(board_short, "tts", synthesize), \
+             mock.patch.object(board_short, "_trim_rendered", trim), \
+             mock.patch.object(board_short, "tts", side_effect=AssertionError("no re-render")), \
              mock.patch("requests.post", post), \
-             redirect_stdout(io.StringIO()), \
-             redirect_stderr(err):
-            with self.assertRaises(SystemExit):
-                board_short.prepare_spoken(
-                    dict(script["beats"]), script, topic, {**CFG, "voice": _rudra_voice()}, {})
-        self.assertEqual(seen, [])
-        self.assertIn("0 characters", err.getvalue())
-        self.assertIn("outside 70-95", err.getvalue())
+             redirect_stdout(io.StringIO()):
+            _spoken, _narr, _audio, _raw, _times, total = board_short.prepare_spoken(
+                dict(script["beats"]), script, topic, {**CFG, "voice": _rudra_voice()}, {})
+        self.assertEqual(len(seen), 1)
+        self.assertLessEqual(seen[0], 170)
+        self.assertGreater(seen[0], 130)
+        self.assertTrue(70.0 <= total <= 95.0)
 
     def test_about_160_words_allows_one_full_render(self):
         topic = _live_topic()
@@ -624,6 +633,16 @@ class SixBeatGateTests(unittest.TestCase):
                 self.assertEqual(quality_check.short_duration_bounds()[2], "45-62s")
             with mock.patch.object(auto_agent, "RUN", run):
                 self.assertEqual(auto_agent.short_duration_window()[2], "45-70s")
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            (run / "narration.json").write_text(json.dumps({
+                "live_beats": "four",
+                "beats": {"hook": "सवाल", "karein": "कदम"},
+            }), encoding="utf-8")
+            with mock.patch.object(quality_check, "RUN", run):
+                self.assertEqual(quality_check.short_duration_bounds(), (45.0, 65.0, "45-65s"))
+            with mock.patch.object(auto_agent, "RUN", run):
+                self.assertEqual(auto_agent.short_duration_window(), (45.0, 65.0, "45-65s"))
 
 
 if __name__ == "__main__":

@@ -32,6 +32,14 @@ _ONES = {
     "पचानवे": 95, "साथ": 7, "बहध्तर": 72,
 }
 _HUNDRED = {"सौ", "सो"}
+_SCALE = {"हजार": 1000, "लाख": 100000, "करोड़": 10000000, "करोड": 10000000}
+_FRACTION = {"ढाई": 2.5, "ढाइ": 2.5, "डेढ़": 1.5, "डेढ": 1.5, "डेड": 1.5}
+# English title words the voice says in Hindi. Nukta is stripped before lookup.
+_TITLE_EQUIV = {
+    "daily": ("रोज", "दिन", "डेली", "daily"),
+    "loss": ("नुकसान", "घाटा", "लॉस", "हार", "loss"),
+    "limit": ("सीमा", "लिमिट", "हद", "limit"),
+}
 _WORD = {
     "स्ल": "एसएल", "क्यो": "क्यों", "ल": "एसएल", "एल": "एसएल",
     "बान": "बैंक", "गलत": "गलती", "कटी": "कटती",
@@ -157,6 +165,19 @@ def _numbers(tokens):
             i += 1
             i = _append_number(out, val, tokens, i)
             continue
+        if tok in _FRACTION:
+            val = _FRACTION[tok]
+            i += 1
+            if i < len(tokens) and tokens[i] in _SCALE:
+                val *= _SCALE[tokens[i]]
+                i += 1
+            out.append(str(int(val)) if float(val).is_integer() else str(val))
+            continue
+        if tok in _ONES and i + 1 < len(tokens) and tokens[i + 1] in _SCALE:
+            val = _ONES[tok] * _SCALE[tokens[i + 1]]
+            i += 2
+            out.append(str(int(val)))
+            continue
         if tok in _ONES and _ONES[tok] < 10 and i + 1 < len(tokens) and tokens[i + 1] in _HUNDRED:
             val = _ONES[tok] * 100
             i += 2
@@ -169,6 +190,13 @@ def _numbers(tokens):
             val = _ONES[tok]
             i += 1
             i = _append_number(out, val, tokens, i)
+            continue
+        if tok in _SCALE:
+            out.append(str(_SCALE[tok]))
+            i += 1
+            continue
+        if tok in ("रुपये", "रुपया", "प्रतिशत", "percent"):
+            i += 1
             continue
         if tok in _HUNDRED:
             out.append("100")
@@ -229,8 +257,36 @@ def content_tokens(text):
     return out
 
 
-def outline_until(beats_text, beat_times, end, beats=("hook", "pehchan", "matlab", "karein")):
+def _has_token(tok, full):
+    if tok in full:
+        return True
+    folded = tok.casefold()
+    return any(item.casefold() == folded for item in full)
+
+
+def term_covered(term, full):
+    """True when the title word, its digits, or a Hindi equivalent was said or written."""
+    need = tokens(term)
+    if not need:
+        raw = " ".join(str(term or "").split())
+        return not raw or _has_token(raw, full)
+    for tok in need:
+        if _has_token(tok, full):
+            continue
+        alts = _TITLE_EQUIV.get(tok.casefold(), ())
+        if any(_has_token(alt, full) for alt in alts):
+            continue
+        return False
+    return True
+
+
+def outline_until(beats_text, beat_times, end, beats=None):
     """Outline words whose spoken center is at or before `end`. Whisper spelling is separate."""
+    if beats is None:
+        beats = tuple(
+            b for b in ("hook", "pehchan", "matlab", "udaharan", "galti", "karein")
+            if b in (beat_times or {})
+        ) or ("hook", "pehchan", "matlab", "karein")
     parts = []
     limit = float(end) + SAID_PAD
     for beat in beats:
@@ -317,11 +373,11 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
             "scenes": [],
         }
     transcript = " ".join(str(w.get("word") or "") for w in words)
-    full = set(tokens(transcript))
+    script_blob = " ".join(str(v or "") for v in (beats_text or {}).values())
+    full = set(tokens(transcript)) | set(tokens(script_blob))
     missing_title = []
     for term in answer_terms or []:
-        need = tokens(term) or ([term] if str(term).strip() else [])
-        if need and not all(tok in full for tok in need):
+        if not term_covered(term, full):
             missing_title.append(str(term))
     reasons = []
     if missing_title:

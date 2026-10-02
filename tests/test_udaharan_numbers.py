@@ -26,6 +26,7 @@ def _topic():
     topic = next(item for item in bank["topics"] if item["key"] == "intraday_risk_reward")
     topic = json.loads(json.dumps(topic))
     topic["_live_short"] = True
+    topic["_live_beats"] = "six"
     topic["_voice"] = {"words_per_second": 1.9, "voice_id": "ypnkIsDASPgHZuanrF0q"}
     return topic
 

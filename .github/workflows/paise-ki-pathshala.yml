@@ -48,6 +48,10 @@ on:
       topic_key:
         type: string
         default: ""
+      beats:
+        description: "Live Short length. four is the scheduled default. six is the override."
+        type: string
+        default: "four"
   workflow_dispatch:
     inputs:
       format:
@@ -64,6 +68,11 @@ on:
         description: "TEST: sirf ye topic (jaise titan_2010); rotation me used mark nahi hota"
         required: false
         default: ""
+      beats:
+        description: "Live Short beats. four (~55s, default) ya six. Blank on a schedule uses config.json live_beats."
+        type: choice
+        options: [four, six]
+        default: four
 concurrency:
   # One group for every trigger. The next run waits; it does not cancel the
   # run already building a slot. That run re-reads the ledger after checkout
@@ -197,6 +206,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           PUBLISH_VISIBILITY: ${{ steps.fmt.outputs.visibility }}
           TOPIC_KEY: ${{ inputs.topic_key }}
+          LIVE_BEATS: ${{ inputs.beats }}
           PUBLISH_SLOT_IST: ${{ steps.fmt.outputs.slot }}
           PUBLISH_DATE_IST: ${{ steps.fmt.outputs.date_ist }}
           PUBLISH_AT_UTC: ${{ steps.fmt.outputs.publish_at }}

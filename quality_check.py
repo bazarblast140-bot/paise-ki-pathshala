@@ -12,11 +12,14 @@ def fail(msg):
 
 
 def short_duration_bounds():
-    """Six-beat live Shorts are 70-95s. Buffer and ATR stay on 45-62s."""
+    """Four-beat live Shorts are 45-65s. Six-beat stays 70-95s. Buffer and ATR stay 45-62s."""
     lo, hi, label = 45.0, 62.0, "45-62s"
     try:
         import json
-        beats = json.loads((RUN / "narration.json").read_text(encoding="utf-8")).get("beats") or {}
+        data = json.loads((RUN / "narration.json").read_text(encoding="utf-8"))
+        if str(data.get("live_beats") or "") == "four":
+            return 45.0, 65.0, "45-65s"
+        beats = data.get("beats") or {}
         if str(beats.get("udaharan") or "").strip() and str(beats.get("galti") or "").strip():
             return 70.0, 95.0, "70-95s"
     except (OSError, ValueError, AttributeError):
