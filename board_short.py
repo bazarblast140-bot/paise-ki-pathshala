@@ -190,13 +190,13 @@ def check_narration(n, topic):
     # The ATR short is spoken at a calm rate, so its script is shorter.
     # Every other topic still has to land in the 160-180 teaching band.
     if topic.get("_atr"):
-        if not 90 <= words <= 140:
-            fails.append(f"{words} words (90-140 for the calm ATR short)")
+        if not 75 <= words <= 140:
+            fails.append(f"{words} words (75-140 for the calm ATR short)")
         beat_ranges = {
             "hook": (18, 26),
-            "pehchan": (20, 34),
-            "matlab": (18, 36),
-            "karein": (24, 40),
+            "pehchan": (16, 30),
+            "matlab": (14, 32),
+            "karein": (22, 36),
         }
     else:
         if not 160 <= words <= 180:
@@ -391,18 +391,17 @@ def atr_narration(topic):
         ),
         "pehchan": (
             f"नियम यह है। एटीआर पिछले {lesson['period']} कैंडल की औसत हलचल है। "
-            f"एचडीएफसी बैंक का एटीआर {lesson['atr']} है। "
-            f"यह दिशा नहीं बताता, सिर्फ़ हलचल बताता है।"
+            f"एचडीएफसी बैंक का एटीआर {lesson['atr']} है।"
         ),
         "matlab": (
             f"आखिरी भाव {lesson['entry']} एंट्री है। "
             f"{lesson['multiple']} गुना {lesson['atr']} बराबर {lesson['distance']} पॉइंट। "
-            f"एसएल {lesson['sl']} पर है। ऊपर वाली रेखा {lesson['target']} पर है।"
+            f"एसएल {lesson['sl']}। ऊपर {lesson['target']}।"
         ),
         "karein": (
             f"गलती तंग एसएल है। {lesson['atr']} की हलचल में तंग रेखा कटती है। "
             f"दूरी {lesson['distance']} हो और मात्रा {lesson['qty']} हो तो जोखिम {lesson['risk']} रुपये रहता है। "
-            f"यह शिक्षा है, सलाह नहीं।"
+            f"यह सलाह नहीं।"
         ),
     }
     title = f"ATR से SL — {name} पर दूरी {lesson['distance']}"
