@@ -1733,6 +1733,7 @@ def _scene_factory(key):
 
 
 def render_beat(key, beat, img):
+    beat = {"udaharan": "matlab", "galti": "karein"}.get(beat, beat)
     return _scene_factory(key)()(beat, img)
 
 

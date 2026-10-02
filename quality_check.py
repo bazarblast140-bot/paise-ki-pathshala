@@ -11,6 +11,19 @@ def fail(msg):
     raise SystemExit(1)
 
 
+def short_duration_bounds():
+    """Six-beat live Shorts are 70-95s. Buffer and ATR stay on 45-62s."""
+    lo, hi, label = 45.0, 62.0, "45-62s"
+    try:
+        import json
+        beats = json.loads((RUN / "narration.json").read_text(encoding="utf-8")).get("beats") or {}
+        if str(beats.get("udaharan") or "").strip() and str(beats.get("galti") or "").strip():
+            return 70.0, 95.0, "70-95s"
+    except (OSError, ValueError, AttributeError):
+        pass
+    return lo, hi, label
+
+
 def semantic_visual_guard():
     """Zero-credit guard for known topic/visual mismatches before publish."""
     topic_file = RUN / "topic.json"
@@ -106,8 +119,9 @@ def main():
         if fmt == "short":
             if (v.get("width"),v.get("height")) != (1080,1920):
                 fail(f"wrong short resolution {v.get('width')}x{v.get('height')}")
-            if not 45 <= dur <= 62:
-                fail(f"short duration {dur:.1f}s outside 45-62s")
+            lo, hi, label = short_duration_bounds()
+            if not lo <= dur <= hi:
+                fail(f"short duration {dur:.1f}s outside {label}")
             frames=sorted(RUN.glob("b_*_*.png"))
             if len(frames)<4:
                 fail("board frames missing")

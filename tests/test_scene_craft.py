@@ -166,16 +166,20 @@ class AtrLessonTests(unittest.TestCase):
         self.assertNotIn("खरीद लो", joined)
         self.assertNotIn("टारगेट", joined)
 
-    def test_short_voice_is_the_calm_male_narrator(self):
+    def test_short_voice_is_rudra(self):
         with patch.dict(os.environ, {"VIDEO_FORMAT": "short"}):
             voice = __import__("common").cfg()["voice"]
-        self.assertEqual(voice["voice_name"], "Kamal")
-        self.assertEqual(voice["voice_id"], "qsz5tTEjPvsiIJZIpM8S")
+        self.assertEqual(voice["voice_name"], "Rudra")
+        self.assertEqual(voice["voice_id"], "ypnkIsDASPgHZuanrF0q")
+        self.assertNotEqual(voice["voice_id"], "7qBNUtXRGP0jPi0H4r8k")
         self.assertNotEqual(voice["voice_id"], "onwK4e9ZLuTAKqWW03F9")
         self.assertEqual(voice["model"], "eleven_multilingual_v2")
-        self.assertGreaterEqual(voice["stability"], 0.7)
-        self.assertLessEqual(voice["style"], 0.05)
-        self.assertLessEqual(voice["speed"], 1.05)
+        self.assertEqual(voice["stability"], 0.50)
+        self.assertEqual(voice["style"], 0.25)
+        self.assertEqual(voice["similarity_boost"], 0.8)
+        self.assertEqual(voice["speed"], 0.90)
+        self.assertEqual(voice["words_per_second"], 2.8)
+        self.assertEqual(voice["fallback_voice_id"], "qsz5tTEjPvsiIJZIpM8S")
         self.assertEqual(voice["edge_voice"], "hi-IN-MadhurNeural")
         rate = int(str(voice["edge_rate"]).replace("%", "").replace("+", ""))
         self.assertGreaterEqual(rate, 0)

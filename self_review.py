@@ -121,7 +121,9 @@ def score_accuracy(narration, topic, spec=None):
             allowed |= hook_check.extract_numbers(str(close))
             allowed |= hook_check.extract_numbers(str(point.get("date") or ""))
     beats = (narration or {}).get("beats") or {}
-    spoken = " ".join(str(beats.get(b) or "") for b in short_layout.BEATS)
+    order = getattr(short_layout, "ORDER", short_layout.BEATS)
+    names = [b for b in order if b in beats] or list(short_layout.BEATS)
+    spoken = " ".join(str(beats.get(b) or "") for b in names)
     spoken = spoken + " " + str((narration or {}).get("hook_line") or "")
     extra = hook_check.unsourced_numbers(spoken, topic, allowed=allowed)
     if extra:

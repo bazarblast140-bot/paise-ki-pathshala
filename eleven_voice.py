@@ -247,12 +247,94 @@ def ledger_voice_kwargs(run_dir):
 # configured voice is the same Madhur +0% sample.
 PREVIEW_EDGE_VOICE = "hi-IN-MadhurNeural"
 PREVIEW_EDGE_RATE = "+0%"
-# A live slot uses ElevenLabs only while at least this many characters remain.
-# Below the floor, or when the subscription API errors, the slot uses Edge.
-LIVE_EDGE_FLOOR = 2500
+# A live slot stops when fewer than this many characters remain.
+# It does not switch to Edge. Buffer and preview runs never reach this check.
+LIVE_CREDIT_FLOOR = 1000
+KAMAL_VOICE_ID = "qsz5tTEjPvsiIJZIpM8S"
+RUDRA_VOICE_ID = "ypnkIsDASPgHZuanrF0q"
 
 _TRUTHY = {"1", "true", "yes", "on"}
 _PREVIEW_MODES = {"preview", "sample", "dry-run", "dry_run", "test", "qa", "retry", "repair"}
+
+
+def configured_voice_id(c):
+    """A set config voice_id always wins. The secret is only a fallback."""
+    vid = str(((c or {}).get("voice") or {}).get("voice_id") or "").strip()
+    if vid and not vid.upper().startswith("TODO"):
+        return vid
+    return (os.environ.get("ELEVENLABS_VOICE_ID") or "").strip()
+
+
+def ensure_library_voice(c):
+    """Make the configured library voice available. This never calls TTS.
+
+    GET /v1/voices/{id}. On 404, and only when shared_voice_search is set,
+    find that id in GET /v1/shared-voices and POST /v1/voices/add/{owner}/{id}.
+    Any failure uses the Kamal fallback. A live slot still does not use Edge.
+    """
+    voice = c.setdefault("voice", {})
+    vid = configured_voice_id(c)
+    voice["voice_id"] = vid
+    search = str(voice.get("shared_voice_search") or "").strip()
+    if not search or not vid:
+        return vid
+    key = (os.environ.get("ELEVENLABS_API_KEY") or "").strip()
+    if not key:
+        return vid
+    import requests
+    headers = {"xi-api-key": key, "Accept": "application/json"}
+    try:
+        got = requests.get(
+            f"https://api.elevenlabs.io/v1/voices/{vid}",
+            headers=headers, timeout=20,
+        )
+    except Exception as exc:  # noqa: BLE001 — the probe is not a reason to spend TTS
+        print(f"[warn] voice lookup failed ({type(exc).__name__}); keeping {vid}")
+        return vid
+    if getattr(got, "status_code", 0) == 200:
+        print(f"[voice] {voice.get('voice_name') or vid} is on the account ({vid})")
+        return vid
+    if getattr(got, "status_code", 0) != 404:
+        print(f"[note] voice lookup HTTP {getattr(got, 'status_code', 0)}; TTS remains the auth check")
+        return vid
+    new_name = str(voice.get("library_new_name") or "Rudra PKP")
+    try:
+        found = requests.get(
+            "https://api.elevenlabs.io/v1/shared-voices",
+            headers=headers,
+            params={"search": search, "page_size": 30},
+            timeout=20,
+        )
+        body = found.json() if getattr(found, "status_code", 0) == 200 else {}
+        rows = body.get("voices") if isinstance(body, dict) else None
+        owner = ""
+        for row in rows or []:
+            if str((row or {}).get("voice_id") or "") == vid:
+                owner = str(row.get("public_owner_id") or "").strip()
+                break
+        if not owner:
+            raise RuntimeError(f"{vid} was not in the shared-voice search for {search}")
+        added = requests.post(
+            f"https://api.elevenlabs.io/v1/voices/add/{owner}/{vid}",
+            headers={**headers, "Content-Type": "application/json"},
+            json={"new_name": new_name},
+            timeout=20,
+        )
+        payload = added.json() if getattr(added, "status_code", 0) in (200, 201) else {}
+        got_id = str((payload or {}).get("voice_id") or "").strip()
+        if not got_id:
+            raise RuntimeError(f"add voice HTTP {getattr(added, 'status_code', 0)}")
+        voice["voice_id"] = got_id
+        print(f"[voice] added {new_name} as {got_id}")
+        return got_id
+    except Exception as exc:  # noqa: BLE001 — Kamal is already on the account
+        fallback = str(voice.get("fallback_voice_id") or KAMAL_VOICE_ID).strip() or KAMAL_VOICE_ID
+        print(f"[warn] library voice {vid} unavailable ({exc}); using Kamal {fallback}")
+        voice["voice_id"] = fallback
+        voice["voice_name"] = str(voice.get("fallback_voice_name") or "Kamal")
+        if voice.get("fallback_words_per_second") not in (None, ""):
+            voice["words_per_second"] = voice.get("fallback_words_per_second")
+        return fallback
 
 
 def paid_voice_allowed():

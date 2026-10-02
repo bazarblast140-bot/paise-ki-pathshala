@@ -154,6 +154,7 @@ def layer_missing(layer):
 
 def kinds_for(beat, n):
     """Scene types for one beat. The chart appears in at most two problem frames plus one split."""
+    beat = {"udaharan": "matlab", "galti": "karein"}.get(beat, beat)
     n = max(1, int(n))
     if beat == "hook":
         if n == 1:
