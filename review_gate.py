@@ -4,9 +4,59 @@ A public upload needs an explicit AI line that is only READY, a meta file
 that says that verdict was actually parsed, and (for Shorts) a self-review
 that cleared the bar. A missing model, a PASS fallback, an empty narration,
 or a template line that lists both READY and NEEDS FIX is not a verdict.
+
+A Short whose deterministic self-review is already at the high bar below is
+not blocked when the AI's only notes are judgment calls (thumbnail, tone,
+optional labels). Hard compliance, fact, and safety failures still block,
+including when that self-review is perfect. The pass bar in self_review.py
+(part 60 / overall 75) does not change.
 """
 import json
 import re
+
+# Soft judgment may not block a Short that is already clean on the
+# deterministic rubric. Schematic visuals score 90 when they pass, so 90 is
+# that clean floor, not a discount. Accuracy must be 100: a number that
+# failed the ledger check is a fact failure.
+HIGH_BAR_OVERALL = 90
+HIGH_BAR_PART = 90
+
+_FAIL_MARKS = ("✗", "✘", "❌", "❎", "✖")
+_UNVERIFIED = re.compile(r"UNVERIFIED", re.I)
+_UNVERIFIED_NEGATED = re.compile(
+    r"(?:no|not|nahi|nahin|zero|without)\s+(?:\w+\s+){0,3}UNVERIFIED"
+    r"|UNVERIFIED\s+(?:\w+\s+){0,3}(?:nahi|nahin|not|none|zero)",
+    re.I,
+)
+_UNSOURCED = re.compile(r"(source nahi|no source|unsourced|not sourced|without a source)", re.I)
+_EXAMPLE = re.compile(r"(illustrative|example|misal)", re.I)
+_STALE = re.compile(r"(\bmonths?\s+old\b|\byears?\s+old\b|\bstale\b|\boutdated\b|mahine\s+puran)", re.I)
+_GUARANTEE = re.compile(r"guaranteed\s+(profit|returns?)", re.I)
+_GUARANTEE_SOFT = re.compile(r"(check karo|jaisa na|na lage|\bnahi\b|\bnot\b|does not|don't)", re.I)
+_ADVICE = re.compile(
+    r"(you should (buy|sell|hold)|recommends? (buying|selling|holding)|"
+    r"personalized advice|fake[- ]expert|buy this (stock|fund|scheme)|"
+    r"sell this (stock|fund|scheme))",
+    re.I,
+)
+_DISCLAIMER = re.compile(
+    r"(no disclaimer|missing disclaimer|disclaimer (is )?(missing|absent)|disclaimer nahi)",
+    re.I,
+)
+_SUBS = re.compile(
+    r"(subtitles? (were |was )?(not generated|missing|absent)|no subtitles?|"
+    r"\bsubs (missing|absent))",
+    re.I,
+)
+_TAX_YEAR = re.compile(
+    r"tax[^\n|]{0,80}(without|missing|no)\s+(a\s+)?(financial year|\bfy\b)"
+    r"|tax[^\n|]{0,60}(financial year|\bfy\b)[^\n|]{0,40}(missing|not named|nahi)",
+    re.I,
+)
+_TAX_CLEAR = re.compile(
+    r"(zaroorat nahi|not needed|no tax|tax number nahi|koi tax number nahi)",
+    re.I,
+)
 
 FALLBACK_MARKERS = (
     "passed via robust json fallback",
@@ -44,6 +94,194 @@ def spoken_word_count(script):
     return len(body.split())
 
 
+def _clauses(text):
+    parts = []
+    for line in (text or "").splitlines():
+        parts.extend(piece.strip() for piece in line.split("|"))
+    return [piece for piece in parts if piece]
+
+
+def _auto_segments(text):
+    lines = (text or "").splitlines()
+    for index, line in enumerate(lines):
+        if not re.search(r"auto-checks", line, re.I):
+            continue
+        blob = line
+        if index + 1 < len(lines) and lines[index + 1].strip():
+            blob += "\n" + lines[index + 1]
+        return [piece.strip() for piece in blob.split("|") if piece.strip()]
+    return []
+
+
+def _check_name(segment):
+    match = re.match(r"\s*([A-Za-z]+)", segment or "")
+    return match.group(1).lower() if match else ""
+
+
+def _is_fail(segment):
+    return any(mark in (segment or "") for mark in _FAIL_MARKS)
+
+
+def _only_empty_visual_checks(segment):
+    """The model marks Visuals ✗ when the checks blob is empty.
+
+    That is a missing input, not a broken frame. A real visual defect in the
+    same segment still counts.
+    """
+    if not _check_name(segment).startswith("visual"):
+        return False
+    if not re.search(r"visual[_ ]checks", segment, re.I):
+        return False
+    if not re.search(r"(khaali|khali|empty|blank|\{\}|none|missing)", segment, re.I):
+        return False
+    if re.search(
+        r"(missing (number|text|chart|source)|fabricat|wrong|not on screen|no chart|blank frame)",
+        segment,
+        re.I,
+    ):
+        return False
+    return True
+
+
+def _unverified_is_hard(clause):
+    if not _UNVERIFIED.search(clause or ""):
+        return False
+    return _UNVERIFIED_NEGATED.search(clause or "") is None
+
+
+def _unsourced_is_hard(clause):
+    if not _UNSOURCED.search(clause or ""):
+        return False
+    # An illustrative example the ledger already owns is a label note.
+    return _EXAMPLE.search(clause or "") is None
+
+
+def _guarantee_is_hard(clause):
+    if not _GUARANTEE.search(clause or ""):
+        return False
+    # "check it does not look like guaranteed profit" is a thumbnail note.
+    return _GUARANTEE_SOFT.search(clause or "") is None
+
+
+def _tax_year_is_hard(clause):
+    if not re.search(r"\btax\b", clause or "", re.I):
+        return False
+    if _TAX_CLEAR.search(clause or ""):
+        return False
+    return _TAX_YEAR.search(clause or "") is not None
+
+
+def hard_failure_reasons(text):
+    """Compliance, fact, and safety findings. Empty means none were stated.
+
+    Judgment-call wording is not a finding. A negated 'no UNVERIFIED figure'
+    is not a finding either.
+    """
+    reasons = []
+    seen = set()
+
+    def add(reason):
+        if reason and reason not in seen:
+            seen.add(reason)
+            reasons.append(reason)
+
+    for segment in _auto_segments(text):
+        if not _is_fail(segment) or _only_empty_visual_checks(segment):
+            continue
+        name = _check_name(segment) or "check"
+        add(f"auto-check failed: {name}")
+
+    for clause in _clauses(text):
+        if _unverified_is_hard(clause):
+            add("unverified figure")
+        if _unsourced_is_hard(clause):
+            add("unsourced figure")
+        if _STALE.search(clause):
+            add("stale or outdated figure")
+        if _guarantee_is_hard(clause):
+            add("guaranteed return or profit")
+        if _ADVICE.search(clause):
+            add("advice or fake-expert framing")
+        if _DISCLAIMER.search(clause):
+            add("disclaimer missing")
+        if _SUBS.search(clause):
+            add("subtitles missing")
+        if _tax_year_is_hard(clause):
+            add("tax figure without a financial year")
+
+    if re.search(r"reused-content risk:\s*HIGH\b", text or "", re.I):
+        add("reused-content risk HIGH")
+    fails = re.search(r"FAILS this round[^:\n]*:\s*(.+)", text or "", re.I)
+    if fails:
+        rest = fails.group(1).strip()
+        if rest and not re.fullmatch(r"(none|n/a|no|nahi|—|-|\.)", rest, re.I):
+            add("fails this round: " + rest[:160])
+    return reasons
+
+
+def has_judgment_calls(text):
+    """True when the report has at least one judgment-call bullet."""
+    lines = (text or "").splitlines()
+    start = None
+    for index, line in enumerate(lines):
+        if re.search(r"tumhe dekhna hai|judgment calls", line, re.I):
+            start = index + 1
+            break
+    if start is None:
+        return False
+    for line in lines[start:]:
+        if re.search(r"risks / assumptions|fails this round|auto-checks|reused-content", line, re.I):
+            break
+        if re.match(r"\s*[-*•]\s+\S", line):
+            return True
+    return False
+
+
+def soft_judgment_only(text):
+    """True when the AI listed judgment calls and no hard failure."""
+    if not (text or "").strip():
+        return False
+    if hard_failure_reasons(text):
+        return False
+    return has_judgment_calls(text)
+
+
+def self_review_clears_high_bar(self_review):
+    """True when a passing Short review is already clean, not merely above 75."""
+    if not isinstance(self_review, dict) or not self_review.get("public_ok"):
+        return False
+    parts = self_review.get("parts")
+    if not isinstance(parts, dict):
+        return False
+    try:
+        overall = float(self_review.get("overall"))
+    except (TypeError, ValueError):
+        return False
+    if overall < HIGH_BAR_OVERALL:
+        return False
+    for name in ("hook", "visual", "accuracy"):
+        raw = parts.get(name)
+        if raw is None:
+            return False
+        try:
+            score = float(raw)
+        except (TypeError, ValueError):
+            return False
+        if name == "accuracy" and score < 100:
+            return False
+        if score < HIGH_BAR_PART:
+            return False
+    trend = parts.get("trend")
+    if trend is not None:
+        try:
+            trend_score = float(trend)
+        except (TypeError, ValueError):
+            return False
+        if trend_score < HIGH_BAR_PART:
+            return False
+    return True
+
+
 def _load_json(path):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -55,8 +293,11 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
     """Return the publish decision. public_ready is the only path to a public upload.
 
     ai_ok is False when the model call failed or the text has no single verdict
-    line. Deterministic notes are written into the report, but they never
-    upgrade a missing AI verdict to public.
+    line. Deterministic notes never upgrade a missing AI verdict to public.
+
+    A parsed NEEDS FIX still blocks, except one case: the text is judgment
+    calls only, and a Short self-review is already at the high bar. Hard
+    compliance, fact, or safety findings block even then.
     """
     reasons = []
     text = ai_text or ""
@@ -78,6 +319,15 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
             summary = (self_review or {}).get("summary") if isinstance(self_review, dict) else None
             reasons.append(summary or "self-review missing or below the bar")
 
+    hard = hard_failure_reasons(text) if ai_valid and parsed == "NEEDS_FIX" else []
+    if hard:
+        reasons.extend(hard)
+    judgment_only = bool(ai_valid and parsed == "NEEDS_FIX" and soft_judgment_only(text))
+    high = fmt == "short" and self_review_clears_high_bar(self_review)
+    soft_override = bool(
+        judgment_only and high and review_ok and words >= 20 and not hard
+    )
+
     public_ready = bool(ai_valid and parsed == "READY" and review_ok and words >= 20)
     if public_ready:
         return {
@@ -89,7 +339,27 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
             "reasons": [],
             "spoken_words": words,
             "keep_model_report": True,
+            "soft_judgment_only": False,
         }
+    if soft_override:
+        return {
+            "parsed": "READY",
+            "model_verdict": "NEEDS_FIX",
+            "ai_verdict_valid": True,
+            "public_ready": True,
+            "exit_code": 0,
+            "verdict_line": "VERDICT: [READY TO PUBLISH]",
+            "reasons": [],
+            "spoken_words": words,
+            "keep_model_report": False,
+            "soft_judgment_only": True,
+        }
+
+    if parsed == "NEEDS_FIX" and not hard:
+        if not high:
+            reasons.append("AI NEEDS FIX stands: self-review is not at the high bar")
+        elif not judgment_only:
+            reasons.append("AI NEEDS FIX stands: review is not judgment-calls only")
 
     if words < 20:
         verdict_line = "VERDICT: [NEEDS FIX — narration empty or too short]"
@@ -97,6 +367,8 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
         verdict_line = "VERDICT: [NEEDS FIX — AI reviewer unavailable]"
     elif not review_ok:
         verdict_line = "VERDICT: [NEEDS FIX — self-review below bar]"
+    elif hard:
+        verdict_line = "VERDICT: [NEEDS FIX — hard compliance, fact, or safety failure]"
     else:
         verdict_line = "VERDICT: [NEEDS FIX — review blocked public upload]"
     return {
@@ -108,6 +380,7 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
         "reasons": reasons,
         "spoken_words": words,
         "keep_model_report": False,
+        "soft_judgment_only": False,
     }
 
 

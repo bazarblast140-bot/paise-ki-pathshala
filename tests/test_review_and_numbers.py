@@ -163,3 +163,195 @@ class ChartNumberTests(unittest.TestCase):
             self.assertIn(figs["multiple_text"] + " गुना", joined, key)
             self.assertIn(figs["start_text"], joined, key)
             self.assertIn(figs["end_text"], joined, key)
+
+
+# The 2026-10-02 08:30 review. Judgment only; auto-checks were not hard fails.
+# Visuals ✗ is the empty visual_checks blob, not a broken frame.
+OCT2_SOFT_REVIEW = """VERDICT: [NEEDS FIX — 3 items]
+
+✅ Auto-checks pass:
+Hook ✓ | Facts ⚠️ (entry/SL/target ledger-mein hain par source nahi — illustrative maano) | Compliance ✓ (disclaimer + "सलाह नहीं" framing, koi stock/product recommend nahi) | Coverage ✓ | Visuals ✗ (visual_checks khaali) | Length ✓
+
+♻️ Reused-content risk: LOW
+- 0% stock footage, 4/4 chart shots, ElevenLabs premium voice, original script + overlays always-on — yeh teen mitigating factors isko clean rakhte hain.
+
+⚠️ Tumhe dekhna hai (judgment calls):
+- Thumbnail: "1:2 setup फिर भी घाटा?" catchy hai, par check karo ki koi arrow/target number on-thumb se "guaranteed profit" jaisa na lage.
+- Assumption @ 0:00–0:03: entry 200/SL 198/target 204 illustrative example hai — screen par "example only" chhota tag lagana better hoga.
+- "Is this boring?" — tone thoda dry hai; Segment 1 mein ek real chart zoom se retention badh sakta hai.
+
+🔴 Risks / assumptions:
+- Charges/STT/slippage ka koi figure diya nahi gaya aur koi tax number nahi — isliye FY note ki zaroorat nahi. Ledger mein sab "Likely/Illustrative" — koi UNVERIFIED figure nahi.
+- India jurisdiction, non-SEBI channel — disclaimer line ok par "Not SEBI registered" mention add karna safe
+"""
+
+HIGH_REVIEW = {
+    "parts": {"hook": 100, "visual": 90, "accuracy": 100, "trend": None},
+    "overall": 96.7,
+    "passed": True,
+    "public_ok": True,
+    "summary": "overall 96.7 (hook 100, visual 90, accuracy 100, trend skip)",
+}
+
+
+def _script():
+    return "TITLE:\nTitan\n\nHOOK:\n" + ("सवाल साफ है। " * 8) + "\n\nFACT LEDGER:\n- 71.07\n"
+
+
+class SoftJudgmentGateTests(unittest.TestCase):
+    def test_oct2_soft_review_is_not_a_hard_failure(self):
+        self.assertEqual(review_gate.hard_failure_reasons(OCT2_SOFT_REVIEW), [])
+        self.assertTrue(review_gate.soft_judgment_only(OCT2_SOFT_REVIEW))
+        self.assertTrue(review_gate.self_review_clears_high_bar(HIGH_REVIEW))
+
+    def test_oct2_soft_review_publishes_when_self_review_is_at_the_high_bar(self):
+        decision = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), HIGH_REVIEW, "short")
+        self.assertTrue(decision["public_ready"])
+        self.assertEqual(decision["exit_code"], 0)
+        self.assertTrue(decision["soft_judgment_only"])
+        self.assertFalse(decision["keep_model_report"])
+        self.assertEqual(review_gate.parse_report_verdict(decision["verdict_line"]), "READY")
+        report = run_verify._report_from_decision(decision, OCT2_SOFT_REVIEW, HIGH_REVIEW)
+        self.assertEqual(review_gate.parse_report_verdict(report), "READY")
+        self.assertNotIn("NEEDS FIX", report)
+        self.assertIn("example only", report)
+
+    def test_soft_review_still_blocks_without_the_high_bar(self):
+        barely = {"public_ok": True, "overall": 80, "parts": {
+            "hook": 70, "visual": 70, "accuracy": 100, "trend": None,
+        }}
+        decision = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), barely, "short")
+        self.assertFalse(decision["public_ready"])
+        self.assertEqual(decision["exit_code"], 2)
+        self.assertFalse(review_gate.self_review_clears_high_bar(barely))
+        missing_parts = {"public_ok": True, "overall": 96.7}
+        self.assertFalse(review_gate.self_review_clears_high_bar(missing_parts))
+        blocked = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), missing_parts, "short")
+        self.assertFalse(blocked["public_ready"])
+
+    def test_visual_just_under_the_high_bar_still_blocks(self):
+        review = {"public_ok": True, "overall": 96.3, "parts": {
+            "hook": 100, "visual": 89, "accuracy": 100, "trend": None,
+        }}
+        decision = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), review, "short")
+        self.assertFalse(decision["public_ready"])
+
+    def test_accuracy_below_100_still_blocks(self):
+        review = {"public_ok": True, "overall": 96, "parts": {
+            "hook": 100, "visual": 90, "accuracy": 90, "trend": None,
+        }}
+        self.assertFalse(review_gate.self_review_clears_high_bar(review))
+        decision = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), review, "short")
+        self.assertFalse(decision["public_ready"])
+
+    def test_long_form_soft_needs_fix_still_blocks(self):
+        decision = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), HIGH_REVIEW, "long")
+        self.assertFalse(decision["public_ready"])
+
+    def test_needs_fix_without_judgment_calls_still_blocks_at_the_high_bar(self):
+        text = "VERDICT: [NEEDS FIX — 1 item]\n\nLooks unfinished.\n"
+        decision = review_gate.decide(text, True, _script(), HIGH_REVIEW, "short")
+        self.assertFalse(decision["public_ready"])
+        self.assertIn("judgment-calls", " ".join(decision["reasons"]))
+
+    def test_hard_fact_compliance_and_safety_still_block_at_the_high_bar(self):
+        cases = {
+            "unverified figure": OCT2_SOFT_REVIEW + "\n- Close is UNVERIFIED.\n",
+            "unsourced figure": OCT2_SOFT_REVIEW.replace(
+                "Facts ⚠️ (entry/SL/target ledger-mein hain par source nahi — illustrative maano)",
+                "Facts ⚠️ (close has no source)",
+            ),
+            "stale or outdated figure": (
+                "VERDICT: [NEEDS FIX — 1 item]\n\n"
+                "⚠️ Tumhe dekhna hai (judgment calls):\n- Thumbnail is plain.\n\n"
+                "🔴 Risks / assumptions:\n- Data is three months old.\n"
+            ),
+            "auto-check failed: facts": OCT2_SOFT_REVIEW.replace("Facts ⚠️", "Facts ✗"),
+            "auto-check failed: compliance": OCT2_SOFT_REVIEW.replace("Compliance ✓", "Compliance ✗"),
+            "auto-check failed: visuals": OCT2_SOFT_REVIEW.replace(
+                "Visuals ✗ (visual_checks khaali)",
+                "Visuals ✗ (numbers not on screen)",
+            ),
+            "guaranteed return or profit": OCT2_SOFT_REVIEW + "\n- The script promises guaranteed returns.\n",
+            "advice or fake-expert framing": OCT2_SOFT_REVIEW + "\n- Narrator uses a fake-expert persona.\n",
+            "disclaimer missing": OCT2_SOFT_REVIEW + "\n- Disclaimer is missing.\n",
+            "subtitles missing": OCT2_SOFT_REVIEW + "\n- Subtitles were not generated.\n",
+            "reused-content risk HIGH": OCT2_SOFT_REVIEW.replace(
+                "Reused-content risk: LOW", "Reused-content risk: HIGH"),
+            "tax figure without a financial year": OCT2_SOFT_REVIEW + (
+                "\n- LTCG tax is 12.5% with the financial year not named.\n"
+            ),
+        }
+        for reason, text in cases.items():
+            decision = review_gate.decide(text, True, _script(), HIGH_REVIEW, "short")
+            self.assertFalse(decision["public_ready"], reason)
+            self.assertEqual(decision["exit_code"], 2, reason)
+            self.assertIn(reason, decision["reasons"], decision["reasons"])
+            self.assertIn("hard compliance", decision["verdict_line"])
+
+    def test_fails_this_round_still_blocks(self):
+        text = OCT2_SOFT_REVIEW + "\nFAILS this round: facts → unsourced close → script\n"
+        decision = review_gate.decide(text, True, _script(), HIGH_REVIEW, "short")
+        self.assertFalse(decision["public_ready"])
+        self.assertTrue(any(r.startswith("fails this round:") for r in decision["reasons"]))
+
+    def test_fails_this_round_none_is_not_a_hard_failure(self):
+        text = OCT2_SOFT_REVIEW + "\nFAILS this round: none\n"
+        self.assertEqual(review_gate.hard_failure_reasons(text), [])
+        decision = review_gate.decide(text, True, _script(), HIGH_REVIEW, "short")
+        self.assertTrue(decision["public_ready"])
+
+    def test_ready_verdict_is_unchanged(self):
+        text = "VERDICT: [READY TO PUBLISH]\n\n✅ Auto-checks pass:\nHook | Facts | Compliance\n"
+        decision = review_gate.decide(text, True, _script(), HIGH_REVIEW, "short")
+        self.assertTrue(decision["public_ready"])
+        self.assertTrue(decision["keep_model_report"])
+        self.assertFalse(decision["soft_judgment_only"])
+
+    def test_below_bar_self_review_still_blocks_a_ready_verdict(self):
+        text = "VERDICT: [READY TO PUBLISH]\n\nHook is specific.\n"
+        decision = review_gate.decide(
+            text, True, _script(), {"public_ok": False, "summary": "overall 40"}, "short")
+        self.assertFalse(decision["public_ready"])
+        self.assertIn("self-review", decision["verdict_line"])
+
+
+class SoftReviewReportTests(unittest.TestCase):
+    def test_verify_writes_ready_and_cache_does_not_restore_needs_fix(self):
+        import tempfile
+        from pathlib import Path
+        import common
+
+        script = _script()
+        shots = json.dumps({"shots": [], "checks": {}})
+        calls = {"n": 0}
+
+        def fake_review(c, system, user):
+            calls["n"] += 1
+            return OCT2_SOFT_REVIEW
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            (run / "script.txt").write_text(script, encoding="utf-8")
+            (run / "shots.json").write_text(shots, encoding="utf-8")
+            (run / "self_review.json").write_text(json.dumps(HIGH_REVIEW), encoding="utf-8")
+            (run / "subs.ass").write_text("1\n", encoding="utf-8")
+            (run / "final.mp4").write_bytes(b"x")
+            with mock.patch.object(common, "RUN", run), mock.patch.object(run_verify, "RUN", run), \
+                    mock.patch.object(run_verify, "fetch_review", side_effect=fake_review), \
+                    mock.patch.dict("os.environ", {"VIDEO_FORMAT": "short"}, clear=False):
+                run_verify.main()
+                report = (run / "report.md").read_text(encoding="utf-8")
+                meta = json.loads((run / "verify_meta.json").read_text(encoding="utf-8"))
+                self.assertEqual(review_gate.parse_report_verdict(report), "READY")
+                self.assertNotIn("NEEDS FIX", report)
+                self.assertTrue(meta["public_ready"])
+                self.assertTrue(meta["soft_judgment_only"])
+                self.assertEqual(meta["verdict"], "READY")
+                self.assertTrue(review_gate.files_allow_public(run, "short"))
+                self.assertEqual(calls["n"], 1)
+                run_verify.main()
+                self.assertEqual(calls["n"], 1)
+                again = (run / "report.md").read_text(encoding="utf-8")
+                self.assertEqual(review_gate.parse_report_verdict(again), "READY")
+                self.assertTrue(review_gate.files_allow_public(run, "short"))
