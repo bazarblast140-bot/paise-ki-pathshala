@@ -175,7 +175,7 @@ Edit `config.json`:
 - `channel.name`
 - keep `pipeline.auto_publish: false` for now
 
-**Voice:** the default stays the configured ElevenLabs voice. A missing key, or a quota / credit / payment error, uses free Edge TTS for that run and logs a warning. An invalid key or a missing permission is a hard error (no silent Edge fallback). Set `voice.engine: "edge"` to force Edge.
+**Voice:** a live slot uses the configured ElevenLabs voice while at least 2,500 characters remain. Below that floor, or when the subscription API errors or reports insufficient quota, the slot uses Edge TTS and logs `tts_engine=edge` plus the reason in `run/credits.json`. The sync gate still runs on that audio. An invalid key or a missing permission is a hard error (no silent Edge fallback). Buffer Shorts are Edge only (`hi-IN-MadhurNeural`, `+0%`) and spend no ElevenLabs characters. Set `voice.engine: "edge"` to force Edge.
 
 Check everything before spending credits:
 ```bash
@@ -329,7 +329,9 @@ Agar backup buffer me **2 se kam** ready Short hon, yahi check `health-alert` kh
 
 Manifest: `data/buffer_manifest.json` (`ready` / `used`, gate timestamps). MP4 + metadata GitHub release tag **`buffer-shorts`** par hain. Sirf concept topics (risk, position size, stop-loss, compounding jaisi baatein) — live market price wale topics nahi. Screen par jo number ho wo example / मिसाल labelled hona chahiye. 3-trading-day freshness gate real market data par pehle jaisi hai; evergreen item par as-of stamp hota hi nahi.
 
-**Pehle 2–3 item kaise bharen:** Actions → **Buffer refill** → Run workflow. Ek run **ek** item, tab tak jab ready 3 se kam hon. Roz `41 6 * * *` UTC (12:11 IST) bhi yahi karta hai — build crons se alag ghanta. Har item par DeepSeek **zyada se zyada 4** calls (saaf run mein aksar 2: ek narration + ek AI review). ElevenLabs **sirf tab** jab saare gates pass ho chuke hon, usi quality voice se jo normal Short use karti hai, lagbhag **2,000 characters**. Gate fail ya ElevenLabs credit kam ho to item store nahi hota aur aur DeepSeek call nahi hoti. Pre-gate render Edge TTS hai (ElevenLabs credit nahi).
+**Pehle 2–3 item kaise bharen:** Actions → **Buffer refill** → Run workflow. Ek run **ek** item, tab tak jab ready 3 se kam hon. Roz `41 6 * * *` UTC (12:11 IST) bhi yahi karta hai — build crons se alag ghanta. Har item par DeepSeek **zyada se zyada 4** calls (saaf run mein aksar 2: ek narration + ek AI review). Buffer voice **sirf Edge** hai: `hi-IN-MadhurNeural`, rate `+0%`, **0 ElevenLabs characters**. Character floor buffer par lagta hi nahi. Gate fail ho to item store nahi hota.
+
+**Live slot voice:** ElevenLabs tabhi jab subscription par **kam se kam 2,500** characters bache hon. Usse kam, API error, ya insufficient quota par wahi slot Edge se jaata hai (`tts_engine=edge` aur reason `run/credits.json` mein). Slot skip nahi hota. Whisper sync gate usi final audio par chalta hai, chahe engine Edge ho. Invalid key ya missing permission pehle ki tarah hard error hai.
 
 Khali buffer par slot skip rehta hai aur `health-alert` issue khulta hai.
 

@@ -514,6 +514,106 @@ class PreviewVoiceTests(unittest.TestCase):
                 self.assertEqual(credits["elevenlabs_characters_sent"], 0)
                 self.assertEqual(credits["tts_engine"], "edge")
 
+    def test_live_slot_uses_edge_below_the_floor_and_on_api_error(self):
+        """Below 2,500 characters, or a subscription API error, the slot speaks Edge.
+
+        The run does not exit. credits.json records tts_engine=edge and the reason.
+        Whisper still runs on whatever audio this function wrote; the sync call
+        in main() is not gated on the engine.
+        """
+        self.assertEqual(eleven_voice.LIVE_EDGE_FLOOR, 2500)
+        src = (ROOT / "board_short.py").read_text(encoding="utf-8")
+        call = src.index("sync_report = _sync_report(")
+        self.assertNotIn("elevenlabs", src[call - 300:call].lower())
+
+        def low(_url, **_kwargs):
+            return _Resp(200, {
+                "character_count": 10000 - 2499,
+                "character_limit": 10000,
+                "status": "active",
+            })
+
+        def post(*_args, **_kwargs):
+            raise AssertionError("ElevenLabs TTS must not run below the floor")
+
+        engine, meta, credits, _posts, calls = self._speak_with(
+            {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public"},
+            get=low, post=post,
+        )
+        self.assertEqual(engine, "edge")
+        self.assertEqual(credits["tts_engine"], "edge")
+        self.assertEqual(credits["elevenlabs_characters_sent"], 0)
+        self.assertIn("2500", credits["tts_reason"])
+        self.assertIn("floor", credits["tts_reason"])
+        self.assertEqual(calls[0], ("hi-IN-SwaraNeural", "+0%"))
+        self.assertEqual(meta["engine"], "edge")
+
+        def at_floor(_url, **_kwargs):
+            return _Resp(200, {
+                "character_count": 10000 - 2500,
+                "character_limit": 10000,
+                "status": "active",
+            })
+
+        engine, _meta, credits, posts, calls = self._speak_with(
+            {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public"},
+            get=at_floor,
+        )
+        self.assertEqual(engine, "elevenlabs")
+        self.assertGreaterEqual(len(posts), 1)
+        self.assertEqual(calls, [])
+        self.assertEqual(credits["elevenlabs_characters_remaining"], 2500)
+
+        def boom(_url, **_kwargs):
+            raise ConnectionError("subscription down")
+
+        def post_no(*_args, **_kwargs):
+            raise AssertionError("an API error must use Edge, not another paid call")
+
+        engine, _meta, credits, _posts, _calls = self._speak_with(
+            {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public"},
+            get=boom, post=post_no,
+        )
+        self.assertEqual(engine, "edge")
+        self.assertEqual(credits["tts_engine"], "edge")
+        self.assertEqual(credits["elevenlabs_characters_sent"], 0)
+        self.assertIn("ConnectionError", credits["tts_reason"])
+
+    def _speak_with(self, env, get=None, post=None):
+        posts = []
+
+        def default_post(_url, **_kwargs):
+            posts.append(_url)
+            return _Resp(200, b"E" * 2500, headers={"character-cost": "12"})
+
+        def default_get(_url, **_kwargs):
+            return _Resp(200, {"character_count": 0, "character_limit": 100000, "status": "active"})
+
+        async def edge(_text, voice, rate, path):
+            edge.calls.append((voice, rate))
+            path.write_bytes(b"e" * 2000)
+
+        edge.calls = []
+        spoken = {beat: "ek do teen" for beat in board_short.BEATS}
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch("requests.post", post or default_post), \
+             mock.patch("requests.get", get or default_get), \
+             mock.patch.object(board_short, "_edge", edge), \
+             redirect_stdout(io.StringIO()):
+            os.environ.pop("ELEVENLABS_OPT_IN", None)
+            os.environ.pop("DRY_RUN", None)
+            os.environ.pop("PIPELINE_MODE", None)
+            os.environ.pop("RENDER_SAMPLE", None)
+            for key, value in env.items():
+                os.environ[key] = value
+            engine = board_short.synthesize_short_voices(spoken, VOICE)
+            meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
+            credits = json.loads((Path(tmp) / "credits.json").read_text(encoding="utf-8"))
+        return engine, meta, credits, posts, edge.calls
+
     def test_public_publish_and_explicit_opt_in_may_call_elevenlabs(self):
         for env in (
             {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public"},

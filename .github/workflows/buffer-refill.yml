@@ -5,9 +5,9 @@ name: Buffer refill
 # with the 12–14h build crons, the health checks, slot watch, or trend research.
 # 06:41 UTC = 12:11 IST. Odd minute, outside 22:30–01:30 UTC.
 #
-# DeepSeek is capped at 4 calls. ElevenLabs runs only after every gate has
-# passed (the preview render uses Edge). Out of ElevenLabs credit fails closed.
-# This workflow does not publish a slot and does not post a Reel.
+# DeepSeek is capped at 4 calls. The render is Edge only
+# (hi-IN-MadhurNeural, +0%). This workflow does not call ElevenLabs,
+# does not publish a slot, and does not post a Reel.
 on:
   schedule:
     - cron: "41 6 * * *"
@@ -40,9 +40,6 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
           DEEPSEEK_MAX_CALLS: "4"
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
-          ELEVENLABS_MODEL: ${{ vars.ELEVENLABS_MODEL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           BUFFER_FILL: "0"

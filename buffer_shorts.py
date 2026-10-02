@@ -27,8 +27,7 @@ RUN = ROOT / "run"
 RELEASE_TAG = "buffer-shorts"
 TARGET_READY = 3
 MIN_READY = 2
-# One Short, same planning number the health check uses for a day of three.
-ELEVEN_CHARS_PER_SHORT = 2000
+# Buffer Shorts never call ElevenLabs. Live slots keep a separate floor.
 
 # After the slot, a complete buffer post may still go out. YouTube needs a
 # future publishAt, so a missed slot is scheduled UPLOAD_BUFFER plus this pad
@@ -817,54 +816,6 @@ def next_evergreen(bank_topics, entries, manifest):
     return None
 
 
-def voice_policy(gates_ok, *, key_present, remaining, needed):
-    """ElevenLabs only after every gate. Out of credit fails closed.
-
-    `withhold` means do not call ElevenLabs (gates failed; Edge preview stands,
-    and it is not stored). `fail_closed` means the gates passed but paid voice
-    cannot run, so nothing is stored and no further DeepSeek call is allowed.
-    `speak` means one paid render of the same voice a normal Short uses.
-    """
-    if not gates_ok:
-        return "withhold"
-    if not key_present:
-        return "fail_closed"
-    if remaining is None or int(remaining) < int(needed):
-        return "fail_closed"
-    return "speak"
-
-
-def narration_char_need(run_dir=None):
-    run_dir = Path(run_dir) if run_dir else RUN
-    narration = _load_json(run_dir / "narration.json") or {}
-    beats = narration.get("beats") if isinstance(narration.get("beats"), dict) else {}
-    total = sum(len(str(beats.get(name) or "")) for name in ("hook", "pehchan", "matlab", "karein"))
-    return max(ELEVEN_CHARS_PER_SHORT, total)
-
-
-def _eleven_remaining():
-    key = (os.environ.get("ELEVENLABS_API_KEY") or "").strip()
-    if not key:
-        return False, None
-    import requests
-    import eleven_voice
-    try:
-        response = requests.get(
-            "https://api.elevenlabs.io/v1/user/subscription",
-            headers={"xi-api-key": key, "Accept": "application/json"},
-            timeout=20,
-        )
-    except Exception as exc:  # noqa: BLE001
-        print(f"[buffer] ElevenLabs subscription unreadable ({type(exc).__name__}); fail closed", flush=True)
-        return True, None
-    body = eleven_voice.parse_response(response)
-    if eleven_voice.classify(getattr(response, "status_code", 0), body) == "quota":
-        return True, 0
-    if getattr(response, "status_code", 0) != 200:
-        return True, None
-    return True, eleven_voice.subscription_remaining(body if isinstance(body, dict) else {})
-
-
 def _mark_bank_used(topic_key):
     path = ROOT / "topic_bank.json"
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -939,7 +890,7 @@ def admit_run(run_dir, topic, store, manifest, *, mp4, title, description, tags,
 
 
 def default_preview_runner(topic_key):
-    """Edge preview through the normal pipeline. No publish, no buffer fill, cap 4."""
+    """One Edge render through the normal pipeline. No publish and no ElevenLabs."""
     import subprocess
     env = os.environ.copy()
     env["VIDEO_FORMAT"] = "short"
@@ -949,7 +900,10 @@ def default_preview_runner(topic_key):
     env["DEEPSEEK_MAX_CALLS"] = str(__import__("credit_log").DEFAULT_DEEPSEEK_CALLS)
     env["BUFFER_FILL"] = "0"
     env["ELEVENLABS_OPT_IN"] = "0"
-    for key in ("PUBLISH_SLOT_IST", "PUBLISH_DATE_IST", "PUBLISH_AT_UTC"):
+    for key in (
+        "PUBLISH_SLOT_IST", "PUBLISH_DATE_IST", "PUBLISH_AT_UTC",
+        "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "ELEVENLABS_MODEL",
+    ):
         env.pop(key, None)
     return subprocess.run(
         [sys.executable, str(ROOT / "run_pipeline.py"), "--format", "short"],
@@ -958,33 +912,17 @@ def default_preview_runner(topic_key):
     ).returncode
 
 
-def promote_paid_voice():
-    """Re-render with ElevenLabs after the gates have passed. No extra topic pick."""
-    import board_short
-    os.environ["ELEVENLABS_OPT_IN"] = "1"
-    os.environ["BUFFER_FILL"] = "0"
-    os.environ.pop("PUBLISH_SLOT_IST", None)
-    os.environ.pop("PUBLISH_DATE_IST", None)
-    os.environ.pop("PUBLISH_AT_UTC", None)
-    old = sys.argv
-    sys.argv = ["board_short.py"]
-    try:
-        board_short.main()
-    finally:
-        sys.argv = old
-
-
 def _voice_engine(run_dir):
     meta = _load_json(Path(run_dir) / "voice_meta.json") or {}
     return str(meta.get("engine") or "").strip().lower()
 
 
-def refill(*, runner=None, promoter=None, remaining_reader=None, store=None, now=None, manifest_path=None):
+def refill(*, runner=None, store=None, now=None, manifest_path=None):
     """Build at most one evergreen Short when fewer than 3 are ready.
 
-    Writes run/credits.json. ElevenLabs runs only after every gate has passed
-    on the Edge preview. If paid voice is out of credit, the run stops and the
-    Edge preview is not stored.
+    The render is Edge only (hi-IN-MadhurNeural, +0%). ElevenLabs is not
+    called and the character floor does not apply. Writes run/credits.json.
+    Gates run on that Edge audio; a failed gate is not stored.
     """
     import credit_log
     manifest_path = Path(manifest_path) if manifest_path else MANIFEST
@@ -1004,45 +942,19 @@ def refill(*, runner=None, promoter=None, remaining_reader=None, store=None, now
         runner = runner or default_preview_runner
         rc = runner(topic["key"])
         if rc != 0:
-            print(f"[buffer] preview build failed rc={rc}; ElevenLabs not called", flush=True)
+            print(f"[buffer] Edge build failed rc={rc}; nothing stored", flush=True)
             return 1
         preview_gates = evaluate_gates(RUN, topic, now=now)
         if not gates_pass(preview_gates):
             failed = [name for name in _GATE_NAMES if not preview_gates[name]["passed"]]
-            print(f"[buffer] gates failed ({', '.join(failed)}); ElevenLabs not called", flush=True)
+            print(f"[buffer] gates failed ({', '.join(failed)}); not stored", flush=True)
             return 1
-        if remaining_reader is None:
-            key_present, remaining = _eleven_remaining()
-        else:
-            key_present, remaining = remaining_reader()
-        needed = narration_char_need(RUN)
-        policy = voice_policy(
-            True, key_present=key_present, remaining=remaining, needed=needed,
-        )
-        credit_log.set_eleven_remaining(remaining)
-        if policy != "speak":
-            print(
-                f"[buffer] ElevenLabs {policy}; remaining={remaining} needed={needed}; "
-                "not storing an Edge preview and not making more DeepSeek calls",
-                flush=True,
-            )
-            return 1
-        promoter = promoter or promote_paid_voice
-        try:
-            promoter()
-        except credit_log.DeepSeekCallCap as exc:
-            print(f"[buffer] {exc}; fail closed", flush=True)
-            return 1
-        if _voice_engine(RUN) != "elevenlabs":
-            print("[buffer] paid voice did not stick (Edge fallback); fail closed, not stored", flush=True)
-            return 1
-        final_gates = evaluate_gates(RUN, topic, now=now)
-        if not gates_pass(final_gates):
-            print("[buffer] gates failed after the paid voice; not stored", flush=True)
+        if _voice_engine(RUN) != "edge":
+            print("[buffer] buffer items are Edge only; refusing a non-Edge render", flush=True)
             return 1
         mp4_path = RUN / "final.mp4"
         if not mp4_path.exists():
-            print("[buffer] final.mp4 missing after paid voice", flush=True)
+            print("[buffer] final.mp4 missing after the Edge render", flush=True)
             return 1
         import publish
         script = (RUN / "script.txt").read_text(encoding="utf-8") if (RUN / "script.txt").exists() else ""
@@ -1064,10 +976,14 @@ def refill(*, runner=None, promoter=None, remaining_reader=None, store=None, now
             now=now,
         )
         if item is None:
-            print("[buffer] admit refused the paid render", flush=True)
+            print("[buffer] admit refused the Edge render", flush=True)
             return 1
         save_manifest(manifest, manifest_path)
         _mark_bank_used(topic["key"])
+        credit_log.set_tts_engine(
+            "edge",
+            "buffer refill uses Edge hi-IN-MadhurNeural +0%; ElevenLabs not called",
+        )
         print(f"[buffer] stored {item['id']} sha256={item['sha256'][:12]}", flush=True)
         return 0
     finally:

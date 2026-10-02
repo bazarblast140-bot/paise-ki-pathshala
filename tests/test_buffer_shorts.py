@@ -463,24 +463,8 @@ class _IssueHttp:
 
 
 class CreditAndRefillTests(unittest.TestCase):
-    def test_voice_policy_and_deepseek_cap(self):
+    def test_deepseek_cap_still_holds(self):
         self.assertEqual(credit_log.DEFAULT_DEEPSEEK_CALLS, 4)
-        self.assertEqual(
-            buffer_shorts.voice_policy(False, key_present=True, remaining=100000, needed=2000),
-            "withhold",
-        )
-        self.assertEqual(
-            buffer_shorts.voice_policy(True, key_present=True, remaining=100, needed=2000),
-            "fail_closed",
-        )
-        self.assertEqual(
-            buffer_shorts.voice_policy(True, key_present=False, remaining=None, needed=2000),
-            "fail_closed",
-        )
-        self.assertEqual(
-            buffer_shorts.voice_policy(True, key_present=True, remaining=5000, needed=2000),
-            "speak",
-        )
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "credits.json"
             with mock.patch.object(credit_log, "PATH", path):
@@ -491,8 +475,43 @@ class CreditAndRefillTests(unittest.TestCase):
                 saved = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(saved["deepseek_calls"], 4)
 
-    def test_refill_withholds_elevenlabs_until_gates_pass_and_credit_remains(self):
-        promoter = mock.Mock(side_effect=AssertionError("ElevenLabs must wait for the gates"))
+    def test_buffer_runner_is_edge_madhur_and_strips_elevenlabs(self):
+        import board_short
+        import eleven_voice
+        captured = {}
+
+        def fake_run(_args, cwd=None, env=None):
+            captured["env"] = dict(env)
+            return mock.Mock(returncode=0)
+
+        parent = {
+            "ELEVENLABS_API_KEY": "secret-key",
+            "ELEVENLABS_VOICE_ID": "voice",
+            "ELEVENLABS_OPT_IN": "1",
+        }
+        with mock.patch.dict(os.environ, parent, clear=False), \
+             mock.patch("subprocess.run", fake_run):
+            code = buffer_shorts.default_preview_runner("buffer_example_risk")
+        self.assertEqual(code, 0)
+        env = captured["env"]
+        self.assertNotIn("ELEVENLABS_API_KEY", env)
+        self.assertNotIn("ELEVENLABS_VOICE_ID", env)
+        self.assertEqual(env["ELEVENLABS_OPT_IN"], "0")
+        self.assertEqual(env["PIPELINE_MODE"], "preview")
+        self.assertEqual(env["PUBLISH_VISIBILITY"], "unlisted")
+        with mock.patch.dict(os.environ, env, clear=False):
+            os.environ.pop("ELEVENLABS_OPT_IN", None)
+            os.environ["ELEVENLABS_OPT_IN"] = "0"
+            os.environ["PIPELINE_MODE"] = "preview"
+            os.environ["PUBLISH_VISIBILITY"] = "unlisted"
+            self.assertFalse(eleven_voice.paid_voice_allowed())
+            voice, rate = board_short._edge_voice_rate({
+                "voice": {"edge_voice": "hi-IN-SwaraNeural", "edge_rate": "+10%"},
+            })
+        self.assertEqual(voice, "hi-IN-MadhurNeural")
+        self.assertEqual(rate, "+0%")
+
+    def test_failed_build_is_not_stored_and_a_passed_edge_render_is(self):
         with tempfile.TemporaryDirectory() as tmp:
             run = Path(tmp) / "run"
             manifest_path = Path(tmp) / "manifest.json"
@@ -508,63 +527,29 @@ class CreditAndRefillTests(unittest.TestCase):
                  mock.patch.object(slot_guard, "_read", return_value=[]):
                 code = buffer_shorts.refill(
                     runner=fail_preview,
-                    promoter=promoter,
-                    remaining_reader=lambda: (True, 100000),
                     store=MemoryStore(),
                     manifest_path=manifest_path,
                 )
             self.assertEqual(code, 1)
-            promoter.assert_not_called()
             self.assertTrue(credits.exists())
-            self.assertEqual(json.loads(credits.read_text(encoding="utf-8"))["deepseek_calls"], 0)
+            saved = json.loads(credits.read_text(encoding="utf-8"))
+            self.assertEqual(saved["deepseek_calls"], 0)
+            self.assertEqual(saved["elevenlabs_characters_sent"], 0)
             self.assertEqual(os.environ.get("DEEPSEEK_MAX_CALLS"), "4")
 
             def preview_ok(_key):
                 _write_ready_run(run, _topic())
-                return 0
-
-            with mock.patch.object(buffer_shorts, "RUN", run), \
-                 mock.patch.object(credit_log, "PATH", credits), \
-                 mock.patch.object(buffer_shorts, "_load_bank", return_value=[_topic()]), \
-                 mock.patch.object(slot_guard, "_read", return_value=[]):
-                code = buffer_shorts.refill(
-                    runner=preview_ok,
-                    promoter=promoter,
-                    remaining_reader=lambda: (True, 10),
-                    store=MemoryStore(),
-                    manifest_path=manifest_path,
-                )
-            self.assertEqual(code, 1)
-            promoter.assert_not_called()
-            self.assertEqual(buffer_shorts.count_ready(buffer_shorts.load_manifest(manifest_path)), 0)
-
-    def test_refill_stores_one_item_only_after_paid_voice(self):
-        topic = _topic()
-        store = MemoryStore()
-        with tempfile.TemporaryDirectory() as tmp:
-            run = Path(tmp) / "run"
-            manifest_path = Path(tmp) / "manifest.json"
-            credits = Path(tmp) / "credits.json"
-            buffer_shorts.save_manifest(_manifest([]), manifest_path)
-
-            def preview_ok(_key):
-                _write_ready_run(run, topic)
                 (run / "final.mp4").write_bytes(b"edge-preview")
                 return 0
 
-            def promote():
-                (run / "voice_meta.json").write_text(json.dumps({"engine": "elevenlabs"}), encoding="utf-8")
-                (run / "final.mp4").write_bytes(b"paid-voice-mp4")
-
+            store = MemoryStore()
             with mock.patch.object(buffer_shorts, "RUN", run), \
                  mock.patch.object(credit_log, "PATH", credits), \
-                 mock.patch.object(buffer_shorts, "_load_bank", return_value=[topic]), \
+                 mock.patch.object(buffer_shorts, "_load_bank", return_value=[_topic()]), \
                  mock.patch.object(buffer_shorts, "_mark_bank_used") as mark, \
                  mock.patch.object(slot_guard, "_read", return_value=[]):
                 code = buffer_shorts.refill(
                     runner=preview_ok,
-                    promoter=promote,
-                    remaining_reader=lambda: (True, 20000),
                     store=store,
                     manifest_path=manifest_path,
                 )
@@ -572,15 +557,44 @@ class CreditAndRefillTests(unittest.TestCase):
             manifest = buffer_shorts.load_manifest(manifest_path)
             self.assertEqual(buffer_shorts.count_ready(manifest), 1)
             item = manifest["items"][0]
-            self.assertEqual(item["state"], "ready")
-            self.assertEqual(item["topic_key"], topic["key"])
+            self.assertEqual(store.get(item["asset_name"]), b"edge-preview")
             self.assertTrue(item["gates"]["sync"]["passed"])
-            self.assertEqual(store.get(item["asset_name"]), b"paid-voice-mp4")
-            self.assertNotEqual(store.get(item["asset_name"]), b"edge-preview")
-            mark.assert_called_once_with(topic["key"])
-            self.assertIn("deepseek_calls", json.loads(credits.read_text(encoding="utf-8")))
-            with self.assertRaises(buffer_shorts.AlreadyUsed):
-                store.put(item["asset_name"], b"again", "video/mp4")
+            mark.assert_called_once_with(_topic()["key"])
+            saved = json.loads(credits.read_text(encoding="utf-8"))
+            self.assertEqual(saved["elevenlabs_characters_sent"], 0)
+            self.assertEqual(saved["tts_engine"], "edge")
+            self.assertIn("MadhurNeural", saved["tts_reason"])
+            self.assertIn("ElevenLabs not called", saved["tts_reason"])
+
+    def test_non_edge_render_is_not_stored(self):
+        topic = _topic()
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "run"
+            manifest_path = Path(tmp) / "manifest.json"
+            credits = Path(tmp) / "credits.json"
+            buffer_shorts.save_manifest(_manifest([]), manifest_path)
+
+            def paid(_key):
+                _write_ready_run(run, topic)
+                (run / "voice_meta.json").write_text(
+                    json.dumps({"engine": "elevenlabs"}), encoding="utf-8",
+                )
+                (run / "final.mp4").write_bytes(b"paid-voice-mp4")
+                return 0
+
+            store = MemoryStore()
+            with mock.patch.object(buffer_shorts, "RUN", run), \
+                 mock.patch.object(credit_log, "PATH", credits), \
+                 mock.patch.object(buffer_shorts, "_load_bank", return_value=[topic]), \
+                 mock.patch.object(slot_guard, "_read", return_value=[]):
+                code = buffer_shorts.refill(
+                    runner=paid,
+                    store=store,
+                    manifest_path=manifest_path,
+                )
+            self.assertEqual(code, 1)
+            self.assertEqual(store.files, {})
+            self.assertEqual(buffer_shorts.count_ready(buffer_shorts.load_manifest(manifest_path)), 0)
 
 
 class HealthAndWorkflowTests(unittest.TestCase):
@@ -661,6 +675,8 @@ class HealthAndWorkflowTests(unittest.TestCase):
         self.assertIn('cron: "41 6 * * *"', refill)
         self.assertIn('DEEPSEEK_MAX_CALLS: "4"', refill)
         self.assertIn("BUFFER_FILL: \"0\"", refill)
+        self.assertNotIn("ELEVENLABS_API_KEY", refill)
+        self.assertNotIn("ELEVENLABS_VOICE_ID", refill)
         self.assertNotIn("--publish", refill)
         self.assertNotIn("publish.py", refill)
         self.assertIn("group: buffer-refill", refill)

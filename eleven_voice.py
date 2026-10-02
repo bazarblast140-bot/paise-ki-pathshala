@@ -242,10 +242,14 @@ def ledger_voice_kwargs(run_dir):
     }
 
 
-# Samples and dry runs stay on this free voice. A real publish keeps the
-# configured Edge fallback (the short override is a different neural voice).
+# Samples, dry runs, and buffer Shorts stay on this free voice.
+# A real publish keeps the configured Edge fallback. For Shorts that
+# configured voice is the same Madhur +0% sample.
 PREVIEW_EDGE_VOICE = "hi-IN-MadhurNeural"
 PREVIEW_EDGE_RATE = "+0%"
+# A live slot uses ElevenLabs only while at least this many characters remain.
+# Below the floor, or when the subscription API errors, the slot uses Edge.
+LIVE_EDGE_FLOOR = 2500
 
 _TRUTHY = {"1", "true", "yes", "on"}
 _PREVIEW_MODES = {"preview", "sample", "dry-run", "dry_run", "test", "qa", "retry", "repair"}
