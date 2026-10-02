@@ -61,12 +61,17 @@ def gha_output(key, value):
             print(f"{key}={value}", file=f)
 
 
-def _flags(missing, fill=False):
+def _flags(missing, fill=False, use_buffer=False, buffer_date="", buffer_slot=""):
     gha_output("missing", "true" if missing else "false")
     # fill is the earliest unfilled slot still inside the lookahead,
     # scheduled via publishAt. A missed slot is not rolled and does not
     # become an extra instant-public video.
     gha_output("fill", "true" if fill else "false")
+    # Last-chance buffer fill for THIS slot when it is still empty, not on
+    # hold, and close to its publish time. A late complete post beats a skip.
+    gha_output("use_buffer", "true" if use_buffer else "false")
+    gha_output("buffer_date", buffer_date or "")
+    gha_output("buffer_slot", buffer_slot or "")
 
 
 def send(text):
@@ -143,7 +148,11 @@ def main():
         msg += (f"\n\nNext unfilled slot still ahead: {nxt['date_ist']} {nxt['slot']} IST "
                 f"(publishAt {nxt['publish_at']}). No extra public post.")
     print(msg)
-    _flags(True, fill=bool(nxt))
+    import buffer_shorts
+    use_buffer = buffer_shorts.in_last_chance(now, date, slot)
+    if use_buffer:
+        print(f"[buffer] last chance for {date} {slot} IST — fill from the buffer if it is still empty")
+    _flags(True, fill=bool(nxt), use_buffer=use_buffer, buffer_date=date, buffer_slot=slot)
     try:
         send(msg)
     except Exception as e:  # noqa: BLE001 — khabar na jaaye to bhi run fail na ho

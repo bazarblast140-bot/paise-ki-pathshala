@@ -803,7 +803,9 @@ class MainTests(unittest.TestCase):
             {"date_ist": "2026-10-01", "slot": "16:00", "video_id": "aaa"},
             {"date_ist": "2026-10-01", "slot": "21:00", "video_id": "bbb"},
         ]
-        with redirect_stdout(buf), mock.patch.object(H.slot_guard, "_read", return_value=scheduled):
+        with redirect_stdout(buf), \
+             mock.patch.object(H.slot_guard, "_read", return_value=scheduled), \
+             mock.patch.object(H, "check_buffer", return_value=H.Check("Buffer", "ok", "2 ready buffer Shorts")):
             code = H.main(http=http, env=secrets_env(), now=NOW)
         self.assertEqual(code, 0)
         self.assertIn("issue closed #15", buf.getvalue())
@@ -828,7 +830,9 @@ class MainTests(unittest.TestCase):
             {"date_ist": "2026-10-01", "slot": "16:00", "video_id": "aaa"},
             {"date_ist": "2026-10-01", "slot": "21:00", "video_id": "bbb"},
         ]
-        with redirect_stdout(buf), mock.patch.object(H.slot_guard, "_read", return_value=scheduled):
+        with redirect_stdout(buf), \
+             mock.patch.object(H.slot_guard, "_read", return_value=scheduled), \
+             mock.patch.object(H, "check_buffer", return_value=H.Check("Buffer", "ok", "2 ready buffer Shorts")):
             code = H.main(http=http, env=env, now=NOW)
         self.assertEqual(code, 0)
         self.assertIn("dry-run", buf.getvalue())
