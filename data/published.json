@@ -298,7 +298,9 @@
   "slot": "16:00",
   "video_id": "Lx2vFMDO5ws",
   "format": "short",
-  "topic_key": "atr_sl"
+  "topic_key": "atr_sl",
+  "status": "withdrawn",
+  "note": "WITHDRAWN 02-Oct: fallback narration, never mentions SL (title promise), chart says 2 ATR vs voice 1.5x. Set private, publishAt cleared. Slot held; do not refill until PR #14 sync gate is on main."
  },
  {
   "date_ist": "2026-10-02",
@@ -307,5 +309,13 @@
   "format": "short",
   "platform": "hold",
   "note": "HOLD: S5KRdVkEJf0 withdrawn (narration did not match title/visuals), set private with publishAt cleared 02-Oct. Slot stays empty until the PR #14 topic-voice-visual sync gate is on main."
+ },
+ {
+  "date_ist": "2026-10-02",
+  "slot": "16:00",
+  "video_id": null,
+  "format": "short",
+  "platform": "hold",
+  "note": "HOLD: Lx2vFMDO5ws withdrawn (narration/visual/title mismatch). Slot stays empty until the PR #14 sync gate is on main."
  }
 ]
