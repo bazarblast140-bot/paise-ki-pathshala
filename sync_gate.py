@@ -615,10 +615,15 @@ def _decode(audio, vad_filter):
     # condition_on_previous_text stays off so a repeated token is not fed back.
     # VAD is on when the caller asks. A quiet Hindi beat that VAD drops is
     # retried without it.
+    # Log-prob stays off. A normal Hindi line often sits under the default
+    # -1.0, and the next temperature then writes English ("Strike hydrogen").
+    # The fallback still runs when gzip compression exceeds 2.4, which is
+    # the repeated-token loop.
     segments, _info = model().transcribe(
         audio, language="hi", word_timestamps=True, vad_filter=vad_filter,
         beam_size=1, temperature=_WHISPER_TEMPERATURES,
-        compression_ratio_threshold=2.4, condition_on_previous_text=False,
+        compression_ratio_threshold=2.4, log_prob_threshold=None,
+        condition_on_previous_text=False,
     )
     words = []
     for seg in segments:

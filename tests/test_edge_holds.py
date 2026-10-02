@@ -130,6 +130,7 @@ class WhisperRetryTests(unittest.TestCase):
         kwargs = calls[0]
         self.assertFalse(kwargs["condition_on_previous_text"])
         self.assertEqual(kwargs["compression_ratio_threshold"], 2.4)
+        self.assertIsNone(kwargs["log_prob_threshold"])
         self.assertIn(0.0, kwargs["temperature"])
         self.assertIn(0.2, kwargs["temperature"])
         self.assertIn(0.4, kwargs["temperature"])
