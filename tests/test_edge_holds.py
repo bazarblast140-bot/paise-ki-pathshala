@@ -209,6 +209,12 @@ class CardChartTests(unittest.TestCase):
         self.assertIn("चाहिए", blob)
         self.assertNotRegex(blob, r"₹[\d,]+\s+₹[\d,]+,")
         self.assertGreaterEqual(frame.panel_fill, 0.35)
+        import safe_area
+        boxes = [
+            layer["box"] for layer in frame.text_layers
+            if layer.get("text") and layer.get("box") and not layer.get("faint")
+        ]
+        self.assertEqual(safe_area.overlapping(boxes), [])
         short = _topic("risk_daily_loss_limit")
         short["_scene_cards"] = {"hook": ["दो लाख की हद"]}
         short["_scene_figures"] = {"hook": [[]]}

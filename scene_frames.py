@@ -1580,16 +1580,21 @@ def frames_safe_area_notes(frames):
     return notes
 
 
-def _text_width(text, size):
+def _text_extent(text, size):
+    """Pixel width and height of one shaped line at `size`."""
     runs = _runs(text)
     if not runs:
-        return 0
+        return 0, 0
     if len(runs) == 1:
         font = _font(int(size), runs[0][0])
         box = ImageDraw.Draw(Image.new("RGB", (8, 8))).textbbox((0, 0), text, font=font)
-        return box[2] - box[0]
+        return box[2] - box[0], box[3] - box[1]
     _parts, union = _layout_runs(text, int(size))
-    return union[2] - union[0]
+    return union[2] - union[0], union[3] - union[1]
+
+
+def _text_width(text, size):
+    return _text_extent(text, size)[0]
 
 
 def _phrase_rows(text, size, max_width=900):
@@ -1705,7 +1710,8 @@ def _paint_live_card(topic, beat, index, n, body_size=None):
             continue
         if not _unique_lines(trial):
             continue
-        block = head_size + 18 + len(trial) * (size + 16)
+        block = _text_extent(head, head_size)[1] + 24
+        block += sum(_text_extent(row, size)[1] + 24 for row in trial)
         if content_top + block <= content_bottom:
             chosen = size
             rows = trial
@@ -1713,14 +1719,15 @@ def _paint_live_card(topic, beat, index, n, body_size=None):
     image = _live_plate(width, height)
     image.labelled_graphic_boxes = []
     image.chart_bar_boxes = []
-    block_h = head_size + 18 + len(rows) * (chosen + 14)
+    head_h = _text_extent(head, head_size)[1]
+    block_h = head_h + 24 + sum(_text_extent(row, chosen)[1] + 24 for row in rows)
     y = content_top + max(0, (content_bottom - content_top - block_h) / 2)
     _text(image, 540, y, head, GOLD, head_size, anchor="mt")
-    y += head_size + 18
-    line_h = chosen + 16
+    y += head_h + 24
     for row in rows:
+        row_h = _text_extent(row, chosen)[1]
         _text(image, 540, y, row, (250, 250, 250), chosen, anchor="mt")
-        y += line_h
+        y += row_h + 24
     image.scene_kind = f"fact-{beat}"
     boxes = [
         layer["box"] for layer in (image.text_layers or [])
