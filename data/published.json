@@ -317,5 +317,29 @@
   "format": "short",
   "platform": "hold",
   "note": "HOLD: Lx2vFMDO5ws withdrawn (narration/visual/title mismatch). Slot stays empty until the PR #14 sync gate is on main."
+ },
+ {
+  "date_ist": "2026-10-03",
+  "slot": "08:30",
+  "video_id": null,
+  "format": "short",
+  "platform": "hold",
+  "note": "HOLD: no old-pipeline video goes public until the PR #14 topic-voice-visual sync gate and the fallback-narration block are on main (two videos from 2-Oct failed the check)."
+ },
+ {
+  "date_ist": "2026-10-03",
+  "slot": "16:00",
+  "video_id": null,
+  "format": "short",
+  "platform": "hold",
+  "note": "HOLD: no old-pipeline video goes public until the PR #14 topic-voice-visual sync gate and the fallback-narration block are on main (two videos from 2-Oct failed the check)."
+ },
+ {
+  "date_ist": "2026-10-03",
+  "slot": "21:00",
+  "video_id": null,
+  "format": "short",
+  "platform": "hold",
+  "note": "HOLD: no old-pipeline video goes public until the PR #14 topic-voice-visual sync gate and the fallback-narration block are on main (two videos from 2-Oct failed the check)."
  }
 ]
