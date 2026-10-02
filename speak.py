@@ -119,6 +119,7 @@ def speakable(text):
     t = re.sub(rf"({NUM})\s?[xX](?![A-Za-z])", r"\1 गुना", t)               # 5x, 59.53x
     t = re.sub(r"(?<![\w])[-−](?=\d)", "माइनस ", t)
     t = re.sub(r"(?<=\d)\s?[-–]\s?(?=\d)", " ", t)                        # 2-3 दिन, 12-26
+    t = re.sub(r"\s+[-−]\s+", " माइनस ", t)                              # स्ट्राइक − प्रीमियम
     t = re.sub(r"\s*%", " प्रतिशत", t)
     t = re.sub(rf"(?<=\d)\s*/\s*(?=\d|\()", " बटा ", t)
     t = t.replace("/", " और ").replace("=", " बराबर ").replace("+", " प्लस ").replace("&", " एंड ")
@@ -163,6 +164,7 @@ if __name__ == "__main__":
         "TITAN और YES BANK, HDFC BANK": "Titan और Yes Bank, एच डी एफ़ सी Bank",
         "BTST, DP और XYZ": "बी टी एस टी, डी पी और X Y Z",
         "RSI 70, Rs 500 और Rs में": "आर एस आई सत्तर, पाँच सौ रुपये और रुपये में",
+        "स्ट्राइक − प्रीमियम": "स्ट्राइक माइनस प्रीमियम",
     }
     bad = 0
     for src, want in cases.items():

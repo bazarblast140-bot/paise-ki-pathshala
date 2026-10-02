@@ -21,9 +21,142 @@ QUESTION_RE = re.compile(r"(\?|क्या|क्यों|कैसे|कौ�
 CONTRARIAN_RE = re.compile(r"(नहीं|गलत|मत\s|उल्टा|हर कोई गलत|सच नहीं)")
 NUMBER_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
 
+# Compounds and round tens from 11 up. Bare एक…दस are counters ("एक नियम",
+# "चार कदम") and are not figures unless a scale or प्रतिशत follows.
+_HINDI_ONES = {
+    "शून्य": 0, "एक": 1, "दो": 2, "तीन": 3, "चार": 4,
+    "पाँच": 5, "पांच": 5, "छह": 6, "सात": 7, "आठ": 8, "नौ": 9, "दस": 10,
+    "ग्यारह": 11, "बारह": 12, "तेरह": 13, "चौदह": 14, "पंद्रह": 15, "पन्द्रह": 15,
+    "सोलह": 16, "सत्रह": 17, "अठारह": 18, "उन्नीस": 19,
+    "बीस": 20, "इक्कीस": 21, "बाईस": 22, "तेईस": 23, "तेइस": 23, "चौबीस": 24,
+    "पच्चीस": 25, "छब्बीस": 26, "सत्ताईस": 27, "अट्ठाईस": 28, "अट्ठाइस": 28,
+    "उनतीस": 29, "तीस": 30, "इकतीस": 31, "बत्तीस": 32, "तैंतीस": 33,
+    "चौंतीस": 34, "पैंतीस": 35, "छत्तीस": 36, "सैंतीस": 37, "अड़तीस": 38,
+    "उनतालीस": 39, "चालीस": 40, "इकतालीस": 41, "बयालीस": 42, "तैंतालीस": 43,
+    "चवालीस": 44, "पैंतालीस": 45, "छियालीस": 46, "सैंतालीस": 47, "अड़तालीस": 48,
+    "उनचास": 49, "पचास": 50, "इक्यावन": 51, "बावन": 52, "तिरेपन": 53,
+    "चौवन": 54, "पचपन": 55, "छप्पन": 56, "सत्तावन": 57, "अट्ठावन": 58,
+    "उनसठ": 59, "साठ": 60, "इकसठ": 61, "बासठ": 62, "तिरेसठ": 63, "चौंसठ": 64,
+    "पैंसठ": 65, "छियासठ": 66, "सड़सठ": 67, "अड़सठ": 68, "उनहत्तर": 69,
+    "सत्तर": 70, "इकहत्तर": 71, "बहत्तर": 72, "तिहत्तर": 73, "चौहत्तर": 74,
+    "पचहत्तर": 75, "छिहत्तर": 76, "सतहत्तर": 77, "अठहत्तर": 78, "उनासी": 79,
+    "अस्सी": 80, "इक्यासी": 81, "बयासी": 82, "तिरासी": 83, "चौरासी": 84,
+    "पचासी": 85, "छियासी": 86, "सत्तासी": 87, "अठासी": 88, "नवासी": 89,
+    "नब्बे": 90, "इक्यानवे": 91, "बानवे": 92, "तिरानवे": 93, "चौरानवे": 94,
+    "पचानवे": 95, "छियानवे": 96, "सत्तानवे": 97, "अट्ठानवे": 98, "निन्यानवे": 99,
+    "सौ": 100,
+}
+_HINDI_SCALE = {
+    "हजार": 1000, "हज़ार": 1000, "लाख": 100000, "करोड़": 10000000, "करोड": 10000000,
+}
+_HINDI_WORD = "|".join(sorted(_HINDI_ONES, key=len, reverse=True))
+_HINDI_NUM_RE = re.compile(
+    rf"(?<![\u0900-\u097F])({_HINDI_WORD})(?![\u0900-\u097F])"
+    rf"(?:\s+(हज़ार|हजार|लाख|करोड़|करोड|प्रतिशत))?"
+)
+_DIGIT_SCALE_RE = re.compile(
+    r"(\d[\d,]*(?:\.\d+)?)\s*(हज़ार|हजार|लाख|करोड़|करोड)"
+)
+
+
+def _add_canon(found, value):
+    number = float(value)
+    if number.is_integer():
+        found.add(str(int(number)))
+    else:
+        found.add(f"{number:.4f}".rstrip("0").rstrip("."))
+
+
+# Skip danda (U+0964/U+0965) so "बीस।" is the word बीस.
+_HINDI_TOKEN = re.compile(r"[\u0900-\u0963\u0966-\u097F]+")
+_HUNDRED_WORD = {"सौ", "सो"}
+
+
+def _hindi_number_values(text):
+    """Hindi figures in order. Compounds stay one number.
+
+    बाईस हज़ार छह सौ is 22600, एक सौ बीस is 120, चार हज़ार is 4000.
+    Bare एक through दस are skipped unless प्रतिशत or a scale follows.
+    """
+    tokens = [match.group() for match in _HINDI_TOKEN.finditer(text or "")]
+    found = []
+    i = 0
+    while i < len(tokens):
+        word = tokens[i]
+        if word not in _HINDI_ONES:
+            i += 1
+            continue
+        value = 0
+        j = i
+        consumed = False
+        while j < len(tokens) and tokens[j] in _HINDI_ONES:
+            number = _HINDI_ONES[tokens[j]]
+            nxt = tokens[j + 1] if j + 1 < len(tokens) else ""
+            if nxt in _HINDI_SCALE:
+                value += number * _HINDI_SCALE[nxt]
+                j += 2
+                consumed = True
+                continue
+            if nxt in _HUNDRED_WORD and number < 10:
+                value += number * 100
+                j += 2
+                consumed = True
+                continue
+            if consumed:
+                value += number
+                j += 1
+            break
+        if consumed:
+            found.append(value)
+            i = j
+            continue
+        nxt = tokens[i + 1] if i + 1 < len(tokens) else ""
+        if nxt == "प्रतिशत" or _HINDI_ONES[word] >= 11:
+            found.append(_HINDI_ONES[word])
+        i += 1
+    return found
+
 
 def extract_numbers(text):
-    return {n.replace(",", "") for n in NUMBER_RE.findall(text or "")}
+    """Digits, digit+scale (₹2 लाख = 200000), and Hindi number words.
+
+    पचहत्तर, नवासी, चार हज़ार, दो लाख and बाईस हज़ार छह सौ are figures.
+    Bare एक through दस are not, unless प्रतिशत or a scale follows.
+    """
+    text = text or ""
+    found = set()
+    consumed = []
+    for match in _DIGIT_SCALE_RE.finditer(text):
+        raw = float(match.group(1).replace(",", ""))
+        _add_canon(found, raw * _HINDI_SCALE[match.group(2)])
+        consumed.append((match.start(1), match.end(1)))
+    for value in _hindi_number_values(text):
+        _add_canon(found, value)
+    for match in NUMBER_RE.finditer(text):
+        if any(start <= match.start() and match.end() <= end for start, end in consumed):
+            continue
+        found.add(match.group(0).replace(",", ""))
+    return found
+
+
+def _sentence_percents(sentence):
+    """Percent values in order, including Hindi words such as पचहत्तर प्रतिशत."""
+    found = []
+    for match in _PERCENT_PAIR.finditer(sentence or ""):
+        for group in (1, 2):
+            raw = match.group(group)
+            if not raw:
+                continue
+            try:
+                found.append((match.start(group), float(raw.replace(",", ""))))
+            except ValueError:
+                continue
+    for match in _HINDI_NUM_RE.finditer(sentence or ""):
+        if match.group(2) != "प्रतिशत":
+            continue
+        found.append((match.start(), float(_HINDI_ONES[match.group(1)])))
+    found.sort(key=lambda item: item[0])
+    return [value for _pos, value in found]
 
 
 def allowed_numbers(topic):
@@ -178,65 +311,76 @@ def loss_recovery_pair_faults(text, topic):
 
     10% then 11% passes (11.11 rounds to 11). 75% then 89% or 90% does not;
     that fall needs 300%. 50% then 11% is also a block, even though both
-    figures sit on the loss-recovery card.
+    figures sit on the loss-recovery card. "नहीं" does not excuse a later
+    wrong recovery: "25% नहीं, 20% चाहिए" still blocks 20.
     """
     if not _is_loss_recovery_topic(topic):
         return set()
     bad = set()
     for sentence in re.split(r"[।!?？]+|\.\s+", text or ""):
-        if not _LOSS_WORD.search(sentence) or not _RECOVERY_WORD.search(sentence):
+        if not _LOSS_WORD.search(sentence):
             continue
-        pending = None
-        for match in _PERCENT_PAIR.finditer(sentence):
-            values = []
-            try:
-                values.append(float(match.group(1).replace(",", "")))
-            except ValueError:
-                continue
-            if match.group(2):
-                try:
-                    values.append(float(match.group(2).replace(",", "")))
-                except ValueError:
-                    pass
-            before = sentence[max(0, match.start() - 16):match.start()]
-            after = sentence[match.end():match.end() + 48]
-            is_loss = bool(_LOSS_WORD.search(before) or _LOSS_WORD.search(after))
-            is_rec = bool(_RECOVERY_WORD.search(before) or _RECOVERY_WORD.search(after))
-            if is_loss and not is_rec:
-                pending = values[0]
-                continue
-            if is_rec and is_loss and pending is None and len(values) == 1:
-                pending = values[0]
-                continue
-            if not is_rec or pending is None:
-                if is_loss:
-                    pending = values[-1]
-                continue
-            for value in values:
-                expected = _recovery_percent(pending)
-                if expected is None or abs(value - expected) > 0.51:
-                    bad.add(_canon_number(value))
-            pending = None
+        if not (_RECOVERY_WORD.search(sentence) or "नहीं" in sentence):
+            continue
+        values = _sentence_percents(sentence)
+        if len(values) < 2:
+            continue
+        expected = _recovery_percent(values[0])
+        for value in values[1:]:
+            if expected is None or abs(value - expected) > 0.51:
+                bad.add(_canon_number(value))
     return bad
 
 
 _SAME_BOUNCE = re.compile(
     r"उतन[ाीं]\s*ही(?:\s+\S+){0,6}\s*(?:ऊपर|चढ़|वापस|बढ़)"
 )
+# "नुकसान छोटे हुए पैसे पर गिना जाता है" counts the loss on the reduced base.
+# The recovery is what is counted there.
+_LOSS_ON_SMALLER = re.compile(
+    r"नुकसान\s+(?:छोटे(?:\s+हुए)?|छोटा|छोटी)\s+(?:पैसे|रकम|आधार).{0,24}(?:गिन|हिसाब)"
+)
+# Below the breakeven only part of the premium is lost. Full loss is at the strike.
+_BELOW_BREAKEVEN_LOST = re.compile(
+    r"(?:ब्रेकईवन|breakeven|22[,.]?720).{0,48}(?:नीचे|से\s*कम).{0,32}"
+    r"(?:डूब|पूरा\s*प्रीमियम|सारा\s*प्रीमियम)"
+    r"|(?:ब्रेकईवन|breakeven|22[,.]?720).{0,24}से\s*नीचे\s*पैसा\s*डूब",
+    re.I | re.S,
+)
+
+
+def _is_option_breakeven_topic(topic):
+    if str((topic or {}).get("key") or "") == "option_breakeven":
+        return True
+    blob = _topic_blob(topic)
+    return "ब्रेकईवन" in blob or "breakeven" in blob.lower()
 
 
 def fact_contradiction_notes(text, topic):
     """Claims that fight the topic's own facts.
 
-    Loss recovery needs more than the fall. "उतना ही ऊपर" says the opposite.
+    Loss recovery needs more than the fall, and the recovery (not the loss)
+    is computed on the smaller base. Between strike and breakeven only part
+    of the premium is lost.
     """
-    if not _is_loss_recovery_topic(topic):
-        return []
-    if _SAME_BOUNCE.search(text or ""):
-        return [
-            "claim contradicts the topic facts: a fall does not come back by the same percent"
-        ]
-    return []
+    notes = []
+    blob = text or ""
+    if _is_loss_recovery_topic(topic):
+        if _SAME_BOUNCE.search(blob):
+            notes.append(
+                "claim contradicts the topic facts: a fall does not come back by the same percent"
+            )
+        if _LOSS_ON_SMALLER.search(blob):
+            notes.append(
+                "claim contradicts the topic facts: the recovery, not the loss, "
+                "is computed on the smaller base"
+            )
+    if _is_option_breakeven_topic(topic) and _BELOW_BREAKEVEN_LOST.search(blob):
+        notes.append(
+            "claim contradicts the topic facts: between the strike and the breakeven "
+            "only part of the premium is lost"
+        )
+    return notes
 
 
 def _topic_blob(topic):

@@ -510,8 +510,10 @@ def check_narration(n, topic):
 
 _LEAK_SNIPS = (
     "अब इसे chart पर पहचानें",
+    "अब इसे चार्ट पर पहचानें",
     "अब इसे chart पर पहचानने का तरीका समझिए",
     "इन features का मतलब समझिए",
+    "इन फीचर्स का मतलब समझिए",
     "अब आगे traders क्या check करते हैं",
     "अब आगे ट्रेडर्स क्या चेक करते हैं",
     "कार्ड पर लिखा है",
@@ -521,6 +523,8 @@ _LEAK_SNIPS = (
     "यह explanation इसी दिए गए तथ्य तक सीमित है",
     "किसी अतिरिक्त price, date या return का अनुमान नहीं लगाया जा रहा",
     "स्क्रीन पर दिख रहे feature",
+    "स्क्रीन पर",
+    "आपके सामने स्क्रीन",
 )
 _LEAK_META = re.compile(r"कार्ड|topic\s*card|\bcard\b|\bscript\b|\bbeat\b", re.I)
 _LEAK_TELL = re.compile(r"(बोलो|बताओ|बोलिए|बताइए)")
@@ -535,13 +539,11 @@ _BARE_NUMBER = re.compile(
     rf"|(?:{_HINDI_NUMBER})(?:\s+(?:{_HINDI_NUMBER}))?)"
 )
 _LATIN_WORD = re.compile(r"(?<![A-Za-z])([A-Za-z]{3,})(?![A-Za-z])")
-# Chart words already spoken in tests and shipped lessons. Romanized Hindi is not in here.
-_LATIN_ALLOW = {
-    "wick", "chart", "features", "price", "date", "return",
-    "explanation", "hook", "pehchan", "matlab", "karein", "udaharan", "galti",
-    "atr", "rsi", "vwap", "ema", "sma", "entry", "stop", "loss",
-    "low", "high", "sellers",
-}
+# Phrases first, so "daily limit" becomes the lesson words and not "डेली लिमिट".
+_ROMAN_PHRASES = (
+    ("daily loss limit", "दिन की नुकसान हद"),
+    ("daily limit", "दिन की हद"),
+)
 _ROMAN_FOLD = {
     "rakho": "रखो",
     "karo": "करो",
@@ -570,6 +572,37 @@ _ROMAN_FOLD = {
     "risk": "रिस्क",
     "buyer": "बायर",
     "buyers": "बायर्स",
+    "option": "ऑप्शन",
+    "options": "ऑप्शन्स",
+    "daily": "डेली",
+    "limit": "लिमिट",
+    "terminal": "टर्मिनल",
+    "chart": "चार्ट",
+    "edge": "एज",
+    "wick": "विक",
+    "features": "फीचर्स",
+    "price": "प्राइस",
+    "date": "डेट",
+    "return": "रिटर्न",
+    "explanation": "एक्सप्लेनेशन",
+    "entry": "एंट्री",
+    "stop": "स्टॉप",
+    "loss": "लॉस",
+    "low": "लो",
+    "high": "हाई",
+    "sellers": "सेलर्स",
+    "atr": "एटीआर",
+    "rsi": "आर एस आई",
+    "vwap": "वी वैप",
+    "ema": "ई एम ए",
+    "sma": "एस एम ए",
+    "setup": "सेटअप",
+    "hook": "हुक",
+    "pehchan": "पहचान",
+    "matlab": "मतलब",
+    "karein": "करें",
+    "udaharan": "उदाहरण",
+    "galti": "गलती",
 }
 
 
@@ -590,32 +623,31 @@ def _number_dump(sentence):
     return bare >= 3 and bare == len(parts)
 
 
-_ROMAN_HINT = re.compile(r"(?:aa|ee|oo|kh|gh|chh|jh|th|dh|ph|bh|sh)")
-
-
 def latin_misread_words(text):
-    """Romanized Hindi that Edge and Rudra will spell out. English chart words stay."""
+    """Any Latin word still in the narration. Known words are folded before this runs.
+
+    daily, limit, terminal, chart, edge and the rest are not exempt. A leftover
+    word fails the leak gate so the repair writes it again in Devanagari.
+    """
     found = []
     for match in _LATIN_WORD.finditer(text or ""):
         word = match.group(1)
-        low = word.lower()
-        if low in _LATIN_ALLOW:
-            continue
-        roman = low in _ROMAN_FOLD or (
-            low[-1] in "aeiou" and _ROMAN_HINT.search(low)
-        )
-        if roman and word not in found:
+        if word not in found:
             found.append(word)
     return found
 
 
 def fold_roman_words(text):
-    """Known romanized Hindi becomes Devanagari. Other words stay for the leak gate."""
+    """Known English and romanized Hindi become Devanagari. Leftovers stay for the leak gate."""
+    out = str(text or "")
+    for src, dst in _ROMAN_PHRASES:
+        out = re.sub(re.escape(src), dst, out, flags=re.I)
+
     def repl(match):
         word = match.group(0)
         return _ROMAN_FOLD.get(word.lower(), word)
 
-    return _LATIN_WORD.sub(repl, str(text or ""))
+    return _LATIN_WORD.sub(repl, out)
 
 
 def fold_roman_beats(narration):
@@ -1099,15 +1131,54 @@ def _hook_question_and_rest(text, hook_line):
     return text[:match.end()].strip(), text[match.end():].strip()
 
 
-def fit_live_hook(text, lo, hi, hook_line=""):
+_FILLER_SNIPS = (
+    "यह कदम नियम है",
+    "अगला कदम नियम है",
+    "यह नियम है",
+    "अगला कदम",
+    "कदम नियम",
+)
+
+
+def _is_filler_sentence(sentence):
+    body = str(sentence or "").strip().strip("।!?？. ")
+    return any(snip in body for snip in _FILLER_SNIPS)
+
+
+def _terms_in_sentence(sentence, terms):
+    if not terms:
+        return []
+    import sync_gate
+    blob = set(sync_gate.tokens(sentence))
+    return [term for term in terms if sync_gate.term_covered(term, blob)]
+
+
+def _sole_title_carrier(parts, index, terms):
+    """True when dropping this sentence would drop the only copy of a title term."""
+    covered = _terms_in_sentence(parts[index], terms)
+    if not covered:
+        return False
+    others = set()
+    for j, part in enumerate(parts):
+        if j == index:
+            continue
+        others.update(_terms_in_sentence(part, terms))
+    return any(term not in others for term in covered)
+
+
+def fit_live_hook(text, lo, hi, hook_line="", title=""):
     """Keep whole sentences. A comma is not a cut.
 
     The trim lands inside the window only by dropping a sentence that already
-    ended at ।, ?, or !. "premium देना खर्च है," stays with the rest of its
-    sentence. If the only boundary is a comma, the hook is left for a repair.
+    ended at ।, ?, or !. A filler goes before a sentence that is the only
+    copy of a title term. "यही नुकसान का गणित है।" stays. "premium देना खर्च है,"
+    stays with the rest of its sentence. If the only boundary is a comma, or
+    the only way under the cap is to drop that title sentence, the hook is
+    left for a repair.
     """
     text = " ".join(str(text or "").split())
-    if not text or lo <= len(text.split()) <= hi:
+    words_n = len(text.split())
+    if not text or lo <= words_n <= hi:
         return text
     sentences = _split_sentences(text)
     if len(sentences) <= 1:
@@ -1115,14 +1186,43 @@ def fit_live_hook(text, lo, hi, hook_line=""):
     question, _rest = _hook_question_and_rest(text, hook_line)
     if len(question.split()) > hi and len(_split_sentences(question)) <= 1:
         return text
-    built = ""
-    for piece in sentences:
-        trial = piece if not built else " ".join((built + " " + piece).split())
-        if len(trial.split()) > hi:
-            break
-        built = trial
-    if built and lo <= len(built.split()) <= hi:
-        return built
+    import sync_gate
+    terms = []
+    if title:
+        terms = [
+            term for term in sync_gate.answer_terms_for(title)
+            if term and not str(term)[:1].isdigit()
+        ]
+
+    def count(parts):
+        return len(_join_sentences(parts).split())
+
+    kept = list(sentences)
+
+    def drop_pass(fillers_only):
+        nonlocal kept
+        progressed = True
+        while progressed and count(kept) > hi:
+            progressed = False
+            for index in range(len(kept) - 1, -1, -1):
+                if index == 0:
+                    continue
+                if _sole_title_carrier(kept, index, terms):
+                    continue
+                filler = _is_filler_sentence(kept[index])
+                if fillers_only and not filler:
+                    continue
+                trial = kept[:index] + kept[index + 1:]
+                if count(trial) < lo:
+                    continue
+                kept = trial
+                progressed = True
+                break
+
+    drop_pass(True)
+    drop_pass(False)
+    if kept and lo <= count(kept) <= hi and count(kept) < words_n:
+        return _join_sentences(kept)
     return text
 
 
@@ -1136,7 +1236,8 @@ def _apply_hook_fit(narration, topic):
     beats = narration.setdefault("beats", {})
     lo, hi = beat_word_window(targets["hook"], LIVE_BEAT_TOLERANCE)
     current = str(beats.get("hook") or "")
-    fitted = fit_live_hook(current, lo, hi, narration.get("hook_line"))
+    title = narration.get("title") or (topic or {}).get("topic") or ""
+    fitted = fit_live_hook(current, lo, hi, narration.get("hook_line"), title)
     if fitted == " ".join(current.split()):
         return False
     beats["hook"] = fitted
@@ -1535,6 +1636,7 @@ def repair_instructions(draft, rewrite, topic=None, failures=None):
                 "100−p is allowed only when the same sentence writes the subtraction, "
                 "for example 100 − 40 = 60 or 100 में से 40. A bare complement is blocked."
             )
+            lines.extend(_topic_fact_rules(topic))
             example = hook_check.worked_example_sentence(topic)
             if example and not _number_dump(example):
                 lines.append(
@@ -1642,6 +1744,24 @@ def _usable_narration(n, topic=None):
     return any(str(beats.get(b) or "").strip() for b in order)
 
 
+def _topic_fact_rules(topic):
+    """Facts the model keeps getting backwards. Empty for every other topic."""
+    lines = []
+    if hook_check._is_loss_recovery_topic(topic):
+        lines.append(
+            "The recovery percent is computed on the smaller amount left after the loss, "
+            "not on the money that was lost. Say that वापसी छोटे हुए पैसे पर गिनी जाती है. "
+            "Do not say the loss itself is counted on the smaller money."
+        )
+    if hook_check._is_option_breakeven_topic(topic):
+        lines.append(
+            "On a call, between the strike and the breakeven only part of the premium is lost. "
+            "The full premium is lost only at or below the strike. "
+            "Do not say that below the breakeven the money is already gone."
+        )
+    return lines
+
+
 def live_narration_system(topic):
     """Live prompt. Four beats by default; six only when live_beats is six."""
     if four_live(topic):
@@ -1678,6 +1798,7 @@ def live_narration_system(topic):
         "only when the same sentence writes that arithmetic and the result matches. "
         "On a loss-recovery lesson, recovery must be L/(1−L). Any other pair is blocked. "
         "Any other new number is blocked.",
+        *_topic_fact_rules(topic),
         "Spoken audio must land in 70-95 seconds.",
         f"The script may land in {lo}-{hi} words. A long beat is shortened in code. Do not pad.",
     ]
@@ -1717,6 +1838,7 @@ def four_live_system(topic):
         "A sum, difference, product, or ratio of two topic numbers is allowed "
         "only when the same sentence writes that arithmetic and the result matches. "
         "On a loss-recovery lesson, recovery must be L/(1−L). Any other pair is blocked.",
+        *_topic_fact_rules(topic),
         f"Pace coefficient: {wps:.2f} words/second. Target {target_lo}-{target_hi} words "
         f"(about 55-59 seconds on Rudra). The script may land in {lo}-{hi} words.",
         f"Spoken audio must land in {sec_lo:.0f}-{sec_hi:.0f} seconds.",
@@ -2703,14 +2825,19 @@ def stale_data_notes(as_of, today, allow_stale_sample=False):
     return [f"stale market data as of {as_of}"]
 
 
-def _script_near(spoken, beat_times, audio_words, t, radius=0.2):
+def _script_near(spoken, beat_times, audio_words, t, radius=0.85, scene_end=None):
     """Narration words due around t, spelled as the script, not as the transcript.
 
-    Whisper may split 2350 into 2 and 350. The gate compares the script's own
-    figures to the card. The window stays short so the next beat's figure is
-    not required on the card that is still on screen.
+    The forward window is 0.85s again. It stops at the scene end: a figure
+    spoken in the next scene is not required on the card that is still up.
+    Painting that figure here is what the sync gate calls "shown before it
+    is said". Whisper may split 2350 into 2 and 350. The gate compares the
+    script's own figures to the card.
     """
     t = float(t)
+    limit = t + float(radius)
+    if scene_end is not None:
+        limit = min(limit, float(scene_end))
     parts = []
     for beat in timed_beats(beat_times):
         if beat not in (beat_times or {}):
@@ -2727,7 +2854,7 @@ def _script_near(spoken, beat_times, audio_words, t, radius=0.2):
         for word, start in zip(words, starts):
             if start is None:
                 continue
-            if t - 0.05 <= float(start) <= t + radius:
+            if t - 0.05 <= float(start) <= limit:
                 parts.append(word)
     return " ".join(parts)
 
@@ -2750,55 +2877,94 @@ def _scene_pose_at(scenes, t):
     return anim(max(0.0, min(1.0, local)))
 
 
-def scene_cards_for(spoken, beat_times, scenes, audio_words=None):
-    """Caption text and figures for each scene, from that scene's cue window.
+def _script_word_times(spoken, beat_times, audio_words):
+    """(beat, word, start) in script order. Missing whisper times stay proportional."""
+    rows = []
+    for beat in timed_beats(beat_times):
+        if beat not in (beat_times or {}):
+            continue
+        words = str((spoken or {}).get(beat) or "").split()
+        if not words:
+            continue
+        t0, t1 = (float(v) for v in beat_times[beat])
+        if audio_words:
+            starts = _align_starts(words, audio_words, t0, t1)
+        else:
+            starts = None
+        dur = max(1e-6, t1 - t0)
+        for i, word in enumerate(words):
+            start = None if starts is None else starts[i]
+            if start is None:
+                start = t0 + dur * (i + 0.5) / len(words)
+            rows.append((beat, word, float(start)))
+    return rows
 
-    A figure already shown on an earlier card is not repeated. The caption
-    words stay on the card so the sync gate still sees them.
+
+def _timed_sentences(rows):
+    """Sentences that keep each word's spoken start. A danda ends the sentence."""
+    sentences = []
+    cur = []
+    for beat, word, start in rows:
+        cur.append((beat, word, start))
+        if re.search(r"[।!?？.]$", word):
+            sentences.append(cur)
+            cur = []
+    if cur:
+        sentences.append(cur)
+    return sentences
+
+
+def scene_cards_for(spoken, beat_times, scenes, audio_words=None):
+    """One card per scene, from the sentences spoken in that scene.
+
+    A figure is drawn on the scene that contains its spoken start, never on
+    a scene that ends before the word. Dedupe is only inside that scene, so
+    a later scene that says the figure again still shows it. Cue slices are
+    not joined: a card is whole sentences, not "₹2,00,000 ₹4,000,".
     """
     import sync_gate
-    cues = plan_cues(spoken, beat_times, audio_words)
-    # A cue can be clamped to the next beat while Whisper already said the
-    # figure. Any script word with a digit whose time falls in this scene
-    # is part of the card.
-    spoken_here = {}
-    if audio_words:
-        for beat, span in (beat_times or {}).items():
-            script_words = str((spoken or {}).get(beat) or "").split()
-            if not script_words or beat not in (beat_times or {}):
-                continue
-            b0, b1 = (float(v) for v in span)
-            starts = _align_starts(script_words, audio_words, b0, b1)
-            for word, start in zip(script_words, starts):
-                if start is None or not re.search(r"\d", word):
-                    continue
-                for scene in scenes or []:
-                    t0, t1 = float(scene["start"]), float(scene["end"])
-                    if t0 - 1e-6 <= float(start) < t1 - 1e-6:
-                        spoken_here.setdefault(id(scene), []).append(word)
-                        break
+    sentences = _timed_sentences(_script_word_times(spoken, beat_times, audio_words))
     texts = {}
     figures = {}
-    shown = set()
     for scene in scenes or []:
         beat = scene.get("beat")
         t0, t1 = float(scene["start"]), float(scene["end"])
         parts = []
-        for cue in cues:
-            if float(cue["t1"]) <= t0 + 1e-6 or float(cue["t0"]) >= t1 - 1e-6:
+        latest = ""
+        for sent in sentences:
+            if sent[0][0] != beat:
                 continue
-            text = str(cue.get("text") or "").strip()
-            if text:
-                parts.append(text)
-        for word in spoken_here.get(id(scene), []):
-            if word not in " ".join(parts):
-                parts.append(word)
+            ready = [word for _b, word, start in sent if float(start) < t1 - 1e-9]
+            if not ready:
+                continue
+            latest = " ".join(ready)
+            overlaps = any(t0 - 1e-6 <= float(start) < t1 - 1e-6 for _b, _w, start in sent)
+            if not overlaps:
+                continue
+            if latest not in parts:
+                parts.append(latest)
+        # A digit spoken inside this scene stays on this card even when the
+        # rest of its sentence is tagged to the next beat.
+        have = set()
+        for part in parts:
+            have.update(part.split())
+        for sent in sentences:
+            for _b, word, start in sent:
+                if word in have or not re.search(r"\d", word or ""):
+                    continue
+                if t0 - 1e-6 <= float(start) < t1 - 1e-6:
+                    parts.append(word)
+                    have.add(word)
+        # A slice with no word of its own keeps the phrase already being said.
+        if not parts and latest:
+            parts.append(latest)
         blob = " ".join(parts)
         texts.setdefault(beat, []).append(blob)
-        raw = scene_frames._spoken_figures(blob, scene_frames._digit_tokens(blob))
-        if not raw:
-            raw = scene_frames._figure_tokens([blob])
+        # Digit labels only. "दो लाख" stays words until the ₹ figure itself is said,
+        # so a scene that ends first cannot paint 2,00,000 early.
+        raw = scene_frames._figure_tokens([blob])
         kept = []
+        shown = set()
         for label in raw:
             nums = frozenset(sync_gate.numbers_in(label))
             if nums and nums <= shown:
@@ -2827,8 +2993,31 @@ def _word_timings(beat_audio, beat_times):
     return sync_gate.transcribe_beats(beat_audio, beat_times, sources=sources or None)
 
 
+def _scene_at(scenes, t):
+    chosen = scenes[-1]
+    for scene in scenes:
+        if float(scene["start"]) - 1e-6 <= t:
+            chosen = scene
+        if t < float(scene["end"]) - 1e-9:
+            break
+    return chosen
+
+
+def _frame_lesson_text(frame):
+    return [
+        layer.get("text") or ""
+        for layer in (getattr(frame, "text_layers", None) or [])
+        if layer.get("text") and not layer.get("faint")
+    ]
+
+
 def number_faults_for(scenes, spoken, beat_times, audio_words=None, topic=None):
-    """Sample each second. Caption and spoken numbers must be on that frame."""
+    """Sample each second. Caption and spoken numbers must be on that frame.
+
+    A figure already visible on an earlier card of the same beat counts, so
+    a later card does not have to repeat it. The 0.85s window stops at the
+    scene end, so the next scene's figure is not demanded early.
+    """
     # A labelled उदाहरण still has to be the figure drawn on that frame.
     ignore = set()
     frames = [s.get("frame") for s in scenes]
@@ -2839,21 +3028,29 @@ def number_faults_for(scenes, spoken, beat_times, audio_words=None, topic=None):
     cues = plan_cues(spoken, beat_times, audio_words)
     notes = []
     seen = set()
+    earlier = {}
     t = 0.0
     while t < total - 0.05:
+        scene = _scene_at(scenes, t)
         frame = _scene_pose_at(scenes, t)
-        texts = [
-            layer.get("text") or ""
-            for layer in (getattr(frame, "text_layers", None) or [])
-            if layer.get("text") and not layer.get("faint")
-        ]
+        texts = _frame_lesson_text(frame)
+        beat = scene.get("beat")
+        prior = earlier.get(beat, "")
+        on_screen = list(texts)
+        if prior:
+            on_screen.append(prior)
         caption = " ".join(cue.get("text") or "" for cue in cues_at(cues, t))
-        said = _script_near(spoken, beat_times, audio_words, t)
-        for note in number_format_notes(texts, said, caption, ignore=ignore):
+        said = _script_near(
+            spoken, beat_times, audio_words, t, scene_end=float(scene["end"]),
+        )
+        for note in number_format_notes(on_screen, said, caption, ignore=ignore):
             stamped = f"{note} at {t:.1f}s"
             if stamped not in seen:
                 seen.add(stamped)
                 notes.append(stamped)
+        blob = " ".join(texts)
+        if blob:
+            earlier[beat] = (prior + " " + blob).strip()
         t += 1.0
     return notes
 
