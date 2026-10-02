@@ -1,0 +1,42 @@
+name: Render sample (no upload)
+
+# Manual only. Renders one Short with the ElevenLabs voice from secrets and
+# uploads the mp4 as an artifact. It never uploads to YouTube or Instagram
+# and it never calls publish.py or publish_instagram.py.
+on:
+  workflow_dispatch:
+    inputs:
+      topic_key:
+        description: "Topic key to render"
+        type: string
+        default: atr_sl
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install FFmpeg and fonts
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Render one Short
+        env:
+          VIDEO_FORMAT: short
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+        run: python board_short.py --key "${{ inputs.topic_key }}"
+      - name: Upload the mp4
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-short
+          path: run/final.mp4
+          if-no-files-found: error

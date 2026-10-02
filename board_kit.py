@@ -370,8 +370,10 @@ def ass_text(t0, t1, x, y, size, colour, text, an=8, fade=True, wrap=False):
             f"{{\\an{an}\\pos({x},{y})\\fs{size}\\c{colour}{q}{fx}}}{text}")
 
 
-def ass_caption(t0, t1, text):
-    return f"Dialogue: 2,{ass_time(t0)},{ass_time(t1)},Cap,,0,0,0,,{text}"
+def ass_caption(t0, t1, text, x=540, y=1376, size=40):
+    """One spoken line in the subtitle band. y is the top of the line (an=8)."""
+    return (f"Dialogue: 2,{ass_time(t0)},{ass_time(t1)},T,,0,0,0,,"
+            f"{{\\an8\\pos({int(x)},{int(y)})\\fs{int(size)}\\c{WHITE}\\q2}}{text}")
 
 
 def burn_text_on_image(base_png, out_path, events):

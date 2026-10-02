@@ -7,10 +7,12 @@ or a template line that lists both READY and NEEDS FIX is not a verdict.
 
 A Short whose deterministic self-review is already at the high bar below is
 not blocked when the AI's only notes are judgment calls (thumbnail, tone,
-optional labels), and only when that narration is the gated LLM script.
-Hard compliance, fact, and safety failures still block, including when that
-self-review is perfect. A topic-card fallback blocks even at the high bar.
-The pass bar in self_review.py (part 60 / overall 75) does not change.
+optional labels). That exception also requires the topic-voice-visual sync
+gate to have passed and the narration to be one outline (outline, llm, or
+cache — not a topic-card fallback). Hard compliance, fact, and safety
+failures still block, including when that self-review is perfect. A
+topic-card fallback blocks even at the high bar. The pass bar in
+self_review.py (part 60 / overall 75) does not change.
 """
 import json
 import re
@@ -247,8 +249,11 @@ def soft_judgment_only(text):
     return has_judgment_calls(text)
 
 
+_PUBLISHABLE_NARRATION = ("outline", "llm", "cache")
+
+
 def narration_is_fallback(self_review):
-    """True when this review is a topic-card template, not a gated LLM script."""
+    """True when this review is a topic-card template, not a gated script."""
     if not isinstance(self_review, dict):
         return False
     if self_review.get("narration_fallback") is True:
@@ -272,6 +277,30 @@ def narration_is_gated_llm(self_review):
         self_review.get("narration_source") or self_review.get("source") or ""
     ).strip().lower()
     return source in ("llm", "cache")
+
+
+def sync_gate_passed(self_review):
+    """True only when this run's transcript check passed. A missing report does not."""
+    if not isinstance(self_review, dict):
+        return False
+    report = self_review.get("sync")
+    if isinstance(report, dict):
+        return report.get("ok") is True
+    parts = self_review.get("parts")
+    if not isinstance(parts, dict) or parts.get("sync") is None:
+        return False
+    try:
+        return float(parts.get("sync")) >= 100
+    except (TypeError, ValueError):
+        return False
+
+
+def narration_is_single_outline(self_review):
+    """True when the spoken script is one outline. A fallback mix does not qualify."""
+    if narration_is_fallback(self_review):
+        return False
+    source = str((self_review or {}).get("narration_source") or "").strip().lower()
+    return source in _PUBLISHABLE_NARRATION
 
 
 def self_review_clears_high_bar(self_review):
@@ -326,9 +355,10 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
     line. Deterministic notes never upgrade a missing AI verdict to public.
 
     A parsed NEEDS FIX still blocks, except one case: the text is judgment
-    calls only, and a Short self-review is already at the high bar, and the
-    narration is the gated LLM script. Hard compliance, fact, or safety
-    findings block even then. A fallback flag blocks whatever the scores.
+    calls only, a Short self-review is already at the high bar, the
+    topic-voice-visual sync gate passed, and the narration is one outline
+    (outline, llm, or cache — not a fallback). Hard compliance, fact, or
+    safety findings block even then. A fallback flag blocks whatever the scores.
     """
     reasons = []
     text = ai_text or ""
@@ -360,13 +390,11 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
         reasons.extend(hard)
     judgment_only = bool(ai_valid and parsed == "NEEDS_FIX" and soft_judgment_only(text))
     high = fmt == "short" and self_review_clears_high_bar(self_review)
+    synced = sync_gate_passed(self_review)
+    outlined = narration_is_single_outline(self_review)
     soft_override = bool(
-        judgment_only
-        and high
-        and review_ok
-        and narration_is_gated_llm(self_review)
-        and words >= 20
-        and not hard
+        judgment_only and high and review_ok and words >= 20 and not hard
+        and synced and outlined
     )
 
     public_ready = bool(ai_valid and parsed == "READY" and review_ok and words >= 20)
@@ -401,8 +429,10 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
             reasons.append("AI NEEDS FIX stands: self-review is not at the high bar")
         elif not judgment_only:
             reasons.append("AI NEEDS FIX stands: review is not judgment-calls only")
-        elif not narration_is_gated_llm(self_review):
-            reasons.append("AI NEEDS FIX stands: narration is not the gated LLM script")
+        elif not synced:
+            reasons.append("AI NEEDS FIX stands: topic-voice-visual sync did not pass")
+        elif not outlined:
+            reasons.append("AI NEEDS FIX stands: narration is a fallback, not one outline")
 
     if words < 20:
         verdict_line = "VERDICT: [NEEDS FIX — narration empty or too short]"

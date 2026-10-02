@@ -5,6 +5,8 @@ logs/*
 !logs/.gitkeep
 __pycache__/
 *.pyc
+# faster-whisper model cache (re-downloaded on demand)
+.cache/
 
 # Downloaded Pexels footage — 119MB for one video, and re-fetchable any time
 # from each shot's source_asset_query. Never belongs in the repo.

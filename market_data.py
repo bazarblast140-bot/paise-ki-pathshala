@@ -8,12 +8,13 @@ real is available, the caller draws a non-numeric card instead of a fake line.
 import json
 import os
 import pathlib
-from datetime import date
+from datetime import date, timedelta
 
 import board_kit as K
 
 ROOT = pathlib.Path(__file__).resolve().parent
 CACHE_PATH = ROOT / "data" / "index_monthly.json"
+ATR_DAILY_PATH = ROOT / "data" / "hdfc_atr_daily.json"
 
 INDEX_NAMES = {"NIFTY 50", "SENSEX", "NIFTY BANK"}
 SOURCE_NAME = "Yahoo Finance"
@@ -85,6 +86,82 @@ def stock_price_is_old_enough(as_of, today=None, months=3):
     if isinstance(as_of, str):
         as_of = parse_point_date(as_of)
     return as_of <= months_before(today, months)
+
+
+def format_figure(value, places=1):
+    """One rounding for the chart, the caption, and the narration.
+
+    Places are fixed, so a stop written 772.4 on the card cannot be spoken as 772.41.
+    """
+    places = max(0, int(places))
+    return f"{float(value):.{places}f}"
+
+
+def weekdays_since_close(as_of, today):
+    """NSE-style gap: weekdays after `as_of` up to and including `today`.
+
+    Saturday and Sunday are not counted. Exchange holidays are not listed, so a
+    weekday stands in for a session. The same calendar day is zero. A close
+    dated after `today` is not fresh.
+    """
+    if isinstance(as_of, str):
+        as_of = parse_point_date(as_of)
+    if isinstance(today, str):
+        today = parse_point_date(today)
+    if as_of > today:
+        return 99
+    seen = 0
+    day = as_of
+    while day < today:
+        day += timedelta(days=1)
+        if day.weekday() < 5:
+            seen += 1
+    return seen
+
+
+def close_is_fresh(as_of, today, max_days=3):
+    """True when the last close is at most `max_days` weekdays before `today`."""
+    if not as_of:
+        return False
+    return weekdays_since_close(as_of, today) <= int(max_days)
+
+
+def public_upload_block(as_of, today, on_screen, visibility, publish_at):
+    """Block a public or scheduled-public upload on stale data or a hidden date.
+
+    Unlisted review copies are left alone. This function has no sample override:
+    a render flag must not reach the publish path.
+    """
+    going_public = visibility == "public" or bool(publish_at)
+    if not going_public or not as_of:
+        return ""
+    if not close_is_fresh(as_of, today):
+        return f"stale market data as of {as_of}"
+    if not on_screen:
+        return "as-of date is not on screen"
+    return ""
+
+
+def public_freshness_reason(run_dir, visibility, publish_at, today=None):
+    """Read the render stamp and apply the public-upload rule.
+
+    `allow_stale_sample` may be sitting in the stamp from a `--key` render.
+    It is not read here.
+    """
+    today = today or date.today()
+    path = pathlib.Path(run_dir) / "market_freshness.json"
+    if not path.exists():
+        return ""
+    try:
+        stamp = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "market freshness stamp is unreadable"
+    as_of = stamp.get("as_of")
+    if not as_of:
+        return ""
+    return public_upload_block(
+        as_of, today, bool(stamp.get("on_screen")), visibility, publish_at,
+    )
 
 
 def points_from_rows(rows):
@@ -208,6 +285,108 @@ def _non_numeric(reason):
     }
 
 
+def load_atr_daily(path=None):
+    """Checked-in daily OHLC for the ATR lesson. No live fetch."""
+    return json.loads(pathlib.Path(path or ATR_DAILY_PATH).read_text(encoding="utf-8"))
+
+
+def _daily_bars(daily):
+    """Real sessions only. Zero-volume prints are not candles."""
+    out = []
+    for bar in (daily or {}).get("bars") or []:
+        if int(bar.get("volume") or 0) <= 0:
+            continue
+        out.append(bar)
+    return out
+
+
+def atr_lesson(cache=None, today=None, name="HDFC BANK", period=14, multiple=1.5, daily=None):
+    """14-day true-range ATR from real daily OHLC.
+
+    The print is the newest session on or before the three-month line, so it
+    is old enough to show and as fresh as that rule allows. Distance is 1.5
+    times the printed ATR. Candles are the stored open/high/low/close, never
+    an invented wick. Returns None when the file is missing or too short.
+    `cache` is unused; the monthly file is a different series.
+    """
+    today = today or date.today()
+    if daily is None:
+        try:
+            daily = load_atr_daily()
+        except (OSError, ValueError):
+            return None
+    cutoff = months_before(today, 3)
+    bars = [b for b in _daily_bars(daily) if parse_point_date(b["date"]) <= cutoff]
+    if len(bars) < period + 1:
+        return None
+    last = bars[-1]
+    if not stock_price_is_old_enough(last["date"], today):
+        return None
+    window = bars[-(period + 1):]
+    ranges = []
+    for i in range(1, len(window)):
+        prev = float(window[i - 1]["close"])
+        high = float(window[i]["high"])
+        low = float(window[i]["low"])
+        ranges.append(max(high - low, abs(high - prev), abs(low - prev)))
+    atr_text = format_figure(sum(ranges) / len(ranges), 1)
+    dist_text = format_figure(float(atr_text) * float(multiple), 1)
+    entry_text = format_figure(last["close"], 1)
+    qty = 100
+    risk = float(dist_text) * qty
+    risk_text = format_figure(risk, 0 if abs(risk - round(risk)) < 1e-6 else 1)
+    close = float(last["close"])
+    adj = float(last.get("adj_close") if last.get("adj_close") is not None else close)
+    wick = [b for b in bars if "2026-06-15" <= str(b["date"])[:10] <= "2026-06-23"]
+    hit = next((b for b in wick if str(b["date"])[:10] == "2026-06-19"), None)
+    tight = format_figure(float(hit["high"]) - 1.0, 1) if hit else None
+    points = [{"date": str(b["date"])[:10], "close": float(b["close"])} for b in window]
+    return {
+        "name": name,
+        "name_hi": "एचडीएफसी बैंक" if name == "HDFC BANK" else name,
+        "source": (daily or {}).get("source") or SOURCE_NAME,
+        "as_of": str(last["date"])[:10],
+        "period": int(period),
+        "multiple": format_figure(multiple, 1),
+        "atr": atr_text,
+        "distance": dist_text,
+        "entry": entry_text,
+        "sl": format_figure(float(entry_text) - float(dist_text), 1),
+        "target": format_figure(float(entry_text) + float(dist_text), 1),
+        "qty": qty,
+        "risk": risk_text,
+        "points": points,
+        "window": window,
+        "wick_bars": wick,
+        "tight": tight,
+        "close_matches_adj": abs(close - adj) < 0.05,
+    }
+
+
+def apply_atr_card(topic, lesson):
+    """Put the chart's own figures on the topic card so the script may speak them."""
+    topic["_atr"] = lesson
+    topic["topic"] = f"ATR से SL की दूरी — {lesson['name']} ATR {lesson['atr']}"
+    topic["thumb"] = ["तंग SL बार-बार कटता?", f"ATR {lesson['atr']} से दूरी"]
+    topic["facts"] = [
+        f"ATR {lesson['period']} candles की औसत हलचल",
+        f"ATR {lesson['atr']} और {lesson['multiple']} गुना = {lesson['distance']} पॉइंट",
+        f"entry {lesson['entry']}, SL {lesson['sl']}, ऊपर रेखा {lesson['target']}",
+        f"मात्रा {lesson['qty']}, जोखिम {lesson['risk']} रुपये",
+        f"SOURCE {lesson['source']} as of {lesson['as_of']}",
+        "ज़्यादा दूरी = कम मात्रा, जोखिम रुपये में",
+        "ATR दिशा नहीं बताता, सिर्फ़ हलचल",
+        "ये शिक्षा है, किसी शेयर की खरीद-बिक्री सलाह नहीं",
+    ]
+    topic["beats"] = {
+        "hook": ["तंग SL क्यों कटता है?", "सामान्य हलचल से तंग रेखा कटती है"],
+        "pehchan": ["नियम", f"{lesson['period']} दिन की औसत = ATR {lesson['atr']}"],
+        "matlab": ["हिसाब", f"{lesson['multiple']} × {lesson['atr']} = {lesson['distance']} पॉइंट"],
+        "karein": ["गलती", f"मात्रा {lesson['qty']}, जोखिम {lesson['risk']}"],
+    }
+    return topic
+
+
 def spec_for_topic(topic, today=None, fetcher=None, cache=None):
     """Chart contract for one topic.
 
@@ -217,6 +396,32 @@ def spec_for_topic(topic, today=None, fetcher=None, cache=None):
     """
     today = today or date.today()
     key = str((topic or {}).get("key") or "")
+    if key == "atr_sl":
+        try:
+            daily = load_atr_daily()
+        except (OSError, ValueError) as exc:
+            print(f"[market_data] ATR daily file unreadable: {exc}")
+            return _non_numeric("ATR lesson has no real daily bars old enough to show")
+        lesson = atr_lesson(today=today, daily=daily)
+        source = [
+            {"date": str(b["date"])[:10], "close": float(b["close"])}
+            for b in _daily_bars(daily)
+            if lesson and parse_point_date(b["date"]) <= parse_point_date(lesson["as_of"])
+        ]
+        if (not lesson or not lesson.get("close_matches_adj")
+                or values_are_fabricated(lesson["points"], source)):
+            return _non_numeric("ATR lesson has no post-adjustment daily close old enough to show")
+        return {
+            "mode": "series",
+            "source": lesson["source"],
+            "as_of": lesson["as_of"],
+            "series": [{"name": lesson["name"], "points": list(lesson["points"]), "kind": "stock"}],
+            "reason": None,
+            "fabricated": False,
+            "has_digits": False,
+            "labels": [],
+            "atr": lesson,
+        }
     names = TOPIC_SERIES.get(key)
     if not names:
         if (topic or {}).get("cat") == "REAL DATA":

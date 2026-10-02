@@ -469,6 +469,45 @@ class IdempotencyTests(unittest.TestCase):
             self.assertFalse(host.called)
             self.assertEqual((run / "ig_reel.txt").read_text(encoding="utf-8"), "17896148799412730")
 
+    def test_media_list_retries_5xx_then_succeeds(self):
+        calls = {"n": 0}
+
+        def once():
+            calls["n"] += 1
+            if calls["n"] < 3:
+                raise RuntimeError("HTTP 500 https://graph.facebook.com/v23.0/1789/media")
+            return [{"id": "1", "caption": "", "permalink": ""}]
+
+        with mock.patch.object(IG, "_fetch_recent_media_once", side_effect=once), \
+             mock.patch.object(IG.time, "sleep") as sleep:
+            items = IG.fetch_recent_media()
+        self.assertEqual([item["id"] for item in items], ["1"])
+        self.assertEqual(calls["n"], 3)
+        self.assertEqual([c.args[0] for c in sleep.call_args_list], [2, 5])
+        self.assertFalse(IG._transient_live_error(RuntimeError("HTTP 401 denied")))
+        self.assertTrue(IG._transient_live_error(TimeoutError("timed out")))
+
+    def test_persistent_5xx_blocks_the_reel(self):
+        with tempfile.TemporaryDirectory() as d:
+            run, ledger_path = _ready_tree(Path(d))
+            host = mock.Mock(side_effect=AssertionError("must not upload"))
+            reel = mock.Mock(side_effect=AssertionError("must not publish"))
+            with mock.patch.object(IG, "RUN", run), mock.patch.dict("os.environ", self._env()), \
+                 mock.patch.object(IG, "video_format", return_value="short"), \
+                 mock.patch("ledger.PATH", ledger_path), \
+                 mock.patch.object(IG, "_fetch_recent_media_once",
+                                   side_effect=RuntimeError("HTTP 500 https://graph.facebook.com/media")), \
+                 mock.patch.object(IG.time, "sleep") as sleep, \
+                 mock.patch.object(IG, "host_mp4", host), \
+                 mock.patch.object(IG, "publish_reel", reel):
+                with self.assertRaises(SystemExit) as cm:
+                    IG.main()
+            self.assertEqual(cm.exception.code, 1)
+            self.assertFalse(host.called)
+            self.assertFalse(reel.called)
+            self.assertFalse((run / "ig_reel.txt").exists())
+            self.assertEqual([c.args[0] for c in sleep.call_args_list], [2, 5])
+
     def test_live_check_failure_does_not_post(self):
         with tempfile.TemporaryDirectory() as d:
             run, ledger_path = _ready_tree(Path(d))

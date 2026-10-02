@@ -90,9 +90,16 @@
         "target_word_count": 105
       },
       "voice": {
-        "edge_voice": "hi-IN-SwaraNeural",
+        "_note": "Kamal (qsz5tTEjPvsiIJZIpM8S) is a Hindi male narrator in the ElevenLabs voice library: calm, not the energetic Krishna voice. It is not one of the default premade voices, so this id is configurable — if the account cannot use that library voice, set formats.short.voice.voice_id. Stability 0.78, style 0 and speed 1.0 keep delivery slow and clear. Edge hi-IN-MadhurNeural at +0% is the male fallback. Do not raise edge_rate above +10%. Swara is not used for Shorts.",
+        "edge_voice": "hi-IN-MadhurNeural",
         "edge_rate": "+0%",
-        "speed": 1.10
+        "voice_id": "qsz5tTEjPvsiIJZIpM8S",
+        "voice_name": "Kamal",
+        "model": "eleven_multilingual_v2",
+        "stability": 0.78,
+        "similarity_boost": 0.75,
+        "style": 0.0,
+        "speed": 1.0
       },
       "pipeline": {
         "word_count_tolerance": 0.3

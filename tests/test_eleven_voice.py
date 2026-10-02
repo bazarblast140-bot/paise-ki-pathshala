@@ -153,8 +153,11 @@ class ShortFallbackTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"VIDEO_FORMAT": "short"}):
             merged = common.cfg()
         self.assertEqual(merged["voice"]["engine"], "elevenlabs")
-        self.assertEqual(merged["voice"]["edge_voice"], "hi-IN-SwaraNeural")
-        self.assertEqual(merged["voice"]["voice_id"], "7qBNUtXRGP0jPi0H4r8k")
+        # Shorts use the Hindi narrator. The long-form id above stays put.
+        self.assertEqual(merged["voice"]["voice_name"], "Kamal")
+        self.assertEqual(merged["voice"]["voice_id"], "qsz5tTEjPvsiIJZIpM8S")
+        self.assertEqual(merged["voice"]["edge_voice"], "hi-IN-MadhurNeural")
+        self.assertEqual(merged["voice"]["edge_rate"], "+0%")
 
     def test_quota_on_a_later_beat_redoes_the_whole_run_on_edge(self):
         posts = {"n": 0, "urls": []}

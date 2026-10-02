@@ -596,28 +596,65 @@ class LiveCheckError(RuntimeError):
     """The live media list could not be read. Publishing must stop."""
 
 
-def fetch_recent_media() -> list:
-    """Recent IG media via the Graph API. Raises LiveCheckError — never returns a guess."""
+# Graph 5xx and timeouts are transient. Three tries, then fail closed — never post blind.
+MEDIA_LIST_TRIES = 3
+MEDIA_LIST_BACKOFF = (2, 5, 10)
+
+
+def _transient_live_error(exc) -> bool:
+    """HTTP 5xx and timeouts only. Auth and not-found stay hard errors."""
+    if isinstance(exc, LiveCheckError):
+        return False
+    if isinstance(exc, TimeoutError):
+        return True
+    if isinstance(exc, urllib.error.URLError) and not isinstance(exc, urllib.error.HTTPError):
+        return True
+    text = str(exc)
+    low = text.lower()
+    if "timed out" in low or "timeout" in low:
+        return True
+    match = re.search(r"HTTP\s+(\d+)", text)
+    return bool(match and int(match.group(1)) >= 500)
+
+
+def _fetch_recent_media_once() -> list:
+    """One media-list read. Raises the underlying HTTP/timeout error, or LiveCheckError."""
     ig_user = env("IG_USER_ID")
     if not ig_user or not env("IG_ACCESS_TOKEN"):
         raise LiveCheckError("IG_USER_ID and IG_ACCESS_TOKEN required for the live Reel check")
     params = {"fields": "id,caption,permalink", "limit": "25"}
     items = []
-    try:
-        for _page in range(3):
-            data = ig_call(f"{ig_user}/media", params=params)
-            if not isinstance(data, dict) or not isinstance(data.get("data"), list):
-                raise LiveCheckError("Instagram media list did not return data; not posting")
-            items.extend(data["data"])
-            after = ((data.get("paging") or {}).get("cursors") or {}).get("after")
-            if not after:
-                break
-            params = {**params, "after": after}
-    except LiveCheckError:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        raise LiveCheckError(redact_text(str(exc))) from exc
+    for _page in range(3):
+        data = ig_call(f"{ig_user}/media", params=params)
+        if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+            raise LiveCheckError("Instagram media list did not return data; not posting")
+        items.extend(data["data"])
+        after = ((data.get("paging") or {}).get("cursors") or {}).get("after")
+        if not after:
+            break
+        params = {**params, "after": after}
     return items
+
+
+def fetch_recent_media() -> list:
+    """Recent IG media via the Graph API. Raises LiveCheckError — never returns a guess.
+
+    5xx and timeouts are retried. Anything still failing blocks the Reel. A 4xx is not retried.
+    """
+    last = None
+    for attempt in range(MEDIA_LIST_TRIES):
+        try:
+            return _fetch_recent_media_once()
+        except LiveCheckError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            if not _transient_live_error(exc):
+                raise LiveCheckError(redact_text(str(exc))) from exc
+            last = exc
+            if attempt + 1 >= MEDIA_LIST_TRIES:
+                break
+            time.sleep(MEDIA_LIST_BACKOFF[attempt])
+    raise LiveCheckError(redact_text(f"live media list failed after {MEDIA_LIST_TRIES} tries: {last}")) from last
 
 
 def live_match(items, ident: dict) -> str:
