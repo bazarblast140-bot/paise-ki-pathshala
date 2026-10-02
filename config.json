@@ -82,9 +82,11 @@
   "notify": {
     "channel": "telegram"
   },
+  "live_beats": "four",
   "formats": {
     "_comment": "VIDEO_FORMAT=short (run_pipeline.py --format short) par ye values upar ke config par chadh jaati hain. Har topic ka ek short aur ek long banta hai (pick_topic: used / used_short).",
     "short": {
+      "live_beats": "four",
       "video": {
         "resolution": "1080x1920",
         "target_minutes": 1.38,

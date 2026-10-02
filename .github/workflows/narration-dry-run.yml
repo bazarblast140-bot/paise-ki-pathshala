@@ -1,9 +1,10 @@
 name: Narration dry run
 
-# Text-only live narration check. workflow_dispatch only.
+# Live narration check. workflow_dispatch only.
 # Picks N upcoming Short topics without marking them used, runs DeepSeek
-# narration, beat repair, trim, the text gates, and the duration estimate,
-# then stops before any TTS. No ElevenLabs key, no upload, no commit.
+# narration, beat repair, trim, and the text gates.
+# full=true then speaks with free Edge TTS and renders final.mp4.
+# No ElevenLabs key, no upload, no commit.
 on:
   workflow_dispatch:
     inputs:
@@ -15,6 +16,15 @@ on:
         description: "How many different upcoming topics to narrate"
         type: number
         default: 3
+      beats:
+        description: "four (~55s, default) or six. Overrides config.json live_beats."
+        type: choice
+        options: [four, six]
+        default: four
+      full:
+        description: "Render final.mp4 with free Edge TTS. No ElevenLabs, no upload."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,7 +36,7 @@ concurrency:
 jobs:
   narrate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -34,13 +44,31 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Install FFmpeg and fonts
+        if: ${{ inputs.full }}
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
       - name: Install deps
         run: pip install -r requirements.txt
-      - name: Live narration text check
+      - name: Live narration check
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
           DEEPSEEK_MAX_CALLS: "4"
           VIDEO_FORMAT: short
           DRY_RUN: "1"
-        run: python narration_dry_run.py --topics "${{ github.event.inputs.topics || 3 }}" --topic-keys "${{ github.event.inputs.topic_keys }}"
+          LIVE_BEATS: ${{ inputs.beats }}
+        run: |
+          ARGS=(--topics "${{ github.event.inputs.topics || 3 }}" --topic-keys "${{ github.event.inputs.topic_keys }}" --beats "${{ inputs.beats }}")
+          if [ "${{ inputs.full }}" = "true" ]; then
+            ARGS+=(--full)
+          fi
+          python narration_dry_run.py "${ARGS[@]}"
+      - name: Upload Edge dry-run video
+        if: ${{ inputs.full }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-dry-run
+          path: |
+            run/final.mp4
+            run/tts_text.txt
+          if-no-files-found: error

@@ -1,10 +1,12 @@
-"""Text-only check of the live narration path. No TTS, no upload, no commit.
+"""Live narration check. No ElevenLabs, no upload, no commit.
 
 Picks upcoming Short topics without marking them used, runs the DeepSeek
 narration (repair and trim included), the text gates, and the duration
-estimate at the per-voice pace, then stops. ElevenLabs is never called.
+estimate at the per-voice pace. With --full, free Edge TTS then renders
+final.mp4. ElevenLabs is never called.
 
-  python narration_dry_run.py --topics 3
+  python narration_dry_run.py --topics 3 --beats four
+  python narration_dry_run.py --topics 1 --beats four --full
 """
 import argparse
 import json
@@ -16,6 +18,7 @@ from pick_topic import CAT_COOLDOWN, _bank_recent_cats, _pick_fresh, load_resear
 
 import board_short
 import credit_log
+import market_data
 
 
 def select_by_keys(keys, bank=None):
@@ -51,12 +54,17 @@ def select_upcoming(count, bank=None):
     return picked
 
 
-def prepare_live(topic, c):
-    """Force the six-beat live gates without turning on paid voice."""
+def prepare_live(topic, c, beats=None):
+    """Force the live gates without turning on paid voice."""
     live = json.loads(json.dumps(topic))
     live.pop("_atr", None)
     live["_live_short"] = True
     live["_voice"] = dict((c or {}).get("voice") or {})
+    chosen = str(beats or live.get("_live_beats") or "").strip().lower()
+    if chosen in ("four", "six"):
+        live["_live_beats"] = chosen
+    else:
+        live["_live_beats"] = board_short.resolve_live_beats(live)
     return live
 
 
@@ -98,13 +106,13 @@ def _calls_used():
         return 0
 
 
-def evaluate_topic(topic, c):
-    """Narrate one topic. Returns (passed, report). Never calls TTS."""
+def evaluate_topic(topic, c, beats=None):
+    """Narrate one topic. Returns (passed, report, narration). Never calls TTS."""
     credit_log.reset()
     cache = board_short.RUN / "narration.json"
     cache.unlink(missing_ok=True)
     (board_short.RUN / "narration_block.json").unlink(missing_ok=True)
-    live = prepare_live(topic, c)
+    live = prepare_live(topic, c, beats=beats)
     narration = {"beats": {}}
     passed = False
     reason = ""
@@ -134,19 +142,35 @@ def evaluate_topic(topic, c):
     calls = _calls_used()
     if isinstance(narration, tuple):
         narration = narration[0]
-    return passed, format_report(live, narration if isinstance(narration, dict) else {}, calls, passed, reason)
+    payload = narration if isinstance(narration, dict) else {}
+    return passed, format_report(live, payload, calls, passed, reason), payload
+
+
+def render_topic(topic, narration, c, beats=None):
+    """Edge TTS and the visual pipeline. No upload. Caller already popped ElevenLabs."""
+    live = prepare_live(topic, c, beats=beats)
+    spec = market_data.spec_for_topic(live)
+    if spec.get("atr"):
+        market_data.apply_atr_card(live, spec["atr"])
+    live["_chart_spec"] = spec
+    live["_allow_stale_sample"] = True
+    board_short.produce_short(live, narration, c, spec, source=narration.get("source") or "llm")
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Live narration text check. Stops before TTS.")
+    parser = argparse.ArgumentParser(description="Live narration check. Optional Edge render.")
     parser.add_argument("--topics", type=int, default=3)
     parser.add_argument("--topic-keys", default="", help="Comma-separated keys. Empty picks upcoming topics.")
+    parser.add_argument("--beats", default="", choices=["", "four", "six"])
+    parser.add_argument("--full", action="store_true", help="Render final.mp4 with free Edge TTS.")
     args = parser.parse_args(argv)
     os.environ["VIDEO_FORMAT"] = "short"
     os.environ["DRY_RUN"] = "1"
     os.environ.pop("ELEVENLABS_API_KEY", None)
     os.environ.pop("ELEVENLABS_OPT_IN", None)
     os.environ.pop("PUBLISH_VISIBILITY", None)
+    if args.beats in ("four", "six"):
+        os.environ["LIVE_BEATS"] = args.beats
     bank_path = ROOT / "topic_bank.json"
     published = ROOT / "data" / "published.json"
     bank_before = bank_path.read_bytes()
@@ -165,9 +189,18 @@ def main(argv=None):
             return 1
     c = cfg()
     failed = 0
+    rendered = 0
     for topic in topics:
-        passed, report = evaluate_topic(topic, c)
+        passed, report, narration = evaluate_topic(topic, c, beats=args.beats)
         print(report)
+        if passed and args.full:
+            try:
+                render_topic(topic, narration, c, beats=args.beats)
+                rendered += 1
+                print(f"RENDER {topic.get('key')} run/final.mp4")
+            except SystemExit as exc:
+                print(f"FAIL render {topic.get('key')}: {exc}")
+                failed += 1
         print("")
         if not passed:
             failed += 1
@@ -180,7 +213,10 @@ def main(argv=None):
     if failed:
         print(f"FAIL {failed} of {len(topics)} topics")
         return 1
-    print(f"PASS {len(topics)} topics, no TTS")
+    if args.full:
+        print(f"PASS {len(topics)} topics, Edge render {rendered}")
+    else:
+        print(f"PASS {len(topics)} topics, no TTS")
     return 0
 
 

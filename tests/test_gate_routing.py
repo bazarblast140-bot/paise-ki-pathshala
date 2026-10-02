@@ -2,9 +2,8 @@
 
 A vague karein used to end the live loop after call 3 because the rewrite
 list only looked at word windows and disallowed numbers. The 4th call is a
-repair of the beat the message names. If that still fails, karein or galti
-gets one concrete sentence that reuses a topic figure, and only when the
-windows still hold.
+repair of the beat the message names. If that still fails, the run blocks.
+There is no template sentence pasted onto karein or galti.
 """
 import inspect
 import json
@@ -34,6 +33,7 @@ def _journal():
     topic = next(item for item in bank["topics"] if item["key"] == "risk_journal")
     topic = json.loads(json.dumps(topic))
     topic["_live_short"] = True
+    topic["_live_beats"] = "six"
     topic["_voice"] = {"words_per_second": 1.9, "voice_id": "ypnkIsDASPgHZuanrF0q"}
     return topic
 
@@ -124,53 +124,33 @@ class VagueRepairTests(unittest.TestCase):
                  board_short, "fallback_narration",
                  side_effect=AssertionError("template must not be built"),
              ):
-            script, source = board_short.narration(topic, CFG)
-        self.assertEqual(source, "llm")
+            with self.assertRaises(SystemExit):
+                board_short.narration(topic, CFG)
+            block = json.loads((Path(tmp) / "narration_block.json").read_text(encoding="utf-8"))
         self.assertEqual(len(calls), 4)
         self.assertNotIn("REWRITE karein", calls[0])
         for user in calls[1:]:
             self.assertIn("REWRITE karein", user)
             self.assertIn("vague explanation (no number, level or step): karein", user)
             self.assertIn("Exact failure:", user)
-        karein = script["beats"]["karein"]
-        self.assertIn("अगले हफ़्ते से हर trade के बाद", karein)
-        self.assertIn("40%", karein)
-        self.assertNotIn("उदाहरण", karein)
-        self.assertTrue(scene_pace.segment_is_concrete(karein))
-        self.assertEqual(board_short.check_narration(script, topic), [])
-        self.assertEqual(scene_pace.vague_beats(script["beats"], order=board_short.LIVE_ORDER), [])
-        self.assertEqual(script["review_attempts"], 4)
-        lo, hi = _windows(topic)["karein"]
-        self.assertTrue(lo <= len(karein.split()) <= hi)
-        total = sum(len(script["beats"][beat].split()) for beat in board_short.LIVE_ORDER)
-        self.assertTrue(board_short.LIVE_TOTAL_WORDS[0] <= total <= board_short.LIVE_TOTAL_WORDS[1])
+        self.assertIn("vague explanation (no number, level or step): karein", block["reason"])
+        self.assertNotIn("अगले हफ़्ते से हर trade के बाद", block["reason"])
+        self.assertFalse(hasattr(board_short, "anchor_vague_takeaway"))
 
-    def test_deterministic_karein_and_galti_fallback_reuses_the_topic_figure(self):
+    def test_vague_takeaway_is_not_patched_with_a_template_sentence(self):
+        self.assertNotIn("anchor_vague_takeaway", inspect.getsource(board_short.narration))
         topic = _journal()
-        self.assertEqual(board_short.topic_key_figure(topic), "40%")
-        targets = _targets()
         windows = _windows(topic)
-        counts = dict(targets)
+        counts = dict(_targets())
         counts["galti"] = windows["galti"][0]
         draft = _live_script(counts, vague={"galti"})
+        before = draft["beats"]["galti"]
         self.assertEqual(
             scene_pace.vague_beats(draft["beats"], order=board_short.LIVE_ORDER),
             ["galti"],
         )
-        self.assertTrue(board_short.anchor_vague_takeaway(draft, topic))
-        galti = draft["beats"]["galti"]
-        self.assertIn("उदाहरण अगले हफ़्ते से हर trade के बाद 40%", galti)
-        self.assertEqual(board_short.check_narration(draft, topic), [])
-        self.assertEqual(scene_pace.vague_beats(draft["beats"], order=board_short.LIVE_ORDER), [])
-        lo, hi = windows["galti"]
-        self.assertTrue(lo <= len(galti.split()) <= hi)
-
-        overflow = _live_script(vague=set())
-        overflow["beats"]["karein"] = _vague_words(windows["karein"][1]) + "।"
-        before = overflow["beats"]["karein"]
-        self.assertFalse(scene_pace.segment_is_concrete(before))
-        self.assertFalse(board_short.anchor_vague_takeaway(overflow, topic))
-        self.assertEqual(overflow["beats"]["karein"], before)
+        self.assertNotIn("अगले हफ़्ते से हर trade के बाद", before)
+        self.assertIn("galti", board_short.beats_to_rewrite(draft, topic))
 
 
 class GateRoutingTests(unittest.TestCase):
@@ -212,6 +192,7 @@ class GateRoutingTests(unittest.TestCase):
             ("hook makes a clickbait return claim", None, ["hook"]),
             ("hook beat must open with the punchy hook line", None, ["hook"]),
             ("vague explanation (no number, level or step): karein", None, ["karein"]),
+            ("karein narrator leak: कार्ड पर दिया हिसाब बोलो", None, ["karein"]),
             ("vague explanation (no number, level or step): galti, karein", None, ["galti", "karein"]),
             ("self-review below bar: overall 40", None, ["all"]),
             ("estimated 100.0s (200 words / 1.90 w/s) outside 70-95", None, ["all"]),
@@ -246,6 +227,7 @@ class GateRoutingTests(unittest.TestCase):
             "hook number is not in the topic facts",
             "clickbait return claim",
             "vague explanation",
+            "narrator leak",
             "self-review below bar",
             "estimated",
         ]
@@ -259,6 +241,7 @@ class GateRoutingTests(unittest.TestCase):
                 board_short.narration,
                 board_short._estimate_note,
                 board_short._dry_fails,
+                board_short.narrator_leak_notes,
             )
         )
         joined = "\n".join(message for message, _narration, _expected in cases)

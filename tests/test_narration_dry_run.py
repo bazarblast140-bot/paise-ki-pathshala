@@ -75,7 +75,7 @@ class DryRunTests(unittest.TestCase):
              mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
              mock.patch.object(board_short, "narration", side_effect=narrate), \
              mock.patch.object(board_short, "synthesize_short_voices", synthesize):
-            passed, report = narration_dry_run.evaluate_topic(
+            passed, report, _narration = narration_dry_run.evaluate_topic(
                 topic, {"voice": {"words_per_second": 1.9, "voice_id": "ypnkIsDASPgHZuanrF0q"}})
         self.assertTrue(passed, report)
         self.assertIn("topic hammer_rule", report)
@@ -130,6 +130,12 @@ class DryRunTests(unittest.TestCase):
         self.assertIn("--topic-keys", text)
         self.assertIn("DEEPSEEK_API_KEY", text)
         self.assertIn("narration_dry_run.py", text)
+        self.assertIn("beats:", text)
+        self.assertIn("full:", text)
+        self.assertIn("--full", text)
+        self.assertIn("run/final.mp4", text)
+        self.assertIn("run/tts_text.txt", text)
+        self.assertIn("upload-artifact", text)
         self.assertNotIn("ELEVENLABS_API_KEY", text)
         self.assertNotIn("git commit", text)
         self.assertNotIn("git push", text)
@@ -182,9 +188,9 @@ class DryRunTests(unittest.TestCase):
         before = bank_path.read_bytes()
         seen = []
 
-        def evaluate(topic, _c):
+        def evaluate(topic, _c, beats=None):
             seen.append(topic.get("key"))
-            return True, f"topic {topic.get('key')}\nPASS"
+            return True, f"topic {topic.get('key')}\nPASS", {}
 
         try:
             with mock.patch.object(narration_dry_run, "evaluate_topic", side_effect=evaluate):
@@ -197,6 +203,64 @@ class DryRunTests(unittest.TestCase):
                     os.environ[key] = value
         self.assertEqual(code, 0)
         self.assertEqual(seen, ["risk_journal", "intraday_risk_reward"])
+        self.assertEqual(bank_path.read_bytes(), before)
+
+    def test_full_edge_dry_run_uses_four_beats_and_mocks_tts(self):
+        saved = {
+            key: os.environ.get(key)
+            for key in (
+                "VIDEO_FORMAT", "DRY_RUN", "PUBLISH_VISIBILITY", "ELEVENLABS_OPT_IN",
+                "ELEVENLABS_API_KEY", "LIVE_BEATS",
+            )
+        }
+        bank_path = ROOT / "topic_bank.json"
+        before = bank_path.read_bytes()
+        targets = board_short.four_live_targets(1.9)
+        beats = {}
+        for beat, target in targets.items():
+            lead = "क्या यह सेटअप गलत है?" if beat == "hook" else ""
+            beats[beat] = " ".join((lead.split() + ["नियम"] * target)[:target])
+        script = {
+            "title": "सेटअप का नियम समझिए",
+            "hook_line": "क्या यह सेटअप गलत है?",
+            "beats": beats,
+            "source": "llm",
+        }
+        seen = {}
+
+        def narrate(live, _c, spec=None):
+            seen["beats"] = live.get("_live_beats")
+            return script, "llm"
+
+        def produce(topic, narration, _c, _spec, source="llm", beat_pngs=None):
+            seen["produce"] = topic.get("_live_beats")
+            seen["source"] = source
+            self.assertNotIn("ELEVENLABS_API_KEY", os.environ)
+            (board_short.RUN / "final.mp4").write_bytes(b"mp4")
+            (board_short.RUN / "tts_text.txt").write_text(narration["beats"]["hook"], encoding="utf-8")
+            return 55.0
+
+        try:
+            with tempfile.TemporaryDirectory() as tmp, \
+                 mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "should-be-removed"}, clear=False), \
+                 mock.patch.object(board_short, "RUN", Path(tmp)), \
+                 mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+                 mock.patch.object(board_short, "narration", side_effect=narrate), \
+                 mock.patch.object(board_short, "produce_short", side_effect=produce), \
+                 mock.patch.object(board_short, "synthesize_short_voices", side_effect=AssertionError("TTS stays behind produce_short")):
+                (Path(tmp)).mkdir(exist_ok=True)
+                code = narration_dry_run.main([
+                    "--topic-keys", "risk_journal", "--beats", "four", "--full",
+                ])
+        finally:
+            for key, value in saved.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+        self.assertEqual(code, 0)
+        self.assertEqual(seen["beats"], "four")
+        self.assertEqual(seen["produce"], "four")
         self.assertEqual(bank_path.read_bytes(), before)
 
 

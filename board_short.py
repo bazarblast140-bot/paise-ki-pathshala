@@ -210,6 +210,13 @@ LIVE_TOTAL_WORDS = (130, 185)
 # the take runs long. Trim toward 170 words before any TTS call.
 LIVE_ESTIMATE_MARGIN_S = 90.0
 LIVE_MARGIN_WORDS = 170
+# Proven four-beat live Short (~55s on Rudra at 1.9 w/s). This is the default.
+# Word target 95-115, text gate 88-122, audio gate 45-65s. Shares sum to 105.
+FOUR_LIVE_SHARE = {"hook": 18, "pehchan": 26, "matlab": 32, "karein": 29}
+FOUR_LIVE_WORD_TARGET = (95, 115)
+FOUR_LIVE_TOTAL_WORDS = (88, 122)
+FOUR_LIVE_VOICE_SECONDS = (45.0, 65.0)
+FOUR_LIVE_MARGIN_S = 60.0
 VISUAL_ALIAS = {"udaharan": "matlab", "galti": "karein"}
 CARD_LINES = {
     "udaharan": ("उदाहरण", "एक ठोस केस"),
@@ -218,9 +225,37 @@ CARD_LINES = {
 
 
 def _live_lesson(c):
-    """Paid ElevenLabs publishes the six-beat Short. Preview and buffer stay on four."""
+    """Paid ElevenLabs publishes a live Short. Preview and buffer stay on the evergreen four."""
     engine = str(((c or {}).get("voice") or {}).get("engine") or "elevenlabs").strip().lower()
     return engine == "elevenlabs" and eleven_voice.paid_voice_allowed()
+
+
+def resolve_live_beats(topic=None):
+    """four or six. Topic flag, then LIVE_BEATS, then config.json. Default four."""
+    raw = str((topic or {}).get("_live_beats") or "").strip().lower()
+    if raw in ("four", "six"):
+        return raw
+    raw = os.environ.get("LIVE_BEATS", "").strip().lower()
+    if raw in ("four", "six"):
+        return raw
+    try:
+        data = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "four"
+    raw = str(data.get("live_beats") or "").strip().lower()
+    if raw not in ("four", "six"):
+        short = ((data.get("formats") or {}).get("short") or {})
+        raw = str(short.get("live_beats") or "four").strip().lower()
+    return raw if raw in ("four", "six") else "four"
+
+
+def four_live(topic):
+    """The default live Short: four beats, ~55s, not the six-beat lesson."""
+    return (
+        bool((topic or {}).get("_live_short"))
+        and not (topic or {}).get("_atr")
+        and resolve_live_beats(topic) != "six"
+    )
 
 
 def voice_wps(c):
@@ -267,6 +302,48 @@ def live_word_window(wps):
     return lo, hi
 
 
+def four_live_bounds(wps):
+    """Word target and text gate, scaled from the 1.9 w/s Rudra figures."""
+    scale = float(wps) / LIVE_BASE_WPS
+
+    def pair(lo, hi):
+        return (max(1, int(round(lo * scale))), max(1, int(round(hi * scale))))
+
+    return pair(*FOUR_LIVE_WORD_TARGET), pair(*FOUR_LIVE_TOTAL_WORDS)
+
+
+def four_live_targets(wps):
+    """Per-beat targets whose sum is the midpoint of 95-115 at 1.9 w/s."""
+    wps = float(wps)
+    scale = wps / LIVE_BASE_WPS
+    targets = {beat: max(8, int(round(FOUR_LIVE_SHARE[beat] * scale))) for beat in BEATS}
+    aim = int(round(((FOUR_LIVE_WORD_TARGET[0] + FOUR_LIVE_WORD_TARGET[1]) / 2.0) * scale))
+    delta = aim - sum(targets.values())
+    step = 0
+    while delta != 0 and step < 40:
+        beat = BEATS[step % len(BEATS)]
+        if delta > 0:
+            targets[beat] += 1
+            delta -= 1
+        elif targets[beat] > 8:
+            targets[beat] -= 1
+            delta += 1
+        step += 1
+    return targets
+
+
+def four_margin_words(wps):
+    """Word budget for a 60s estimate, inside the 88-122 text gate at 1.9 w/s."""
+    return max(1, int(round(FOUR_LIVE_MARGIN_S * float(wps))))
+
+
+def live_voice_bounds(topic):
+    """Seconds the pre-TTS estimate and the finished voice must land in."""
+    if four_live(topic):
+        return FOUR_LIVE_VOICE_SECONDS
+    return LIVE_VOICE_SECONDS
+
+
 def _topic_voice(topic):
     return {"voice": (topic or {}).get("_voice") or {}}
 
@@ -275,8 +352,10 @@ def _lesson(topic):
     """Beat order, per-beat targets, accept window, and the prompt's target band."""
     if (topic or {}).get("_live_short") and not (topic or {}).get("_atr"):
         wps = voice_wps(_topic_voice(topic))
-        targets = live_beat_targets(wps)
-        return LIVE_ORDER, targets, LIVE_TOTAL_WORDS, LIVE_WORD_TARGET
+        if resolve_live_beats(topic) == "six":
+            return LIVE_ORDER, live_beat_targets(wps), LIVE_TOTAL_WORDS, LIVE_WORD_TARGET
+        target, total = four_live_bounds(wps)
+        return BEATS, four_live_targets(wps), total, target
     return BEATS, BEAT_WORD_TARGET, TOTAL_WORDS, TOTAL_WORD_TARGET
 
 
@@ -337,7 +416,10 @@ def _teaching_beat_ranges():
 def check_narration(n, topic):
     fails = []
     beats = n.get("beats") or {}
-    order = BEATS if topic.get("_atr") or not topic.get("_live_short") else LIVE_ORDER
+    if topic.get("_atr") or not topic.get("_live_short"):
+        order = BEATS
+    else:
+        order = _lesson(topic)[0]
     for b in order:
         if not str(beats.get(b) or "").strip():
             fails.append(f"beat '{b}' khaali")
@@ -416,7 +498,42 @@ def check_narration(n, topic):
     fails.extend(hook_check.check_hook_line(hook_line, allowed_numbers(topic), max_words=limit))
     if hook_line and not hook.startswith(hook_line.rstrip("।")):
         fails.append("hook beat must open with the punchy hook line")
+    if topic.get("_live_short") and not topic.get("_atr"):
+        fails.extend(narrator_leak_notes(beats, order))
     return fails
+
+
+_LEAK_SNIPS = (
+    "अब इसे chart पर पहचानें",
+    "अब इसे chart पर पहचानने का तरीका समझिए",
+    "इन features का मतलब समझिए",
+    "अब आगे traders क्या check करते हैं",
+    "कार्ड पर लिखा है",
+    "कार्ड पर दिया हिसाब बोलो",
+    "कार्ड का आंकड़ा ही बोलो",
+    "अगले हफ़्ते से हर trade के बाद",
+)
+_LEAK_META = re.compile(r"कार्ड|topic\s*card|\bcard\b|\bscript\b|\bbeat\b", re.I)
+_LEAK_TELL = re.compile(r"(बोलो|बताओ|बोलिए|बताइए)")
+
+
+def narrator_leak_notes(beats, order):
+    """Sentences that instruct the narrator, or the generic filler openers."""
+    notes = []
+    for beat in order or ():
+        text = str((beats or {}).get(beat) or "")
+        for sent in re.split(r"[।!?？]+", text):
+            line = " ".join(sent.split())
+            if not line:
+                continue
+            low = line.lower()
+            leaked = any(snip.lower() in low for snip in _LEAK_SNIPS)
+            if _LEAK_META.search(line) or _LEAK_TELL.search(line):
+                leaked = True
+            if leaked:
+                notes.append(f"{beat} narrator leak: {line[:90]}")
+                break
+    return notes
 
 
 NARR_SYSTEM = """You write the SPOKEN Hindi narration for a vertical finance Short for Indian traders
@@ -456,11 +573,9 @@ MANDATORY TEACHING SEQUENCE — NEVER CHANGE THIS ORDER:
 4) KAREIN — "अब traders आमतौर पर क्या check करते हैं?" Show confirmation, entry context, SL/risk,
    or limitation only after the meaning is established. Refer back to the SAME setup.
 
-BRIDGE WORDS:
-- Hook → Pehchan: "अब इसे chart पर पहचानें।"
-- Pehchan → Matlab: "इन features का मतलब समझिए।"
-- Matlab → Karein: "अब आगे traders क्या check करते हैं।"
-Use these naturally so the lesson sounds continuous, not robotic.
+Do not instruct the narrator. Never say बोलो, बताओ, कार्ड, card, script, or beat.
+Do not use filler openers such as "अब इसे chart पर पहचानें", "इन features का मतलब समझिए",
+or "अब आगे traders क्या check करते हैं". Speak the lesson itself.
 
 CONTINUITY RULES:
 - Each beat must answer the next question in the sequence. Never repeat the hook in later beats.
@@ -641,15 +756,15 @@ def fallback_narration(topic):
         "hook": _fit_words(
             hook_seed, 22, 28,
             [
-                "अब इसे chart पर पहचानने का तरीका समझिए।",
-                "आगे की जानकारी इसी topic के संदर्भ में रहेगी।",
+                "अब इसे पहचानने का तरीका समझिए।",
+                "आगे की जानकारी इसी विषय के संदर्भ में रहेगी।",
             ],
         ),
         "pehchan": _fit_words(
             f'{src["pehchan"][0]}। {src["pehchan"][1]}।',
             38, 46,
             [
-                "अब इसे chart पर पहचानें।",
+                "अब इसे पहचानें।",
                 "स्क्रीन पर दिख रहे feature को एक साथ देखें।",
                 "पहचान का मतलब है कि पहले वही structure साफ समझें।",
                 "इसके बाद ही उसका market meaning पढ़ना आसान होता है।",
@@ -659,7 +774,7 @@ def fallback_narration(topic):
             f'{src["matlab"][0]}। {src["matlab"][1]}।',
             46, 54,
             [
-                "इन features का मतलब समझिए।",
+                "इन बातों का मतलब समझिए।",
                 "अब setup के कारण और असर को जोड़कर देखें।",
                 "यह explanation इसी दिए गए तथ्य तक सीमित है।",
                 "किसी अतिरिक्त price, date या return का अनुमान नहीं लगाया जा रहा।",
@@ -670,7 +785,7 @@ def fallback_narration(topic):
             f'{src["karein"][0]}। {src["karein"][1]}।',
             42, 50,
             [
-                "अब आगे traders क्या check करते हैं।",
+                "अब आगे जाँच क्या होती है।",
                 "पहले confirmation और risk की सीमा समझी जाती है।",
                 "किसी setup को अकेले देखकर फैसला तय नहीं होता।",
                 "स्क्रीन पर मौजूद जानकारी इसकी practical सीमा भी दिखाती है।",
@@ -1340,7 +1455,9 @@ def _usable_narration(n, topic=None):
 
 
 def live_narration_system(topic):
-    """Six-beat prompt. Word targets come from the voice coefficient."""
+    """Live prompt. Four beats by default; six only when live_beats is six."""
+    if four_live(topic):
+        return four_live_system(topic)
     _order, targets, (lo, hi), (target_lo, target_hi) = _lesson(topic)
     wps = voice_wps(_topic_voice(topic))
     lines = [
@@ -1384,6 +1501,33 @@ def live_narration_system(topic):
     return NARR_SYSTEM + "\n\n" + "\n".join(lines)
 
 
+def four_live_system(topic):
+    """Four-beat live prompt. ~55s on Rudra. Same number and leak gates."""
+    _order, targets, (lo, hi), (target_lo, target_hi) = _lesson(topic)
+    wps = voice_wps(_topic_voice(topic))
+    sec_lo, sec_hi = FOUR_LIVE_VOICE_SECONDS
+    lines = [
+        "LIVE SHORT OVERRIDE. Four beats, not six. This replaces the word counts above.",
+        "Beats, in order: hook, pehchan, matlab, karein.",
+        "hook = the problem. pehchan = how to recognise it. matlab = one worked example.",
+        "karein = the confirmation or risk check, then one takeaway. Do not speak a CTA.",
+        "Do not invent a number. Do not instruct the narrator.",
+        "Never mention कार्ड, card, script, or beat. Never say बोलो or बताओ.",
+        f"Allowed numbers: {_allowed_number_text(topic)}.",
+        "A percentage p on the topic also allows 100−p. "
+        "A sum, difference, product, or ratio of two topic numbers is allowed "
+        "only when the same sentence writes that arithmetic and the result matches.",
+        f"Pace coefficient: {wps:.2f} words/second. Target {target_lo}-{target_hi} words "
+        f"(about 50-60 seconds). The script may land in {lo}-{hi} words.",
+        f"Spoken audio must land in {sec_lo:.0f}-{sec_hi:.0f} seconds.",
+        "Keep sentence punctuation (। . ?) so the voice can pause.",
+    ]
+    for beat, target in targets.items():
+        blo, bhi = beat_word_window(target, LIVE_BEAT_TOLERANCE)
+        lines.append(f"- {beat}: target about {target} words. Accept {blo}-{bhi}.")
+    return NARR_SYSTEM + "\n\n" + "\n".join(lines)
+
+
 def topic_key_figure(topic):
     """A figure already written on the card, for the vague-beat fallback."""
     blob = hook_check._topic_blob(topic)
@@ -1407,66 +1551,13 @@ def topic_key_figure(topic):
     return allowed[0] if allowed else ""
 
 
-def anchor_vague_takeaway(narration, topic):
-    """After the repairs, give a still-vague karein or galti one concrete sentence.
-
-    The sentence reuses a figure from the topic. It is kept only when the beat
-    and the total stay inside their windows.
-    """
-    if not isinstance(narration, dict):
-        return False
-    if not (topic or {}).get("_live_short") or (topic or {}).get("_atr"):
-        return False
-    order, targets, (total_lo, total_hi), _band = _lesson(topic)
-    beats = narration.setdefault("beats", {})
-    vague = scene_pace.vague_beats(beats, order=order)
-    chosen = [beat for beat in ("galti", "karein") if beat in vague]
-    figure = topic_key_figure(topic)
-    if not chosen or not figure:
-        return False
-    example = hook_check.worked_example_sentence(topic)
-    notes = []
-    for beat in chosen:
-        sentence = f"अगले हफ़्ते से हर trade के बाद {figure} लिखिए।"
-        if beat == "galti":
-            sentence = "उदाहरण " + sentence
-        lo, hi = beat_word_window(targets[beat], LIVE_BEAT_TOLERANCE)
-        current = str(beats.get(beat) or "")
-        original = current
-        guard = 0
-        while len(f"{current} {sentence}".split()) > hi and guard < 20:
-            guard += 1
-            parts = _split_sentences(current)
-            index = _drop_index(parts, beat, example, lo)
-            if index is None:
-                break
-            parts.pop(index)
-            current = _join_sentences(parts)
-        trial = " ".join(f"{current} {sentence}".split())
-        if not lo <= len(trial.split()) <= hi:
-            continue
-        beats[beat] = trial
-        total = sum(len(str(beats.get(name) or "").split()) for name in order)
-        if not total_lo <= total <= total_hi:
-            beats[beat] = original
-            continue
-        notes.append(f"{beat}: added '{sentence}'")
-    if not notes:
-        return False
-    bucket = narration.setdefault("_trim_notes", [])
-    if isinstance(bucket, list):
-        bucket.extend(notes)
-    for note in notes:
-        print(f"[trim] {note}", flush=True)
-    topic["_spoken_beats"] = {beat: str(beats.get(beat) or "") for beat in order}
-    return True
-
-
 def narration(topic, c, spec=None):
     market_data.sync_topic_numbers(topic)
     if _live_lesson(c) and not topic.get("_atr"):
         topic["_live_short"] = True
         topic["_voice"] = dict((c or {}).get("voice") or {})
+    if topic.get("_live_short") and not topic.get("_atr") and not topic.get("_live_beats"):
+        topic["_live_beats"] = resolve_live_beats(topic)
     if topic.get("_atr"):
         # The calm-rate script is fixed to the chart numbers. A 160-word draft
         # would run long, and speeding the voice up is not allowed.
@@ -1499,6 +1590,8 @@ def narration(topic, c, spec=None):
             content = _content_ok(topic, n, spec)
             # Only an LLM pass is reusable. A file without that mark is regenerated.
             if not fails and content["passed"] and n.get("source") == "llm" and not n.get("narration_fallback"):
+                if topic.get("_live_short") and not topic.get("_atr"):
+                    n["live_beats"] = resolve_live_beats(topic)
                 ok("narration cache reused — no LLM credit")
                 return n, "cache"
         except SystemExit:
@@ -1532,6 +1625,8 @@ def narration(topic, c, spec=None):
         script["review_attempts"] = calls_used
         script["narration_fallback"] = False
         script["source"] = "llm"
+        if topic.get("_live_short") and not topic.get("_atr"):
+            script["live_beats"] = resolve_live_beats(topic)
         cache.write_text(json.dumps(script, ensure_ascii=False, indent=2), encoding="utf-8")
         return script, "llm"
 
@@ -1607,16 +1702,6 @@ def narration(topic, c, spec=None):
         print(f"[retry] narration call {calls}/{NARRATION_CALL_CAP}: {last}")
         if kind == "repair" and not (topic.get("_live_short") and not topic.get("_atr")):
             break
-    if (
-        topic.get("_live_short")
-        and not topic.get("_atr")
-        and isinstance(draft, dict)
-        and anchor_vague_takeaway(draft, topic)
-    ):
-        fails = _gate(draft)
-        if not fails:
-            return _accept(draft, calls)
-        last = "; ".join(fails)
     reason = (
         "LLM narration failed the hook/teaching gate; "
         "refusing the topic-card template (no upload, no paid voice)"
@@ -2550,7 +2635,13 @@ def _craft_samples(scenes, topic, beat_times, spoken, hook_line, cta, audio_word
     """One frame a second for the still check, and every frame for text boxes."""
     frames = [s.get("frame") for s in scenes]
     if not frames or any(frame is None for frame in frames):
-        return None, None
+        missing = [
+            str(scene.get("beat") or "?")
+            for scene, frame in zip(scenes, frames)
+            if frame is None
+        ]
+        notes = [f"scene has no frame: {beat}" for beat in missing] or ["scene has no frame"]
+        return [], [], notes
     durations = [float(s["end"]) - float(s["start"]) for s in scenes]
     total = sum(durations)
     samples = []
@@ -2939,11 +3030,11 @@ def _live_estimate(narration, topic):
 
 
 def _estimate_note(narration, topic):
-    """None when words/pace lands in 70-95s. Otherwise the reason to skip TTS."""
+    """None when words/pace lands in the live duration gate. Otherwise skip TTS."""
     if not (topic or {}).get("_live_short") or (topic or {}).get("_atr"):
         return None
     words, wps, seconds = _live_estimate(narration, topic)
-    lo, hi = LIVE_VOICE_SECONDS
+    lo, hi = live_voice_bounds(topic)
     if lo <= seconds <= hi:
         return None
     return (
@@ -2966,10 +3057,17 @@ def beats_below_minimum(narration, topic):
     return under
 
 
-def tighten_duration_margin(narration, topic):
-    """Before TTS, a live estimate over 90s is trimmed toward 170 words.
+def _margin_budget(topic):
+    """Seconds that trigger a free trim, and the word budget that trim aims at."""
+    if four_live(topic):
+        return FOUR_LIVE_MARGIN_S, four_margin_words(voice_wps(_topic_voice(topic)))
+    return LIVE_ESTIMATE_MARGIN_S, LIVE_MARGIN_WORDS
 
-    The prompt still aims at 140-175. This pass is free: no model call and no
+
+def tighten_duration_margin(narration, topic):
+    """Before TTS, a long live estimate is trimmed. Six-beat: over 90s toward 170.
+
+    Four-beat: over 60s toward about 114 words at 1.9 w/s. No model call and no
     voice request. The hook's first question and the udaharan core stay.
     After the trim the beat windows are checked again. A beat that fell under
     its minimum is locked and a different beat is trimmed instead.
@@ -2978,16 +3076,17 @@ def tighten_duration_margin(narration, topic):
         return narration
     if not (topic or {}).get("_live_short") or (topic or {}).get("_atr"):
         return narration
+    cap_s, budget = _margin_budget(topic)
     words, _wps, seconds = _live_estimate(narration, topic)
-    if seconds <= LIVE_ESTIMATE_MARGIN_S:
+    if seconds <= cap_s:
         return narration
     print(
         f"[duration] estimate {seconds:.1f}s ({words} words) over "
-        f"{LIVE_ESTIMATE_MARGIN_S:.0f}s; trimming toward {LIVE_MARGIN_WORDS} words",
+        f"{cap_s:.0f}s; trimming toward {budget} words",
         flush=True,
     )
     saved = json.loads(json.dumps(narration.get("beats") or {}))
-    apply_live_draft(narration, topic, total_hi=LIVE_MARGIN_WORDS)
+    apply_live_draft(narration, topic, total_hi=budget)
     under = beats_below_minimum(narration, topic)
     if under:
         print(
@@ -2995,7 +3094,7 @@ def tighten_duration_margin(narration, topic):
             flush=True,
         )
         narration["beats"] = json.loads(json.dumps(saved))
-        apply_live_draft(narration, topic, total_hi=LIVE_MARGIN_WORDS, locked=under)
+        apply_live_draft(narration, topic, total_hi=budget, locked=under)
         if beats_below_minimum(narration, topic):
             narration["beats"] = json.loads(json.dumps(saved))
     return narration
@@ -3062,16 +3161,35 @@ def _collect_dry_fails(narration, topic, spec):
 
 
 def fit_estimated_duration(narration, topic, c, spec):
-    """Text gates before any TTS request. A long live script is trimmed, not rewritten.
+    """Text gates before any TTS request. Trim a long live script, then judge it.
 
-    The duration estimate is words / per-voice pace. Outside 70-95s, no ElevenLabs
-    call is made: a short script gets one repair, a long one is failed as text.
+    The duration estimate is words / per-voice pace. The margin trim runs before
+    that guard. Still outside the live window (45-65s or 70-95s), no voice
+    request is made.
     """
     live = bool(topic.get("_live_short") and not topic.get("_atr"))
     if live:
         apply_live_draft(narration, topic)
+        already_short = set(beats_below_minimum(narration, topic))
+        tighten_duration_margin(narration, topic)
+        under = [beat for beat in beats_below_minimum(narration, topic) if beat not in already_short]
+        if under:
+            die(
+                "margin trim left "
+                + ", ".join(under)
+                + " under the beat minimum; refusing TTS with 0 characters spent"
+            )
     fails = _collect_dry_fails(narration, topic, spec)
     if not fails:
+        return narration
+    why = "; ".join(fails)
+    print(f"[duration] dry check failed before TTS: {why}")
+    lo, hi = live_voice_bounds(topic) if live else LIVE_VOICE_SECONDS
+    label = f"{lo:.0f}-{hi:.0f}"
+    if _one_beat_repair(narration, topic, c, spec, why) is None:
+        die(f"estimated duration outside {label}s; refusing TTS with 0 characters spent")
+    if live:
+        apply_live_draft(narration, topic)
         tighten_duration_margin(narration, topic)
         under = beats_below_minimum(narration, topic)
         if under:
@@ -3080,33 +3198,18 @@ def fit_estimated_duration(narration, topic, c, spec):
                 + ", ".join(under)
                 + " under the beat minimum; refusing TTS with 0 characters spent"
             )
-        return narration
-    why = "; ".join(fails)
-    print(f"[duration] dry check failed before TTS: {why}")
-    if live:
-        _words, _wps, seconds = _live_estimate(narration, topic)
-        if seconds > LIVE_VOICE_SECONDS[1]:
-            die(
-                "estimated duration outside 70-95s; refusing TTS with 0 characters spent: "
-                + why
-            )
-    if _one_beat_repair(narration, topic, c, spec, why) is None:
-        die("estimated duration outside 70-95s and the DeepSeek cap is spent; no TTS")
-    if live:
-        apply_live_draft(narration, topic)
     fails = _collect_dry_fails(narration, topic, spec)
     if fails:
+        if live:
+            _words, _wps, seconds = _live_estimate(narration, topic)
+            if seconds < lo or seconds > hi:
+                die(
+                    f"estimated duration outside {label}s; refusing TTS with 0 characters spent: "
+                    + "; ".join(fails)
+                )
         die(
             "dry text check still failed after one repair; refusing TTS and the topic-card template: "
             + "; ".join(fails)
-        )
-    tighten_duration_margin(narration, topic)
-    under = beats_below_minimum(narration, topic)
-    if under:
-        die(
-            "margin trim left "
-            + ", ".join(under)
-            + " under the beat minimum; refusing TTS with 0 characters spent"
         )
     (RUN / "narration.json").write_text(
         json.dumps(narration, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -3133,10 +3236,28 @@ def _rerender_beats(spoken, c, beats):
     return _trim_rendered(beats)
 
 
+def require_scene_frames(topic, spec):
+    """Die before TTS when a lesson beat has no picture."""
+    if (topic or {}).get("_atr"):
+        return
+    order = _lesson(topic)[0] if (topic or {}).get("_live_short") else BEATS
+    missing = []
+    for beat in order:
+        try:
+            frames, _flags = scene_frames.frames_for(topic, beat, 1, spec or {})
+        except Exception as exc:  # noqa: BLE001 — a render error is a missing frame
+            die(f"scene has no frame before TTS: {beat} ({exc})")
+        if not frames or frames[0] is None:
+            missing.append(beat)
+    if missing:
+        die("scene has no frame before TTS: " + ", ".join(missing))
+
+
 def prepare_spoken(spoken, narration, topic, c, spec):
     """Render once after the dry check. A live miss re-speaks only the changed beats."""
-    order = LIVE_ORDER if topic.get("_live_short") else tuple(b for b in BEATS if b in spoken)
+    order = _lesson(topic)[0] if topic.get("_live_short") else tuple(b for b in BEATS if b in spoken)
     if topic.get("_live_short"):
+        require_scene_frames(topic, spec)
         eleven_voice.ensure_library_voice(c)
         topic["_voice"] = dict((c or {}).get("voice") or {})
         narration = fit_estimated_duration(narration, topic, c, spec)
@@ -3154,7 +3275,8 @@ def prepare_spoken(spoken, narration, topic, c, spec):
             die(f"voice duration outside 42-62s; refusing artificial speed change: {total:.1f}s — {detail}")
         audio = {beat: RUN / f"voice_clean_{beat}.wav" for beat in order}
         return spoken, narration, audio, raw, beat_times, total
-    lo, hi = LIVE_VOICE_SECONDS
+    lo, hi = live_voice_bounds(topic)
+    label = f"{lo:.0f}-{hi:.0f}"
     if lo <= total <= hi:
         topic["_spoken_beats"] = {beat: spoken[beat] for beat in order}
         audio = {beat: RUN / f"voice_clean_{beat}.wav" for beat in order}
@@ -3163,30 +3285,31 @@ def prepare_spoken(spoken, narration, topic, c, spec):
         words = sum(len(str(spoken.get(beat) or "").split()) for beat in order)
         rate = words / max(total, 0.1)
         # Measured words/s of this audio. Do not lift the budget to the text-gate
-        # floor: a 1.9 w/s voice needs about 171 words for 90s, and a slower take
-        # may need fewer than 130. The re-measured duration is the final gate.
-        budget = int(math.floor(90.0 * rate))
+        # floor. Four-beat aims at 60s; six-beat aims at 90s. The re-measured
+        # duration is the final gate.
+        cap_s = FOUR_LIVE_MARGIN_S if four_live(topic) else 90.0
+        budget = int(math.floor(cap_s * rate))
         print(
-            f"[duration] {total:.1f}s outside 70-95; trimming sentences toward {budget} words"
+            f"[duration] {total:.1f}s outside {label}; trimming sentences toward {budget} words"
         )
         apply_live_draft(narration, topic, total_hi=budget)
         spoken = {beat: narration["beats"][beat] for beat in order}
         changed = [beat for beat in order if spoken[beat] != before[beat]]
         if not changed:
             die(
-                "voice duration outside 70-95s and no sentence could be trimmed; "
+                f"voice duration outside {label}s and no sentence could be trimmed; "
                 "refusing a longer rewrite: "
                 f"{total:.1f}s — {_duration_detail(before, raw, order)}"
             )
     else:
         why = (
-            f"The spoken voice is {total:.1f}s. It must land in 70-95 seconds. "
+            f"The spoken voice is {total:.1f}s. It must land in {label} seconds. "
             "The script is too short. Add words only on the short beats."
         )
-        print(f"[duration] {total:.1f}s under 70; one repair of the short beats")
+        print(f"[duration] {total:.1f}s under {lo:.0f}; one repair of the short beats")
         if _one_beat_repair(narration, topic, c, spec, why) is None:
             die(
-                "voice duration outside 70-95s; refusing artificial speed change: "
+                f"voice duration outside {label}s; refusing artificial speed change: "
                 f"{total:.1f}s — {_duration_detail(spoken, raw, order)}"
             )
         apply_live_draft(narration, topic)
@@ -3200,7 +3323,7 @@ def prepare_spoken(spoken, narration, topic, c, spec):
         changed = [beat for beat in order if spoken[beat] != before[beat]]
         if not changed:
             die(
-                "voice duration outside 70-95s and the repair changed no beats; "
+                f"voice duration outside {label}s and the repair changed no beats; "
                 f"refusing artificial speed change: {total:.1f}s"
             )
     raw.update(_rerender_beats(spoken, c, changed))
@@ -3208,7 +3331,7 @@ def prepare_spoken(spoken, narration, topic, c, spec):
     topic["_spoken_beats"] = {beat: spoken[beat] for beat in order}
     if total < lo or total > hi:
         die(
-            "voice duration outside 70-95s after one repair; refusing artificial speed change: "
+            f"voice duration outside {label}s after one repair; refusing artificial speed change: "
             f"{total:.1f}s — {_duration_detail(spoken, raw, order)}"
         )
     (RUN / "narration.json").write_text(
@@ -3251,7 +3374,14 @@ def main():
     elif spec.get("mode") == "series":
         print(f"[market_data] {spec.get('source')} as of {spec.get('as_of')}")
 
-    lesson = LIVE_ORDER if _live_lesson(c) and not spec.get("atr") else BEATS
+    if _live_lesson(c) and not spec.get("atr"):
+        topic["_live_short"] = True
+        topic["_voice"] = dict((c or {}).get("voice") or {})
+        if not topic.get("_live_beats"):
+            topic["_live_beats"] = resolve_live_beats(topic)
+        lesson = _lesson(topic)[0]
+    else:
+        lesson = BEATS
     beat_pngs = {}
     for b in lesson:
         pics = beat_images(topic, b)
@@ -3267,6 +3397,13 @@ def main():
 
     n, source = narration(topic, c, spec)
     require_llm_narration(n, source)
+    produce_short(topic, n, c, spec, source, beat_pngs=beat_pngs)
+
+
+def produce_short(topic, n, c, spec, source="llm", beat_pngs=None):
+    """Voice, scenes, sync, and final.mp4. No upload and no git commit."""
+    if topic.get("_live_short") and not topic.get("_atr"):
+        n["live_beats"] = resolve_live_beats(topic)
     # CTA/disclaimer stay on-screen; do not spend TTS credits speaking them.
     spoken = dict(n["beats"])
     # Trim only the outer TTS silence. Sentence punctuation stays, so pauses
@@ -3280,7 +3417,7 @@ def main():
     if t < 45.0 and not topic.get("_live_short"):
         print(f"[duration] natural speech is {t:.1f}s; no slow-motion stretching")
     ok(f"voice: trimmed speech {raw_total:.1f}s -> final {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
-    switch = {b: cue_frac(topic["key"], spoken[b]) for b in order if len(beat_pngs.get(b) or ()) == 3}
+    switch = {b: cue_frac(topic["key"], spoken[b]) for b in order if len((beat_pngs or {}).get(b) or ()) == 3}
     if switch:
         ok("3rd picture at " + ", ".join(f"{b} {f:.0%}" for b, f in switch.items()))
     cta = engagement.engagement_question(topic)
@@ -3299,8 +3436,8 @@ def main():
         kinds = scene_frames.kinds_for(beat, len(group)) if spec.get("atr") else [""] * len(group)
         paths = []
         for i, (scene, frame, flag) in enumerate(zip(group, frames, flags)):
+            scene["frame"] = frame
             if getattr(frame, "text_layers", None) is not None and getattr(frame, "plate", None) is not None:
-                scene["frame"] = frame
                 scene_frames.set_progress(frame, (scenes.index(scene) + 1) / len(scenes))
             path = RUN / f"sc_{beat}_{i}.png"
             frame.save(path)
@@ -3360,18 +3497,21 @@ def main():
              switch=switch, hook_line=hook_line, scenes=scenes)
 
     # Final-file hard gate: never retime the finished video.
-    # If duration is outside the publishing window, fail and regenerate narration.
     final_path = RUN / "final.mp4"
     final_dur = duration(final_path)
     if topic.get("_live_short"):
-        lo, hi = LIVE_VOICE_SECONDS
+        lo, hi = live_voice_bounds(topic)
+        label = f"{lo:.0f}-{hi:.0f}"
         if final_dur < lo or final_dur > hi:
-            die(f"final.mp4 duration outside 70-95s; refusing post-render speed change: {final_dur:.1f}s")
+            die(f"final.mp4 duration outside {label}s; refusing post-render speed change: {final_dur:.1f}s")
     elif final_dur < 45.0 or final_dur > 62.0:
         die(f"final.mp4 duration outside 45-62s; refusing post-render speed change: {final_dur:.1f}s")
 
     write_compat(topic, n, spoken, beat_times)
+    (RUN / "narration.json").write_text(
+        json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
     ok(f"wrote run/final.mp4 ({final_dur:.1f}s) + thumbnail.jpg")
+    return final_dur
 
 
 if __name__ == "__main__":
