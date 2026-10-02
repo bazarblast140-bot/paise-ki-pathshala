@@ -5,6 +5,7 @@ A beat may land ±20% from its target. The total may land in 150-190
 beats that missed. An empty or timed-out reply stays inside the 4-call cap
 and never becomes the topic-card template.
 """
+import inspect
 import json
 import tempfile
 import unittest
@@ -12,6 +13,8 @@ from pathlib import Path
 from unittest import mock
 
 import board_short
+import hook_check
+import scene_pace
 
 
 HOOK = "क्या यह सेटअप गलत है?"
@@ -191,6 +194,140 @@ class RepairLoopTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         self.assertIn("REWRITE hook: current 41 words, target exactly 25 words", calls[1]["user"])
         self.assertIn("topic-card", block["reason"])
+
+
+DARK_HOOK = "काले बादल छा गए क्यों?"
+_VAGUE = ["समझिए", "चार्ट", "पर", "देखिए", "कैंडल", "भाव", "तेज़ी", "बादल"]
+
+
+def _dark_cloud():
+    bank = json.loads((Path(__file__).resolve().parents[1] / "topic_bank.json").read_text(encoding="utf-8"))
+    return next(topic for topic in bank["topics"] if topic["key"] == "dark_cloud")
+
+
+def _vague_words(n, prefix=""):
+    prefix = " ".join(str(prefix).split())
+    have = prefix.split() if prefix else []
+    if len(have) >= n:
+        return " ".join(have[:n])
+    rest = [_VAGUE[i % len(_VAGUE)] for i in range(n - len(have))]
+    return " ".join(have + rest)
+
+
+def _dark_draft(hook, pehchan, matlab, karein, *, concrete_karein=True):
+    """Word counts from the dark_cloud log. Vague beats have no number, level, or step."""
+    return {
+        "title": "काले बादल का मतलब",
+        "hook_line": DARK_HOOK,
+        "beats": {
+            "hook": _vague_words(hook, DARK_HOOK),
+            "pehchan": _vague_words(pehchan),
+            "matlab": _vague_words(matlab),
+            "karein": _vague_words(karein, "गलती" if concrete_karein else ""),
+        },
+    }
+
+
+def _dark_fixed():
+    hook = _pad(25, DARK_HOOK + " उदाहरण के लिए भाव 100 पर काला बादल देखिए")
+    return {
+        "title": "काले बादल का मतलब",
+        "hook_line": DARK_HOOK,
+        "beats": {
+            "hook": hook,
+            "pehchan": _pad(42, "नियम"),
+            "matlab": _pad(50, "कदम"),
+            "karein": _pad(46, "गलती"),
+        },
+    }
+
+
+class DarkCloudRepairTests(unittest.TestCase):
+    def test_labelled_example_numbers_only_on_evergreen_topics(self):
+        cloud = _dark_cloud()
+        self.assertTrue(hook_check.allows_example_numbers(cloud))
+        labelled = "उदाहरण के लिए भाव 100 पर देखिए।"
+        self.assertEqual(hook_check.unsourced_numbers(labelled, cloud), set())
+        self.assertEqual(hook_check.unsourced_numbers("भाव 100 पर देखिए।", cloud), {"100"})
+        real = {"key": "titan_2010", "cat": "REAL DATA", "topic": "Titan", "beats": {}, "facts": [], "thumb": []}
+        self.assertFalse(hook_check.allows_example_numbers(real))
+        self.assertEqual(hook_check.unsourced_numbers(labelled, real), {"100"})
+        self.assertEqual(
+            board_short.number_format_notes(["काले बादल"], spoken="उदाहरण 100", caption="100", ignore={"100"}),
+            [],
+        )
+        self.assertTrue(board_short.number_format_notes(["एसएल 772.4"], spoken="एसएल 772.41", caption=""))
+
+    def test_logged_failures_repair_vague_beats_and_shrink_the_hook(self):
+        cloud = _dark_cloud()
+        cases = [
+            {"hook": 47, "pehchan": 42, "matlab": 43, "karein": 46, "keep": ("karein",)},
+            {"hook": 48, "pehchan": 56, "matlab": 64, "karein": 58, "keep": ()},
+            {"hook": 26, "pehchan": 34, "matlab": 33, "karein": 38, "keep": ("karein",)},
+        ]
+        for case in cases:
+            with self.subTest(hook=case["hook"], total=(
+                case["hook"] + case["pehchan"] + case["matlab"] + case["karein"]
+            )):
+                bad = _dark_draft(**{k: case[k] for k in ("hook", "pehchan", "matlab", "karein")})
+                self.assertEqual(
+                    scene_pace.vague_beats(bad["beats"]),
+                    ["hook", "pehchan", "matlab"],
+                )
+                calls = []
+
+                def fake(system, user, model=None, max_tokens=2000, retries=3, attempts=None, _calls=calls):
+                    _calls.append(user)
+                    if len(_calls) == 1:
+                        return bad
+                    return _dark_fixed()
+
+                with tempfile.TemporaryDirectory() as tmp, \
+                     mock.patch.object(board_short, "RUN", Path(tmp)), \
+                     mock.patch.object(board_short, "claude_json", side_effect=fake), \
+                     mock.patch.object(
+                         board_short, "fallback_narration",
+                         side_effect=AssertionError("template must not be built"),
+                     ):
+                    script, source = board_short.narration(cloud, CFG)
+                self.assertEqual(source, "llm")
+                self.assertEqual(len(calls), 2)
+                repair = calls[1]
+                self.assertIn(
+                    f"REWRITE hook: current {case['hook']} words, target exactly 25 words (accept 20-30).",
+                    repair,
+                )
+                self.assertIn("The hook must be 20-30 words.", repair)
+                for beat in ("hook", "pehchan", "matlab"):
+                    row = next(line for line in repair.splitlines() if line.startswith(f"REWRITE {beat}:"))
+                    self.assertIn("This beat is vague: it needs a concrete number, level, or step", row)
+                karein_row = next(line for line in repair.splitlines() if "karein" in line and line.startswith(("REWRITE", "KEEP")))
+                self.assertNotIn("is vague", karein_row)
+                self.assertIn("evergreen topic with no market data", repair)
+                self.assertIn("उदाहरण", repair)
+                self.assertGreaterEqual(len(script["beats"]["hook"].split()), 20)
+                self.assertLessEqual(len(script["beats"]["hook"].split()), 30)
+                self.assertEqual(board_short.check_narration(script, cloud), [])
+                for beat in case["keep"]:
+                    self.assertIn(f"KEEP {beat} VERBATIM", repair)
+                    self.assertEqual(script["beats"][beat], bad["beats"][beat])
+
+    def test_buffer_refill_uses_the_short_narration_path(self):
+        import buffer_shorts
+        import run_pipeline
+        captured = {}
+
+        def fake_run(args, cwd=None, env=None):
+            captured["args"] = list(args)
+            return mock.Mock(returncode=0)
+
+        with mock.patch("subprocess.run", fake_run):
+            code = buffer_shorts.default_preview_runner("dark_cloud")
+        self.assertEqual(code, 0)
+        self.assertTrue(str(captured["args"][1]).endswith("run_pipeline.py"))
+        self.assertEqual(captured["args"][-2:], ["--format", "short"])
+        self.assertIn("board_short.py", [script for _name, script in run_pipeline.SHORT_STAGES])
+        self.assertIn("n, source = narration(", inspect.getsource(board_short.main))
 
 
 if __name__ == "__main__":

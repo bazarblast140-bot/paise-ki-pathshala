@@ -237,7 +237,7 @@ def check_narration(n, topic):
         bw = len(str(beats.get(b) or "").split())
         if not lo <= bw <= hi:
             fails.append(f"{b} beat {bw} words ({lo}-{hi} chahiye)")
-    extra = {x.replace(",", "") for x in re.findall(r"\d[\d,]*(?:\.\d+)?", text)} - allowed_numbers(topic)
+    extra = hook_check.unsourced_numbers(text, topic)
     if extra:
         fails.append(f"ye numbers topic me nahi hain: {sorted(extra)} — sirf diye gaye numbers use karo")
     low = text.lower()
@@ -339,7 +339,9 @@ CONTINUITY RULES:
 - Hit the per-beat targets in WORD COUNTS. Extra words must add concrete teaching detail, not filler.
 - Never stretch audio artificially just to hit a target duration.
 - Do not compress a beat into a slogan; each beat must teach its assigned step.
-- Use ONLY numbers that appear in the topic data given to you. Never invent prices, dates, returns.
+- Use ONLY numbers that appear in the topic data given to you. Never invent a live price, date, or return.
+  On an evergreen topic with no market data, an illustrative figure is allowed only in the same
+  sentence as उदाहरण, example, or मिसाल.
 - Not a quiz. Do not ask the viewer to pick options.
 - SEBI rules: never tell anyone to buy/sell/hold a specific stock, fund or product; no targets,
   no tips; never promise returns. Patterns/indicators are probabilities, not sure signals.
@@ -368,7 +370,16 @@ def word_count_rules():
     lines.append(
         f"- total: target {target_lo}-{target_hi} words. Accept {total_lo}-{total_hi}."
     )
-    lines.append("The hook stays short. Its target is 25 words, not a long introduction.")
+    lines.append("The hook stays short. Its target is 25 words and it must land in 20-30 words.")
+    lines.append(
+        "Every beat needs a concrete number, a level, or a step "
+        "(a figure, रेखा, नियम, कदम, or उदाहरण). A vague beat fails."
+    )
+    lines.append(
+        "On an evergreen topic with no market data, a new figure is allowed only in the "
+        "same sentence as उदाहरण, example, or मिसाल, and it is an illustration, not a live price. "
+        "REAL DATA and a fetched series may use only the numbers on the card."
+    )
     lines.append(
         "Short example of the JSON shape (write the real lesson, and hit these counts):"
     )
@@ -672,16 +683,20 @@ def beats_to_rewrite(n, topic, extra=""):
     for beat in BEATS:
         if beat in joined and beat not in rewrite:
             rewrite.append(beat)
+    for beat in scene_pace.vague_beats((n or {}).get("beats")):
+        if beat not in rewrite:
+            rewrite.append(beat)
     if fails and not rewrite:
         rewrite = list(BEATS)
     return rewrite
 
 
-def repair_instructions(draft, rewrite):
-    """Tell the model the current count and the exact target for each failing beat."""
+def repair_instructions(draft, rewrite, topic=None):
+    """Tell the model the current count, the exact target, and which beats are vague."""
     counts = beat_word_counts(draft)
+    vague = set(scene_pace.vague_beats((draft or {}).get("beats")))
     lines = [
-        "The draft missed the word targets.",
+        "The draft missed the word targets or a beat is vague.",
         "Rewrite ONLY the beats listed under REWRITE.",
         "Copy every KEEP beat verbatim, character for character.",
         "Return one JSON object with title, hook_line, and all four beats.",
@@ -692,10 +707,18 @@ def repair_instructions(draft, rewrite):
         current = counts[beat]
         text = str((draft.get("beats") or {}).get(beat) or "")
         if beat in rewrite:
-            lines.append(
+            line = (
                 f"REWRITE {beat}: current {current} words, target exactly {target} words "
                 f"(accept {lo}-{hi})."
             )
+            if beat == "hook":
+                line += " The hook must be 20-30 words."
+            if beat in vague:
+                line += (
+                    " This beat is vague: it needs a concrete number, level, or step "
+                    "the viewer can point at."
+                )
+            lines.append(line)
         else:
             lines.append(
                 f"KEEP {beat} VERBATIM ({current} words; target {target}): {text}"
@@ -705,6 +728,12 @@ def repair_instructions(draft, rewrite):
         lines.append(f"KEEP title VERBATIM: {draft.get('title') or ''}")
     else:
         lines.append("hook_line must be the first sentence of the rewritten hook.")
+    if topic is not None and hook_check.allows_example_numbers(topic):
+        lines.append(
+            "This is an evergreen topic with no market data. A new figure is allowed "
+            "only when the same sentence labels it as an example (उदाहरण, example, or मिसाल). "
+            "Do not present that figure as a live price."
+        )
     return "\n".join(lines)
 
 
@@ -810,7 +839,7 @@ def narration(topic, c, spec=None):
         rewrite = None
         if draft is not None and not repair_done:
             rewrite = beats_to_rewrite(draft, topic, last)
-            user_msg = msg + "\n\n" + repair_instructions(draft, rewrite)
+            user_msg = msg + "\n\n" + repair_instructions(draft, rewrite, topic)
             kind = "repair"
         else:
             extra = ""
@@ -1575,20 +1604,23 @@ def cues_at(cues, t):
     return hits
 
 
-def number_format_notes(on_screen_texts, spoken="", caption=""):
+def number_format_notes(on_screen_texts, spoken="", caption="", ignore=None):
     """Every spoken or captioned number must match an on-screen figure exactly.
 
     772.41 does not match 772.4. Extra figures on the card are allowed.
+    ignore holds labelled example figures on an evergreen topic. A live price
+    is never ignored.
     """
     import sync_gate
     screen = set()
     for text in on_screen_texts or []:
         screen.update(sync_gate.numbers_in(text))
+    skipped = set(ignore or ())
     notes = []
     seen = set()
     for origin, blob in (("spoken", spoken), ("caption", caption)):
         for num in sync_gate.numbers_in(blob):
-            if num in screen or num in seen:
+            if num in screen or num in seen or num in skipped:
                 continue
             seen.add(num)
             notes.append(f"{origin} number {num} is not an on-screen value")
@@ -1650,8 +1682,12 @@ def _scene_pose_at(scenes, t):
     return anim(max(0.0, min(1.0, local)))
 
 
-def number_faults_for(scenes, spoken, beat_times, audio_words=None):
+def number_faults_for(scenes, spoken, beat_times, audio_words=None, topic=None):
     """Sample each second. Caption and spoken numbers must be on that frame."""
+    ignore = set()
+    if topic is not None and hook_check.allows_example_numbers(topic):
+        full = " ".join(str((spoken or {}).get(beat) or "") for beat in BEATS)
+        ignore = hook_check.example_labelled_numbers(full)
     frames = [s.get("frame") for s in scenes]
     if not frames or any(frame is None for frame in frames):
         return []
@@ -1670,7 +1706,7 @@ def number_faults_for(scenes, spoken, beat_times, audio_words=None):
         ]
         caption = " ".join(cue.get("text") or "" for cue in cues_at(cues, t))
         said = _script_near(spoken, beat_times, audio_words, t)
-        for note in number_format_notes(texts, said, caption):
+        for note in number_format_notes(texts, said, caption, ignore=ignore):
             stamped = f"{note} at {t:.1f}s"
             if stamped not in seen:
                 seen.add(stamped)
@@ -1791,7 +1827,7 @@ def _craft_samples(scenes, topic, beat_times, spoken, hook_line, cta, audio_word
         if note not in seen:
             seen.add(note)
             layout_notes.append(note)
-    for note in number_faults_for(scenes, spoken, beat_times, audio_words):
+    for note in number_faults_for(scenes, spoken, beat_times, audio_words, topic=topic):
         if note not in seen:
             seen.add(note)
             layout_notes.append(note)
