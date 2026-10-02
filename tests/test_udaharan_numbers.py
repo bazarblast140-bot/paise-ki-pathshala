@@ -132,7 +132,7 @@ class UdaharanNumberTests(unittest.TestCase):
         fails = board_short.check_narration(labelled, topic)
         self.assertTrue(any("udaharan" in item and "उदाहरण" in item for item in fails))
         draft = json.loads(json.dumps(labelled))
-        self.assertNotIn("udaharan", board_short.beats_to_rewrite(draft, topic))
+        self.assertIn("udaharan", board_short.beats_to_rewrite(draft, topic))
         board_short.apply_live_draft(draft, topic)
         self.assertEqual(
             hook_check.unlabelled_example_beats(draft["beats"], ("udaharan", "galti")),

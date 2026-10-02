@@ -124,14 +124,80 @@ class DryRunTests(unittest.TestCase):
     def test_workflow_is_dispatch_only_and_has_no_elevenlabs(self):
         text = (ROOT / ".github" / "workflows" / "narration-dry-run.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch", text)
+        self.assertIn("topic_keys:", text)
         self.assertIn("topics:", text)
         self.assertIn("default: 3", text)
+        self.assertIn("--topic-keys", text)
         self.assertIn("DEEPSEEK_API_KEY", text)
         self.assertIn("narration_dry_run.py", text)
         self.assertNotIn("ELEVENLABS_API_KEY", text)
         self.assertNotIn("git commit", text)
         self.assertNotIn("git push", text)
         self.assertIn("contents: read", text)
+
+    def test_topic_keys_pick_named_topics_without_writing_the_bank(self):
+        bank = {
+            "topics": [
+                _topic("alpha", used=True),
+                _topic("risk_journal"),
+                _topic("gamma"),
+            ]
+        }
+        raw = json.dumps(bank)
+        picked, missing = narration_dry_run.select_by_keys(
+            ["risk_journal", "alpha", "missing-key"], bank)
+        self.assertEqual([item["key"] for item in picked], ["risk_journal", "alpha"])
+        self.assertTrue(picked[1]["used_short"])
+        self.assertEqual(missing, ["missing-key"])
+        self.assertEqual(json.dumps(bank), raw)
+
+    def test_unknown_topic_keys_exit_before_narration(self):
+        saved = {
+            key: os.environ.get(key)
+            for key in ("VIDEO_FORMAT", "DRY_RUN", "PUBLISH_VISIBILITY", "ELEVENLABS_OPT_IN", "ELEVENLABS_API_KEY")
+        }
+        bank_path = ROOT / "topic_bank.json"
+        before = bank_path.read_bytes()
+        try:
+            with mock.patch.object(
+                narration_dry_run, "evaluate_topic",
+                side_effect=AssertionError("unknown keys must not narrate"),
+            ):
+                code = narration_dry_run.main(["--topic-keys", "not-a-real-topic"])
+        finally:
+            for key, value in saved.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+        self.assertEqual(code, 1)
+        self.assertEqual(bank_path.read_bytes(), before)
+
+    def test_named_topic_keys_are_narrated_and_the_bank_stays(self):
+        saved = {
+            key: os.environ.get(key)
+            for key in ("VIDEO_FORMAT", "DRY_RUN", "PUBLISH_VISIBILITY", "ELEVENLABS_OPT_IN", "ELEVENLABS_API_KEY")
+        }
+        bank_path = ROOT / "topic_bank.json"
+        before = bank_path.read_bytes()
+        seen = []
+
+        def evaluate(topic, _c):
+            seen.append(topic.get("key"))
+            return True, f"topic {topic.get('key')}\nPASS"
+
+        try:
+            with mock.patch.object(narration_dry_run, "evaluate_topic", side_effect=evaluate):
+                code = narration_dry_run.main(["--topic-keys", "risk_journal, intraday_risk_reward"])
+        finally:
+            for key, value in saved.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+        self.assertEqual(code, 0)
+        self.assertEqual(seen, ["risk_journal", "intraday_risk_reward"])
+        self.assertEqual(bank_path.read_bytes(), before)
 
 
 if __name__ == "__main__":
