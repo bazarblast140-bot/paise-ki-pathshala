@@ -5,6 +5,7 @@ import subprocess
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 import board_short
 import market_data
@@ -114,7 +115,7 @@ class AtrLessonTests(unittest.TestCase):
         self.assertEqual(scene_pace.vague_beats(narration["beats"]), [])
         lesson = spec["atr"]
         hook = narration["beats"]["hook"]
-        self.assertTrue(hook.startswith("तंग SL बार-बार कटता क्यों है?"))
+        self.assertTrue(hook.startswith("तंग एसएल बार-बार कटता क्यों है?"))
         self.assertNotIn(lesson["atr"], hook)
         self.assertNotIn(lesson["distance"], hook)
         self.assertIn(lesson["atr"], narration["beats"]["pehchan"])
@@ -136,7 +137,7 @@ class AtrLessonTests(unittest.TestCase):
         self.assertNotIn("टारगेट", joined)
 
     def test_short_voice_is_the_calm_male_narrator(self):
-        with unittest.mock.patch.dict(os.environ, {"VIDEO_FORMAT": "short"}):
+        with patch.dict(os.environ, {"VIDEO_FORMAT": "short"}):
             voice = __import__("common").cfg()["voice"]
         self.assertEqual(voice["voice_name"], "Daniel")
         self.assertEqual(voice["voice_id"], "onwK4e9ZLuTAKqWW03F9")

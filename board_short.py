@@ -370,31 +370,33 @@ def atr_narration(topic):
     """Adult ATR lesson. Every figure is the one drawn from the monthly closes."""
     lesson = topic["_atr"]
     name = lesson["name_hi"]
-    hook_line = "तंग SL बार-बार कटता क्यों है?"
+    hook_line = "तंग एसएल बार-बार कटता क्यों है?"
+    # Letters stay one Devanagari word so the voice does not spell A-T-R.
+    # Each chart figure is spoken once. The written word count is unchanged.
     beats = {
         "hook": (
             f"{hook_line} भाव की सामान्य हलचल से तंग रेखा कट जाती है। "
-            f"ATR इसी हलचल को नापता है। आगे नियम और असली उदाहरण है।"
+            f"एटीआर इसी हलचल को नापता है।"
         ),
         "pehchan": (
-            f"नियम यह है। ATR पिछले {lesson['period']} कैंडल की औसत हलचल है। "
-            f"{name} के महीने के भाव पर ATR {lesson['atr']} है। "
-            f"आँकड़ा {lesson['as_of']} तक का है। "
+            f"नियम यह है। एटीआर पिछले {lesson['period']} कैंडल की औसत हलचल है। "
+            f"एचडीएफसी बैंक के महीने के भाव पर एटीआर {lesson['atr']} है। "
+            f"स्रोत जून {lesson['as_of'][:4]} का है। "
             f"यह दिशा नहीं बताता, सिर्फ़ हलचल बताता है। हर महीने का बदलाव इसी औसत में जुड़ता है।"
         ),
         "matlab": (
-            f"उदाहरण {name} का आखिरी भाव {lesson['entry']} है। "
-            f"दूरी {lesson['multiple']} गुना ATR रखी जाती है। "
+            f"उदाहरण एचडीएफसी बैंक का आखिरी भाव {lesson['entry']} है। "
+            f"दूरी {lesson['multiple']} गुना एटीआर रखी जाती है। "
             f"{lesson['multiple']} गुना {lesson['atr']} बराबर {lesson['distance']} पॉइंट। "
-            f"एंट्री रेखा {lesson['entry']} पर है। SL रेखा {lesson['sl']} पर है। "
+            f"एंट्री रेखा वही भाव है। एसएल रेखा {lesson['sl']} पर है। "
             f"ऊपर वाली रेखा {lesson['target']} पर है। ये रेखाएँ शिक्षा हैं, सलाह नहीं। "
-            f"स्क्रीन पर एंट्री, फिर SL, फिर दूरी क्रम से बनती है।"
+            f"स्क्रीन पर एंट्री, फिर एसएल, फिर दूरी क्रम से बनती है।"
         ),
         "karein": (
-            f"गलती यह है कि SL को ATR से तंग रखना। "
+            f"गलती यह है कि एसएल को एटीआर से तंग रखना। "
             f"{lesson['atr']} की हलचल में तंग रेखा शोर में कटती है। "
             f"दूरी {lesson['distance']} पॉइंट हो तो मात्रा कम होती है, जोखिम वही रहता है। "
-            f"SL की दूरी ATR का {lesson['multiple']} गुना है। यह शिक्षा है, सलाह नहीं।"
+            f"एसएल की दूरी एटीआर का {lesson['multiple']} गुना है। यह शिक्षा है, सलाह नहीं।"
         ),
     }
     title = f"ATR से SL — {name} पर दूरी {lesson['distance']}"
