@@ -126,6 +126,9 @@ class SyncGateTests(unittest.TestCase):
         )
         self.assertLess(sync_gate.recall("चार्ज 300 और भाव 9999", heard), sync_gate.MIN_RECALL)
         self.assertFalse(sync_gate._near_token("300", "4000"))
+        for left, right in (("15.7", "15.1"), ("23.5", "23.6"), ("772.4", "772.9"), ("2350", "2360")):
+            self.assertFalse(sync_gate._near_token(left, right), (left, right))
+        self.assertLess(sync_gate.recall("एटीआर 15.7 है", "एटीआर 15.1 है"), 1.0)
         self.assertFalse(sync_gate._near_token("हद", "अग"))
         self.assertFalse(sync_gate._near_token("कारोबारी", "व्यापारी"))
         self.assertGreater(sync_gate._edit_distance("कारोबारी", "व्यापारी", 2), 2)

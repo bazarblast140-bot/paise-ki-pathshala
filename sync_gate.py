@@ -261,6 +261,9 @@ def _edit_distance(a, b, limit):
     return prev[-1]
 
 
+_NUMERIC = re.compile(r"\d+(?:\.\d+)?")
+
+
 def _near_token(src, heard):
     """True for the same token, or a Whisper spelling of the same Hindi word.
 
@@ -270,7 +273,8 @@ def _near_token(src, heard):
     """
     if src == heard:
         return True
-    if str(src).isdigit() or str(heard).isdigit():
+    # Decimals too: 15.7 must not cover 15.1, 23.5 must not cover 23.6.
+    if _NUMERIC.fullmatch(str(src)) or _NUMERIC.fullmatch(str(heard)):
         return False
     src, heard = _fold_token(src), _fold_token(heard)
     if src == heard:
