@@ -175,6 +175,10 @@ class GateBeforeTtsTests(unittest.TestCase):
             (run / "self_review.json").write_text(
                 json.dumps({"public_ok": True, "narration_fallback": True}), encoding="utf-8")
             self.assertFalse(review_gate.files_allow_public(run, "short"))
+            (run / "self_review.json").write_text(
+                json.dumps({"public_ok": True, "narration_source": "fallback", "overall": 96.7}),
+                encoding="utf-8")
+            self.assertFalse(review_gate.files_allow_public(run, "short"))
 
 
 class SlotPaidCallTests(unittest.TestCase):
@@ -276,6 +280,87 @@ class SlotPaidCallTests(unittest.TestCase):
         window = publish[publish.index("DeepSeek balance"):publish.index("DeepSeek balance") + 400]
         self.assertIn("steps.guard.outputs.taken != 'true'", window)
         self.assertIn("run/credits.json", publish)
+
+
+# Slots held on main. Clock is inside the 45-minute to 6-hour lead window
+# for that slot, so --next would select it if the hold were ignored.
+_HELD_SLOTS = (
+    ("2026-10-02", "16:00", datetime(2026, 10, 2, 13, 0)),
+    ("2026-10-02", "21:00", datetime(2026, 10, 2, 18, 0)),
+    ("2026-10-03", "08:30", datetime(2026, 10, 3, 5, 30)),
+    ("2026-10-03", "16:00", datetime(2026, 10, 3, 13, 0)),
+    ("2026-10-03", "21:00", datetime(2026, 10, 3, 18, 0)),
+)
+
+
+class RealLedgerHoldTests(unittest.TestCase):
+    def test_next_skips_every_held_slot_on_the_real_ledger(self):
+        ledger_path = ROOT / "data" / "published.json"
+        self.assertEqual(slot_guard.LEDGER.resolve(), ledger_path.resolve())
+        entries = json.loads(ledger_path.read_text(encoding="utf-8"))
+        holds = [
+            e for e in entries
+            if isinstance(e, dict) and str(e.get("platform") or "").strip().lower() == "hold"
+        ]
+        for date, slot, _when in _HELD_SLOTS:
+            match = [
+                e for e in holds
+                if e.get("date_ist") == date and e.get("slot") == slot and e.get("video_id") is None
+            ]
+            self.assertEqual(len(match), 1, (date, slot))
+
+        posts = mock.Mock(side_effect=AssertionError("paid post"))
+        gets = mock.Mock(side_effect=AssertionError("paid get"))
+        claude = mock.Mock(side_effect=AssertionError("deepseek"))
+        for date, slot, naive in _HELD_SLOTS:
+            now = naive.replace(tzinfo=slot_guard.IST)
+            with self.subTest(slot=f"{date} {slot}"):
+                self.assertIsNone(slot_guard.next_unfilled(now, entries))
+                self.assertIsNone(slot_guard.next_unfilled(now, holds))
+                out = io.StringIO()
+                err = io.StringIO()
+                with mock.patch.object(slot_guard, "_now", return_value=now), \
+                     mock.patch.object(common, "claude", claude), \
+                     mock.patch("requests.post", posts), \
+                     mock.patch("requests.get", gets), \
+                     redirect_stdout(out), redirect_stderr(err):
+                    slot_guard.main(["--next"])
+                text = out.getvalue()
+                self.assertIn("taken=true", text)
+                self.assertNotIn(f"slot={slot}", text)
+                self.assertNotIn(f"date_ist={date}", text)
+                self.assertIn("no unfilled slot", err.getvalue())
+
+                env = {
+                    "PUBLISH_VISIBILITY": "public",
+                    "PUBLISH_SLOT_IST": slot,
+                    "PUBLISH_DATE_IST": date,
+                }
+                with tempfile.TemporaryDirectory() as tmp:
+                    credits = Path(tmp) / "credits.json"
+                    log = io.StringIO()
+                    with mock.patch.dict(os.environ, env), \
+                         mock.patch.object(credit_log, "PATH", credits), \
+                         mock.patch.object(run_pipeline, "run", side_effect=AssertionError("stage")), \
+                         mock.patch.object(common, "claude", claude), \
+                         mock.patch("requests.post", posts), \
+                         mock.patch("requests.get", gets), \
+                         redirect_stdout(log):
+                        with self.assertRaises(SystemExit) as caught:
+                            run_pipeline.main()
+                    self.assertEqual(caught.exception.code, 0)
+                    skipped = log.getvalue()
+                    self.assertIn(date, skipped)
+                    self.assertIn(slot, skipped)
+                    self.assertIn("before paid", skipped)
+                    self.assertIn("deepseek_calls=0", skipped)
+                    self.assertIn("elevenlabs_chars=0", skipped)
+                    saved = json.loads(credits.read_text(encoding="utf-8"))
+                    self.assertEqual(saved["deepseek_calls"], 0)
+                    self.assertEqual(saved["elevenlabs_characters_sent"], 0)
+        posts.assert_not_called()
+        gets.assert_not_called()
+        claude.assert_not_called()
 
 
 class DeepSeekCapTests(unittest.TestCase):

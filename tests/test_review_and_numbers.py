@@ -189,11 +189,14 @@ Hook ✓ | Facts ⚠️ (entry/SL/target ledger-mein hain par source nahi — il
 - India jurisdiction, non-SEBI channel — disclaimer line ok par "Not SEBI registered" mention add karna safe
 """
 
+# The 2-Oct Short was the LLM narration that passed the hook/teaching gate.
+# narration_source is the mark board_short writes before the soft override.
 HIGH_REVIEW = {
     "parts": {"hook": 100, "visual": 90, "accuracy": 100, "trend": None},
     "overall": 96.7,
     "passed": True,
     "public_ok": True,
+    "narration_source": "llm",
     "summary": "overall 96.7 (hook 100, visual 90, accuracy 100, trend skip)",
 }
 
@@ -311,6 +314,61 @@ class SoftJudgmentGateTests(unittest.TestCase):
         self.assertTrue(decision["public_ready"])
         self.assertTrue(decision["keep_model_report"])
         self.assertFalse(decision["soft_judgment_only"])
+
+    def test_fallback_blocks_the_soft_override_whatever_the_scores(self):
+        """#17's relaxation is only for gated LLM narration. A fallback flag wins."""
+        import self_review
+
+        llm = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), HIGH_REVIEW, "short")
+        self.assertTrue(llm["public_ready"])
+        self.assertTrue(llm["soft_judgment_only"])
+        self.assertTrue(review_gate.narration_is_gated_llm(HIGH_REVIEW))
+
+        cached = dict(HIGH_REVIEW)
+        cached["narration_source"] = "cache"
+        cache_decision = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), cached, "short")
+        self.assertTrue(cache_decision["public_ready"])
+
+        flagged = dict(HIGH_REVIEW)
+        flagged["narration_fallback"] = True
+        flagged["public_ok"] = True
+        self.assertFalse(review_gate.self_review_clears_high_bar(flagged))
+        self.assertFalse(review_gate.narration_is_gated_llm(flagged))
+        blocked = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), flagged, "short")
+        self.assertFalse(blocked["public_ready"])
+        self.assertEqual(blocked["exit_code"], 2)
+        self.assertFalse(blocked["soft_judgment_only"])
+        self.assertTrue(any("fallback" in r for r in blocked["reasons"]))
+
+        ready = "VERDICT: [READY TO PUBLISH]\n\nHook is specific.\n"
+        ready_blocked = review_gate.decide(ready, True, _script(), flagged, "short")
+        self.assertFalse(ready_blocked["public_ready"])
+
+        sourced = dict(HIGH_REVIEW)
+        sourced["narration_source"] = "fallback"
+        sourced["public_ok"] = True
+        self.assertTrue(review_gate.narration_is_fallback(sourced))
+        source_blocked = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), sourced, "short")
+        self.assertFalse(source_blocked["public_ready"])
+
+        unmarked = dict(HIGH_REVIEW)
+        unmarked.pop("narration_source")
+        self.assertFalse(review_gate.narration_is_gated_llm(unmarked))
+        self.assertTrue(review_gate.self_review_clears_high_bar(unmarked))
+        no_source = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), unmarked, "short")
+        self.assertFalse(no_source["public_ready"])
+        self.assertIn("gated LLM", " ".join(no_source["reasons"]))
+
+        rejected = self_review._reject_fallback(
+            {"narration_fallback": True, "source": "fallback"},
+            dict(HIGH_REVIEW),
+        )
+        self.assertGreaterEqual(rejected["overall"], 90)
+        self.assertFalse(rejected["public_ok"])
+        self.assertTrue(rejected["narration_fallback"])
+        hard_fail = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), rejected, "short")
+        self.assertFalse(hard_fail["public_ready"])
+        self.assertFalse(review_gate.self_review_clears_high_bar(rejected))
 
     def test_below_bar_self_review_still_blocks_a_ready_verdict(self):
         text = "VERDICT: [READY TO PUBLISH]\n\nHook is specific.\n"

@@ -7,9 +7,10 @@ or a template line that lists both READY and NEEDS FIX is not a verdict.
 
 A Short whose deterministic self-review is already at the high bar below is
 not blocked when the AI's only notes are judgment calls (thumbnail, tone,
-optional labels). Hard compliance, fact, and safety failures still block,
-including when that self-review is perfect. The pass bar in self_review.py
-(part 60 / overall 75) does not change.
+optional labels), and only when that narration is the gated LLM script.
+Hard compliance, fact, and safety failures still block, including when that
+self-review is perfect. A topic-card fallback blocks even at the high bar.
+The pass bar in self_review.py (part 60 / overall 75) does not change.
 """
 import json
 import re
@@ -246,8 +247,37 @@ def soft_judgment_only(text):
     return has_judgment_calls(text)
 
 
+def narration_is_fallback(self_review):
+    """True when this review is a topic-card template, not a gated LLM script."""
+    if not isinstance(self_review, dict):
+        return False
+    if self_review.get("narration_fallback") is True:
+        return True
+    for key in ("narration_source", "source"):
+        if str(self_review.get(key) or "").strip().lower() == "fallback":
+            return True
+    return False
+
+
+def narration_is_gated_llm(self_review):
+    """True only for the LLM narration that passed the hook/teaching gate.
+
+    board_short writes narration_source as llm or cache after that gate.
+    A missing source is not that mark. A fallback flag wins even if the
+    source was left as llm and the numeric scores are at the high bar.
+    """
+    if not isinstance(self_review, dict) or narration_is_fallback(self_review):
+        return False
+    source = str(
+        self_review.get("narration_source") or self_review.get("source") or ""
+    ).strip().lower()
+    return source in ("llm", "cache")
+
+
 def self_review_clears_high_bar(self_review):
     """True when a passing Short review is already clean, not merely above 75."""
+    if narration_is_fallback(self_review):
+        return False
     if not isinstance(self_review, dict) or not self_review.get("public_ok"):
         return False
     parts = self_review.get("parts")
@@ -296,8 +326,9 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
     line. Deterministic notes never upgrade a missing AI verdict to public.
 
     A parsed NEEDS FIX still blocks, except one case: the text is judgment
-    calls only, and a Short self-review is already at the high bar. Hard
-    compliance, fact, or safety findings block even then.
+    calls only, and a Short self-review is already at the high bar, and the
+    narration is the gated LLM script. Hard compliance, fact, or safety
+    findings block even then. A fallback flag blocks whatever the scores.
     """
     reasons = []
     text = ai_text or ""
@@ -313,7 +344,7 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
         reasons.append(f"narration too short ({words} words)")
 
     review_ok = True
-    if isinstance(self_review, dict) and self_review.get("narration_fallback"):
+    if narration_is_fallback(self_review):
         review_ok = False
         reasons.append(
             "narration is a topic-card fallback, not an LLM script that passed the hook/teaching gate"
@@ -330,7 +361,12 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
     judgment_only = bool(ai_valid and parsed == "NEEDS_FIX" and soft_judgment_only(text))
     high = fmt == "short" and self_review_clears_high_bar(self_review)
     soft_override = bool(
-        judgment_only and high and review_ok and words >= 20 and not hard
+        judgment_only
+        and high
+        and review_ok
+        and narration_is_gated_llm(self_review)
+        and words >= 20
+        and not hard
     )
 
     public_ready = bool(ai_valid and parsed == "READY" and review_ok and words >= 20)
@@ -365,6 +401,8 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
             reasons.append("AI NEEDS FIX stands: self-review is not at the high bar")
         elif not judgment_only:
             reasons.append("AI NEEDS FIX stands: review is not judgment-calls only")
+        elif not narration_is_gated_llm(self_review):
+            reasons.append("AI NEEDS FIX stands: narration is not the gated LLM script")
 
     if words < 20:
         verdict_line = "VERDICT: [NEEDS FIX — narration empty or too short]"
@@ -407,6 +445,6 @@ def files_allow_public(run_dir, fmt):
         return False
     if fmt == "short":
         review = _load_json(run_dir / "self_review.json")
-        if not review or not review.get("public_ok") or review.get("narration_fallback"):
+        if not review or not review.get("public_ok") or narration_is_fallback(review):
             return False
     return True
