@@ -428,10 +428,15 @@ class LayoutGateTests(unittest.TestCase):
             img = scene_frames._ladder_moving(lesson, phase)
             self._labels_clear(img)
             nums = set()
+            blob = " ".join(layer.get("text") or "" for layer in img.text_layers)
             for layer in img.text_layers:
                 if layer.get("quantity") == "distance":
                     nums.update(re.findall(r"\d+(?:\.\d+)?", layer.get("text") or ""))
             self.assertLessEqual(len(nums), 1, (phase, nums))
+            if phase < 0.9:
+                self.assertNotIn("पॉइंट", blob)
+            else:
+                self.assertIn(f"दूरी {lesson['distance']} पॉइंट", blob)
 
     def _labels_clear(self, img):
         blob = " ".join(layer.get("text") or "" for layer in img.text_layers)
@@ -487,6 +492,13 @@ class LayoutGateTests(unittest.TestCase):
         scene_frames._text(pair, 200, 300, "दूरी  23.5", (255, 220, 40), 36, band=False, quantity="distance")
         scene_frames._text(pair, 200, 420, "20.8", (255, 220, 40), 36, band=False, quantity="distance")
         self.assertTrue(any("two values" in note for note in scene_frames.frame_layout_notes(pair)))
+        orphan = scene_frames._blank()
+        scene_frames._text(orphan, 540, 400, "पॉइंट", (255, 255, 255), 32, anchor="mt", band=False)
+        self.assertTrue(any("lone unit" in note for note in scene_frames.frame_layout_notes(orphan)))
+        named = scene_frames._blank()
+        scene_frames._text(named, 540, 300, "23.5", (255, 220, 40), 96, anchor="mt", band=False)
+        scene_frames._text(named, 540, 460, "पॉइंट", (255, 255, 255), 36, anchor="mt", band=False)
+        self.assertEqual(scene_frames.frame_layout_notes(named), [])
 
     def test_a_short_card_is_empty_background_and_the_atr_card_is_not(self):
         import numpy as np

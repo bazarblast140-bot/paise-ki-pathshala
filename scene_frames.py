@@ -650,8 +650,44 @@ def _highlight(img, y, alpha=64):
     _mark_shape(img, (x0, top, x1, top + height), alpha, "highlight")
 
 
+_UNIT_WORDS = {"पॉइंट", "रुपये", "शेयर"}
+
+
+def _lone_unit_word(text):
+    """True when the whole sprite is a unit and it carries no number."""
+    raw = str(text or "").strip()
+    if not raw or re.search(r"\d", raw):
+        return False
+    words = re.findall(r"[\u0900-\u097F]+", raw)
+    return len(words) == 1 and words[0] in _UNIT_WORDS
+
+
+def _number_only(text):
+    raw = str(text or "").strip().replace(",", "").replace(" ", "")
+    return bool(re.fullmatch(r"₹?\d+(?:\.\d+)?", raw))
+
+
+def _unit_labels_a_figure(layer, layers):
+    """A big figure directly above the unit is the number it names."""
+    box = layer.get("box")
+    if not box:
+        return False
+    mid = (float(box[0]) + float(box[2])) / 2.0
+    for other in layers:
+        if other is layer or not _number_only(other.get("text")):
+            continue
+        ob = other.get("box")
+        if not ob:
+            continue
+        other_mid = (float(ob[0]) + float(ob[2])) / 2.0
+        gap = float(box[1]) - float(ob[3])
+        if abs(other_mid - mid) < 180 and -8 <= gap <= 360:
+            return True
+    return False
+
+
 def frame_layout_notes(img):
-    """Opaque covers, empty boxes, and two numbers for one quantity."""
+    """Opaque covers, empty boxes, two numbers for one quantity, and a lone unit."""
     layers = [
         layer for layer in (getattr(img, "text_layers", None) or [])
         if layer.get("text") and layer.get("box") and not layer.get("faint")
@@ -685,6 +721,10 @@ def frame_layout_notes(img):
     for key, nums in groups.items():
         if len(nums) > 1:
             notes.append("two values for " + key + ": " + ", ".join(sorted(nums)))
+    for layer in layers:
+        if _lone_unit_word(layer.get("text")) and not _unit_labels_a_figure(layer, layers):
+            notes.append("lone unit word with no number")
+            break
     return notes
 
 
@@ -790,21 +830,23 @@ def _ladder_moving(lesson, phase):
     _bracket(img, 930, y_of(entry), tip, GOLD)
     _text(img, 150, _cy(230), "कीमत की सीढ़ी", K.YELLOW, 44, anchor="lt")
     _text(img, 540, _cy(300), f"{lesson['multiple']} गुना", K.YELLOW, 36, anchor="mt")
-    _ladder_labels(img, lesson, y_of, phase >= 0.35, phase >= 0.70)
+    # SL is already drawn. Counting it as lesson text keeps this beat matched
+    # to the voice once the distance label is hidden.
+    _ladder_labels(img, lesson, y_of, True, phase >= 0.70)
     final = float(lesson["distance"])
     shown = final * grown
     if abs(shown - final) < 0.05:
         _text(
-            img, 540, _cy(390), f"दूरी  {lesson['distance']}", K.YELLOW, 40,
+            img, 540, _cy(390), f"दूरी {lesson['distance']} पॉइंट", K.YELLOW, 40,
             anchor="mt", quantity="distance",
         )
     elif phase >= 0.08:
         # Above the wash, at the bracket tip, so the wash does not cover the figure.
+        # The distance label stays off until this counter lands.
         _text(
             img, 948, tip - 86, f"{shown:.1f}", GOLD, 32, anchor="lt",
             role="meter", quantity="distance",
         )
-        _text(img, 540, _cy(390), "पॉइंट", K.INK, 32, anchor="mt")
     return _finish(img, "ladder")
 
 
