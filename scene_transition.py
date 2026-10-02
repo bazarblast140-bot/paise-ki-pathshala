@@ -195,6 +195,14 @@ def sliced_glyph_notes(a, b, t=0.5, mode="wipe", direction="left"):
     return notes
 
 
+def _posed(img, end):
+    """Still used at a wipe. An animated scene enters at its start and leaves at its end."""
+    anim = getattr(img, "animate", None)
+    if anim is None:
+        return img
+    return anim(1.0 if end else 0.0)
+
+
 def transition_faults(images, transitions):
     """Check the midpoint of every transition. A sliced line is a fault."""
     faults = []
@@ -202,7 +210,7 @@ def transition_faults(images, transitions):
     for i in range(len(images) - 1):
         name = names[i % len(names)]
         for t in (0.5, 0.82):
-            notes = sliced_glyph_notes(images[i], images[i + 1], t, name)
+            notes = sliced_glyph_notes(_posed(images[i], True), _posed(images[i + 1], False), t, name)
             if notes:
                 faults.append(f"{i}:{name}@{t:.2f}:{notes[0]}")
                 break
@@ -239,7 +247,8 @@ def render_at(images, durations, t, transitions=(), fade_s=0.28, overlay=None):
             overlay(frame, 0.0 if total <= 0 else min(1.0, t / total))
         return frame
     i, u = hit
-    frame = composite(images[i], images[i + 1], u, names[i % len(names)])
+    # Pose animated neighbours so a wipe does not flash the other end of the move.
+    frame = composite(_posed(images[i], True), _posed(images[i + 1], False), u, names[i % len(names)])
     if overlay is not None:
         overlay(frame, 0.0 if total <= 0 else min(1.0, t / total))
     return frame

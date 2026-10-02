@@ -433,6 +433,20 @@ def _ladder_ys(lesson):
     return entry, sl, target, y_of
 
 
+def _band(img, y, alpha):
+    """Gold row behind the level being drawn. Geometry, not a text sprite."""
+    alpha = int(max(0, min(180, alpha)))
+    if alpha < 8:
+        return
+    height = 58
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    top = int(round(float(y) - height / 2.0))
+    ImageDraw.Draw(overlay).rounded_rectangle(
+        [188, top, 908, top + height], 16, fill=(212, 168, 72, alpha),
+    )
+    img.paste(overlay, (0, 0), overlay)
+
+
 def _bracket(img, x, y0, y1, color):
     draw = ImageDraw.Draw(img)
     top, bot = (y0, y1) if y0 <= y1 else (y1, y0)
@@ -532,6 +546,59 @@ def _ladder_moving(lesson, phase):
     img = _finish(img, "ladder")
     _push(img, (150, 380, 990, 1020), 1.0 + 0.06 * phase)
     return img
+
+
+def _ladder_reveal(lesson, phase):
+    """Entry, SL, then the upper line draw on while a gold row travels with them.
+
+    phase 1 is the bracket's first frame, so the handoff does not pop.
+    """
+    phase = max(0.0, min(1.0, float(phase)))
+    if phase >= 0.999:
+        return _ladder_moving(lesson, 0.0)
+    entry, sl, target, y_of = _ladder_ys(lesson)
+    img = _blank()
+    _card(img)
+    draw = ImageDraw.Draw(img)
+    draw.line([(200, 420), (200, 960)], fill=(88, 100, 120), width=3)
+    rows = (
+        (entry, K.TARGET_GREEN, f"एंट्री  {lesson['entry']}"),
+        (sl, K.SL_RED, f"एसएल  {lesson['sl']}"),
+        (target, K.BLUE, f"ऊपर  {lesson['target']}"),
+    )
+    cuts = (0.34, 0.67)
+    if phase < cuts[0]:
+        local = _ease(phase / cuts[0])
+        fracs = (local, 0.0, 0.0)
+        band_y = y_of(entry)
+        band_a = 150 * local
+    elif phase < cuts[1]:
+        local = _ease((phase - cuts[0]) / (cuts[1] - cuts[0]))
+        fracs = (1.0, local, 0.0)
+        band_y = y_of(entry) + (y_of(sl) - y_of(entry)) * local
+        band_a = 150
+    else:
+        local = _ease((phase - cuts[1]) / (1.0 - cuts[1]))
+        fracs = (1.0, 1.0, local)
+        band_y = y_of(sl) + (y_of(target) - y_of(sl)) * local
+        fade = max(0.0, (phase - 0.90) / 0.10)
+        band_a = 150 * (1.0 - _ease(fade))
+    _band(img, band_y, band_a)
+    pending = []
+    for (price, col, label), frac in zip(rows, fracs):
+        if frac <= 0.02:
+            continue
+        y = y_of(price)
+        x1 = 230 + 470 * frac
+        draw.line([(230, y), (x1, y)], fill=col, width=4)
+        if frac > 0.92:
+            draw.line([(860, y), (886, y)], fill=(120, 132, 150), width=3)
+        pending.append((y, col, label, frac))
+    _text(img, 100, 220, "कीमत की सीढ़ी", K.YELLOW, 42, anchor="lt")
+    for y, col, label, frac in pending:
+        if frac > 0.82:
+            _text(img, 250, y - 42, label, col, 30, anchor="lt")
+    return _finish(img, "ladder")
 
 
 def _ladder(lesson, step, total):
@@ -672,7 +739,18 @@ def _atr_frames(beat, n, lesson):
         step = seen.get(kind, 0)
         total = kinds.count(kind)
         img = _BUILDERS[kind](lesson, step, total)
-        if kind == "ladder" and step in settled:
+        if kind == "ladder" and ladder_total > 1 and step not in settled:
+            # The first ladder cuts only added a line. A gold row now travels
+            # with each stroke so a four-second span cannot stay a still.
+            drawing = [s for s in range(ladder_total) if s not in settled]
+            slot = drawing.index(step)
+            p0 = slot / len(drawing)
+            p1 = (slot + 1) / len(drawing)
+            img = _ladder_reveal(lesson, p1)
+            img.animate = (lambda u, start=p0, end=p1: _ladder_reveal(
+                lesson, start + (end - start) * max(0.0, min(1.0, float(u)))
+            ))
+        elif kind == "ladder" and step in settled:
             slot = settled.index(step)
             p0 = slot / len(settled)
             p1 = (slot + 1) / len(settled)
