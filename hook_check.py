@@ -69,6 +69,20 @@ def _canon_number(value):
     return f"{number:.4f}".rstrip("0").rstrip(".")
 
 
+# udaharan and galti may use these factors even when the card does not list them.
+# A result is allowed only after the written expression is evaluated.
+STANDARD_MULTIPLIERS = (1, 1.5, 2, 3)
+_EXPR_OP = r"[+\-−–*×x/÷]"
+_EXPR_NUM = r"\d[\d,]*(?:\.\d+)?"
+_EXPR_RE = re.compile(
+    rf"({_EXPR_NUM}(?:\s*{_EXPR_OP}\s*{_EXPR_NUM})+)(?:\s*=\s*({_EXPR_NUM}))?"
+)
+
+
+def standard_multiplier_numbers():
+    return {_canon_number(value) for value in STANDARD_MULTIPLIERS}
+
+
 def _topic_blob(topic):
     parts = [str((topic or {}).get("topic") or "")]
     parts.extend(str(x) for x in ((topic or {}).get("thumb") or []))
@@ -124,6 +138,132 @@ def worked_example_numbers(topic):
     return found | derived
 
 
+def _same_number(left, right):
+    try:
+        return abs(float(left) - float(right)) <= 1e-6
+    except (TypeError, ValueError):
+        return False
+
+
+def _eval_arithmetic(expr, allowed):
+    """Evaluate a left-to-right sum of products. Every operand must be allowed.
+
+    Multiplication and division bind first, so 200 − 1.5×2 is 197, not 397.
+    """
+    tokens = re.findall(rf"{_EXPR_NUM}|{_EXPR_OP}", expr or "")
+    if len(tokens) < 3 or len(tokens) % 2 == 0:
+        return None
+    values = []
+    for token in tokens[0::2]:
+        try:
+            number = float(token.replace(",", ""))
+        except ValueError:
+            return None
+        if _canon_number(number) not in allowed:
+            return None
+        values.append(number)
+    ops = tokens[1::2]
+    if len(ops) != len(values) - 1:
+        return None
+    reduced = [values[0]]
+    add_ops = []
+    index = 0
+    while index < len(ops):
+        op = ops[index]
+        rhs = values[index + 1]
+        if op in ("*", "×", "x", "/", "÷"):
+            left = reduced.pop()
+            if op in ("/", "÷") and rhs == 0:
+                return None
+            product = left * rhs if op in ("*", "×", "x") else left / rhs
+            reduced.append(product)
+        else:
+            reduced.append(rhs)
+            add_ops.append("-" if op in ("-", "−", "–") else "+")
+        index += 1
+    result = reduced[0]
+    for op, rhs in zip(add_ops, reduced[1:]):
+        result = result + rhs if op == "+" else result - rhs
+    return result
+
+
+def verified_arithmetic_numbers(text, allowed):
+    """Results of expressions in `text` whose operands are already allowed.
+
+    A stated equals-value is kept only when it matches the evaluation.
+    200 − 1.5×2 = 197 passes. The same expression = 300 does not.
+    """
+    allowed = {_canon_number(float(str(item).replace(",", ""))) for item in (allowed or set()) if str(item).strip()}
+    found = set()
+    for match in _EXPR_RE.finditer(text or ""):
+        value = _eval_arithmetic(match.group(1), allowed)
+        if value is None:
+            continue
+        stated = match.group(2)
+        if stated is None:
+            found.add(_canon_number(value))
+            continue
+        stated_value = float(stated.replace(",", ""))
+        if _same_number(value, stated_value):
+            found.add(_canon_number(stated_value))
+    return found
+
+
+def worked_example_sentence(topic):
+    """The udaharan line the model should speak verbatim or near-verbatim.
+
+    Built only from the card. A market-data topic does not get a multiplier
+    formula; concept topics may show entry − factor × risk when that equals
+    the stop already on the card.
+    """
+    if _market_claim(topic):
+        nums = teaching_allowed_numbers(topic)
+
+        def key(value):
+            try:
+                return (0, float(value))
+            except (TypeError, ValueError):
+                return (1, str(value))
+
+        shown = ", ".join(sorted(nums, key=key)[:12])
+        return f"उदाहरण: {shown}।" if shown else "उदाहरण: कार्ड का आंकड़ा ही बोलो।"
+    blob = _topic_blob(topic)
+    entry = _labelled_level(blob, ["entry", "एंट्री", "buy"])
+    stop = _labelled_level(blob, ["SL", "stop(?:-loss)?", "स्टॉप"])
+    target = _labelled_level(blob, ["target", "टारगेट"])
+    parts = ["उदाहरण:"]
+    if entry is not None and stop is not None:
+        risk = abs(entry - stop)
+        if _canon_number(risk) in standard_multiplier_numbers():
+            parts.append(
+                f"एंट्री {_canon_number(entry)}, रिस्क {_canon_number(risk)}, "
+                f"एसएल = {_canon_number(entry)} − 1×{_canon_number(risk)} = {_canon_number(stop)}"
+            )
+        else:
+            parts.append(
+                f"एंट्री {_canon_number(entry)}, एसएल {_canon_number(stop)}, "
+                f"रिस्क {_canon_number(entry)} − {_canon_number(stop)} = {_canon_number(risk)}"
+            )
+    elif entry is not None:
+        parts.append(f"एंट्री {_canon_number(entry)}")
+    if entry is not None and target is not None:
+        reward = abs(target - entry)
+        parts.append(
+            f"लक्ष्य {_canon_number(target)}, रिवॉर्ड {_canon_number(target)} − {_canon_number(entry)} = {_canon_number(reward)}"
+        )
+    qty_match = re.search(r"(\d[\d,]*)\s*शेयर", blob)
+    if qty_match and entry is not None and stop is not None and target is not None:
+        qty = float(qty_match.group(1).replace(",", ""))
+        risk_total = abs(entry - stop) * qty
+        reward_total = abs(target - entry) * qty
+        parts.append(
+            f"{_canon_number(qty)} शेयर पर रिस्क {_canon_number(risk_total)} और रिवॉर्ड {_canon_number(reward_total)}"
+        )
+    if len(parts) == 1:
+        return "उदाहरण: कार्ड पर दिया हिसाब बोलो।"
+    return " ".join(parts) + "।"
+
+
 def _market_claim(topic):
     if not isinstance(topic, dict) or topic.get("_atr"):
         return True
@@ -155,20 +295,28 @@ def teaching_allowed_numbers(topic, sourced=None):
 def live_number_faults(beats, topic, order, allowed=None):
     """Numbers that were not computed from the topic or the sourced data.
 
-    udaharan and galti have no label exception. An invented figure fails
-    even when the sentence says उदाहरण. Real market data stays on the
-    sourced set only.
+    udaharan and galti may also use a standard multiplier (1, 1.5, 2, 3) or a
+    result that the beat's own expression evaluates to. A label does not add
+    a number. Real market data stays on the sourced set only: no multiplier
+    and no extra arithmetic.
     """
     card = set(allowed if allowed is not None else allowed_numbers(topic))
     sourced = set()
     if allowed is not None:
         sourced = set(allowed) - set(allowed_numbers(topic))
     teaching = teaching_allowed_numbers(topic, sourced=sourced)
+    market = _market_claim(topic)
     extra = set()
     for beat in order:
         text = str((beats or {}).get(beat) or "")
         nums = extract_numbers(text)
-        ok = teaching if beat in TEACHING_BEATS else card
+        if beat in TEACHING_BEATS and not market:
+            ok = set(teaching) | standard_multiplier_numbers()
+            ok |= verified_arithmetic_numbers(text, ok)
+        elif beat in TEACHING_BEATS:
+            ok = set(teaching)
+        else:
+            ok = card
         extra |= nums - ok
     return extra
 
@@ -192,9 +340,24 @@ def unlabelled_example_beats(beats, order):
     return found
 
 
-def example_card_lines(topic):
-    """Scene card for the worked example: the word उदाहरण plus the computed figures."""
-    nums = teaching_allowed_numbers(topic)
+def example_card_lines(topic, spoken=""):
+    """Scene card: the word उदाहरण plus the figures this beat actually says.
+
+    With no spoken line yet, the card lists the code-computed set. After a
+    trim, only numbers still in that beat stay on screen, so the sync gate
+    sees the same figures as the narration.
+    """
+    base = set(teaching_allowed_numbers(topic))
+    said = extract_numbers(spoken)
+    if said:
+        if _market_claim(topic):
+            nums = said & base
+        else:
+            ok = set(base) | standard_multiplier_numbers()
+            ok |= verified_arithmetic_numbers(spoken, ok)
+            nums = said & ok
+    else:
+        nums = base
 
     def key(value):
         try:

@@ -37,6 +37,30 @@ def _words(n, salt, lead=""):
     return " ".join(parts + ["नियम"] * (n - len(parts)))
 
 
+def _packed(n, salt, lead=""):
+    """n words split into short sentences so a long beat can be trimmed from the end."""
+    counters = [
+        "एक", "दो", "तीन", "चार", "पांच", "छह", "सात", "आठ", "नौ", "दस",
+        "ग्यारह", "बारह", "तेरह", "चौदह", "पंद्रह", "सोलह", "सत्रह", "अठारह",
+    ]
+    lead = " ".join(str(lead).split())
+    parts = []
+    count = len(lead.split()) if lead else 0
+    if lead:
+        if lead[-1] not in "।?!":
+            lead += "।"
+        parts.append(lead)
+    index = 0
+    while count < n:
+        need = min(4, n - count)
+        mark = counters[index] if index < len(counters) else "और"
+        words = [salt, mark, "नियम", "कदम"][:need]
+        parts.append(" ".join(words) + "।")
+        count += need
+        index += 1
+    return " ".join(parts)
+
+
 def _script(hook, udaharan, karein):
     return {
         "title": "सेटअप का हिसाब समझिए",
@@ -94,17 +118,21 @@ class UdaharanNumberTests(unittest.TestCase):
             topic,
         )
         self.assertTrue(any("udaharan" in item and "उदाहरण" in item for item in fails))
-        self.assertIn("udaharan", board_short.beats_to_rewrite(
-            {"title": "सेटअप का हिसाब समझिए", "hook_line": HOOK, "beats": {
-                "hook": _words(26, "हुक", HOOK),
-                "pehchan": _words(36, "पहचान"),
-                "matlab": _words(40, "मतलब"),
-                "udaharan": bare["udaharan"] + " " + " ".join(["नियम"] * 40),
-                "galti": _words(42, "गलती"),
-                "karein": _words(39, "करें"),
-            }},
-            topic,
-        ))
+        draft = {"title": "सेटअप का हिसाब समझिए", "hook_line": HOOK, "beats": {
+            "hook": _words(26, "हुक", HOOK),
+            "pehchan": _words(36, "पहचान"),
+            "matlab": _words(40, "मतलब"),
+            "udaharan": bare["udaharan"] + " " + " ".join(["नियम"] * 40),
+            "galti": _words(42, "गलती"),
+            "karein": _words(39, "करें"),
+        }}
+        self.assertNotIn("udaharan", board_short.beats_to_rewrite(draft, topic))
+        board_short.apply_live_draft(draft, topic)
+        self.assertEqual(
+            hook_check.unlabelled_example_beats(draft["beats"], ("udaharan", "galti")),
+            [],
+        )
+        self.assertEqual(board_short.check_narration(draft, topic), [])
 
     def test_scene_card_labels_the_computed_figures(self):
         topic = _topic()
@@ -134,60 +162,64 @@ class UdaharanNumberTests(unittest.TestCase):
         self.assertIn("198", blob)
         self.assertIn("204", blob)
 
-    def test_one_point_five_and_300_fail_and_the_repair_rewrites_udaharan(self):
+    def test_a_312_word_hook_44_script_is_trimmed_into_range(self):
         topic = _topic()
-        bad = _script(hook=35, udaharan=48, karein=52)
-        fails = board_short.check_narration(bad, topic)
-        self.assertTrue(any("1.5" in item and "300" in item for item in fails))
-        rewrite = board_short.beats_to_rewrite(bad, topic)
-        self.assertIn("udaharan", rewrite)
-        self.assertNotIn("pehchan", rewrite)
-        self.assertNotIn("matlab", rewrite)
-        self.assertNotIn("galti", rewrite)
-
-        good = _script(hook=26, udaharan=48, karein=39)
-        good["beats"]["udaharan"] = _fixed_udaharan()
-        good["beats"]["pehchan"] = "यह रखना है " + _words(33, "पहचानबदल")
+        example = hook_check.worked_example_sentence(topic)
+        long = {
+            "title": "सेटअप का हिसाब समझिए",
+            "hook_line": HOOK,
+            "beats": {
+                "hook": _packed(44, "हुक", HOOK),
+                "pehchan": _packed(50, "पहचान"),
+                "matlab": _packed(55, "मतलब"),
+                "udaharan": _packed(60, "उदाहरणवाक्य", example),
+                "galti": _packed(48, "गलती"),
+                "karein": _packed(55, "करें"),
+            },
+        }
+        raw = " ".join(long["beats"].values())
+        self.assertEqual(len(raw.split()), 312)
+        self.assertEqual(len(long["beats"]["hook"].split()), 44)
         calls = []
 
         def fake(system, user, model=None, max_tokens=2000, retries=3, attempts=None):
             calls.append({"system": system, "user": user})
-            return bad if len(calls) == 1 else good
+            return long
 
         with tempfile.TemporaryDirectory() as tmp, \
              mock.patch.object(board_short, "RUN", Path(tmp)), \
              mock.patch.object(board_short, "claude_json", side_effect=fake), \
+             mock.patch.object(board_short, "_content_ok", return_value={"passed": True, "summary": "ok"}), \
              mock.patch.object(
                  board_short, "fallback_narration",
                  side_effect=AssertionError("template must not be built"),
              ):
             script, source = board_short.narration(topic, CFG)
-            self.assertFalse((Path(tmp) / "narration_block.json").exists())
         self.assertEqual(source, "llm")
-        self.assertEqual(len(calls), 2)
-        self.assertIn("allowed_numbers", calls[0]["user"])
-        self.assertNotIn("1.5", calls[0]["system"])
-        self.assertIn("200", calls[0]["system"])
-        repair = calls[1]["user"]
-        self.assertIn("REWRITE udaharan:", repair)
-        self.assertIn("A label does not make an invented number allowed", repair)
-        self.assertIn("KEEP pehchan VERBATIM", repair)
-        self.assertIn(bad["beats"]["pehchan"], repair)
-        allowed_line = next(line for line in repair.splitlines() if line.startswith("Allowed numbers:"))
-        self.assertIn("200", allowed_line)
-        self.assertIn("198", allowed_line)
-        self.assertIn("204", allowed_line)
-        self.assertNotIn("1.5", allowed_line)
-        self.assertNotIn("300", allowed_line)
-        self.assertEqual(script["beats"]["pehchan"], bad["beats"]["pehchan"])
-        self.assertNotIn("1.5", script["beats"]["udaharan"])
-        self.assertNotIn("300", script["beats"]["udaharan"])
-        self.assertIn("200", script["beats"]["udaharan"])
+        self.assertEqual(len(calls), 1)
+        self.assertIn(example, calls[0]["system"])
+        self.assertIn("udaharan_sentence", calls[0]["user"])
+        self.assertIn("verbatim", calls[0]["system"])
+        counts = {beat: len(script["beats"][beat].split()) for beat in board_short.LIVE_ORDER}
+        total = sum(counts.values())
+        self.assertGreaterEqual(total, 200)
+        self.assertLessEqual(total, 270)
+        self.assertLessEqual(counts["hook"], 34)
+        self.assertGreaterEqual(counts["hook"], 18)
+        self.assertTrue(script["beats"]["hook"].startswith(HOOK))
+        self.assertIn(example.strip("।"), script["beats"]["udaharan"])
+        self.assertTrue(script.get("_trim_notes"))
         self.assertEqual(board_short.check_narration(script, topic), [])
+        topic["_spoken_beats"] = script["beats"]
+        _head, sub = board_short.card_pair(topic, "udaharan")
+        self.assertIn("उदाहरण", sub)
+        for number in hook_check.extract_numbers(sub):
+            self.assertIn(number, hook_check.extract_numbers(script["beats"]["udaharan"]))
 
-    def test_a_second_repair_is_not_spent_and_the_template_stays_unused(self):
+    def test_an_invented_number_is_still_blocked_without_a_second_call(self):
         topic = _topic()
-        bad = _script(hook=35, udaharan=48, karein=52)
+        bad = _script(hook=26, udaharan=48, karein=39)
+        bad["beats"]["udaharan"] = _words(48, "उदाहरण में चार्ज 300")
         calls = []
 
         def fake(system, user, model=None, max_tokens=2000, retries=3, attempts=None):
@@ -204,9 +236,10 @@ class UdaharanNumberTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 board_short.narration(topic, CFG)
             block = json.loads((Path(tmp) / "narration_block.json").read_text(encoding="utf-8"))
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 1)
         self.assertTrue(block["blocked"])
-        self.assertIn("1.5", block["reason"])
+        self.assertIn("300", block["reason"])
+        self.assertNotIn("1.5", block["reason"])
         self.assertIn("topic-card", block["reason"])
 
     def test_a_label_does_not_admit_an_invented_number(self):
@@ -214,7 +247,7 @@ class UdaharanNumberTests(unittest.TestCase):
         labelled = {"udaharan": "मान लीजिए चार्ज 300 है।", "galti": "उदाहरण में चार्ज 1.5 है।"}
         self.assertEqual(
             hook_check.live_number_faults(labelled, topic, ("udaharan", "galti")),
-            {"300", "1.5"},
+            {"300"},
         )
         bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))
         cloud = next(item for item in bank["topics"] if item["key"] == "dark_cloud")
@@ -266,3 +299,61 @@ class UdaharanNumberTests(unittest.TestCase):
         )
         self.assertTrue(board_short.number_format_notes(
             ["एंट्री 200"], spoken="मान लीजिए चार्ज 300", caption=""))
+
+    def test_a_verified_multiplier_result_passes_and_a_wrong_result_does_not(self):
+        topic = _topic()
+        line = "उदाहरण: एंट्री 200, एसएल = 200 − 1.5×2 = 197।"
+        self.assertEqual(hook_check.live_number_faults({"udaharan": line}, topic, ("udaharan",)), set())
+        wrong = "उदाहरण: एंट्री 200, एसएल = 200 − 1.5×2 = 300।"
+        self.assertEqual(
+            hook_check.live_number_faults({"udaharan": wrong}, topic, ("udaharan",)),
+            {"300"},
+        )
+        real = {"key": "titan_2010", "cat": "REAL DATA", "topic": "Titan", "_live_short": True,
+                "beats": {}, "facts": ["close 100"], "thumb": []}
+        self.assertEqual(
+            hook_check.live_number_faults(
+                {"udaharan": "उदाहरण 100 − 1.5×2 = 97।"}, real, ("udaharan",)),
+            {"1.5", "2", "97"},
+        )
+
+    def test_missing_udaharan_label_is_inserted_before_the_gate(self):
+        topic = _topic()
+        script = _script(hook=26, udaharan=48, karein=39)
+        script["beats"]["udaharan"] = "एंट्री 200 है। रिस्क 2 है। " + " ".join(["नियम"] * 42)
+        script["beats"]["galti"] = "रिस्क 4 बिना लेबल। " + " ".join(["गलती"] * 38)
+        board_short.apply_live_draft(script, topic)
+        self.assertTrue(script["beats"]["udaharan"].startswith("उदाहरण "))
+        self.assertIn("उदाहरण रिस्क 2", script["beats"]["udaharan"])
+        self.assertTrue(script["beats"]["galti"].startswith("उदाहरण "))
+        self.assertEqual(
+            hook_check.unlabelled_example_beats(script["beats"], ("udaharan", "galti")),
+            [],
+        )
+        self.assertTrue(any("inserted उदाहरण" in note for note in script["_trim_notes"]))
+
+    def test_trimmed_card_matches_the_spoken_line_for_the_sync_gate(self):
+        import sync_gate
+        topic = _topic()
+        spoken = "उदाहरण एंट्री 200 एसएल 198 है।"
+        topic["_spoken_beats"] = {"udaharan": spoken, "galti": "उदाहरण रिस्क 2 है।"}
+        head, sub = board_short.card_pair(topic, "udaharan")
+        self.assertEqual(head, "उदाहरण")
+        self.assertIn("200", sub)
+        self.assertIn("198", sub)
+        self.assertNotIn("400", sub)
+        self.assertNotIn("300", sub)
+        words = []
+        cursor = 0.0
+        for word in spoken.split():
+            words.append({"word": word, "start": cursor, "end": cursor + 0.3})
+            cursor += 0.3
+        end = max(1.0, cursor)
+        report = sync_gate.check(
+            words,
+            [{"start": 0.0, "end": end, "beat": "udaharan", "kind": "ladder", "show": [sub]}],
+            {"udaharan": spoken},
+            {"udaharan": (0.0, end)},
+            [],
+        )
+        self.assertTrue(report["ok"], report["reason"])

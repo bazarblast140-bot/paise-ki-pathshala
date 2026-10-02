@@ -12,7 +12,8 @@ _EXTRA = {
 
 def _lines(topic, beat):
     if beat in hook_check.TEACHING_BEATS:
-        return hook_check.example_card_lines(topic)
+        spoken = str(((topic or {}).get("_spoken_beats") or {}).get(beat) or "")
+        return hook_check.example_card_lines(topic, spoken)
     pair = (topic.get("beats") or {}).get(beat)
     if isinstance(pair, (list, tuple)) and len(pair) >= 2:
         return str(pair[0]), str(pair[1])
