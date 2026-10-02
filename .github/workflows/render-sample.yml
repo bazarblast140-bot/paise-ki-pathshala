@@ -1,8 +1,8 @@
 name: Render sample (no upload)
 
-# Manual only. Renders one Short with the ElevenLabs voice from secrets and
-# uploads the mp4 as an artifact. It never uploads to YouTube or Instagram
-# and it never calls publish.py or publish_instagram.py.
+# PINNED BRANCH ONLY (pinned-known-good-4beat). Edge TTS dry render.
+# No ElevenLabs key, no DeepSeek key, no YouTube/Instagram upload, no git push.
+# Uploads final.mp4 and the script files as an Actions artifact only.
 on:
   workflow_dispatch:
     inputs:
@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -29,14 +31,23 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
       - name: Install deps
         run: pip install -r requirements.txt
-      - name: Render one Short
+      - name: Render one Short (Edge only)
         env:
           VIDEO_FORMAT: short
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_API_KEY: ""
+          DRY_RUN: "1"
         run: python board_short.py --key "${{ inputs.topic_key }}"
       - name: Upload the mp4
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sample-short
-          path: run/final.mp4
-          if-no-files-found: error
+          name: pinned-edge-render
+          path: |
+            run/final.mp4
+            run/tts_text.txt
+            run/narration.json
+            run/self_review.json
+            run/script.txt
+            run/spoken.txt
+            run/thumbnail.jpg
+          if-no-files-found: warn
