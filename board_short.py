@@ -1145,6 +1145,13 @@ def _cue_texts(text):
             glued = (bool(re.search(r"\d", word)) and nxt.strip("।.,?!") in UNITS) or (
                 word in ("करीब", "लगभग", "₹") and bool(re.search(r"\d", nxt))
             )
+            # A later figure gets its own cue, so the subtitle does not say 2350
+            # while the voice is still on 23.5.
+            cur_has_digit = any(re.search(r"\d", item) for item in cur)
+            if re.search(r"\d", word) and cur_has_digit and cur and not glued:
+                out.append(" ".join(cur))
+                cur = [word]
+                continue
             trial = cur + [word]
             lines = _wrap_caption(" ".join(trial), size)
             if len(lines) > 2 and cur and not glued:
@@ -1407,17 +1414,32 @@ def stale_data_notes(as_of, today, allow_stale_sample=False):
     return [f"stale market data as of {as_of}"]
 
 
-def _words_near(audio_words, t, radius=0.85):
-    if not audio_words:
-        return ""
+def _script_near(spoken, beat_times, audio_words, t, radius=0.85):
+    """Narration words due around t, spelled as the script, not as the transcript.
+
+    Whisper may split 2350 into 2 and 350. The gate compares the script's own
+    figures to the card.
+    """
     t = float(t)
-    picked = []
-    for word in audio_words:
-        start = float(word.get("start") or 0)
-        end = float(word.get("end") or start)
-        if end >= t - 0.05 and start <= t + radius:
-            picked.append(str(word.get("word") or ""))
-    return " ".join(picked)
+    parts = []
+    for beat in BEATS:
+        if beat not in (beat_times or {}):
+            continue
+        t0, t1 = (float(v) for v in beat_times[beat])
+        words = str((spoken or {}).get(beat) or "").split()
+        if not words:
+            continue
+        if audio_words:
+            starts = _align_starts(words, audio_words, t0, t1)
+        else:
+            dur = max(1e-6, t1 - t0)
+            starts = [t0 + dur * (i + 0.5) / len(words) for i in range(len(words))]
+        for word, start in zip(words, starts):
+            if start is None:
+                continue
+            if t - 0.05 <= float(start) <= t + radius:
+                parts.append(word)
+    return " ".join(parts)
 
 
 def _scene_pose_at(scenes, t):
@@ -1457,7 +1479,7 @@ def number_faults_for(scenes, spoken, beat_times, audio_words=None):
             if layer.get("text") and not layer.get("faint")
         ]
         caption = " ".join(cue.get("text") or "" for cue in cues_at(cues, t))
-        said = _words_near(audio_words, t)
+        said = _script_near(spoken, beat_times, audio_words, t)
         for note in number_format_notes(texts, said, caption):
             stamped = f"{note} at {t:.1f}s"
             if stamped not in seen:

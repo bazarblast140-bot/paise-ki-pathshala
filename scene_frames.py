@@ -1068,11 +1068,7 @@ def _takeaway(lesson):
     _text(img, 540, _cy(400), "दूरी", K.YELLOW, 56, anchor="mt")
     _text(img, 540, _cy(540), str(lesson["distance"]), K.YELLOW, 120, anchor="mt", quantity="distance")
     _text(img, 540, _cy(740), "पॉइंट", K.INK, 48, anchor="mt")
-    _text(
-        img, 540, _cy(880),
-        f"मात्रा {lesson['qty']} जोखिम {lesson['risk']}",
-        K.INK, 36, anchor="mt",
-    )
+    _text(img, 540, _cy(880), f"मात्रा {lesson['qty']}", K.INK, 36, anchor="mt")
     _lower_callout(img, "मात्रा इसी से")
     return _finish(img, "takeaway")
 
