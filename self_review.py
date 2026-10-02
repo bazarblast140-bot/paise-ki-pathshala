@@ -130,8 +130,13 @@ def score_accuracy(narration, topic, spec=None):
         extra |= hook_check.extract_numbers(str((narration or {}).get("hook_line") or "")) - allowed
     else:
         extra = hook_check.unsourced_numbers(spoken, topic, allowed=allowed)
+    extra |= hook_check.loss_recovery_pair_faults(spoken, topic)
+    notes = []
     if extra:
-        return 0, [f"numbers with no source: {sorted(extra)}"]
+        notes.append(f"numbers with no source: {sorted(extra)}")
+    notes.extend(hook_check.fact_contradiction_notes(spoken, topic))
+    if notes:
+        return 0, notes
     return 100, []
 
 
