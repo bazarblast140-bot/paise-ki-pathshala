@@ -7,8 +7,9 @@ Parts (each 0-100):
             facts or in the fetched series
   trend     only when data/trends.json lists themes or topic clusters;
             skipped when the file is absent or is an empty research snapshot
-  craft     no scene held past about 5s, scene count >= duration/4, and every
-            spoken beat names a number, level, or step
+  craft     no scene held past about 5s, scene count >= duration/4, every
+            spoken beat names a number, level, or step, a four-second span
+            changes the picture, and text sprites do not overlap
 
 Pass bar: every included part >= PART_BAR (60) and the mean >= OVERALL_BAR (75).
 Below the bar, the narration is regenerated up to MAX_ATTEMPTS times. Still
@@ -231,13 +232,17 @@ def score_content(topic, narration, spec=None, trends=None):
     return _reject_fallback(narration, _pack({"hook": hook, "accuracy": accuracy, "trend": trend}, notes))
 
 
-def score_craft(narration, overlays=None, scenes=None, labels=None):
+def score_craft(narration, overlays=None, scenes=None, labels=None, samples=None, text_frames=None):
     """0 when a scene sits too long, there are too few scenes, a beat is vague, or a label leaves the 6% margin.
 
     scenes=None derives the cut list from the on-screen beat spans, which is what
     the renderer does. An explicit static list is scored as given.
     labels=None skips the safe-area check. A list of boxes fails if any box
     crosses the 6% frame margin.
+    samples, when given, are (time, image) pairs. A span of about 4s with no
+    pixel change fails even if a cut sits inside it.
+    text_frames, when given, are (time, boxes). Two sprites that cover the same
+    pixels fail.
     """
     notes = []
     vague = scene_pace.vague_beats((narration or {}).get("beats"))
@@ -264,12 +269,28 @@ def score_craft(narration, overlays=None, scenes=None, labels=None):
     ok, scene_notes = scene_pace.check_scenes(planned, duration)
     if not ok:
         notes.extend(scene_notes)
+    if samples:
+        notes.extend(scene_pace.unchanged_spans(samples))
+    if text_frames:
+        import safe_area
+        for t, boxes in text_frames:
+            hits = safe_area.overlapping(boxes)
+            if not hits:
+                continue
+            a, b = hits[0]
+            notes.append(
+                "text sprites overlap at "
+                f"{float(t):.1f}s: ({a[0]:.0f},{a[1]:.0f},{a[2]:.0f},{a[3]:.0f}) "
+                f"and ({b[0]:.0f},{b[1]:.0f},{b[2]:.0f},{b[3]:.0f})"
+            )
+            break
     if notes:
         return 0, notes
     return 100, []
 
 
-def full_review(topic, narration, spec, overlays, trends=None, scenes=None, labels=None):
+def full_review(topic, narration, spec, overlays, trends=None, scenes=None, labels=None,
+                samples=None, text_frames=None):
     """All parts, including the visual and the craft cut. public_ok follows `passed`."""
     if trends is None:
         trends = load_trends()
@@ -277,7 +298,8 @@ def full_review(topic, narration, spec, overlays, trends=None, scenes=None, labe
     visual, vis_notes = score_visual(spec, overlays)
     accuracy, acc_notes = score_accuracy(narration, topic, spec)
     trend, trend_notes = score_trend(topic, trends)
-    craft, craft_notes = score_craft(narration, overlays, scenes, labels)
+    craft, craft_notes = score_craft(
+        narration, overlays, scenes, labels, samples=samples, text_frames=text_frames)
     notes = hook_notes + vis_notes + acc_notes + trend_notes + craft_notes
     packed = _pack(
         {"hook": hook, "visual": visual, "accuracy": accuracy, "trend": trend, "craft": craft},

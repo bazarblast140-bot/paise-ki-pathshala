@@ -2,14 +2,20 @@
 
 A chart may not sit still. Each beat is cut into slices of at most 4 seconds,
 so a scene is never held for about 5 seconds, and the scene count is at least
-duration/4. The self-review craft score uses the same rules.
+duration/4. Cuts are not enough: a four-second span whose pictures match also
+fails. The self-review craft score uses the same rules.
 """
 import math
 import re
 
+import numpy as np
+
 BEATS = ("hook", "pehchan", "matlab", "karein")
 MAX_SLICE_S = 4.0
 MAX_HOLD_S = 5.0
+# A four-second span must change the picture, not only the cut list.
+VISUAL_SPAN_S = 4.0
+VISUAL_MIN_DELTA = 1.0
 
 # A segment is concrete when it names a number or a level/step the viewer can
 # point at. Vague filler ("यह समझिए") fails the craft score.
@@ -42,6 +48,29 @@ def plan_scenes(beat_times, beats=BEATS):
                 "callout": i % 2 == 1,
             })
     return scenes
+
+
+def unchanged_spans(samples, span=VISUAL_SPAN_S, min_delta=VISUAL_MIN_DELTA):
+    """Spans of about `span` seconds whose frames barely differ.
+
+    samples is (time, image array). Each time is compared with the next sample
+    that is at least `span` seconds later. Mean absolute pixel difference below
+    min_delta is a still, even when a cut falls inside the span.
+    """
+    notes = []
+    ordered = sorted(samples or [], key=lambda item: float(item[0]))
+    for i, (t0, left) in enumerate(ordered):
+        for t1, right in ordered[i + 1:]:
+            gap = float(t1) - float(t0)
+            if gap + 1e-6 < span:
+                continue
+            delta = float(np.abs(np.asarray(left, dtype=np.int16) - np.asarray(right, dtype=np.int16)).mean())
+            if delta < min_delta:
+                notes.append(
+                    f"no visual change across {gap:.1f}s ({float(t0):.1f}-{float(t1):.1f}, delta {delta:.2f})"
+                )
+            break
+    return notes
 
 
 def check_scenes(scenes, duration):

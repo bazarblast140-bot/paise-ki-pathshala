@@ -282,6 +282,78 @@ class AtrLessonTests(unittest.TestCase):
         self.assertGreater(scene_transition.ink_column_coverage(layer, plate, whole), 0.85)
 
 
+class MotionGateTests(unittest.TestCase):
+    def test_a_still_span_fails_even_when_the_cuts_are_short(self):
+        import numpy as np
+
+        topic = _hammer()
+        narration = board_short.fallback_narration(topic)
+        times = {"hook": (0.0, 8.0), "pehchan": (8.0, 18.0), "matlab": (18.0, 32.0), "karein": (32.0, 48.0)}
+        scenes = scene_pace.plan_scenes(times)
+        ok, notes = scene_pace.check_scenes(scenes, 48.0)
+        self.assertTrue(ok, notes)
+        still = np.zeros((24, 24, 3), dtype=np.uint8)
+        samples = [(0.0, still), (4.0, still.copy())]
+        self.assertTrue(scene_pace.unchanged_spans(samples))
+        craft, craft_notes = self_review.score_craft(narration, scenes=scenes, samples=samples)
+        self.assertEqual(craft, 0)
+        self.assertTrue(any("visual change" in note for note in craft_notes))
+        moved = np.full((24, 24, 3), 80, dtype=np.uint8)
+        clean, clean_notes = self_review.score_craft(
+            narration, scenes=scenes, samples=[(0.0, still), (4.0, moved)])
+        self.assertEqual(clean, 100, clean_notes)
+        self.assertEqual(scene_pace.VISUAL_SPAN_S, 4.0)
+
+    def test_overlapping_sprites_fail_and_the_bands_stay_apart(self):
+        import json
+        from datetime import date
+
+        import market_data
+        import numpy as np
+        import scene_transition
+
+        topic = _hammer()
+        narration = board_short.fallback_narration(topic)
+        times = {"hook": (0.0, 8.0), "pehchan": (8.0, 18.0), "matlab": (18.0, 32.0), "karein": (32.0, 48.0)}
+        scenes = scene_pace.plan_scenes(times)
+        craft, notes = self_review.score_craft(
+            narration, scenes=scenes,
+            text_frames=[(52.0, [(100, 100, 220, 180), (160, 140, 280, 220)])])
+        self.assertEqual(craft, 0)
+        self.assertTrue(any("overlap" in note for note in notes))
+        bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))["topics"]
+        atr = next(t for t in bank if t["key"] == "atr_sl")
+        spec = market_data.spec_for_topic(atr, today=date(2026, 10, 2))
+        market_data.apply_atr_card(atr, spec["atr"])
+        script = board_short.atr_narration(atr)
+        beat_times = {"hook": (0.0, 10.0), "pehchan": (10.0, 21.0), "matlab": (21.0, 38.0), "karein": (38.0, 55.0)}
+        groups = {}
+        for scene in scene_pace.plan_scenes(beat_times):
+            groups.setdefault(scene["beat"], []).append(scene)
+        frames = []
+        for beat, group in groups.items():
+            made, _flags = scene_frames.frames_for(atr, beat, len(group), spec)
+            frames.extend(made)
+        durations = [3.4] * len(frames)
+        # The poll is on during the last scene. Its box must miss the grey disclaimer.
+        moment = sum(durations) - 1.5
+        frame = scene_transition.render_at(frames, durations, moment)
+        boxes = [
+            layer["box"] for layer in frame.text_layers
+            if layer.get("text") and layer.get("box") and not layer.get("faint")
+        ]
+        boxes.extend(board_short.on_screen_boxes(
+            atr, beat_times, script["beats"], script["hook_line"],
+            __import__("engagement").engagement_question(atr), 53.5))
+        self.assertFalse(safe_area.overlapping(boxes), safe_area.overlapping(boxes)[:3])
+        moving = [frame for frame in frames if getattr(frame, "animate", None)]
+        self.assertGreaterEqual(len(moving), 2)
+        early = np.asarray(moving[0].animate(0).convert("RGB"))
+        later = np.asarray(moving[0].animate(1).convert("RGB"))
+        delta = float(np.abs(early.astype(np.int16) - later.astype(np.int16)).mean())
+        self.assertGreaterEqual(delta, scene_pace.VISUAL_MIN_DELTA)
+
+
 class BedTests(unittest.TestCase):
     def test_bed_is_in_the_ducking_window_and_licensed(self):
         bed = ROOT / "assets" / "bed" / "bed.wav"

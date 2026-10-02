@@ -209,6 +209,42 @@ def transition_faults(images, transitions):
     return faults
 
 
+def render_at(images, durations, t, transitions=(), fade_s=0.28, overlay=None):
+    """The picture at time t. Animated scenes are redrawn; a wipe never cuts their type."""
+    durations = [float(d) for d in durations]
+    starts = []
+    acc = 0.0
+    for dur in durations:
+        starts.append(acc)
+        acc += dur
+    total = acc
+    t = min(max(0.0, float(t)), total if total else 0.0)
+    names = tuple(transitions or ("fade",))
+    fade = float(fade_s)
+    hit = _window(t, starts, fade) if len(images) > 1 else None
+    if hit is not None:
+        i, _u = hit
+        if getattr(images[i], "animate", None) and getattr(images[i + 1], "animate", None):
+            hit = None
+    if hit is None:
+        idx = _scene_index(t, starts, durations)
+        img = images[idx]
+        anim = getattr(img, "animate", None)
+        if anim is not None:
+            local = 0.0 if durations[idx] <= 0 else (t - starts[idx]) / durations[idx]
+            frame = anim(local)
+        else:
+            frame = img
+        if overlay is not None and anim is not None:
+            overlay(frame, 0.0 if total <= 0 else min(1.0, t / total))
+        return frame
+    i, u = hit
+    frame = composite(images[i], images[i + 1], u, names[i % len(names)])
+    if overlay is not None:
+        overlay(frame, 0.0 if total <= 0 else min(1.0, t / total))
+    return frame
+
+
 def _scene_index(t, starts, durations):
     for i, start in enumerate(starts):
         if t < start + durations[i] or i == len(starts) - 1:
@@ -234,14 +270,13 @@ def write_timeline(images, durations, out, fps=30, transitions=(), fade_s=0.28, 
     total = sum(durations)
     fps = int(fps)
     nframes = max(1, int(round(total * fps)))
-    holds = [img.convert("RGB").tobytes() for img in images]
+    holds = []
     starts = []
     acc = 0.0
-    for dur in durations:
+    for img, dur in zip(images, durations):
         starts.append(acc)
         acc += dur
-    fade = float(fade_s)
-    names = tuple(transitions or ("fade",))
+        holds.append(None if getattr(img, "animate", None) else img.convert("RGB").tobytes())
     log_path = str(out) + ".ffmpeg.log"
     cmd = [
         "ffmpeg", "-v", "error", "-y",
@@ -255,14 +290,12 @@ def write_timeline(images, durations, out, fps=30, transitions=(), fade_s=0.28, 
         try:
             for fi in range(nframes):
                 t = min(total, fi / float(fps))
-                hit = _window(t, starts, fade) if len(images) > 1 else None
-                if hit is None:
-                    proc.stdin.write(holds[_scene_index(t, starts, durations)])
+                idx = _scene_index(t, starts, durations)
+                hit = _window(t, starts, float(fade_s)) if len(images) > 1 else None
+                if hit is None and holds[idx] is not None:
+                    proc.stdin.write(holds[idx])
                 else:
-                    i, u = hit
-                    frame = composite(images[i], images[i + 1], u, names[i % len(names)])
-                    if overlay is not None:
-                        overlay(frame, 0.0 if total <= 0 else min(1.0, t / total))
+                    frame = render_at(images, durations, t, transitions, fade_s, overlay)
                     proc.stdin.write(frame.convert("RGB").tobytes())
             proc.stdin.close()
             proc.stdin = None

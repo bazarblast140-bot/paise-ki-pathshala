@@ -244,7 +244,8 @@ def _glow_line(img, x0, y, x1, color):
 
 
 def _brand(img):
-    _text(img, 88, 1696, "PKP", GOLD, 26, anchor="lt", persist=True, band=False)
+    """Channel mark in the brand band, under the subtitles and above the progress bar."""
+    _text(img, 88, safe_area.BRAND_Y, "PKP", GOLD, 26, anchor="lt", persist=True, band=False)
 
 
 def paint_progress(img, frac):
@@ -275,7 +276,11 @@ def _finish(img, kind):
 
 
 def _source(img, lesson):
-    _text(img, 540, 990, f"Yahoo Finance   {lesson['as_of']}", K.MUTED, 26, anchor="mt")
+    """Source line shares the brand band. It does not sit in the subtitle band."""
+    _text(
+        img, 540, safe_area.SOURCE_Y, f"Yahoo Finance   {lesson['as_of']}",
+        K.MUTED, 26, anchor="mt", band=False,
+    )
 
 
 def _ohlc(bars):
@@ -417,19 +422,125 @@ def _formula(lesson, step, total):
     return _finish(img, "formula")
 
 
-def _ladder(lesson, step, total):
-    img = _blank()
-    _card(img)
+def _ladder_ys(lesson):
     entry, sl = float(lesson["entry"]), float(lesson["sl"])
     target = float(lesson["target"])
-    reveal = 4 if total <= 1 else min(4, step + 1)
-    draw = ImageDraw.Draw(img)
-    draw.line([(200, 400), (200, 960)], fill=(88, 100, 120), width=3)
     span = (target - sl) or 1.0
 
     def y_of(price):
-        return 920 - (price - sl) / span * 480
+        return 900 - (price - sl) / span * 440
 
+    return entry, sl, target, y_of
+
+
+def _bracket(img, x, y0, y1, color):
+    draw = ImageDraw.Draw(img)
+    top, bot = (y0, y1) if y0 <= y1 else (y1, y0)
+    if bot - top < 2:
+        bot = top + 2
+    draw.line([(x, top), (x, bot)], fill=color, width=4)
+    draw.line([(x - 16, top), (x + 16, top)], fill=color, width=4)
+    draw.line([(x - 16, bot), (x + 16, bot)], fill=color, width=4)
+
+
+def _push_region(img, box, scale):
+    """Zoom one rectangle as a bitmap. The caller decides which image (plate or still)."""
+    if scale <= 1.001:
+        return
+    x0, y0, x1, y1 = (int(v) for v in box)
+    crop = img.crop((x0, y0, x1, y1))
+    cw, ch = crop.size
+    cx, cy = cw // 2, ch // 2
+    hw = min(cx, cw - cx, max(2, int(round(cw / scale / 2))))
+    hh = min(cy, ch - cy, max(2, int(round(ch / scale / 2))))
+    zoomed = crop.crop((cx - hw, cy - hh, cx + hw, cy + hh)).resize((cw, ch), Image.Resampling.LANCZOS)
+    img.paste(zoomed, (x0, y0))
+
+
+def _push(img, box, scale):
+    """Camera push on the plot. Sprites inside the plot scale as one layer each."""
+    if scale <= 1.001:
+        return img
+    _push_region(img, box, scale)
+    plate = getattr(img, "plate", None)
+    if plate is not None:
+        _push_region(plate, box, scale)
+    x0, y0, x1, y1 = (float(v) for v in box)
+    cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+    moved = []
+    for layer in list(getattr(img, "text_layers", []) or []):
+        sprite = layer["image"]
+        sw, sh = sprite.size
+        lx, ly = layer["xy"]
+        scx, scy = lx + sw / 2.0, ly + sh / 2.0
+        if not (x0 <= scx <= x1 and y0 <= scy <= y1):
+            moved.append(layer)
+            continue
+        nw = max(1, int(round(sw * scale)))
+        nh = max(1, int(round(sh * scale)))
+        scaled = sprite.resize((nw, nh), Image.Resampling.LANCZOS)
+        ncx = cx + (scx - cx) * scale
+        ncy = cy + (scy - cy) * scale
+        updated = dict(layer)
+        updated["image"] = scaled
+        updated["xy"] = (int(round(ncx - nw / 2.0)), int(round(ncy - nh / 2.0)))
+        box0 = layer.get("box")
+        if box0:
+            bcx = (box0[0] + box0[2]) / 2.0
+            bcy = (box0[1] + box0[3]) / 2.0
+            bw = (box0[2] - box0[0]) * scale
+            bh = (box0[3] - box0[1]) * scale
+            nbx = cx + (bcx - cx) * scale
+            nby = cy + (bcy - cy) * scale
+            updated["box"] = (nbx - bw / 2.0, nby - bh / 2.0, nbx + bw / 2.0, nby + bh / 2.0)
+        moved.append(updated)
+    img.text_layers = moved
+    img.label_boxes = [layer["box"] for layer in moved if layer.get("text") and layer.get("box")]
+    return img
+
+
+def _ladder_moving(lesson, phase):
+    """Full ladder with a growing entry-to-SL bracket, a counting distance, and a ticking price."""
+    phase = max(0.0, min(1.0, float(phase)))
+    grown = _ease(phase)
+    img = _blank()
+    _card(img)
+    entry, sl, target, y_of = _ladder_ys(lesson)
+    draw = ImageDraw.Draw(img)
+    draw.line([(200, 420), (200, 960)], fill=(88, 100, 120), width=3)
+    rows = (
+        (entry, K.TARGET_GREEN, f"एंट्री  {lesson['entry']}"),
+        (sl, K.SL_RED, f"एसएल  {lesson['sl']}"),
+        (target, K.BLUE, f"ऊपर  {lesson['target']}"),
+    )
+    for price, col, label in rows:
+        y = y_of(price)
+        draw.line([(230, y), (700, y)], fill=col, width=4)
+        draw.line([(860, y), (886, y)], fill=(120, 132, 150), width=3)
+    tip = y_of(entry) + (y_of(sl) - y_of(entry)) * grown
+    _bracket(img, 760, y_of(entry), tip, GOLD)
+    final = float(lesson["distance"])
+    shown = final * grown
+    count = lesson["distance"] if abs(shown - final) < 0.05 else f"{shown:.1f}"
+    live = entry + (sl - entry) * grown
+    tick = lesson["sl"] if abs(live - sl) < 0.05 else f"{live:.1f}"
+    _text(img, 100, 220, "कीमत की सीढ़ी", K.YELLOW, 42, anchor="lt")
+    _text(img, 540, 312, f"दूरी  {count}", K.YELLOW, 32, anchor="mt")
+    for price, col, label in rows:
+        _text(img, 250, y_of(price) - 42, label, col, 30, anchor="lt")
+    _text(img, 898, tip, tick, GOLD, 22, anchor="lm")
+    img = _finish(img, "ladder")
+    _push(img, (150, 380, 990, 1020), 1.0 + 0.06 * phase)
+    return img
+
+
+def _ladder(lesson, step, total):
+    img = _blank()
+    _card(img)
+    entry, sl, target, y_of = _ladder_ys(lesson)
+    reveal = 4 if total <= 1 else min(4, step + 1)
+    draw = ImageDraw.Draw(img)
+    draw.line([(200, 420), (200, 960)], fill=(88, 100, 120), width=3)
     rows = (
         (entry, K.TARGET_GREEN, f"एंट्री  {lesson['entry']}", 1),
         (sl, K.SL_RED, f"एसएल  {lesson['sl']}", 2),
@@ -444,7 +555,7 @@ def _ladder(lesson, step, total):
         glow = need == active
         partial = glow and reveal < 4 and total > 1
         frac = _ease(0.58) if partial else 1.0
-        x1 = 230 + 620 * frac
+        x1 = 230 + 470 * frac
         if not glow:
             draw.line([(230, y), (x1, y)], fill=col, width=4)
         pending.append((230, y, x1, col, label, glow, frac))
@@ -453,9 +564,9 @@ def _ladder(lesson, step, total):
         if glow:
             _glow_line(img, x0, y, x1, col)
         if frac > 0.8:
-            _text(img, 250, y - 44, label, col, 32, anchor="lt")
-    if reveal >= 4:
-        _text(img, 540, 300, f"दूरी  {lesson['distance']} पॉइंट", K.YELLOW, 32, anchor="mt")
+            _text(img, 250, y - 42, label, col, 30, anchor="lt")
+    if reveal >= 4 and total <= 1:
+        _text(img, 540, 312, f"दूरी  {lesson['distance']}", K.YELLOW, 32, anchor="mt")
     return _finish(img, "ladder")
 
 
@@ -485,7 +596,9 @@ def _split(lesson):
     _axis_labels(img, ax_r, steps=3)
     _text(img, 298, 860, "तंग रेखा कट गई", K.RED, 24, anchor="mt")
     _text(img, 760, 860, "एटीआर रेखा रुकी" if held else "एटीआर रेखा", K.GREEN, 24, anchor="mt")
-    _source(img, lesson)
+    # Karein already burns the grey disclaimer in the brand band. A second
+    # source line there would sit on top of it. The problem and formula
+    # scenes, outside that beat, still carry the Yahoo line.
     return _finish(img, "split")
 
 
@@ -547,10 +660,26 @@ def _atr_frames(beat, n, lesson):
     kinds = kinds_for(beat, n)
     frames, flags = [], []
     seen = {}
+    ladder_total = kinds.count("ladder")
+    settled = []
+    cursor = {}
+    for kind in kinds:
+        step = cursor.get(kind, 0)
+        if kind == "ladder" and ladder_total > 1 and min(4, step + 1) >= 4:
+            settled.append(step)
+        cursor[kind] = step + 1
     for kind in kinds:
         step = seen.get(kind, 0)
         total = kinds.count(kind)
         img = _BUILDERS[kind](lesson, step, total)
+        if kind == "ladder" and step in settled:
+            slot = settled.index(step)
+            p0 = slot / len(settled)
+            p1 = (slot + 1) / len(settled)
+            img = _ladder_moving(lesson, p1)
+            img.animate = (lambda u, start=p0, end=p1: _ladder_moving(
+                lesson, start + (end - start) * max(0.0, min(1.0, float(u)))
+            ))
         frames.append(img)
         flags.append(
             kind in ("formula", "split", "size", "takeaway", "cta")

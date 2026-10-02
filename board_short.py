@@ -972,7 +972,118 @@ def cue_frac(key, text):
     return 0.58
 
 
+def _wrap_lines(text, size, max_w):
+    """Break a line the same way the burned subtitle will, so the gate box matches."""
+    font = scene_frames._font(size)
+    probe = ImageDraw.Draw(Image.new("RGB", (4, 4)))
+    lines, cur = [], ""
+    for word in str(text or "").split():
+        trial = word if not cur else cur + " " + word
+        if probe.textlength(trial, font=font) <= max_w or not cur:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = word
+    if cur:
+        lines.append(cur)
+    return lines or [""]
+
+
+def _top_box(text, x, y, size, max_w=None):
+    """Bounding box for an=8 (top-center) text. max_w wraps on spaces."""
+    font = scene_frames._font(int(size))
+    probe = ImageDraw.Draw(Image.new("RGB", (4, 4)))
+    lines = _wrap_lines(text, size, max_w) if max_w else [text]
+    gap = int(size * 1.25)
+    boxes = []
+    for i, line in enumerate(lines):
+        if not line:
+            continue
+        boxes.append(probe.textbbox((x, y + i * gap), line, font=font, anchor="mt"))
+    if not boxes:
+        return (x, y, x + 1, y + 1)
+    return (
+        min(b[0] for b in boxes), min(b[1] for b in boxes),
+        max(b[2] for b in boxes), max(b[3] for b in boxes),
+    )
+
+
+def on_screen_boxes(topic, beat_times, spoken, hook_line, cta, t):
+    """ASS boxes visible at time t. Scene sprites are added by the caller."""
+    import safe_area
+    boxes = []
+    t = float(t)
+    for b in BEATS:
+        t0, t1 = beat_times[b]
+        if b == "hook":
+            t0 = 0.0
+        if not (t0 - 1e-6 <= t < t1 + 1e-6):
+            continue
+        head, sub = topic["beats"][b]
+        if b == "hook":
+            head = hook_line
+        head_size = fit_size(head, 960, 60, 32)
+        key_size = fit_size(sub, 960, 36, 26)
+        boxes.append(_top_box(head, 540, safe_area.HEAD_Y, head_size))
+        boxes.append(_top_box(sub, 540, safe_area.KEY_Y, key_size))
+        parts = chunks(spoken[b])
+        total = sum(len(p) for p in parts) or 1
+        cursor = t0 + 0.1
+        span = max(0.2, (t1 - t0) - 0.2)
+        caption = parts[-1] if parts else ""
+        for p in parts:
+            dt = span * len(p) / total
+            if cursor <= t < cursor + dt:
+                caption = p
+                break
+            cursor += dt
+        if caption:
+            cap_size = fit_size(caption, 960, 40, 26)
+            boxes.append(_top_box(caption, 540, safe_area.CAPTION_Y, cap_size))
+    t0, t1 = beat_times["karein"]
+    if t0 - 1e-6 <= t <= t1 + 1e-6:
+        boxes.append(_top_box(DISCLAIMER, 540, safe_area.SOURCE_Y, 26))
+        cta_start = max(t0, t1 - 2.8)
+        if t >= cta_start:
+            boxes.append(_top_box(cta, 540, safe_area.CTA_Y, 32, max_w=900))
+    return boxes
+
+
+def _craft_samples(scenes, topic, beat_times, spoken, hook_line, cta):
+    """One frame a second for the still check, and each scene's midpoint for text boxes."""
+    frames = [s.get("frame") for s in scenes]
+    if not frames or any(frame is None for frame in frames):
+        return None, None
+    durations = [float(s["end"]) - float(s["start"]) for s in scenes]
+    total = sum(durations)
+
+    def boxes_at(frame, t):
+        found = [
+            layer["box"] for layer in (getattr(frame, "text_layers", None) or [])
+            if layer.get("text") and layer.get("box") and not layer.get("faint")
+        ]
+        found.extend(on_screen_boxes(topic, beat_times, spoken, hook_line, cta, t))
+        return found
+
+    samples = []
+    t = 0.0
+    while t < total - 0.05:
+        frame = scene_transition.render_at(frames, durations, t, SCENE_TRANSITIONS, SCENE_FADE_S)
+        samples.append((t, np.asarray(frame.convert("RGB"))))
+        t += 1.0
+    text_frames = []
+    moments = [(float(s["start"]) + float(s["end"])) / 2.0 for s in scenes]
+    k0, k1 = beat_times["karein"]
+    moments.append(max(k0, k1 - 1.4))
+    for moment in moments:
+        frame = scene_transition.render_at(
+            frames, durations, moment, SCENE_TRANSITIONS, SCENE_FADE_S)
+        text_frames.append((moment, boxes_at(frame, moment)))
+    return samples, text_frames
+
+
 def build_ass(topic, beat_times, spoken, hook_line, cta):
+    import safe_area
     ev = []
     for b in BEATS:
         t0, t1 = beat_times[b]
@@ -982,27 +1093,34 @@ def build_ass(topic, beat_times, spoken, hook_line, cta):
             # screen by 1.4s and stays through the hook beat (covers 0-2s).
             head = hook_line
             t0 = 0.0
-            ev.extend(hook_motion.dialogues(head, t1, 540, 1170, fit_size(head, 980, 84)))
+            ev.extend(hook_motion.dialogues(
+                head, t1, 540, safe_area.HEAD_Y, fit_size(head, 960, 60, 32)))
         else:
-            ev.append(K.ass_text(t0 + 0.05, t1, 540, 1170, fit_size(head, 980, 84),
-                                 K.YEL, head, 8, fade=True))
-        ev.append(K.ass_text(t0 + (0 if b == "hook" else 0.05), t1, 540, 1240, fit_size(sub, 980, 54, 34),
-                             K.WHITE, sub, 8, fade=(b != "hook"), wrap=True))
+            ev.append(K.ass_text(
+                t0 + 0.05, t1, 540, safe_area.HEAD_Y, fit_size(head, 960, 60, 32),
+                K.YEL, head, 8, fade=True))
+        ev.append(K.ass_text(
+            t0 + (0 if b == "hook" else 0.05), t1, 540, safe_area.KEY_Y,
+            fit_size(sub, 960, 36, 26), K.WHITE, sub, 8, fade=(b != "hook")))
         parts = chunks(spoken[b])
         total = sum(len(p) for p in parts) or 1
         t = t0 + 0.1
         span = (t1 - t0) - 0.2
         for p in parts:
             dt = span * len(p) / total
-            ev.append(K.ass_caption(t, t + dt, p))
+            ev.append(K.ass_caption(
+                t, t + dt, p, y=safe_area.CAPTION_Y, size=fit_size(p, 960, 40, 26)))
             t += dt
     t0, t1 = beat_times["karein"]
-    ev.append(K.ass_text(t0, t1, 540, 1325, 30, "&H00B8A394&", DISCLAIMER, 8))
+    # Grey disclaimer sits in the brand band, under the white subtitle band.
+    ev.append(K.ass_text(t0, t1, 540, safe_area.SOURCE_Y, 26, "&H00B8A394&", DISCLAIMER, 8))
     # Poll question, not a like/follow/subscribe bait line. Referral disclosure
     # stays in the description (publish.py), not on this card.
     cta_start = max(t0, t1 - 2.8)
-    ev.append(K.ass_text(cta_start, t1, 540, 1480, fit_size(cta, 980, 42, 28), K.WHITE,
-                         cta, 8, fade=True, wrap=True))
+    cta_lines = _wrap_lines(cta, 32, 900)
+    ev.append(K.ass_text(
+        cta_start, t1, 540, safe_area.CTA_Y, 32, K.WHITE,
+        "\\N".join(cta_lines), 8, fade=True, wrap=False))
     return K.ASS_HEAD + "\n".join(ev) + "\n"
 
 
@@ -1356,9 +1474,12 @@ def main():
     visual_gate(paced)
     ok(f"scenes: {len(scenes)} cuts, longest {max(s['end'] - s['start'] for s in scenes):.2f}s")
     overlays = short_layout.overlay_plan(topic, beat_times, hook_line, cta)
+    samples, text_frames = _craft_samples(
+        scenes, topic, beat_times, spoken, hook_line, cta)
     review = self_review.full_review(
         topic, n, spec, overlays, scenes=scenes,
         labels=(label_boxes if labels_ready else None),
+        samples=samples, text_frames=text_frames,
     )
     review["narration_source"] = source
     review["attempts"] = n.get("review_attempts") or self_review.MAX_ATTEMPTS
