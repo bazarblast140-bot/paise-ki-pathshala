@@ -72,6 +72,7 @@ concurrency:
   cancel-in-progress: false
 permissions:
   contents: write
+  issues: write
 jobs:
   build-video:
     runs-on: ubuntu-latest
@@ -162,6 +163,12 @@ jobs:
           EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
         run: python competitor_research.py --max-age-hours 20
       - name: Run Pipeline (+ publish if READY)
+        id: pipeline
+        # A failed build must still reach the buffer step. auto_agent fills
+        # when it can classify the failure; this step covers a crash before
+        # that hook. continue-on-error keeps the job moving so an empty slot
+        # can be filled, and a later buffer failure still fails the job.
+        continue-on-error: true
         if: steps.guard.outputs.taken != 'true'
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
@@ -200,11 +207,31 @@ jobs:
           # by name. The value is never printed.
           ACTIONS_TOKEN_FOR_COMPARE: ${{ secrets.GITHUB_TOKEN }}
         run: python auto_agent.py --format ${{ steps.fmt.outputs.format }} --publish
+      - name: Buffer fill if this slot is still empty
+        id: buffer
+        if: always() && steps.guard.outputs.taken != 'true'
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YT_FIN_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
+          EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
+          PUBLISH_VISIBILITY: ${{ steps.fmt.outputs.visibility }}
+          PUBLISH_SLOT_IST: ${{ steps.fmt.outputs.slot }}
+          PUBLISH_DATE_IST: ${{ steps.fmt.outputs.date_ist }}
+          PUBLISH_AT_UTC: ${{ steps.fmt.outputs.publish_at }}
+          IG_CROSSPOST: ${{ steps.fmt.outputs.format == 'short' && steps.fmt.outputs.visibility == 'public' && '1' || '0' }}
+          IG_USER_ID: ${{ vars.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_SURFACE: ${{ vars.IG_SURFACE || 'facebook' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python buffer_shorts.py --fill-scheduled
       - name: Commit topic_bank (prevent topic repeats)
-        if: success() && steps.guard.outputs.taken != 'true'
+        if: steps.guard.outputs.taken != 'true' && (success() || steps.buffer.outcome == 'success')
         run: |
           FILES=""
-          for f in topic_bank.json data/published.json data/competitor_insights.json \
+          for f in topic_bank.json data/published.json data/buffer_manifest.json data/competitor_insights.json \
                    data/competitor_performance.json data/own_topic_performance.json; do
             [ -e "$f" ] && FILES="$FILES $f"
           done

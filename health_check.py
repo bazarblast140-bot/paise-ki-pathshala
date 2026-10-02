@@ -889,6 +889,7 @@ def run_checks(http, env, now, provider=None, engine=None):
         check_instagram(http, env, secrets, now),
         check_youtube_quota(),
         check_future_slots(now),
+        check_buffer(),
     ]
 
 
@@ -918,6 +919,34 @@ def check_future_slots(now, entries=None):
         summary_hi=(
             f"Aage sirf {count} slot scheduled hai. Kam se kam {want} future slot "
             "private + publishAt par hone chahiye, warna agla publish khali reh sakta hai."
+        ),
+    )
+
+
+def check_buffer(path=None):
+    """Warn when fewer than two pre-gated buffer Shorts are ready.
+
+    A warn opens the same health-alert issue. Counting is a local manifest
+    read: no upload and no release download.
+    """
+    import buffer_shorts
+    count = buffer_shorts.count_ready(buffer_shorts.load_manifest(path))
+    name = "Buffer"
+    want = buffer_shorts.MIN_READY
+    if count >= want:
+        return Check(
+            name=name,
+            status="ok",
+            detail=f"{count} ready buffer Shorts",
+        )
+    return Check(
+        name=name,
+        status="warn",
+        detail=f"only {count} ready buffer Short(s); want at least {want}",
+        summary_hi=(
+            f"Backup buffer mein sirf {count} ready Short hai. "
+            f"Kam se kam {want} hone chahiye, warna gate fail par slot khali reh sakta hai. "
+            "Actions → Buffer refill → Run workflow (ek run = ek item)."
         ),
     )
 

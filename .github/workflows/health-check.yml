@@ -8,7 +8,7 @@ name: Health check
 #   00:53 IST = 19:23 UTC → 16:00 (before the 20:37 UTC / 02:07 IST build)
 #   02:53 IST = 21:23 UTC → 21:00 (before the 01:47 UTC / 07:17 IST build)
 # Also warns (health-alert issue) when fewer than 2 future slots are already
-# uploaded as private + publishAt.
+# uploaded as private + publishAt, and when fewer than 2 buffer Shorts are ready.
 # On warn/fail: one GitHub issue labelled health-alert (create or update, no dupes).
 # When every check is ok/skip/note, that issue is closed.
 # GITHUB_TOKEN is the built-in token. No new secrets are required.

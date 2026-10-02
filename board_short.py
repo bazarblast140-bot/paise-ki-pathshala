@@ -953,16 +953,21 @@ def preflight_eleven_credits(texts):
             headers={"xi-api-key": key, "Accept": "application/json"},
             timeout=20,
         )
-    except Exception as exc:  # noqa: BLE001 — network must not kill the slot
-        print(f"[note] ElevenLabs subscription pre-check skipped ({exc}); TTS will decide")
+    except Exception as exc:  # noqa: BLE001 — an API error uses Edge; it does not skip the slot
+        _switch_to_edge(f"subscription pre-check failed ({type(exc).__name__})")
         return
     body = eleven_voice.parse_response(response)
     status = getattr(response, "status_code", 0)
-    if eleven_voice.classify(status, body) == "quota":
+    kind = eleven_voice.classify(status, body)
+    if kind == "quota":
         _switch_to_edge(eleven_voice.describe(status, body))
         return
     if status != 200:
-        print(f"[note] ElevenLabs subscription pre-check HTTP {status}; TTS remains the auth check")
+        # A scoped key may 401/403 on the subscription read. TTS stays the auth check.
+        if kind in ("auth", "permission"):
+            print(f"[note] ElevenLabs subscription pre-check HTTP {status}; TTS remains the auth check")
+            return
+        _switch_to_edge(f"subscription pre-check failed ({eleven_voice.describe(status, body)})")
         return
     remaining = eleven_voice.subscription_remaining(body)
     if remaining is None:
@@ -971,6 +976,12 @@ def preflight_eleven_credits(texts):
     credit_log.set_eleven_remaining(remaining)
     import speak
     need = sum(len(speak.speakable(text or "")) for text in texts)
+    floor = eleven_voice.LIVE_EDGE_FLOOR
+    if remaining < floor:
+        _switch_to_edge(
+            f"pre-check remaining={remaining} is below the {floor} character floor"
+        )
+        return
     if need > 0 and remaining < need:
         _switch_to_edge(f"pre-check remaining={remaining} characters, this Short needs {need}")
 
@@ -1159,7 +1170,8 @@ def synthesize_short_voices(spoken, c):
         VOICE_FALLBACK_REASON,
         elevenlabs_attempted=key_set and eleven_voice.paid_voice_allowed(),
     )
-    credit_log.set_tts_engine(engine)
+    # The whisper sync gate runs later on this audio, Edge or ElevenLabs.
+    credit_log.set_tts_engine(engine, VOICE_FALLBACK_REASON)
     ok(f"voice engine: {engine}" + (f" ({VOICE_FALLBACK_REASON})" if VOICE_FALLBACK_REASON else ""))
     return engine
 

@@ -116,9 +116,12 @@ def set_eleven_remaining(n):
     _write(data)
 
 
-def set_tts_engine(engine):
+def set_tts_engine(engine, reason=None):
+    """Record the engine. `reason` is why a live slot used Edge instead of ElevenLabs."""
     data = _read()
     data["tts_engine"] = str(engine or "") or None
+    if reason is not None:
+        data["tts_reason"] = " ".join(str(reason).split())
     data.setdefault("elevenlabs_characters_sent", 0)
     data.setdefault("deepseek_calls", 0)
     _write(data)
@@ -132,6 +135,7 @@ def snapshot():
     data.setdefault("elevenlabs_characters_sent", 0)
     data.setdefault("elevenlabs_characters_remaining", None)
     data.setdefault("tts_engine", None)
+    data.setdefault("tts_reason", "")
     return data
 
 
@@ -144,6 +148,7 @@ def ledger_fields():
         "elevenlabs_characters_sent": data["elevenlabs_characters_sent"],
         "elevenlabs_characters_remaining": data["elevenlabs_characters_remaining"],
         "tts_engine": data["tts_engine"],
+        "tts_reason": data.get("tts_reason") or "",
     }
 
 
@@ -154,6 +159,7 @@ def write_summary():
     remaining = data.get("elevenlabs_characters_remaining")
     remaining_txt = "n/a" if remaining is None else str(remaining)
     engine = data.get("tts_engine") or "none"
+    reason = data.get("tts_reason") or ""
     line = (
         "[credits] "
         f"deepseek_calls={data['deepseek_calls']} "
@@ -163,5 +169,7 @@ def write_summary():
         f"elevenlabs_remaining={remaining_txt} "
         f"tts_engine={engine}"
     )
+    if reason:
+        line += " tts_reason=" + reason.replace(" ", "_")
     print(line, flush=True)
     return line
