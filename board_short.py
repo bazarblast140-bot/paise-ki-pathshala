@@ -182,6 +182,31 @@ def allowed_numbers(topic):
     return hook_check.allowed_numbers(topic)
 
 
+# Spoken targets. The gate accepts ±20% on each beat and 150-190 words overall.
+# The hook target stays short so a 40-word opening still fails.
+BEAT_WORD_TARGET = {"hook": 25, "pehchan": 42, "matlab": 50, "karein": 46}
+BEAT_WORD_TOLERANCE = 0.20
+TOTAL_WORDS = (150, 190)
+TOTAL_WORD_TARGET = (160, 180)
+NARRATION_CALL_CAP = 4
+
+
+def beat_word_window(target):
+    """Inclusive word window, ±20% of the target, rounded to a whole word."""
+    lo = max(1, int(round(target * (1 - BEAT_WORD_TOLERANCE))))
+    hi = int(round(target * (1 + BEAT_WORD_TOLERANCE)))
+    return lo, hi
+
+
+def beat_word_counts(n):
+    beats = (n or {}).get("beats") or {}
+    return {b: len(str(beats.get(b) or "").split()) for b in BEATS}
+
+
+def _teaching_beat_ranges():
+    return {b: beat_word_window(BEAT_WORD_TARGET[b]) for b in BEATS}
+
+
 def check_narration(n, topic):
     fails = []
     beats = n.get("beats") or {}
@@ -191,7 +216,7 @@ def check_narration(n, topic):
     text = " ".join(str(beats.get(b) or "") for b in BEATS)
     words = len(text.split())
     # The ATR short is spoken at a calm rate, so its script is shorter.
-    # Every other topic still has to land in the 160-180 teaching band.
+    # Every other topic targets 160-180 and may land anywhere in 150-190.
     if topic.get("_atr"):
         if not 75 <= words <= 140:
             fails.append(f"{words} words (75-140 for the calm ATR short)")
@@ -202,19 +227,17 @@ def check_narration(n, topic):
             "karein": (22, 36),
         }
     else:
-        if not 160 <= words <= 180:
-            fails.append(f"{words} words (160-180 chahiye)")
-        beat_ranges = {
-            "hook": (22, 28),
-            "pehchan": (38, 46),
-            "matlab": (46, 54),
-            "karein": (42, 50),
-        }
+        lo, hi = TOTAL_WORDS
+        if not lo <= words <= hi:
+            fails.append(
+                f"{words} words ({lo}-{hi} chahiye, target {TOTAL_WORD_TARGET[0]}-{TOTAL_WORD_TARGET[1]})"
+            )
+        beat_ranges = _teaching_beat_ranges()
     for b, (lo, hi) in beat_ranges.items():
         bw = len(str(beats.get(b) or "").split())
         if not lo <= bw <= hi:
             fails.append(f"{b} beat {bw} words ({lo}-{hi} chahiye)")
-    extra = {x.replace(",", "") for x in re.findall(r"\d[\d,]*(?:\.\d+)?", text)} - allowed_numbers(topic)
+    extra = hook_check.unsourced_numbers(text, topic)
     if extra:
         fails.append(f"ye numbers topic me nahi hain: {sorted(extra)} — sirf diye gaye numbers use karo")
     low = text.lower()
@@ -288,7 +311,7 @@ Return ONLY JSON:
 MANDATORY TEACHING SEQUENCE — NEVER CHANGE THIS ORDER:
 1) HOOK — Start with hook_line, the punchy first sentence (a number copied from the topic facts, or a curiosity-gap question with no new number).
    Then name the topic and the one-line reason it matters. Do NOT explain the answer yet.
-   The hook beat still totals 22-28 words; only the opening sentence is short.
+   The hook beat targets 25 words and stays short; only the opening sentence is the punch.
 2) PEHCHAN — "इसे chart पर पहचानेंगे कैसे?" Point to the exact visible structure/rules shown on screen.
    Use concrete features, not generic definitions.
 3) MATLAB — "इस pattern/strategy का मतलब क्या है?" Connect those exact features to buyer/seller force,
@@ -313,10 +336,12 @@ CONTINUITY RULES:
 - For pattern/strategy topics, use this order: setup → recognition rules → market meaning →
   confirmation/risk. Do not show or explain entry/SL before the setup and meaning are established.
 - Each beat: 3-4 short sentences, preferably under 14 words per sentence.
-- Total 160-180 words. The extra words must add concrete teaching detail, not filler.
+- Hit the per-beat targets in WORD COUNTS. Extra words must add concrete teaching detail, not filler.
 - Never stretch audio artificially just to hit a target duration.
 - Do not compress a beat into a slogan; each beat must teach its assigned step.
-- Use ONLY numbers that appear in the topic data given to you. Never invent prices, dates, returns.
+- Use ONLY numbers that appear in the topic data given to you. Never invent a live price, date, or return.
+  On an evergreen topic with no market data, an illustrative figure is allowed only in the same
+  sentence as उदाहरण, example, or मिसाल.
 - Not a quiz. Do not ask the viewer to pick options.
 - SEBI rules: never tell anyone to buy/sell/hold a specific stock, fund or product; no targets,
   no tips; never promise returns. Patterns/indicators are probabilities, not sure signals.
@@ -324,11 +349,50 @@ CONTINUITY RULES:
   ("आमतौर पर traders SL ... रखते हैं", "कई traders ... का इंतज़ार करते हैं"), never "ऐसा करो" as an order.
 - Do not add a CTA or disclaimer inside the narration — the template adds them.
 - If category is "REAL DATA": the first sentence of hook is ONLY the question (max 10 words);
-  the rest of the 22-28 word hook may give neutral context but must not reveal the answer. pehchan =
+  the rest of the hook may give neutral context but must not reveal the answer, and the hook beat
+  stays on its short target. pehchan =
   the two prices with years. matlab = the multiple (गुना) once. karein = the final value once, then
-  the balance line from facts. Say the final value only in karein, never earlier. Keep the same
-  160-180 total-word requirement and the same beat ranges; use the extra words for concrete explanation,
+  the balance line from facts. Say the final value only in karein, never earlier. Use the same
+  per-beat targets and the same total band as every other topic; use extra words for concrete explanation,
   not filler. Write "लगाते" (not "लगते")."""
+
+
+def word_count_rules():
+    """Exact per-beat targets, the ±20% band, and a short JSON example."""
+    lines = [
+        "WORD COUNTS (this section is the rule; count words by splitting on spaces):",
+    ]
+    for beat, target in BEAT_WORD_TARGET.items():
+        lo, hi = beat_word_window(target)
+        lines.append(f"- {beat}: target exactly {target} words. Accept {lo}-{hi} (±20%).")
+    total_lo, total_hi = TOTAL_WORDS
+    target_lo, target_hi = TOTAL_WORD_TARGET
+    lines.append(
+        f"- total: target {target_lo}-{target_hi} words. Accept {total_lo}-{total_hi}."
+    )
+    lines.append("The hook stays short. Its target is 25 words and it must land in 20-30 words.")
+    lines.append(
+        "Every beat needs a concrete number, a level, or a step "
+        "(a figure, रेखा, नियम, कदम, or उदाहरण). A vague beat fails."
+    )
+    lines.append(
+        "On an evergreen topic with no market data, a new figure is allowed only in the "
+        "same sentence as उदाहरण, example, or मिसाल, and it is an illustration, not a live price. "
+        "REAL DATA and a fetched series may use only the numbers on the card."
+    )
+    lines.append(
+        "Short example of the JSON shape (write the real lesson, and hit these counts):"
+    )
+    lines.append(
+        '{"title":"1:2 सेटअप और फिर भी घाटा","hook_line":"1:2 सेटअप फिर भी घाटा क्यों?",'
+        '"beats":{"hook":"<exactly 25 words, first sentence is hook_line>",'
+        '"pehchan":"<exactly 42 words>","matlab":"<exactly 50 words>",'
+        '"karein":"<exactly 46 words>"}}'
+    )
+    return "\n".join(lines)
+
+
+NARR_SYSTEM = NARR_SYSTEM + "\n\n" + word_count_rules()
 
 
 def _fit_words(seed, lo, hi, additions):
@@ -593,6 +657,123 @@ def require_llm_narration(n, source):
     )
 
 
+def beats_to_rewrite(n, topic, extra=""):
+    """Beats outside the ±20% window, plus any beat named by another gate failure."""
+    if topic.get("_atr"):
+        return list(BEATS)
+    counts = beat_word_counts(n)
+    rewrite = []
+    for beat in BEATS:
+        lo, hi = beat_word_window(BEAT_WORD_TARGET[beat])
+        text = str(((n or {}).get("beats") or {}).get(beat) or "").strip()
+        if not text or not lo <= counts[beat] <= hi:
+            rewrite.append(beat)
+    total = sum(counts.values())
+    if not (TOTAL_WORDS[0] <= total <= TOTAL_WORDS[1]) and not rewrite:
+        if total > TOTAL_WORDS[1]:
+            rewrite = [b for b in BEATS if counts[b] > BEAT_WORD_TARGET[b]]
+        else:
+            rewrite = [b for b in BEATS if counts[b] < BEAT_WORD_TARGET[b]]
+        if not rewrite:
+            rewrite = list(BEATS)
+    fails = list(check_narration(n, topic))
+    if extra:
+        fails.append(str(extra))
+    joined = " ".join(fails)
+    for beat in BEATS:
+        if beat in joined and beat not in rewrite:
+            rewrite.append(beat)
+    for beat in scene_pace.vague_beats((n or {}).get("beats")):
+        if beat not in rewrite:
+            rewrite.append(beat)
+    if fails and not rewrite:
+        rewrite = list(BEATS)
+    return rewrite
+
+
+def repair_instructions(draft, rewrite, topic=None):
+    """Tell the model the current count, the exact target, and which beats are vague."""
+    counts = beat_word_counts(draft)
+    vague = set(scene_pace.vague_beats((draft or {}).get("beats")))
+    lines = [
+        "The draft missed the word targets or a beat is vague.",
+        "Rewrite ONLY the beats listed under REWRITE.",
+        "Copy every KEEP beat verbatim, character for character.",
+        "Return one JSON object with title, hook_line, and all four beats.",
+    ]
+    for beat in BEATS:
+        target = BEAT_WORD_TARGET[beat]
+        lo, hi = beat_word_window(target)
+        current = counts[beat]
+        text = str((draft.get("beats") or {}).get(beat) or "")
+        if beat in rewrite:
+            line = (
+                f"REWRITE {beat}: current {current} words, target exactly {target} words "
+                f"(accept {lo}-{hi})."
+            )
+            if beat == "hook":
+                line += " The hook must be 20-30 words."
+            if beat in vague:
+                line += (
+                    " This beat is vague: it needs a concrete number, level, or step "
+                    "the viewer can point at."
+                )
+            lines.append(line)
+        else:
+            lines.append(
+                f"KEEP {beat} VERBATIM ({current} words; target {target}): {text}"
+            )
+    if "hook" not in rewrite:
+        lines.append(f"KEEP hook_line VERBATIM: {draft.get('hook_line') or ''}")
+        lines.append(f"KEEP title VERBATIM: {draft.get('title') or ''}")
+    else:
+        lines.append("hook_line must be the first sentence of the rewritten hook.")
+    if topic is not None and hook_check.allows_example_numbers(topic):
+        lines.append(
+            "This is an evergreen topic with no market data. A new figure is allowed "
+            "only when the same sentence labels it as an example (उदाहरण, example, or मिसाल). "
+            "Do not present that figure as a live price."
+        )
+    return "\n".join(lines)
+
+
+def merge_repair(original, repaired, rewrite):
+    """Keep passing beats verbatim even if the repair rewrites them."""
+    out = {
+        "title": str((original or {}).get("title") or ""),
+        "hook_line": str((original or {}).get("hook_line") or ""),
+        "beats": {
+            b: str(((original or {}).get("beats") or {}).get(b) or "") for b in BEATS
+        },
+    }
+    got = repaired if isinstance(repaired, dict) else {}
+    got_beats = got.get("beats") if isinstance(got.get("beats"), dict) else {}
+    for beat in rewrite:
+        text = str(got_beats.get(beat) or "").strip()
+        if text:
+            out["beats"][beat] = text
+    if "hook" in rewrite:
+        title = str(got.get("title") or "").strip()
+        hook_line = str(got.get("hook_line") or "").strip()
+        if title:
+            out["title"] = title
+        if hook_line:
+            out["hook_line"] = hook_line
+    return out
+
+
+def _usable_narration(n):
+    """A real script. An empty body or a timeout verdict is not one."""
+    if not isinstance(n, dict):
+        return False
+    if n.get("ai_verdict_valid") is False and "beats" not in n:
+        return False
+    beats = n.get("beats")
+    if not isinstance(beats, dict):
+        return False
+    return any(str(beats.get(b) or "").strip() for b in BEATS)
+
+
 def narration(topic, c, spec=None):
     market_data.sync_topic_numbers(topic)
     if topic.get("_atr"):
@@ -635,53 +816,79 @@ def narration(topic, c, spec=None):
             "on_screen": {b: {"headline": h, "sub": s} for b, (h, s) in topic["beats"].items()},
             "facts": topic["facts"]}
     msg = json.dumps(user, ensure_ascii=False)
-    last = None
-    for attempt in range(1, self_review.MAX_ATTEMPTS + 1):
+    draft = None
+    repair_done = False
+    last = ""
+    calls = 0
+    model = c["models"]["script_model"]
+
+    def _gate(candidate):
+        fails = check_narration(candidate, topic)
+        vague = scene_pace.vague_beats(candidate.get("beats"))
+        if vague:
+            fails.append("vague explanation (no number, level or step): " + ", ".join(vague))
+        content = _content_ok(topic, candidate, spec) if not fails else None
+        if content and not content["passed"]:
+            fails.append("self-review below bar: " + content["summary"])
+        return fails
+
+    # Call 1 is a full script. The next contentful call rewrites only the
+    # failing beats. An empty or timed-out body stays on this loop and never
+    # becomes the topic-card template. The loop stops at 4 DeepSeek calls.
+    while calls < NARRATION_CALL_CAP:
+        rewrite = None
+        if draft is not None and not repair_done:
+            rewrite = beats_to_rewrite(draft, topic, last)
+            user_msg = msg + "\n\n" + repair_instructions(draft, rewrite, topic)
+            kind = "repair"
+        else:
+            extra = ""
+            if last:
+                extra = (
+                    "\n\nPrevious response was empty, timed out, or was not a script. "
+                    "Return the JSON now. Do not leave beats out."
+                )
+            user_msg = msg + extra
+            kind = "full"
+        calls += 1
         try:
-            n = claude_json(NARR_SYSTEM, msg + ("" if not last else f"\n\nFIX THESE: {last}"),
-                            model=c["models"]["script_model"], max_tokens=2000)
+            n = claude_json(
+                NARR_SYSTEM, user_msg, model=model, max_tokens=2000,
+                retries=1, attempts=1,
+            )
         except SystemExit:
             raise
         except Exception as e:  # noqa: BLE001
-            last = f"invalid JSON: {e}"
-            print(f"[retry] narration attempt {attempt}: {last}")
-            if self_review.next_action(False, attempt) == "retry":
-                continue
-            break
-        if not isinstance(n, dict):
-            n = {}
-        fails = check_narration(n, topic)
-        vague = scene_pace.vague_beats(n.get("beats"))
-        if vague:
-            fails.append("vague explanation (no number, level or step): " + ", ".join(vague))
-        content = _content_ok(topic, n, spec) if not fails else None
-        if content and not content["passed"]:
-            fails.append("self-review below bar: " + content["summary"])
+            last = f"empty or timeout: {e}"
+            print(f"[retry] narration call {calls}/{NARRATION_CALL_CAP}: {last}")
+            continue
+        if not _usable_narration(n):
+            last = "empty or timeout response"
+            print(f"[retry] narration call {calls}/{NARRATION_CALL_CAP}: {last}")
+            continue
+        if kind == "repair":
+            n = merge_repair(draft, n, rewrite)
+            repair_done = True
+        draft = n
+        fails = _gate(n)
         if not fails:
-            ok(f"narration OK (attempt {attempt})")
-            n["review_attempts"] = attempt
+            ok(f"narration OK (call {calls})")
+            n["review_attempts"] = calls
             n["narration_fallback"] = False
             n["source"] = "llm"
             cache.write_text(json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
             return n, "llm"
         last = "; ".join(fails)
-        print(f"[retry] narration attempt {attempt}: {last}")
-        if self_review.next_action(False, attempt) != "retry":
+        print(f"[retry] narration call {calls}/{NARRATION_CALL_CAP}: {last}")
+        if kind == "repair":
             break
-    print("[warn] LLM narration failed the hook/teaching gate — building narration from the topic card")
-    # The failed or partial LLM text is discarded. The card is one outline, and it is not published.
-    n, source = resolve_narration(None, fallback_narration(topic))
-    n["review_attempts"] = self_review.MAX_ATTEMPTS
-    n["narration_fallback"] = True
-    n["source"] = "fallback"
-    fallback_fails = check_narration(n, topic)
     reason = (
         "LLM narration failed the hook/teaching gate; "
         "refusing the topic-card template (no upload, no paid voice)"
     )
-    if fallback_fails:
-        reason += ": " + "; ".join(fallback_fails)
-    block_fallback(n, reason)
+    if last:
+        reason += ": " + last
+    block_fallback(draft or {}, reason)
 
 
 def resolve_narration(llm_result, template):
@@ -1397,20 +1604,23 @@ def cues_at(cues, t):
     return hits
 
 
-def number_format_notes(on_screen_texts, spoken="", caption=""):
+def number_format_notes(on_screen_texts, spoken="", caption="", ignore=None):
     """Every spoken or captioned number must match an on-screen figure exactly.
 
     772.41 does not match 772.4. Extra figures on the card are allowed.
+    ignore holds labelled example figures on an evergreen topic. A live price
+    is never ignored.
     """
     import sync_gate
     screen = set()
     for text in on_screen_texts or []:
         screen.update(sync_gate.numbers_in(text))
+    skipped = set(ignore or ())
     notes = []
     seen = set()
     for origin, blob in (("spoken", spoken), ("caption", caption)):
         for num in sync_gate.numbers_in(blob):
-            if num in screen or num in seen:
+            if num in screen or num in seen or num in skipped:
                 continue
             seen.add(num)
             notes.append(f"{origin} number {num} is not an on-screen value")
@@ -1472,8 +1682,12 @@ def _scene_pose_at(scenes, t):
     return anim(max(0.0, min(1.0, local)))
 
 
-def number_faults_for(scenes, spoken, beat_times, audio_words=None):
+def number_faults_for(scenes, spoken, beat_times, audio_words=None, topic=None):
     """Sample each second. Caption and spoken numbers must be on that frame."""
+    ignore = set()
+    if topic is not None and hook_check.allows_example_numbers(topic):
+        full = " ".join(str((spoken or {}).get(beat) or "") for beat in BEATS)
+        ignore = hook_check.example_labelled_numbers(full)
     frames = [s.get("frame") for s in scenes]
     if not frames or any(frame is None for frame in frames):
         return []
@@ -1492,7 +1706,7 @@ def number_faults_for(scenes, spoken, beat_times, audio_words=None):
         ]
         caption = " ".join(cue.get("text") or "" for cue in cues_at(cues, t))
         said = _script_near(spoken, beat_times, audio_words, t)
-        for note in number_format_notes(texts, said, caption):
+        for note in number_format_notes(texts, said, caption, ignore=ignore):
             stamped = f"{note} at {t:.1f}s"
             if stamped not in seen:
                 seen.add(stamped)
@@ -1613,7 +1827,7 @@ def _craft_samples(scenes, topic, beat_times, spoken, hook_line, cta, audio_word
         if note not in seen:
             seen.add(note)
             layout_notes.append(note)
-    for note in number_faults_for(scenes, spoken, beat_times, audio_words):
+    for note in number_faults_for(scenes, spoken, beat_times, audio_words, topic=topic):
         if note not in seen:
             seen.add(note)
             layout_notes.append(note)
