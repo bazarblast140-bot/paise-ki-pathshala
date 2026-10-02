@@ -315,6 +315,14 @@ def verdict_is_ready():
     return review_gate.files_allow_public(RUN, video_format())
 
 def main():
+    # Re-read the ledger immediately before any upload. The picker already
+    # read it after checkout; a fill or a hold that landed during the build
+    # must not become a second public video.
+    from slot_guard import scheduled_slot_block
+    blocked = scheduled_slot_block()
+    if blocked:
+        die(blocked + ". Ledger was re-read before upload; refusing a second fill.")
+
     only_if_ready = "--only-if-ready" in sys.argv
     if only_if_ready and not verdict_is_ready():
         die("Verify verdict is NOT 'READY TO PUBLISH'. Refusing to upload. (This is by design.)")

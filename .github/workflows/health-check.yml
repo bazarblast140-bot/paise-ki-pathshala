@@ -2,18 +2,21 @@ name: Health check
 
 # Read-only pre-slot check. Never uploads, publishes, or posts a Reel.
 # Publish slots are 08:30, 16:00, 21:00 IST. Actions cron is UTC (IST = UTC+5:30).
-# Fires before that slot's earliest build, on an odd minute (GitHub sheds :00/:30):
-#   04:47 IST = 23:17 UTC → 08:30 slot (before the 23:47 UTC build)
-#   11:41 IST = 06:11 UTC → 16:00 slot
-#   16:47 IST = 11:17 UTC → 21:00 slot
+# Fires before that slot's earliest build, on an odd minute, outside
+# 22:30–01:30 UTC (GitHub sheds :00/:30 and drops that midnight window):
+#   17:17 IST = 11:47 UTC → 08:30 (before the 13:07 UTC / 18:37 IST build)
+#   00:53 IST = 19:23 UTC → 16:00 (before the 20:37 UTC / 02:07 IST build)
+#   02:53 IST = 21:23 UTC → 21:00 (before the 01:47 UTC / 07:17 IST build)
+# Also warns (health-alert issue) when fewer than 2 future slots are already
+# uploaded as private + publishAt.
 # On warn/fail: one GitHub issue labelled health-alert (create or update, no dupes).
 # When every check is ok/skip/note, that issue is closed.
 # GITHUB_TOKEN is the built-in token. No new secrets are required.
 on:
   schedule:
-    - cron: "17 23 * * *"
-    - cron: "11 6 * * *"
-    - cron: "17 11 * * *"
+    - cron: "47 11 * * *"   # 17:17 IST → 08:30
+    - cron: "23 19 * * *"   # 00:53 IST → 16:00
+    - cron: "23 21 * * *"   # 02:53 IST → 21:00
   workflow_dispatch:
     inputs:
       slot:

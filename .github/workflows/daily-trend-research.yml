@@ -5,8 +5,10 @@ name: Daily trend research
 # It must never publish, upload, or post. No push: trigger — a push used to
 # start a public upload from the production workflow.
 #
-# Schedule: 00:00 UTC = 05:30 IST, before the 08:30 IST publish slot.
-# GitHub cron can slip; 05:30 still leaves room before that slot.
+# Schedule: 11:23 UTC = 16:53 IST. Odd minute, outside 22:30–01:30 UTC.
+# 00:00 UTC was GitHub's busiest minute and landed about 3.5h late on
+# 2-Oct-2026. This fires before the 17:17 IST health check and the 18:37 IST
+# build that can fill the next 08:30 slot, so that build checks out fresh trends.
 #
 # Auth (no new secrets): YT_DATA_API_KEY if present, else the upload OAuth
 # refresh token (YT_FIN_CLIENT_ID / YT_FIN_CLIENT_SECRET / YT_FIN_REFRESH_TOKEN).
@@ -14,7 +16,7 @@ name: Daily trend research
 # quota with uploads (~1,600 each). Low quota skips calls and still exits 0.
 on:
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "23 11 * * *"   # 16:53 IST, before the 18:37 IST 08:30 build
   workflow_dispatch:
     inputs:
       dry_run:

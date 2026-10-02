@@ -39,8 +39,9 @@ for _stream in (sys.stdout, sys.stderr):
 ROOT = Path(__file__).resolve().parent
 IST = timezone(timedelta(hours=5, minutes=30))
 
-# Before the earliest build cron for that slot, odd minutes (GitHub sheds :00/:30).
-# cron is UTC. IST = UTC+5:30. Lead is minutes before the slot, not a fixed 90.
+# Before the earliest build cron for that slot. Odd minutes, outside
+# 22:30–01:30 UTC (GitHub sheds :00/:30 and drops that window).
+# cron is UTC. IST = UTC+5:30. Lead is minutes before the slot.
 SCHEDULE = slot_guard.HEALTH_SCHEDULE
 SLOT_NAMES = tuple(row[2] for row in SCHEDULE)
 
@@ -887,7 +888,38 @@ def run_checks(http, env, now, provider=None, engine=None):
         check_elevenlabs(http, env, secrets, engine=engine),
         check_instagram(http, env, secrets, now),
         check_youtube_quota(),
+        check_future_slots(now),
     ]
+
+
+def check_future_slots(now, entries=None):
+    """Warn when fewer than two future slots are already private + publishAt.
+
+    A warn is a health-alert issue. Holds and withdrawn rows do not count.
+    """
+    scheduled = slot_guard.future_scheduled_slots(now, entries)
+    count = len(scheduled)
+    listed = ", ".join(f"{row['date_ist']} {row['slot']}" for row in scheduled) or "none"
+    name = "Future slots"
+    want = slot_guard.MIN_FUTURE_SCHEDULED
+    if count >= want:
+        return Check(
+            name=name,
+            status="ok",
+            detail=f"{count} future slots already scheduled (private + publishAt): {listed}",
+        )
+    return Check(
+        name=name,
+        status="warn",
+        detail=(
+            f"only {count} future slot(s) scheduled ({listed}); "
+            f"want at least {want} uploaded as private + publishAt"
+        ),
+        summary_hi=(
+            f"Aage sirf {count} slot scheduled hai. Kam se kam {want} future slot "
+            "private + publishAt par hone chahiye, warna agla publish khali reh sakta hai."
+        ),
+    )
 
 
 def has_problem(checks):

@@ -5,20 +5,33 @@ name: Paise Ki Pathshala
 # ELEVENLABS_*, IG_ACCESS_TOKEN, optional YT_DATA_API_KEY (competitor research).
 # Variables: YT_FIN_CHANNEL_ID, IG_USER_ID, optional SELF_REPAIR.
 on:
-  # Build AHEAD of the slot. YouTube publishAt is the public time.
-  # Odd minutes only — GitHub sheds :00 and :30. Three triggers per slot
-  # (~3–4h before, ~2–3h before, backup). Still 3 public slots a day.
+  # Build 12–14h AHEAD of the slot. YouTube publishAt is the public time.
+  # Nine triggers, odd minutes, none in 22:30–01:30 UTC (GitHub's busiest
+  # hours; :00 and :30 are dropped there too). Any firing run builds the
+  # earliest unfilled slot inside a 26h lookahead, at least 2h ahead.
+  # Still 3 public slots. Each slot has 3 chances in its 12–14h window.
+  # 3 Oct 08:30 is built on the evening of 2 Oct. One slot per run.
   # 08:30 IST = 03:00 UTC. 16:00 IST = 10:30 UTC. 21:00 IST = 15:30 UTC.
+  #
+  #   01:47 UTC = 07:17 IST  → 21:00 in 13h43m
+  #   02:23 UTC = 07:53 IST  → 21:00 in 13h07m
+  #   03:13 UTC = 08:43 IST  → 21:00 in 12h17m
+  #   13:07 UTC = 18:37 IST  → next 08:30 in 13h53m
+  #   13:47 UTC = 19:17 IST  → next 08:30 in 13h13m
+  #   14:23 UTC = 19:53 IST  → next 08:30 in 12h37m
+  #   20:37 UTC = 02:07 IST  → 16:00 in 13h53m
+  #   21:13 UTC = 02:43 IST  → 16:00 in 13h17m
+  #   21:47 UTC = 03:17 IST  → 16:00 in 12h43m
   schedule:
-    - cron: "47 23 * * *"   # 05:17 IST -> 08:30
-    - cron: "17 0 * * *"    # 05:47 IST -> 08:30
-    - cron: "23 1 * * *"    # 06:53 IST -> 08:30 backup
-    - cron: "41 6 * * *"    # 12:11 IST -> 16:00
-    - cron: "47 7 * * *"    # 13:17 IST -> 16:00
-    - cron: "53 8 * * *"    # 14:23 IST -> 16:00 backup
-    - cron: "47 11 * * *"   # 17:17 IST -> 21:00
-    - cron: "13 13 * * *"   # 18:43 IST -> 21:00
-    - cron: "7 14 * * *"    # 19:37 IST -> 21:00 backup
+    - cron: "47 1 * * *"    # 07:17 IST → 21:00
+    - cron: "23 2 * * *"    # 07:53 IST → 21:00
+    - cron: "13 3 * * *"    # 08:43 IST → 21:00
+    - cron: "7 13 * * *"    # 18:37 IST → next 08:30
+    - cron: "47 13 * * *"   # 19:17 IST → next 08:30
+    - cron: "23 14 * * *"   # 19:53 IST → next 08:30
+    - cron: "37 20 * * *"   # 02:07 IST → 16:00
+    - cron: "13 21 * * *"   # 02:43 IST → 16:00
+    - cron: "47 21 * * *"   # 03:17 IST → 16:00
   # NOTE: no `push:` trigger on purpose. A push that touched this file used to
   # start a PUBLIC upload with no slot and no slot guard (inputs are empty on
   # push, so the format step falls back to short + public). Between 30-Sep and
@@ -52,8 +65,9 @@ on:
         required: false
         default: ""
 concurrency:
-  # One group for every early trigger. The backup waits; it does not cancel
-  # the run already building the slot. slot_guard then sees the ledger and skips.
+  # One group for every trigger. The next run waits; it does not cancel the
+  # run already building a slot. That run re-reads the ledger after checkout
+  # and again before upload, so two overlapping runs cannot fill one slot.
   group: paise-ki-pathshala-publish
   cancel-in-progress: false
 permissions:
@@ -73,6 +87,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
       - name: Install deps
         run: pip install -r requirements.txt
+      - name: Re-read ledger after checkout
+        run: |
+          # Setup above can take several minutes. Fetch the ledger again so
+          # the picker sees a fill or a hold that landed after checkout.
+          branch="${GITHUB_REF_NAME:-main}"
+          git fetch origin "$branch"
+          git checkout "origin/$branch" -- data/published.json
       - name: Format decide karo
         id: fmt
         run: |
@@ -95,7 +116,7 @@ jobs:
             echo "publish_at=" >> "$GITHUB_OUTPUT"
             echo "taken=false" >> "$GITHUB_OUTPUT"
           elif [ "$VIS" = "public" ]; then
-            # Next unfilled slot still far enough ahead. Skip if the ledger has it.
+            # Earliest unfilled slot inside the 26h lookahead, at least 2h ahead.
             python slot_guard.py --next >> "$GITHUB_OUTPUT"
           else
             echo "slot=" >> "$GITHUB_OUTPUT"
