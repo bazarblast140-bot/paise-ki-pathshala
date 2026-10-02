@@ -2914,10 +2914,6 @@ def _timed_sentences(rows):
     return sentences
 
 
-def _has_digit(word):
-    return bool(re.search(r"\d", word or ""))
-
-
 def scene_cards_for(spoken, beat_times, scenes, audio_words=None):
     """One card per scene, from the sentences spoken in that scene.
 
@@ -2934,30 +2930,39 @@ def scene_cards_for(spoken, beat_times, scenes, audio_words=None):
         beat = scene.get("beat")
         t0, t1 = float(scene["start"]), float(scene["end"])
         parts = []
+        latest = ""
         for sent in sentences:
-            first = float(sent[0][2])
-            last = float(sent[-1][2])
-            number_words = [word for _b, word, start in sent if _has_digit(word)]
-            number_starts = [float(start) for _b, word, start in sent if _has_digit(word)]
-            late = any(start >= t1 - 1e-6 for start in number_starts)
-            completes = (t0 - 1e-6) <= last < (t1 - 1e-6) and not late
-            begins = (t0 - 1e-6) <= first < (t1 - 1e-6)
-            in_scene = any((t0 - 1e-6) <= float(start) < (t1 - 1e-6) for _b, _w, start in sent)
-            if not in_scene and sent[0][0] != beat:
+            if sent[0][0] != beat:
                 continue
-            if completes and (begins or sent[0][0] == beat or in_scene):
-                text = " ".join(word for _b, word, _s in sent)
-                if text not in parts:
-                    parts.append(text)
+            ready = [word for _b, word, start in sent if float(start) < t1 - 1e-9]
+            if not ready:
                 continue
-            for word, start in zip(number_words, number_starts):
-                if (t0 - 1e-6) <= start < (t1 - 1e-6) and word not in parts:
+            latest = " ".join(ready)
+            overlaps = any(t0 - 1e-6 <= float(start) < t1 - 1e-6 for _b, _w, start in sent)
+            if not overlaps:
+                continue
+            if latest not in parts:
+                parts.append(latest)
+        # A digit spoken inside this scene stays on this card even when the
+        # rest of its sentence is tagged to the next beat.
+        have = set()
+        for part in parts:
+            have.update(part.split())
+        for sent in sentences:
+            for _b, word, start in sent:
+                if word in have or not re.search(r"\d", word or ""):
+                    continue
+                if t0 - 1e-6 <= float(start) < t1 - 1e-6:
                     parts.append(word)
+                    have.add(word)
+        # A slice with no word of its own keeps the phrase already being said.
+        if not parts and latest:
+            parts.append(latest)
         blob = " ".join(parts)
         texts.setdefault(beat, []).append(blob)
-        raw = scene_frames._spoken_figures(blob, scene_frames._digit_tokens(blob))
-        if not raw:
-            raw = scene_frames._figure_tokens([blob])
+        # Digit labels only. "दो लाख" stays words until the ₹ figure itself is said,
+        # so a scene that ends first cannot paint 2,00,000 early.
+        raw = scene_frames._figure_tokens([blob])
         kept = []
         shown = set()
         for label in raw:

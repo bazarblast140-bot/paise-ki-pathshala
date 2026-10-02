@@ -137,7 +137,12 @@ def check_scenes(scenes, duration):
 
 
 def segment_is_concrete(text):
-    return bool(_CONCRETE_RE.search(str(text or "")))
+    """A number, a level, or a step. Hindi figures count (दो प्रतिशत, बाईस हज़ार)."""
+    raw = str(text or "")
+    if _CONCRETE_RE.search(raw):
+        return True
+    import hook_check
+    return bool(hook_check.extract_numbers(raw))
 
 
 def vague_beats(beats, order=BEATS):

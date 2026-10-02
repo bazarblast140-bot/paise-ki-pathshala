@@ -9,6 +9,7 @@ import numpy as np
 import board_short
 import hook_check
 import scene_frames
+import scene_pace
 import self_review
 import speak
 import sync_gate
@@ -63,6 +64,8 @@ class FigureBeforeSpokenTests(unittest.TestCase):
         self.assertIn("2,00,000", late)
         # The same figure said again on a later card of the beat is not dropped.
         self.assertIn("₹2,00,000", late)
+        # The earlier slice still shows the words already said, not a blank card.
+        self.assertIn("लाख", texts["pehchan"][0])
 
 
 class TitleTermFoldTests(unittest.TestCase):
@@ -206,6 +209,29 @@ class CardChartTests(unittest.TestCase):
         self.assertIn("चाहिए", blob)
         self.assertNotRegex(blob, r"₹[\d,]+\s+₹[\d,]+,")
         self.assertGreaterEqual(frame.panel_fill, 0.35)
+        short = _topic("risk_daily_loss_limit")
+        short["_scene_cards"] = {"hook": ["दो लाख की हद"]}
+        short["_scene_figures"] = {"hook": [[]]}
+        short["_spoken_beats"] = {"hook": "दो लाख की हद"}
+        small = scene_frames.frames_for(short, "hook", 1, {"mode": "schematic"})[0][0]
+        self.assertGreaterEqual(small.panel_fill, 0.35)
+        shown = scene_frames.frame_card_text(small)
+        self.assertIn("दो लाख की हद", shown)
+        self.assertNotIn("2,00,000", shown)
+
+
+class HindiConcreteTests(unittest.TestCase):
+    def test_a_hindi_number_word_keeps_the_beat_concrete(self):
+        beats = {
+            "hook": "हर दिन दो प्रतिशत की हद क्यों? एक बुरा दिन पूरा महीना खा सकता है।",
+            "pehchan": "ऑप्शन बायर का ब्रेकईवन बाईस हज़ार छह सौ है।",
+            "matlab": "वापसी छोटे हुए पैसे पर गिनी जाती है।",
+            "karein": "यह जोखिम का नियम है।",
+        }
+        vague = scene_pace.vague_beats(beats)
+        self.assertNotIn("hook", vague)
+        self.assertNotIn("pehchan", vague)
+        self.assertIn("matlab", vague)
 
 
 class LatinAndNumberGateTests(unittest.TestCase):

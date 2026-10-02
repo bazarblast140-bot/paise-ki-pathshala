@@ -1580,11 +1580,92 @@ def frames_safe_area_notes(frames):
     return notes
 
 
-def _paint_live_card(topic, beat, index, n, body_size):
-    """Headline at least 64px. Body lines are whole sentences. Bars do not count as fill."""
+def _text_width(text, size):
+    runs = _runs(text)
+    if not runs:
+        return 0
+    if len(runs) == 1:
+        font = _font(int(size), runs[0][0])
+        box = ImageDraw.Draw(Image.new("RGB", (8, 8))).textbbox((0, 0), text, font=font)
+        return box[2] - box[0]
+    _parts, union = _layout_runs(text, int(size))
+    return union[2] - union[0]
+
+
+def _phrase_rows(text, size, max_width=900):
+    """Whole sentences wrapped so each line fits at `size`. Orphans stay with the line above."""
+    rows = []
+    for sentence in _card_sentences(text):
+        words = str(sentence or "").split()
+        cur = ""
+        for word in words:
+            trial = (cur + " " + word).strip()
+            if cur and _text_width(trial, size) > max_width:
+                rows.append(cur)
+                cur = word
+            else:
+                cur = trial
+        if cur:
+            rows.append(cur)
+    if len(rows) >= 2 and len(rows[-1].split()) <= 2:
+        joined = rows[-2] + " " + rows[-1]
+        if _text_width(joined, size) <= max_width + 40:
+            rows[-2] = joined
+            rows.pop()
+    return rows
+
+
+def _tight_panel(boxes, pad):
+    """A card around the words, not a navy field with a caption in the corner."""
+    left, top, right, bottom = safe_area.limits()
+    top = max(top, safe_area.CONTENT_TOP)
+    bottom = min(bottom, safe_area.CONTENT_BOTTOM)
+    x0 = min(float(box[0]) for box in boxes) - pad
+    y0 = min(float(box[1]) for box in boxes) - pad
+    x1 = max(float(box[2]) for box in boxes) + pad
+    y1 = max(float(box[3]) for box in boxes) + pad
+    return (
+        max(left, x0),
+        max(top, y0),
+        min(right, x1),
+        min(bottom, y1),
+    )
+
+
+def _seat_panel(image, panel, color):
+    """Draw the card behind the sprites already recorded on `image`."""
+    width, height = image.size
+    final = _live_plate(width, height)
+    draw = ImageDraw.Draw(final)
+    draw.rounded_rectangle(
+        [int(panel[0]), int(panel[1]), int(panel[2]), int(panel[3])],
+        28, fill=color, outline=GOLD, width=4,
+    )
+    for layer in image.text_layers or []:
+        sprite = layer.get("image")
+        xy = layer.get("xy")
+        if sprite is None or xy is None:
+            continue
+        final.paste(sprite, xy, sprite)
+    final.text_layers = list(image.text_layers or [])
+    final.label_boxes = list(getattr(image, "label_boxes", None) or [])
+    final.shapes = list(getattr(image, "shapes", None) or [])
+    final.labelled_graphic_boxes = []
+    final.chart_bar_boxes = list(getattr(image, "chart_bar_boxes", None) or [])
+    final.panel_box = tuple(panel)
+    final.scene_kind = getattr(image, "scene_kind", "")
+    final.panel_fill = panel_fill_fraction(final)
+    return final
+
+
+def _paint_live_card(topic, beat, index, n, body_size=None):
+    """Headline at least 64px. The card hugs the phrase so empty navy is not the panel.
+
+    Body lines are whole sentences. A chart is drawn only for two or more digit
+    figures, and its bars are not part of the fill.
+    """
+    del body_size  # size is chosen so the whole phrase fits
     width, height = K.W, K.H
-    image = _live_plate(width, height)
-    draw = ImageDraw.Draw(image)
     shift = (_BEAT_SHIFT.get(beat, 0) + int(index)) % 4
     panel_color = (
         (22, 48, 96),
@@ -1592,57 +1673,90 @@ def _paint_live_card(topic, beat, index, n, body_size):
         (18, 52, 88),
         (26, 42, 102),
     )[shift]
-    panel_box = (70, 190, width - 70, 1300)
-    draw.rounded_rectangle(list(panel_box), 28, fill=panel_color, outline=GOLD, width=4)
-    image.panel_box = panel_box
-    image.labelled_graphic_boxes = []
-    image.chart_bar_boxes = []
     card = _scene_card_text(topic, beat, index, n)
     spoken = bool(str(((topic or {}).get("_spoken_beats") or {}).get(beat) or "").strip())
     figures = _scene_figure_list(topic, beat, index, card, spoken)
     summary = _summary_line(figures)
-    head_size = 72
-    y = 228
+    # The summary repeats the card when the card already shows those figures.
+    if summary and summary not in card:
+        phrase = f"{summary} {card}".strip()
+    else:
+        phrase = card
     head = _BEAT_HEAD.get(beat, "बात")
+    head_size = 72
+    content_top = safe_area.CONTENT_TOP + 36
+    content_bottom = safe_area.CONTENT_BOTTOM - 28
+    def _unique_lines(trial):
+        seen = set()
+        for row in trial:
+            key = normalize_label(row)
+            if not key:
+                continue
+            if key in seen:
+                return False
+            seen.add(key)
+        return True
+
+    chosen = 64
+    rows = _phrase_rows(phrase, chosen) if phrase else []
+    for size in (168, 152, 136, 120, 104, 88, 72, 64):
+        trial = _phrase_rows(phrase, size) if phrase else []
+        if any(_text_width(row, size) > 920 for row in trial):
+            continue
+        if not _unique_lines(trial):
+            continue
+        block = head_size + 18 + len(trial) * (size + 16)
+        if content_top + block <= content_bottom:
+            chosen = size
+            rows = trial
+            break
+    image = _live_plate(width, height)
+    image.labelled_graphic_boxes = []
+    image.chart_bar_boxes = []
+    block_h = head_size + 18 + len(rows) * (chosen + 14)
+    y = content_top + max(0, (content_bottom - content_top - block_h) / 2)
     _text(image, 540, y, head, GOLD, head_size, anchor="mt")
     y += head_size + 18
-    line_h = int(body_size) + 16
-    bottom = panel_box[3] - 28
-    max_lines = max(1, int((bottom - y) / line_h))
-    # Narrow wrap keeps the large size inside the safe width.
-    limit = 16 if body_size >= 80 else 18
-    if summary:
-        for row in phrases_that_fit(summary, limit, max_lines):
-            _text(image, 540, y, row, (250, 250, 250), body_size, anchor="mt")
-            y += line_h
-            max_lines -= 1
-            if max_lines <= 0:
-                break
-    if max_lines > 0:
-        for row in phrases_that_fit(card, limit, max_lines):
-            _text(image, 540, y, row, (230, 236, 245), body_size, anchor="mt")
-            y += line_h
-    _paint_labelled_chart(image, figures, panel_box, text_bottom=y)
+    line_h = chosen + 16
+    for row in rows:
+        _text(image, 540, y, row, (250, 250, 250), chosen, anchor="mt")
+        y += line_h
     image.scene_kind = f"fact-{beat}"
-    image.panel_fill = panel_fill_fraction(image)
-    return image
+    boxes = [
+        layer["box"] for layer in (image.text_layers or [])
+        if layer.get("text") and layer.get("box") and not layer.get("faint")
+    ]
+    if not boxes:
+        image.panel_box = (70, 190, width - 70, 1300)
+        image.panel_fill = panel_fill_fraction(image)
+        return image
+    seated = None
+    for pad in (72, 56, 44, 32, 24):
+        panel = _tight_panel(boxes, pad)
+        trial = _seat_panel(image, panel, panel_color)
+        seated = trial
+        if trial.panel_fill + 1e-9 >= 0.35:
+            break
+    # Bars sit under the card. They are not part of the panel, so they cannot
+    # satisfy the 35% fill. Two figures or none.
+    room_top = float(seated.panel_box[3]) + 16
+    room_bottom = min(content_bottom, room_top + 260)
+    if len(figures) >= 2 and room_bottom - room_top >= 160:
+        _paint_labelled_chart(
+            seated, figures, (90, room_top, width - 90, room_bottom),
+            text_bottom=room_top,
+        )
+    return seated
 
 
 def _live_fact_frame(topic, beat, index, n=1):
-    """One full-frame card of the words this scene says. No zoom and no second title.
+    """One card of the words this scene says. No zoom and no second title.
 
     The headline is at least 64px on a 1080-wide frame. Short phrases are drawn
     whole. A chart is two or more bars scaled to the figures, or it is absent.
     The bars do not count toward the 35% panel fill.
     """
-    best = None
-    for body_size in (96, 88, 80, 72, 64):
-        image = _paint_live_card(topic, beat, index, n, body_size)
-        if best is None or image.panel_fill > best.panel_fill:
-            best = image
-        if image.panel_fill + 1e-9 >= 0.35:
-            return image
-    return best
+    return _paint_live_card(topic, beat, index, n)
 
 
 def _live_plate(width, height):
