@@ -409,5 +409,98 @@ class PreUploadRereadTests(unittest.TestCase):
             self.assertEqual(caught.exception.code, 1)
 
 
+class WithdrawnSlotTests(unittest.TestCase):
+    """A withdrawn video stays in the ledger and does not occupy the clock slot."""
+
+    def test_withdrawn_row_leaves_the_slot_open_for_a_new_upload(self):
+        now = datetime(2026, 10, 2, 11, 0, tzinfo=IST)
+        withdrawn = {
+            "date_ist": "2026-10-02",
+            "slot": "16:00",
+            "video_id": "Lx2vFMDO5ws",
+            "status": "withdrawn",
+            "topic_key": "atr_sl",
+        }
+        choice = SG.next_unfilled(now, [withdrawn])
+        self.assertEqual(choice["date_ist"], "2026-10-02")
+        self.assertEqual(choice["slot"], "16:00")
+        self.assertEqual(choice["publish_at"], "2026-10-02T10:30:00Z")
+        self.assertFalse(SG.slot_is_scheduled([withdrawn], "2026-10-02", "16:00"))
+        self.assertEqual(SG.row_state(SG.find_entry([withdrawn], "2026-10-02", "16:00")), "open")
+        env = {
+            "PUBLISH_VISIBILITY": "public",
+            "PUBLISH_SLOT_IST": "16:00",
+            "PUBLISH_DATE_IST": "2026-10-02",
+        }
+        with mock.patch.object(SG, "_read", return_value=[withdrawn]), mock.patch.dict(os.environ, env):
+            self.assertIsNone(SG.scheduled_slot_block())
+
+    def test_hold_still_blocks_when_a_withdrawn_row_is_also_present(self):
+        now = datetime(2026, 10, 2, 11, 0, tzinfo=IST)
+        entries = [
+            {"date_ist": "2026-10-02", "slot": "16:00", "video_id": "Lx2vFMDO5ws", "status": "withdrawn"},
+            {"date_ist": "2026-10-02", "slot": "16:00", "video_id": None, "platform": "hold"},
+        ]
+        choice = SG.next_unfilled(now, entries)
+        self.assertEqual(choice["slot"], "21:00")
+        self.assertNotEqual(choice["slot"], "16:00")
+        self.assertEqual(SG.row_state(SG.find_entry(entries, "2026-10-02", "16:00")), "held")
+
+    def test_a_later_real_upload_fills_the_slot_the_withdrawal_left_open(self):
+        entries = [
+            {"date_ist": "2026-10-02", "slot": "16:00", "video_id": "Lx2vFMDO5ws", "status": "withdrawn"},
+            {"date_ist": "2026-10-02", "slot": "16:00", "video_id": "newShort1", "platform": "youtube"},
+        ]
+        now = datetime(2026, 10, 2, 11, 0, tzinfo=IST)
+        choice = SG.next_unfilled(now, entries)
+        self.assertEqual(choice["slot"], "21:00")
+        self.assertTrue(SG.slot_is_scheduled(entries, "2026-10-02", "16:00"))
+        self.assertEqual(SG.find_entry(entries, "2026-10-02", "16:00")["video_id"], "newShort1")
+
+    def test_slot_watch_does_not_treat_a_withdrawn_video_as_the_upload(self):
+        import slot_watch
+        now = slot_watch.datetime(2026, 10, 2, 16, 49, tzinfo=slot_watch.IST)
+        entries = [
+            {"date_ist": "2026-09-01", "slot": "08:30", "video_id": "abc", "format": "short"},
+            {
+                "date_ist": "2026-10-02",
+                "slot": "16:00",
+                "video_id": "Lx2vFMDO5ws",
+                "status": "withdrawn",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "published.json"
+            path.write_text(json.dumps(entries), encoding="utf-8")
+            gout = Path(d) / "gha"
+            env = {"SLOT_CHECK": "16:00", "GITHUB_OUTPUT": str(gout)}
+            buf = io.StringIO()
+            with mock.patch.object(slot_watch, "LEDGER", path), \
+                 mock.patch.dict(os.environ, env), \
+                 mock.patch.object(slot_watch, "send"), \
+                 mock.patch.object(slot_watch, "datetime", wraps=slot_watch.datetime) as dt, \
+                 mock.patch("sys.stdout", buf):
+                dt.now.return_value = now
+                slot_watch.main()
+            flags = gout.read_text(encoding="utf-8")
+            text = buf.getvalue()
+        self.assertIn("missing=true", flags)
+        self.assertIn("fill=true", flags)
+        self.assertNotIn("youtu.be/Lx2vFMDO5ws", text)
+        self.assertNotIn("on hold", text)
+
+    def test_live_ledger_keeps_the_withdrawn_video_and_drops_todays_1600_hold(self):
+        entries = json.loads((ROOT / "data" / "published.json").read_text(encoding="utf-8"))
+        rows = [
+            entry for entry in entries
+            if entry.get("date_ist") == "2026-10-02" and entry.get("slot") == "16:00"
+        ]
+        withdrawn = [entry for entry in rows if entry.get("video_id") == "Lx2vFMDO5ws"]
+        self.assertEqual(len(withdrawn), 1)
+        self.assertEqual(withdrawn[0].get("status"), "withdrawn")
+        self.assertIn("Do not republish", withdrawn[0].get("note", ""))
+        self.assertFalse(any(SG.is_hold(entry) for entry in rows))
+
+
 if __name__ == "__main__":
     unittest.main()
