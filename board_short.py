@@ -350,7 +350,10 @@ def check_narration(n, topic):
         bw = len(str(beats.get(b) or "").split())
         if not lo <= bw <= hi:
             fails.append(f"{b} beat {bw} words ({lo}-{hi} chahiye)")
-    extra = hook_check.unsourced_numbers(text, topic)
+    if topic.get("_live_short"):
+        extra = hook_check.live_number_faults(beats, topic, order)
+    else:
+        extra = hook_check.unsourced_numbers(text, topic)
     if extra:
         fails.append(f"ye numbers topic me nahi hain: {sorted(extra)} — sirf diye gaye numbers use karo")
     low = text.lower()
@@ -770,6 +773,38 @@ def require_llm_narration(n, source):
     )
 
 
+def _allowed_number_list(topic):
+    nums = hook_check.allowed_example_numbers(topic)
+
+    def key(value):
+        try:
+            return (0, float(value))
+        except (TypeError, ValueError):
+            return (1, str(value))
+
+    return sorted(nums, key=key)
+
+
+def _allowed_number_text(topic):
+    return ", ".join(_allowed_number_list(topic))
+
+
+def _number_beats(n, topic, order):
+    """Beats that contain a number the gate will reject."""
+    beats = (n or {}).get("beats") or {}
+    if (topic or {}).get("_live_short"):
+        return hook_check.beats_with_number_faults(beats, topic, order)
+    extra = hook_check.unsourced_numbers(
+        " ".join(str(beats.get(beat) or "") for beat in order), topic)
+    if not extra:
+        return []
+    found = []
+    for beat in order:
+        if hook_check.extract_numbers(str(beats.get(beat) or "")) & extra:
+            found.append(beat)
+    return found
+
+
 def beats_to_rewrite(n, topic, extra=""):
     """Beats outside the ±20% window, plus any beat named by another gate failure."""
     order, targets, total_window, _band = _lesson(topic)
@@ -801,6 +836,9 @@ def beats_to_rewrite(n, topic, extra=""):
     for beat in scene_pace.vague_beats(beats, order=order):
         if beat not in rewrite:
             rewrite.append(beat)
+    for beat in _number_beats(n, topic, order):
+        if beat not in rewrite:
+            rewrite.append(beat)
     if fails and not rewrite:
         rewrite = list(order)
     return rewrite
@@ -819,6 +857,18 @@ def repair_instructions(draft, rewrite, topic=None):
         f"Return one JSON object with title, hook_line, and all {how_many} beats.",
         "Keep sentence punctuation (। . ?) so the voice can pause. Do not write run-on lines.",
     ]
+    if topic is not None:
+        allowed = _allowed_number_text(topic)
+        lines.append(
+            f"Allowed numbers: {allowed}. "
+            "A rewritten beat may use only these figures. Do not invent any other number."
+        )
+        if hook_check.allows_example_numbers(topic):
+            lines.append(
+                "This evergreen topic may use one extra figure in udaharan or galti only, "
+                "when the same sentence says उदाहरण or मान लीजिए. Never in the hook. "
+                "That figure must be the number already on screen."
+            )
     for beat in order:
         target = targets[beat]
         lo, hi = beat_word_window(target)
@@ -848,9 +898,8 @@ def repair_instructions(draft, rewrite, topic=None):
         lines.append("hook_line must be the first sentence of the rewritten hook.")
     if topic is not None and hook_check.allows_example_numbers(topic):
         lines.append(
-            "This is an evergreen topic with no market data. A new figure is allowed "
-            "only when the same sentence labels it as an example (उदाहरण, example, or मिसाल). "
-            "Do not present that figure as a live price."
+            "This is an evergreen topic with no market data. "
+            "Do not present an example figure as a live price."
         )
     return "\n".join(lines)
 
@@ -903,9 +952,11 @@ def live_narration_system(topic):
         "Beats, in order: hook, pehchan, matlab, udaharan, galti, karein.",
         "hook = the problem. The punchy hook_line is on screen from the first frame.",
         "pehchan = how to recognise it. matlab = what it means.",
-        "udaharan = one worked example with concrete numbers. On an evergreen topic, "
-        "label that figure as उदाहरण in the same sentence.",
-        "galti = one common mistake and the fix.",
+        "udaharan = one worked example. Use only the allowed numbers below. "
+        "On an evergreen topic, label an extra on-screen figure as उदाहरण or मान लीजिए "
+        "in the same sentence. Never put that extra figure in the hook.",
+        "galti = one common mistake and the fix, using the same allowed numbers.",
+        f"Allowed numbers for udaharan and galti: {_allowed_number_text(topic)}.",
         "karein = the confirmation or risk check, then one takeaway. Do not speak a CTA.",
         "Keep sentence punctuation (। . ?) so the voice pauses. Do not write run-on lines.",
         f"Pace coefficient: {wps:.2f} words/second. The estimate must land in 75-90 seconds.",
@@ -968,7 +1019,8 @@ def narration(topic, c, spec=None):
             print(f"[cache] narration invalid, regenerating: {e}")
     user = {"topic": topic["topic"], "category": topic["cat"],
             "on_screen": {b: {"headline": h, "sub": s} for b, (h, s) in topic["beats"].items()},
-            "facts": topic["facts"]}
+            "facts": topic["facts"],
+            "allowed_numbers": _allowed_number_list(topic)}
     msg = json.dumps(user, ensure_ascii=False)
     draft = None
     repair_done = False
@@ -1849,10 +1901,8 @@ def _scene_pose_at(scenes, t):
 
 def number_faults_for(scenes, spoken, beat_times, audio_words=None, topic=None):
     """Sample each second. Caption and spoken numbers must be on that frame."""
+    # A labelled उदाहरण still has to be the figure drawn on that frame.
     ignore = set()
-    if topic is not None and hook_check.allows_example_numbers(topic):
-        full = " ".join(str((spoken or {}).get(beat) or "") for beat in timed_beats(beat_times))
-        ignore = hook_check.example_labelled_numbers(full)
     frames = [s.get("frame") for s in scenes]
     if not frames or any(frame is None for frame in frames):
         return []

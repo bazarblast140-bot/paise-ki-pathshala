@@ -37,7 +37,7 @@ LAST_CHANCE_AFTER = timedelta(minutes=90)
 LATE_PAD = timedelta(minutes=5)
 
 _LIVE_CATS = {"REAL DATA", "MARKET FACT"}
-_EXAMPLE_MARKERS = ("example", "misal", "मिसाल", "उदाहरण", "illustrative")
+_EXAMPLE_MARKERS = ("example", "misal", "मिसाल", "उदाहरण", "मान लीजिए", "illustrative")
 _NARRATION_OK = {"llm", "cache", "outline"}
 _GATE_NAMES = (
     "fallback_narration",
