@@ -1,6 +1,8 @@
 """Topic–voice–visual sync, and a narration fallback that must not publish."""
 import unittest
 
+import numpy as np
+
 import board_short
 import self_review
 import sync_gate
@@ -104,6 +106,19 @@ class SyncGateTests(unittest.TestCase):
         text = sync_gate.normalize(heard)
         for figure in ("15.7", "795.9", "772.4", "819.4", "2350", "एटीआर", "एसएल"):
             self.assertIn(figure, text.split(), figure)
+        # This voice's other spellings of the same words.
+        again = sync_gate.normalize("स्येल अटियार पुईंट बरावर रषल Hdfc बान")
+        for figure in ("एसएल", "एटीआर", "पॉइंट", "बराबर", "हलचल", "एचडीएफसी", "बैंक"):
+            self.assertIn(figure, again.split(), figure)
+
+    def test_speech_offset_uses_loudness_not_zero_crossings(self):
+        rate = 16000
+        silence = np.zeros(int(0.30 * rate), dtype=np.float32)
+        t = np.arange(int(0.50 * rate)) / rate
+        tone = (0.4 * np.sin(2 * np.pi * 180 * t)).astype(np.float32)
+        offset = sync_gate.speech_offset(np.concatenate([silence, tone]), rate=rate)
+        self.assertGreater(offset, 0.25)
+        self.assertLess(offset, 0.40)
 
     def test_fallback_does_not_keep_partial_llm_text(self):
         template = {

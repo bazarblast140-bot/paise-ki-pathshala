@@ -1515,10 +1515,19 @@ def _sync_report(topic, narration, scenes, beat_audio, beat_times, spec):
     """Transcribe the beat audio and fail closed on a mismatch or a whisper error."""
     import sync_gate
     try:
-        words = sync_gate.transcribe_beats(beat_audio, beat_times)
+        sources = {}
+        for beat in BEATS:
+            mp3 = RUN / f"tts_{beat}.mp3"
+            if mp3.exists():
+                sources[beat] = mp3
+        words = sync_gate.transcribe_beats(beat_audio, beat_times, sources=sources or None)
         rows = []
         for scene in scenes:
             frame = scene.get("frame")
+            # The stored pose is the cut. An animated scene's lesson is the
+            # picture held through the slice, not the handoff frame.
+            if frame is not None and getattr(frame, "animate", None):
+                frame = frame.animate(0.5)
             rows.append({
                 "start": scene["start"],
                 "end": scene["end"],

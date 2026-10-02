@@ -714,6 +714,7 @@ def _ladder_moving(lesson, phase):
         draw.line([(230, y), (700, y)], fill=col, width=4)
         draw.line([(860, y), (886, y)], fill=(120, 132, 150), width=3)
     tip = y_of(entry) + (y_of(sl) - y_of(entry)) * grown
+    _band(img, tip, 90 + 70 * grown)
     _bracket(img, 760, y_of(entry), tip, GOLD)
     final = float(lesson["distance"])
     shown = final * grown

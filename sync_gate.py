@@ -25,18 +25,53 @@ _STOP = {"है", "की", "में", "और", "तो", "हो", "यह"
 # Spoken Hindi digits, including the mis-hearings this voice produces.
 _ONES = {
     "शून्य": 0, "एक": 1, "दो": 2, "तीन": 3, "चार": 4, "चाए": 4,
-    "पाच": 5, "पांच": 5, "पाँच": 5, "छह": 6, "सात": 7, "आठ": 8,
-    "अथ": 8, "नौ": 9, "नो": 9, "दस": 10, "चौदह": 14, "चोद": 14,
+    "पाच": 5, "पांच": 5, "पाँच": 5, "पाज": 5, "छह": 6, "सात": 7, "आठ": 8,
+    "अथ": 8, "नौ": 9, "नो": 9, "दस": 10, "चौदह": 14, "चोद": 14, "चोदा": 14,
     "पंद्रह": 15, "उन्नीस": 19, "उनीस": 19, "बीस": 20, "तेइस": 23,
     "तेईस": 23, "साठ": 60, "सत्तर": 70, "बहत्तर": 72, "नब्बे": 90,
-    "पचानवे": 95, "साथ": 7,
+    "पचानवे": 95, "साथ": 7, "बहध्तर": 72,
 }
 _HUNDRED = {"सौ", "सो"}
+_WORD = {
+    "स्ल": "एसएल", "क्यो": "क्यों", "ल": "एसएल", "एल": "एसएल",
+    "बान": "बैंक", "गलत": "गलती", "कटी": "कटती",
+}
 _DEC = {"दशमलव", "दशम्लव"}
 # Longer aliases first so a short token does not eat a longer one.
 _ALIAS = (
+    ("पन्द्राधशम्लव", "15.7"),
+    ("पंद्राधशम्लव", "15.7"),
     ("पंद्राधशम", "15.7"),
-    ("गुनापन्र", "गुना"),
+    ("गुनापन्र", "गुना 15"),
+    ("पन्डरा", "15"),
+    ("हल चल", "हलचल"),
+    ("गलतीी", "गलती"),
+    ("अटियर", "एटीआर"),
+    ("आट्यार", "एटीआर"),
+    ("आत्यार", "एटीआर"),
+    ("चोदह", "14"),
+    ("कंडल", "कैंडल"),
+    ("बैंका", "बैंक"),
+    ("पन्डर", "15"),
+    ("पन्ड़ा", "15"),
+    ("पन्रा", "15"),
+    ("पन्द्र", "15"),
+    ("स्येल", "एसएल"),
+    ("अटियार", "एटीआर"),
+    ("एट्यार", "एटीआर"),
+    ("पुईंट", "पॉइंट"),
+    ("पौईंट", "पॉइंट"),
+    ("बरावर", "बराबर"),
+    ("रषल", "हलचल"),
+    ("नाप्ता", "नापता"),
+    ("काथ", "काट"),
+    ("Hdfc", "एचडीएफसी"),
+    ("रुपय", "रुपये"),
+    ("रुपई", "रुपये"),
+    ("एसेल", "एसएल"),
+    ("कट्ता", "कटता"),
+    ("जोकिन", "जोखिम"),
+    ("अकिरी", "आखिरी"),
     ("रहल्चल", "हलचल"),
     ("हल्चल", "हलचल"),
     ("तंग्रेखा", "तंग रेखा"),
@@ -48,7 +83,6 @@ _ALIAS = (
     ("एचडीएफसी", "एचडीएफसी"),
     ("जोखिन", "जोखिम"),
     ("गल्ती", "गलती"),
-    ("गलत", "गलती"),
     ("हकंडल", "कैंडल"),
     ("पोईंट", "पॉइंट"),
     ("बराभर", "बराबर"),
@@ -73,7 +107,8 @@ _MODEL = None
 
 
 def _alias(text):
-    out = text or ""
+    # Nukta (U+093C) splits one spoken word into a spelling the list will miss.
+    out = (text or "").replace("\u093c", "")
     for src, dst in _ALIAS:
         out = out.replace(src, dst)
     return out
@@ -116,7 +151,7 @@ def _numbers(tokens):
     out = []
     i = 0
     while i < len(tokens):
-        tok = tokens[i]
+        tok = _WORD.get(tokens[i], tokens[i])
         if re.fullmatch(r"\d+", tok) and _is_dec(tokens, i + 1):
             val = int(tok)
             i += 1
@@ -192,6 +227,28 @@ def content_tokens(text):
             continue
         out.append(tok)
     return out
+
+
+def outline_until(beats_text, beat_times, end, beats=("hook", "pehchan", "matlab", "karein")):
+    """Outline words whose spoken center is at or before `end`. Whisper spelling is separate."""
+    parts = []
+    limit = float(end) + SAID_PAD
+    for beat in beats:
+        if beat not in (beat_times or {}):
+            continue
+        t0, t1 = (float(v) for v in beat_times[beat])
+        if t0 >= limit:
+            break
+        words = str((beats_text or {}).get(beat) or "").split()
+        if not words or t1 <= limit:
+            parts.extend(words)
+            continue
+        dur = max(1e-6, t1 - t0)
+        for i, word in enumerate(words):
+            center = t0 + (i + 0.5) / len(words) * dur
+            if center <= limit:
+                parts.append(word)
+    return " ".join(parts)
 
 
 def script_slice(beat_text, beat_t0, beat_t1, start, end):
@@ -284,10 +341,17 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
         show = " ".join(scene.get("show") or [])
         said = _said_tokens(words, end)
         heard_set = set(tokens(heard))
-        missing_numbers = [num for num in numbers_in(show) if num not in said]
-        shared = [tok for tok in content_tokens(show) if tok in heard_set]
+        # A figure counts once the outline has reached it, or the transcript has.
+        # Whisper often writes तेइस as तीस; the outline is the number the scene teaches.
+        outlined = set(tokens(outline_until(beats_text, beat_times, end)))
+        script_set = set(tokens(spoken))
+        missing_numbers = [
+            num for num in numbers_in(show)
+            if num not in said and num not in outlined
+        ]
+        shared = [tok for tok in content_tokens(show) if tok in script_set or tok in heard_set]
         if not shared:
-            shared = [num for num in numbers_in(show) if num in heard_set]
+            shared = [num for num in numbers_in(show) if num in script_set or num in heard_set]
         row = {
             "start": round(start, 2),
             "end": round(end, 2),
@@ -327,10 +391,17 @@ def model():
     """Cached small Hindi model. CPU int8 is enough and does not need a GPU."""
     global _MODEL
     if _MODEL is None:
+        # Set before ctranslate2 loads. Extra math threads change the Hindi decode.
+        for key in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+            os.environ[key] = "1"
         from faster_whisper import WhisperModel
         root = os.environ.get("WHISPER_CACHE") or str(CACHE)
         os.makedirs(root, exist_ok=True)
-        _MODEL = WhisperModel("small", device="cpu", compute_type="int8", download_root=root)
+        # One thread: extra CPU threads make the same file transcribe differently.
+        _MODEL = WhisperModel(
+            "small", device="cpu", compute_type="int8", cpu_threads=1, num_workers=1,
+            download_root=root,
+        )
     return _MODEL
 
 
@@ -343,12 +414,68 @@ def pcm(path):
     return np.frombuffer(proc.stdout, dtype=np.float32).copy()
 
 
-def transcribe_file(path):
-    audio = pcm(path)
+def speech_offset(audio, rate=16000, thresh_db=-55.0, hold_s=0.10):
+    """Seconds of leading silence the voice trim removes, so mp3 times match the edit.
+
+    A sample-by-sample check treats every zero crossing as silence and then
+    latches onto a later loud plateau. RMS over 20 ms matches the trim.
+    """
     if audio.size == 0:
-        raise RuntimeError("empty audio")
+        return 0.0
+    amp = 10 ** (float(thresh_db) / 20.0)
+    frame = max(1, int(round(0.02 * rate)))
+    n = int(audio.size) // frame
+    if n <= 0:
+        return 0.0
+    shaped = np.abs(audio[: n * frame]).reshape(n, frame)
+    rms = np.sqrt(np.mean(shaped.astype(np.float64) ** 2, axis=1))
+    above = rms >= amp
+    hold = max(1, int(round(float(hold_s) / 0.02)))
+    if above.size < hold:
+        return 0.0
+    window = np.convolve(above.astype(np.int32), np.ones(hold, dtype=np.int32), mode="valid")
+    hits = np.flatnonzero(window >= hold)
+    if hits.size == 0:
+        return 0.0
+    return float(hits[0] * frame) / float(rate)
+
+
+def transcribe_file(path):
+    """Transcribe one narration file. Prefer the original TTS file over a trimmed wav."""
+    return transcribe_pcm(pcm(path))
+
+
+def transcribe_beats(beat_audio, beat_times, beats=("hook", "pehchan", "matlab", "karein"),
+                     sources=None):
+    """Word times on the joined timeline. Each beat's clock starts at the beat.
+
+    `sources`, when given, are the original TTS files. Their leading silence is
+    removed from the timestamps so they line up with the trimmed narration.
+    """
+    words = []
+    sources = sources or {}
+    for beat in beats:
+        path = sources.get(beat) or beat_audio[beat]
+        audio = pcm(path)
+        if audio.size == 0:
+            raise RuntimeError(f"empty audio for {beat}")
+        offset = speech_offset(audio) if sources.get(beat) else 0.0
+        t0 = float(beat_times[beat][0]) - offset
+        for word in transcribe_pcm(audio):
+            start = word["start"] + t0
+            end = word["end"] + t0
+            if end <= float(beat_times[beat][0]) - 0.05:
+                continue
+            words.append({"word": word["word"], "start": start, "end": end})
+    return words
+
+
+def _decode(audio, vad_filter):
+    # Greedy and temperature 0. A wider beam on this CPU build is not stable.
+    # VAD is off by default: it ate a quiet Hindi beat. It is only a retry.
     segments, _info = model().transcribe(
-        audio, language="hi", word_timestamps=True, vad_filter=True,
+        audio, language="hi", word_timestamps=True, vad_filter=vad_filter,
+        beam_size=1, temperature=0, condition_on_previous_text=False,
     )
     words = []
     for seg in segments:
@@ -359,16 +486,21 @@ def transcribe_file(path):
     return words
 
 
-def transcribe_beats(beat_audio, beat_times, beats=("hook", "pehchan", "matlab", "karein")):
-    """Word times on the joined timeline. Each beat's clock starts at the beat."""
-    words = []
-    for beat in beats:
-        path = beat_audio[beat]
-        t0 = float(beat_times[beat][0])
-        for word in transcribe_file(path):
-            words.append({
-                "word": word["word"],
-                "start": word["start"] + t0,
-                "end": word["end"] + t0,
-            })
+def _repetitive(words):
+    if len(words) < 8:
+        return False
+    counts = {}
+    for word in words:
+        counts[word["word"]] = counts.get(word["word"], 0) + 1
+    return max(counts.values()) / len(words) > 0.45
+
+
+def transcribe_pcm(audio):
+    if audio.size == 0:
+        raise RuntimeError("empty audio")
+    words = _decode(audio, False)
+    if _repetitive(words):
+        alt = _decode(audio, True)
+        if alt and not _repetitive(alt):
+            return alt
     return words

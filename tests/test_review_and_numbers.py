@@ -200,6 +200,15 @@ HIGH_REVIEW = {
     "summary": "overall 96.7 (hook 100, visual 90, accuracy 100, trend skip)",
 }
 
+# The high bar alone is not enough. Sync must have passed, and the script
+# must be one outline rather than a fallback mix.
+TRUSTED_REVIEW = {
+    **HIGH_REVIEW,
+    "parts": {**HIGH_REVIEW["parts"], "sync": 100},
+    "sync": {"ok": True, "reason": ""},
+    "narration_source": "outline",
+}
+
 
 def _script():
     return "TITLE:\nTitan\n\nHOOK:\n" + ("सवाल साफ है। " * 8) + "\n\nFACT LEDGER:\n- 71.07\n"
@@ -212,7 +221,7 @@ class SoftJudgmentGateTests(unittest.TestCase):
         self.assertTrue(review_gate.self_review_clears_high_bar(HIGH_REVIEW))
 
     def test_oct2_soft_review_publishes_when_self_review_is_at_the_high_bar(self):
-        decision = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), HIGH_REVIEW, "short")
+        decision = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), TRUSTED_REVIEW, "short")
         self.assertTrue(decision["public_ready"])
         self.assertEqual(decision["exit_code"], 0)
         self.assertTrue(decision["soft_judgment_only"])
@@ -305,8 +314,34 @@ class SoftJudgmentGateTests(unittest.TestCase):
     def test_fails_this_round_none_is_not_a_hard_failure(self):
         text = OCT2_SOFT_REVIEW + "\nFAILS this round: none\n"
         self.assertEqual(review_gate.hard_failure_reasons(text), [])
-        decision = review_gate.decide(text, True, _script(), HIGH_REVIEW, "short")
+        decision = review_gate.decide(text, True, _script(), TRUSTED_REVIEW, "short")
         self.assertTrue(decision["public_ready"])
+
+    def test_soft_review_blocks_without_sync_or_when_narration_is_fallback(self):
+        """The 96.7 fallback video must not publish on judgment calls alone."""
+        bare = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), HIGH_REVIEW, "short")
+        self.assertFalse(bare["public_ready"])
+        self.assertEqual(bare["exit_code"], 2)
+        self.assertFalse(bare["soft_judgment_only"])
+        self.assertTrue(any("sync" in reason for reason in bare["reasons"]))
+
+        failed_sync = {
+            **TRUSTED_REVIEW,
+            "parts": {**TRUSTED_REVIEW["parts"], "sync": 0},
+            "sync": {"ok": False, "reason": "transcription failed: empty transcript"},
+        }
+        missed = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), failed_sync, "short")
+        self.assertFalse(missed["public_ready"])
+        self.assertTrue(any("sync" in reason for reason in missed["reasons"]))
+
+        fallback = {**TRUSTED_REVIEW, "narration_source": "fallback"}
+        blocked = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), fallback, "short")
+        self.assertFalse(blocked["public_ready"])
+        self.assertTrue(any("fallback" in reason for reason in blocked["reasons"]))
+        self.assertFalse(review_gate.narration_is_single_outline(fallback))
+        self.assertTrue(review_gate.narration_is_single_outline(TRUSTED_REVIEW))
+        self.assertTrue(review_gate.sync_gate_passed(TRUSTED_REVIEW))
+        self.assertFalse(review_gate.sync_gate_passed(HIGH_REVIEW))
 
     def test_ready_verdict_is_unchanged(self):
         text = "VERDICT: [READY TO PUBLISH]\n\n✅ Auto-checks pass:\nHook | Facts | Compliance\n"
@@ -319,12 +354,17 @@ class SoftJudgmentGateTests(unittest.TestCase):
         """#17's relaxation is only for gated LLM narration. A fallback flag wins."""
         import self_review
 
-        llm = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), HIGH_REVIEW, "short")
+        synced_llm = {
+            **HIGH_REVIEW,
+            "parts": {**HIGH_REVIEW["parts"], "sync": 100},
+            "sync": {"ok": True, "reason": ""},
+        }
+        llm = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), synced_llm, "short")
         self.assertTrue(llm["public_ready"])
         self.assertTrue(llm["soft_judgment_only"])
         self.assertTrue(review_gate.narration_is_gated_llm(HIGH_REVIEW))
 
-        cached = dict(HIGH_REVIEW)
+        cached = dict(synced_llm)
         cached["narration_source"] = "cache"
         cache_decision = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), cached, "short")
         self.assertTrue(cache_decision["public_ready"])
@@ -351,13 +391,14 @@ class SoftJudgmentGateTests(unittest.TestCase):
         source_blocked = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), sourced, "short")
         self.assertFalse(source_blocked["public_ready"])
 
-        unmarked = dict(HIGH_REVIEW)
+        unmarked = dict(synced_llm)
         unmarked.pop("narration_source")
         self.assertFalse(review_gate.narration_is_gated_llm(unmarked))
+        self.assertFalse(review_gate.narration_is_single_outline(unmarked))
         self.assertTrue(review_gate.self_review_clears_high_bar(unmarked))
         no_source = review_gate.decide(OCT2_SOFT_REVIEW, True, _script(), unmarked, "short")
         self.assertFalse(no_source["public_ready"])
-        self.assertIn("gated LLM", " ".join(no_source["reasons"]))
+        self.assertTrue(any("outline" in r or "fallback" in r for r in no_source["reasons"]))
 
         rejected = self_review._reject_fallback(
             {"narration_fallback": True, "source": "fallback"},
@@ -396,7 +437,7 @@ class SoftReviewReportTests(unittest.TestCase):
             run = Path(tmp)
             (run / "script.txt").write_text(script, encoding="utf-8")
             (run / "shots.json").write_text(shots, encoding="utf-8")
-            (run / "self_review.json").write_text(json.dumps(HIGH_REVIEW), encoding="utf-8")
+            (run / "self_review.json").write_text(json.dumps(TRUSTED_REVIEW), encoding="utf-8")
             (run / "subs.ass").write_text("1\n", encoding="utf-8")
             (run / "final.mp4").write_bytes(b"x")
             with mock.patch.object(common, "RUN", run), mock.patch.object(run_verify, "RUN", run), \
