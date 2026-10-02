@@ -101,7 +101,8 @@ def main():
         print(f"[skip] {date} ledger se purana hai (ledger {start} se).")
         _flags(False)
         return
-    hit = next((e for e in ents if e.get("date_ist") == date and e.get("slot") == slot), None)
+    # Withdrawn rows keep the old video id private. They are not this slot's upload.
+    hit = slot_guard.find_entry(ents, date, slot)
     if hit and slot_guard.is_hold(hit):
         # A hold is not a missing upload. Do not fill it and do not page about a video id.
         msg = (f"⚠️ Paise Ki Pathshala\n{date} {slot} IST is on hold "

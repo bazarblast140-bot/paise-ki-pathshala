@@ -296,21 +296,30 @@ _HELD_SLOTS = (
 )
 
 
-class RealLedgerHoldTests(unittest.TestCase):
-    def test_next_skips_every_held_slot_on_the_real_ledger(self):
+class LedgerHoldTests(unittest.TestCase):
+    def test_next_skips_every_held_slot(self):
         ledger_path = ROOT / "data" / "published.json"
         self.assertEqual(slot_guard.LEDGER.resolve(), ledger_path.resolve())
-        entries = json.loads(ledger_path.read_text(encoding="utf-8"))
-        holds = [
-            e for e in entries
-            if isinstance(e, dict) and str(e.get("platform") or "").strip().lower() == "hold"
+        # Holds are lifted on main as slots go live, so the real ledger is only
+        # a base: drop its hold rows and add the fixture holds on top.
+        real = json.loads(ledger_path.read_text(encoding="utf-8"))
+        base = [
+            e for e in real
+            if isinstance(e, dict) and str(e.get("platform") or "").strip().lower() != "hold"
+            and not (e.get("date_ist"), e.get("slot")) in {(d, s) for d, s, _w, _x in _HELD_SLOTS}
         ]
-        for date, slot, _when, _expected in _HELD_SLOTS:
-            match = [
-                e for e in holds
-                if e.get("date_ist") == date and e.get("slot") == slot and e.get("video_id") is None
-            ]
-            self.assertEqual(len(match), 1, (date, slot))
+        holds = [
+            {"date_ist": d, "slot": s, "video_id": None, "format": "short", "platform": "hold"}
+            for d, s, _w, _x in _HELD_SLOTS
+        ]
+        entries = base + holds
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        fixture = Path(tmpdir.name) / "published.json"
+        fixture.write_text(json.dumps(entries, ensure_ascii=False), encoding="utf-8")
+        patcher = mock.patch.object(slot_guard, "LEDGER", fixture)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
         posts = mock.Mock(side_effect=AssertionError("paid post"))
         gets = mock.Mock(side_effect=AssertionError("paid get"))
