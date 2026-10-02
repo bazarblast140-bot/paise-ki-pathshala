@@ -36,21 +36,16 @@ def _normalize(mode, direction):
 
 
 def outgoing_alpha(u):
-    """Old line stays whole until the midpoint, then fades. It never shares the frame."""
-    if u <= 0.50:
-        return 1.0
-    if u >= 0.64:
-        return 0.0
-    return 1.0 - (u - 0.50) / 0.14
+    """Old line stays fully opaque until the midpoint, then the new line replaces it.
+
+    A fade through zero left one blank frame. A partial fade stacked the two
+    lines. The swap is instant and each side is the whole sprite.
+    """
+    return 1.0 if u <= 0.5 else 0.0
 
 
 def incoming_alpha(u):
-    """New line fades in only after the old line is gone, still as one sprite."""
-    if u <= 0.64:
-        return 0.0
-    if u >= 0.82:
-        return 1.0
-    return (u - 0.64) / 0.18
+    return 0.0 if u <= 0.5 else 1.0
 
 
 def blend_plates(a, b, u, mode="wipe", direction="left"):
