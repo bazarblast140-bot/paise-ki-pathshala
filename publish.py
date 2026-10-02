@@ -355,6 +355,10 @@ def main():
                 "Refusing to move this video onto the next day.")
         visibility = "private"
     visibility, publish_at = publish_guard.clamp_visibility(visibility, publish_at)
+    import market_data
+    fresh = market_data.public_freshness_reason(RUN, visibility, publish_at)
+    if fresh:
+        die(fresh + ". Refusing a public upload.")
 
     print(f"\n  Title      : {title}")
     print(f"  Tags       : {', '.join(tags) or '(none)'}")

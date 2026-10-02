@@ -465,6 +465,12 @@ def _source(img, lesson):
     )
 
 
+def _mark_market(img, lesson):
+    """Data scenes must show the close's as-of date. The craft gate reads this."""
+    img.shows_market_data = True
+    img.market_as_of = str((lesson or {}).get("as_of") or "")
+
+
 def _ohlc(bars):
     return [
         (float(b["open"]), float(b["high"]), float(b["low"]), float(b["close"]))
@@ -517,7 +523,7 @@ def _axis_labels(img, ax, steps=4):
         y = ax.y(price)
         if y < ax.y0 + 4 or y > ax.y1 - 4:
             continue
-        _text(img, ax.x1 + 14, y, f"{price:.1f}", K.MUTED, 20, anchor="lm", role="axis")
+        _text(img, ax.x1 + 14, y, market_data.format_figure(price, 1), K.MUTED, 20, anchor="lm", role="axis")
 
 
 def _mark_content(img, box):
@@ -545,7 +551,6 @@ def _hook(lesson):
     _text(img, 540, _cy(680), "सामान्य हलचल", K.INK, 42, anchor="mt")
     _text(img, 540, _cy(780), "तंग रेखा को काट देती है", K.INK, 38, anchor="mt")
     _text(img, 540, _cy(900), "एटीआर इस हलचल को नापता है", K.YELLOW, 36, anchor="mt")
-    _lower_callout(img, "सामान्य हलचल")
     return _finish(img, "hook")
 
 
@@ -577,6 +582,7 @@ def _problem(lesson, step, total):
         _text(img, 620, _cy(268), "तंग रेखा", K.INK, 28, anchor="lt")
     _axis_labels(img, ax)
     _lower_callout(img, "दैनिक भाव")
+    _mark_market(img, lesson)
     _source(img, lesson)
     return _finish(img, "problem")
 
@@ -602,7 +608,7 @@ def _formula(lesson, step, total):
         # The figure itself is spoken at the end of this beat, on the next card.
         _text(img, 540, _cy(500), "औसत", K.YELLOW, 96, anchor="mt")
         _text(img, 540, _cy(680), "हलचल", K.INK, 72, anchor="mt")
-        _text(img, 540, _cy(820), "पिछले कैंडल", K.MUTED, 36, anchor="mt")
+        _text(img, 540, _cy(820), f"पिछले {lesson['period']} कैंडल", K.MUTED, 36, anchor="mt")
     else:
         # The product is spoken in the next beat. This card stays on the average.
         _text(img, 540, _cy(460), "एचडीएफसी बैंक", K.INK, 44, anchor="mt")
@@ -610,6 +616,7 @@ def _formula(lesson, step, total):
         _text(img, 540, _cy(780), "औसत हलचल", K.INK, 48, anchor="mt")
     _text(img, 540, _cy(960), "दिशा नहीं, सिर्फ़ हलचल", K.MUTED, 32, anchor="mt")
     _lower_callout(img, "सिर्फ़ हलचल")
+    _mark_market(img, lesson)
     _source(img, lesson)
     return _finish(img, "formula")
 
@@ -715,6 +722,37 @@ def _unit_labels_a_figure(layer, layers):
     return False
 
 
+def normalize_label(text):
+    """Compare titles and labels as one string, ignoring spacing and a closing danda."""
+    return re.sub(r"\s+", " ", str(text or "").strip()).strip("।.!?… ")
+
+
+def repeated_text_notes(layers, extra_texts=None, active_caption=""):
+    """Fail when one scene paints the same string twice.
+
+    The burned caption cue is not a scene sprite. Pass it as `active_caption`
+    so it is left out; two matching labels still fail when the cue repeats them.
+    """
+    skip = normalize_label(active_caption)
+    texts = []
+    for layer in layers or []:
+        if layer.get("faint") or layer.get("role") in ("brand", "glow"):
+            continue
+        if layer.get("text"):
+            texts.append(layer.get("text"))
+    for text in extra_texts or []:
+        if normalize_label(text) == skip:
+            continue
+        texts.append(text)
+    counts = {}
+    for text in texts:
+        key = normalize_label(text)
+        if not key:
+            continue
+        counts[key] = counts.get(key, 0) + 1
+    return [f"repeated text: {key}" for key, count in counts.items() if count > 1]
+
+
 def frame_layout_notes(img):
     """Opaque covers, empty boxes, two numbers for one quantity, and a lone unit."""
     layers = [
@@ -756,6 +794,12 @@ def frame_layout_notes(img):
         if _lone_unit_word(layer.get("text")) and not _unit_labels_a_figure(layer, layers):
             notes.append("lone unit word with no number")
             break
+    notes.extend(repeated_text_notes(layers))
+    as_of = str(getattr(img, "market_as_of", "") or "")
+    if as_of:
+        blob = " ".join(str(layer.get("text") or "") for layer in (getattr(img, "text_layers", None) or []))
+        if as_of not in blob:
+            notes.append("as-of date is not on screen")
     return notes
 
 
@@ -894,7 +938,7 @@ def _ladder_lines(img, lesson, y_of):
 
 
 def _ladder_moving(lesson, phase):
-    """All three prices stay labeled. One distance figure: the bracket counter, then 23.5."""
+    """All three prices stay labeled. The distance figure is the final formatted value."""
     phase = max(0.0, min(1.0, float(phase)))
     grown = _ease(phase)
     img = _blank()
@@ -906,25 +950,24 @@ def _ladder_moving(lesson, phase):
     _bracket(img, 930, y_of(entry), tip, GOLD)
     _band_label(img, tip)
     _text(img, 150, _cy(230), "कीमत की सीढ़ी", K.YELLOW, 44, anchor="lt")
-    _text(img, 540, _cy(300), f"{lesson['multiple']} गुना", K.YELLOW, 36, anchor="mt")
+    # The multiple, the ATR, and the distance use the same strings as the caption.
+    # A running counter used to print a different rounding while the subtitle
+    # already said the final figure.
+    _text(
+        img, 540, _cy(300), f"{lesson['multiple']} गुना {lesson['atr']}",
+        K.YELLOW, 36, anchor="mt",
+    )
     # SL is already drawn. Counting it as lesson text keeps this beat matched
     # to the voice once the distance label is hidden.
     _ladder_labels(img, lesson, y_of, True, phase >= 0.70)
-    final = float(lesson["distance"])
-    shown = final * grown
-    if abs(shown - final) < 0.05:
-        _text(
-            img, 540, _cy(390), f"दूरी {lesson['distance']} पॉइंट", K.YELLOW, 40,
-            anchor="mt", quantity="distance",
-        )
-    elif phase >= 0.08:
-        # Above the wash, at the bracket tip, so the wash does not cover the figure.
-        # The distance label stays off until this counter lands.
-        _text(
-            img, 948, tip - 86, f"{shown:.1f}", GOLD, 32, anchor="lt",
-            role="meter", quantity="distance",
-        )
+    if phase >= 0.9:
+        distance = f"दूरी {lesson['distance']} पॉइंट"
+    else:
+        distance = f"दूरी {lesson['distance']}"
+    _text(img, 540, _cy(390), distance, K.YELLOW, 40, anchor="mt", quantity="distance")
     _lower_callout(img, "एंट्री से एसएल")
+    _mark_market(img, lesson)
+    _source(img, lesson)
     return _finish(img, "ladder")
 
 
@@ -944,14 +987,21 @@ def _ladder_reveal(lesson, phase):
     _band_label(img, travel)
     _text(img, 150, _cy(230), "कीमत की सीढ़ी", K.YELLOW, 44, anchor="lt")
     _ladder_labels(img, lesson, y_of, False, False)
-    if phase >= 0.50:
+    if phase >= 0.52:
+        _text(
+            img, 540, _cy(300), f"{lesson['multiple']} गुना {lesson['atr']}",
+            K.YELLOW, 36, anchor="mt",
+        )
+    elif phase >= 0.50:
         _text(img, 540, _cy(300), f"{lesson['multiple']} गुना", K.YELLOW, 36, anchor="mt")
-    if phase >= 0.75:
+    if phase >= 0.52:
         _text(
             img, 540, _cy(390), f"दूरी  {lesson['distance']}", K.YELLOW, 40,
             anchor="mt", quantity="distance",
         )
     _lower_callout(img, "एंट्री से एसएल")
+    _mark_market(img, lesson)
+    _source(img, lesson)
     return _finish(img, "ladder")
 
 
@@ -987,9 +1037,13 @@ def _split(lesson):
     _text(img, 298, _cy(900), "तंग रेखा कट गई", K.RED, 28, anchor="mt")
     _text(img, 760, _cy(900), "एटीआर रेखा रुकी" if held else "एटीआर रेखा", K.GREEN, 28, anchor="mt")
     _lower_callout(img, "तंग बनाम एटीआर")
-    # Karein already burns the grey disclaimer in the brand band. A second
-    # source line there would sit on top of it. The problem and formula
-    # scenes, outside that beat, still carry the Yahoo line.
+    # Karein already burns the grey disclaimer in the brand band. The as-of
+    # date stays inside the card so it does not sit on that line.
+    _text(
+        img, 540, 250, f"{lesson['as_of']}   एटीआर {lesson['atr']}",
+        K.MUTED, 24, anchor="mt", role="source",
+    )
+    _mark_market(img, lesson)
     return _finish(img, "split")
 
 
@@ -1010,16 +1064,22 @@ def _takeaway(lesson):
     img = _blank()
     _card(img)
     _accent(img, [240, _cy(300), 840, _cy(300) + 10])
+    _text(img, 540, _cy(240), f"एटीआर {lesson['atr']}", K.MUTED, 32, anchor="mt")
     _text(img, 540, _cy(400), "दूरी", K.YELLOW, 56, anchor="mt")
     _text(img, 540, _cy(540), str(lesson["distance"]), K.YELLOW, 120, anchor="mt", quantity="distance")
     _text(img, 540, _cy(740), "पॉइंट", K.INK, 48, anchor="mt")
-    _text(img, 540, _cy(880), "मात्रा इसी दूरी से", K.INK, 40, anchor="mt")
+    _text(
+        img, 540, _cy(880),
+        f"मात्रा {lesson['qty']} जोखिम {lesson['risk']}",
+        K.INK, 36, anchor="mt",
+    )
     _lower_callout(img, "मात्रा इसी से")
     return _finish(img, "takeaway")
 
 
 def _rupees(value):
-    return f"₹{int(float(str(value).replace(',', ''))):,}"
+    """Same integer the narration speaks. A thousands comma would not match 2350."""
+    return "₹" + market_data.format_figure(str(value).replace(",", ""), 0)
 
 
 def _cta_at(lesson, step=0, total=1, phase=1.0):
@@ -1029,8 +1089,10 @@ def _cta_at(lesson, step=0, total=1, phase=1.0):
     _card(img)
     sl_line = f"एसएल = भाव − {lesson['multiple']} गुना एटीआर = {lesson['sl']}"
     risk_line = f"{lesson['qty']} शेयर पर जोखिम {_rupees(lesson['risk'])}"
+    distance_line = f"दूरी {lesson['distance']}"
     # The first card centers the two facts. The second keeps them up so the poll fits.
     later = total > 1 and step >= 1
+    _text(img, 540, _cy(200 if later else 360), distance_line, K.YELLOW, 36, anchor="mt")
     _text(img, 540, _cy(280 if later else 520), sl_line, K.INK, 36, anchor="mt")
     _text(img, 540, _cy(460 if later else 760), risk_line, K.YELLOW, 52 if not later else 48, anchor="mt")
     if later:

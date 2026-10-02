@@ -16,6 +16,7 @@ Writes run/: final.mp4, thumbnail.jpg, script.txt, spoken.txt, shots.json, subs.
 import argparse
 import asyncio
 import json
+from datetime import date
 import math
 import os
 import re
@@ -385,6 +386,14 @@ def atr_narration(topic):
     """
     lesson = topic["_atr"]
     name = lesson["name_hi"]
+    # The card, this script, and the burned cue share format_figure.
+    atr = market_data.format_figure(lesson["atr"], 1)
+    entry = market_data.format_figure(lesson["entry"], 1)
+    multiple = market_data.format_figure(lesson["multiple"], 1)
+    distance = market_data.format_figure(lesson["distance"], 1)
+    sl = market_data.format_figure(lesson["sl"], 1)
+    target = market_data.format_figure(lesson["target"], 1)
+    risk = market_data.format_figure(lesson["risk"], 0)
     hook_line = "तंग एसएल बार-बार कटता क्यों है?"
     beats = {
         "hook": (
@@ -393,16 +402,16 @@ def atr_narration(topic):
         ),
         "pehchan": (
             f"नियम यह है। एटीआर पिछले {lesson['period']} कैंडल की औसत हलचल है। "
-            f"एचडीएफसी बैंक का एटीआर {lesson['atr']} है।"
+            f"एचडीएफसी बैंक का एटीआर {atr} है।"
         ),
         "matlab": (
-            f"आखिरी भाव {lesson['entry']} एंट्री है। "
-            f"{lesson['multiple']} गुना {lesson['atr']} बराबर {lesson['distance']} पॉइंट। "
-            f"एसएल {lesson['sl']}। ऊपर {lesson['target']}।"
+            f"आखिरी भाव {entry} एंट्री है। "
+            f"{multiple} गुना {atr} बराबर {distance} पॉइंट। "
+            f"एसएल {sl}। ऊपर {target}।"
         ),
         "karein": (
-            f"गलती तंग एसएल है। {lesson['atr']} की हलचल में तंग रेखा कटती है। "
-            f"दूरी {lesson['distance']} हो और मात्रा {lesson['qty']} हो तो जोखिम {lesson['risk']} रुपये रहता है। "
+            f"गलती तंग एसएल है। {atr} की हलचल में तंग रेखा कटती है। "
+            f"दूरी {distance} हो और मात्रा {lesson['qty']} हो तो जोखिम {risk} रुपये रहता है। "
             f"यह सलाह नहीं।"
         ),
     }
@@ -1369,6 +1378,95 @@ def cues_at(cues, t):
     return hits
 
 
+def number_format_notes(on_screen_texts, spoken="", caption=""):
+    """Every spoken or captioned number must match an on-screen figure exactly.
+
+    772.41 does not match 772.4. Extra figures on the card are allowed.
+    """
+    import sync_gate
+    screen = set()
+    for text in on_screen_texts or []:
+        screen.update(sync_gate.numbers_in(text))
+    notes = []
+    seen = set()
+    for origin, blob in (("spoken", spoken), ("caption", caption)):
+        for num in sync_gate.numbers_in(blob):
+            if num in screen or num in seen:
+                continue
+            seen.add(num)
+            notes.append(f"{origin} number {num} is not an on-screen value")
+    return notes
+
+
+def stale_data_notes(as_of, today, allow_stale_sample=False):
+    """Real runs refuse a close older than three weekdays. A sample may opt in."""
+    if not as_of or market_data.close_is_fresh(as_of, today):
+        return []
+    if allow_stale_sample:
+        return []
+    return [f"stale market data as of {as_of}"]
+
+
+def _words_near(audio_words, t, radius=0.85):
+    if not audio_words:
+        return ""
+    t = float(t)
+    picked = []
+    for word in audio_words:
+        start = float(word.get("start") or 0)
+        end = float(word.get("end") or start)
+        if end >= t - 0.05 and start <= t + radius:
+            picked.append(str(word.get("word") or ""))
+    return " ".join(picked)
+
+
+def _scene_pose_at(scenes, t):
+    """The scene card at t, not the wipe between cards."""
+    t = float(t)
+    chosen = scenes[-1]
+    for scene in scenes:
+        if float(scene["start"]) - 1e-6 <= t:
+            chosen = scene
+        if t < float(scene["end"]) - 1e-9:
+            break
+    frame = chosen.get("frame")
+    anim = getattr(frame, "animate", None)
+    if anim is None:
+        return frame
+    dur = float(chosen["end"]) - float(chosen["start"])
+    local = 0.0 if dur <= 0 else (t - float(chosen["start"])) / dur
+    return anim(max(0.0, min(1.0, local)))
+
+
+def number_faults_for(scenes, spoken, beat_times, audio_words=None):
+    """Sample each second. Caption and spoken numbers must be on that frame."""
+    frames = [s.get("frame") for s in scenes]
+    if not frames or any(frame is None for frame in frames):
+        return []
+    durations = [float(s["end"]) - float(s["start"]) for s in scenes]
+    total = sum(durations)
+    cues = plan_cues(spoken, beat_times, audio_words)
+    notes = []
+    seen = set()
+    t = 0.0
+    while t < total - 0.05:
+        frame = _scene_pose_at(scenes, t)
+        texts = [
+            layer.get("text") or ""
+            for layer in (getattr(frame, "text_layers", None) or [])
+            if layer.get("text") and not layer.get("faint")
+        ]
+        caption = " ".join(cue.get("text") or "" for cue in cues_at(cues, t))
+        said = _words_near(audio_words, t)
+        for note in number_format_notes(texts, said, caption):
+            stamped = f"{note} at {t:.1f}s"
+            if stamped not in seen:
+                seen.add(stamped)
+                notes.append(stamped)
+        t += 1.0
+    return notes
+
+
 def cue_faults(cues):
     """More than one cue in a frame, more than two lines, or a cue ahead of its words."""
     notes = []
@@ -1478,6 +1576,20 @@ def _craft_samples(scenes, topic, beat_times, spoken, hook_line, cta, audio_word
         t += 1.0
     cues = plan_cues(spoken, beat_times, audio_words)
     for note in cue_faults(cues):
+        if note not in seen:
+            seen.add(note)
+            layout_notes.append(note)
+    for note in number_faults_for(scenes, spoken, beat_times, audio_words):
+        if note not in seen:
+            seen.add(note)
+            layout_notes.append(note)
+    as_of = None
+    spec = (topic or {}).get("_chart_spec") or {}
+    atr = (topic or {}).get("_atr") or spec.get("atr") or {}
+    as_of = atr.get("as_of") or spec.get("as_of")
+    for note in stale_data_notes(
+        as_of, date.today(), allow_stale_sample=bool((topic or {}).get("_allow_stale_sample")),
+    ):
         if note not in seen:
             seen.add(note)
             layout_notes.append(note)
@@ -1808,6 +1920,9 @@ def main():
     if spec.get("atr"):
         market_data.apply_atr_card(topic, spec["atr"])
     topic["_chart_spec"] = spec
+    # Sample renders (`--key`) may teach from the checked-in July print.
+    # Scheduled and dispatch publishes never set this, and publish.py ignores it.
+    topic["_allow_stale_sample"] = bool(args.key)
     if spec.get("mode") == "non_numeric":
         print(f"[market_data] non-numeric card: {spec.get('reason')}")
     elif spec.get("mode") == "series":
@@ -1923,6 +2038,14 @@ def main():
         samples=samples, text_frames=text_frames,
         sync=sync_report, layout_notes=layout_notes,
     )
+    as_of = (spec.get("atr") or {}).get("as_of") or spec.get("as_of")
+    on_screen = not any("as-of date is not on screen" in note for note in layout_notes)
+    if as_of:
+        (RUN / "market_freshness.json").write_text(json.dumps({
+            "as_of": as_of,
+            "on_screen": bool(on_screen and as_of),
+            "allow_stale_sample": bool(topic.get("_allow_stale_sample")),
+        }, ensure_ascii=False), encoding="utf-8")
     review = apply_upload_block(review, source)
     review["narration_source"] = source
     review["sync"] = {

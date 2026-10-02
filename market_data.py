@@ -8,7 +8,7 @@ real is available, the caller draws a non-numeric card instead of a fake line.
 import json
 import os
 import pathlib
-from datetime import date
+from datetime import date, timedelta
 
 import board_kit as K
 
@@ -86,6 +86,82 @@ def stock_price_is_old_enough(as_of, today=None, months=3):
     if isinstance(as_of, str):
         as_of = parse_point_date(as_of)
     return as_of <= months_before(today, months)
+
+
+def format_figure(value, places=1):
+    """One rounding for the chart, the caption, and the narration.
+
+    Places are fixed, so a stop written 772.4 on the card cannot be spoken as 772.41.
+    """
+    places = max(0, int(places))
+    return f"{float(value):.{places}f}"
+
+
+def weekdays_since_close(as_of, today):
+    """NSE-style gap: weekdays after `as_of` up to and including `today`.
+
+    Saturday and Sunday are not counted. Exchange holidays are not listed, so a
+    weekday stands in for a session. The same calendar day is zero. A close
+    dated after `today` is not fresh.
+    """
+    if isinstance(as_of, str):
+        as_of = parse_point_date(as_of)
+    if isinstance(today, str):
+        today = parse_point_date(today)
+    if as_of > today:
+        return 99
+    seen = 0
+    day = as_of
+    while day < today:
+        day += timedelta(days=1)
+        if day.weekday() < 5:
+            seen += 1
+    return seen
+
+
+def close_is_fresh(as_of, today, max_days=3):
+    """True when the last close is at most `max_days` weekdays before `today`."""
+    if not as_of:
+        return False
+    return weekdays_since_close(as_of, today) <= int(max_days)
+
+
+def public_upload_block(as_of, today, on_screen, visibility, publish_at):
+    """Block a public or scheduled-public upload on stale data or a hidden date.
+
+    Unlisted review copies are left alone. This function has no sample override:
+    a render flag must not reach the publish path.
+    """
+    going_public = visibility == "public" or bool(publish_at)
+    if not going_public or not as_of:
+        return ""
+    if not close_is_fresh(as_of, today):
+        return f"stale market data as of {as_of}"
+    if not on_screen:
+        return "as-of date is not on screen"
+    return ""
+
+
+def public_freshness_reason(run_dir, visibility, publish_at, today=None):
+    """Read the render stamp and apply the public-upload rule.
+
+    `allow_stale_sample` may be sitting in the stamp from a `--key` render.
+    It is not read here.
+    """
+    today = today or date.today()
+    path = pathlib.Path(run_dir) / "market_freshness.json"
+    if not path.exists():
+        return ""
+    try:
+        stamp = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "market freshness stamp is unreadable"
+    as_of = stamp.get("as_of")
+    if not as_of:
+        return ""
+    return public_upload_block(
+        as_of, today, bool(stamp.get("on_screen")), visibility, publish_at,
+    )
 
 
 def points_from_rows(rows):
@@ -253,20 +329,17 @@ def atr_lesson(cache=None, today=None, name="HDFC BANK", period=14, multiple=1.5
         high = float(window[i]["high"])
         low = float(window[i]["low"])
         ranges.append(max(high - low, abs(high - prev), abs(low - prev)))
-    atr_text = f"{(sum(ranges) / len(ranges)):.1f}"
-    atr = float(atr_text)
-    dist_text = f"{atr * float(multiple):.1f}"
-    dist = float(dist_text)
-    entry_text = f"{float(last['close']):.1f}"
-    entry = float(entry_text)
+    atr_text = format_figure(sum(ranges) / len(ranges), 1)
+    dist_text = format_figure(float(atr_text) * float(multiple), 1)
+    entry_text = format_figure(last["close"], 1)
     qty = 100
     risk = float(dist_text) * qty
-    risk_text = str(int(round(risk))) if abs(risk - round(risk)) < 1e-6 else f"{risk:.1f}"
+    risk_text = format_figure(risk, 0 if abs(risk - round(risk)) < 1e-6 else 1)
     close = float(last["close"])
     adj = float(last.get("adj_close") if last.get("adj_close") is not None else close)
     wick = [b for b in bars if "2026-06-15" <= str(b["date"])[:10] <= "2026-06-23"]
     hit = next((b for b in wick if str(b["date"])[:10] == "2026-06-19"), None)
-    tight = f"{float(hit['high']) - 1.0:.1f}" if hit else None
+    tight = format_figure(float(hit["high"]) - 1.0, 1) if hit else None
     points = [{"date": str(b["date"])[:10], "close": float(b["close"])} for b in window]
     return {
         "name": name,
@@ -274,12 +347,12 @@ def atr_lesson(cache=None, today=None, name="HDFC BANK", period=14, multiple=1.5
         "source": (daily or {}).get("source") or SOURCE_NAME,
         "as_of": str(last["date"])[:10],
         "period": int(period),
-        "multiple": f"{float(multiple):.1f}",
+        "multiple": format_figure(multiple, 1),
         "atr": atr_text,
         "distance": dist_text,
         "entry": entry_text,
-        "sl": f"{entry - dist:.1f}",
-        "target": f"{entry + dist:.1f}",
+        "sl": format_figure(float(entry_text) - float(dist_text), 1),
+        "target": format_figure(float(entry_text) + float(dist_text), 1),
         "qty": qty,
         "risk": risk_text,
         "points": points,

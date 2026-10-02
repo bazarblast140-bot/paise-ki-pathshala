@@ -576,6 +576,127 @@ class LayoutGateTests(unittest.TestCase):
         ass = board_short.build_ass(topic, times, script["beats"], script["hook_line"], "poll", audio)
         self.assertNotIn(f"मात्रा {spec['atr']['qty']}, जोखिम {spec['atr']['risk']}", ass)
 
+    def test_a_repeated_label_fails_and_the_hook_says_it_once(self):
+        lesson = self._lesson()
+        hook = scene_frames._hook(lesson)
+        blob = " ".join(layer.get("text") or "" for layer in hook.text_layers)
+        self.assertEqual(blob.count("सामान्य हलचल"), 1)
+        self.assertEqual(scene_frames.frame_layout_notes(hook), [])
+        pair = scene_frames._blank()
+        scene_frames._text(pair, 540, 400, "सामान्य हलचल", (255, 255, 255), 42, anchor="mt", band=False)
+        scene_frames._text(pair, 430, 900, "सामान्य हलचल", (255, 220, 40), 34, anchor="mt", band=False)
+        self.assertTrue(any("repeated text" in note for note in scene_frames.frame_layout_notes(pair)))
+        # The burned cue is not a second sprite. Two labels still fail if the cue matches them.
+        layers = [layer for layer in pair.text_layers if layer.get("text")]
+        self.assertTrue(scene_frames.repeated_text_notes(
+            layers, extra_texts=["सामान्य हलचल"], active_caption="सामान्य हलचल"))
+        one = scene_frames._blank()
+        scene_frames._text(one, 540, 400, "सामान्य हलचल", (255, 255, 255), 42, anchor="mt", band=False)
+        only = [layer for layer in one.text_layers if layer.get("text")]
+        self.assertEqual(scene_frames.repeated_text_notes(
+            only, extra_texts=["सामान्य हलचल"], active_caption="सामान्य हलचल"), [])
+
+    def test_caption_numbers_use_the_on_screen_rounding(self):
+        self.assertTrue(board_short.number_format_notes(
+            ["एसएल  772.4"], spoken="एसएल 772.4", caption="एसएल 772.41"))
+        self.assertEqual(board_short.number_format_notes(
+            ["एसएल  772.4", "एंट्री  795.9"], spoken="एसएल 772.4", caption="एसएल 772.4।"), [])
+        lesson = self._lesson()
+        self.assertEqual(lesson["sl"], "772.4")
+        self.assertEqual(lesson["sl"], market_data.format_figure(lesson["sl"], 1))
+        self.assertNotEqual(market_data.format_figure("772.41", 1), "772.41")
+        bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))["topics"]
+        topic = next(t for t in bank if t["key"] == "atr_sl")
+        spec = market_data.spec_for_topic(topic, today=date(2026, 10, 2))
+        market_data.apply_atr_card(topic, spec["atr"])
+        script = board_short.atr_narration(topic)
+        self.assertIn("772.4", script["beats"]["matlab"])
+        self.assertNotIn("772.41", " ".join(script["beats"].values()))
+        times = {"hook": (0.0, 10.58), "pehchan": (10.58, 21.11), "matlab": (21.11, 38.33), "karein": (38.33, 55.07)}
+        audio = []
+        for beat, (t0, t1) in times.items():
+            words = script["beats"][beat].split()
+            span = max(0.2, (t1 - t0) - 0.4)
+            for i, word in enumerate(words):
+                start = t0 + span * (i + 0.15) / max(1, len(words))
+                audio.append({"word": word, "start": start, "end": start + 0.28})
+        scenes = scene_pace.plan_scenes(times)
+        groups = {}
+        for scene in scenes:
+            groups.setdefault(scene["beat"], []).append(scene)
+        built = []
+        for beat, group in groups.items():
+            frames, _flags = scene_frames.frames_for(topic, beat, len(group), spec)
+            for scene, frame in zip(group, frames):
+                scene["frame"] = frame
+                built.append(scene)
+        board_short._CUE_CACHE.clear()
+        faults = board_short.number_faults_for(built, script["beats"], times, audio)
+        self.assertEqual(faults, [], faults)
+        for frame in built:
+            if getattr(frame.get("frame"), "market_as_of", ""):
+                self.assertEqual(scene_frames.frame_layout_notes(frame["frame"]), [])
+
+    def test_stale_close_blocks_public_upload_and_the_sample_flag_stays_off_that_path(self):
+        today = date(2026, 10, 2)
+        self.assertEqual(market_data.weekdays_since_close("2026-09-29", today), 3)
+        self.assertTrue(market_data.close_is_fresh("2026-09-29", today))
+        self.assertEqual(market_data.weekdays_since_close("2026-09-28", today), 4)
+        self.assertFalse(market_data.close_is_fresh("2026-09-28", today))
+        self.assertFalse(market_data.close_is_fresh("2026-07-02", today))
+        self.assertEqual(market_data.weekdays_since_close(today, today), 0)
+        # A Friday close is still fresh on the following Monday (the weekend does not count).
+        self.assertEqual(market_data.weekdays_since_close("2026-10-02", date(2026, 10, 5)), 1)
+        self.assertTrue(board_short.stale_data_notes("2026-07-02", today, allow_stale_sample=False))
+        self.assertEqual(board_short.stale_data_notes("2026-07-02", today, allow_stale_sample=True), [])
+        self.assertEqual(board_short.stale_data_notes("2026-09-29", today, allow_stale_sample=False), [])
+        narration = {"beats": {"hook": "नियम 14", "pehchan": "नियम 14", "matlab": "नियम 14", "karein": "नियम 14"}}
+        scenes = scene_pace.plan_scenes(
+            {"hook": (0.0, 8.0), "pehchan": (8.0, 16.0), "matlab": (16.0, 28.0), "karein": (28.0, 42.0)})
+        craft, notes = self_review.score_craft(
+            narration, scenes=scenes,
+            layout_notes=board_short.stale_data_notes("2026-07-02", today))
+        self.assertEqual(craft, 0)
+        self.assertTrue(any("stale market data" in note for note in notes))
+        hidden = scene_frames._blank()
+        hidden.market_as_of = "2026-07-02"
+        self.assertTrue(any("as-of date" in note for note in scene_frames.frame_layout_notes(hidden)))
+        craft, notes = self_review.score_craft(
+            narration, scenes=scenes, layout_notes=["as-of date is not on screen"])
+        self.assertEqual(craft, 0)
+        self.assertTrue(market_data.public_upload_block("2026-07-02", today, True, "public", None))
+        self.assertTrue(market_data.public_upload_block(
+            "2026-09-29", today, False, "private", "2026-10-02T15:30:00Z"))
+        self.assertEqual(market_data.public_upload_block("2026-07-02", today, True, "unlisted", None), "")
+        self.assertEqual(market_data.public_upload_block("2026-09-29", today, True, "public", None), "")
+        self.assertNotIn("allow_stale", market_data.public_upload_block.__code__.co_varnames)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            stamp = Path(tmp) / "market_freshness.json"
+            stamp.write_text(json.dumps({
+                "as_of": "2026-07-02", "on_screen": True, "allow_stale_sample": True,
+            }), encoding="utf-8")
+            reason = market_data.public_freshness_reason(tmp, "public", None, today)
+            self.assertIn("stale", reason)
+            self.assertIn("stale", market_data.public_freshness_reason(
+                tmp, "private", "2026-10-02T15:30:00Z", today))
+            self.assertEqual(market_data.public_freshness_reason(tmp, "unlisted", None, today), "")
+        for name in ("publish.py", "run_pipeline.py", ".github/workflows/paise-ki-pathshala.yml"):
+            text = (ROOT / name).read_text(encoding="utf-8")
+            self.assertNotIn("allow_stale_sample", text, name)
+        src = (ROOT / "board_short.py").read_text(encoding="utf-8")
+        self.assertIn("topic[\"_allow_stale_sample\"] = bool(args.key)", src)
+        lesson = self._lesson()
+        for img in (
+            scene_frames._problem(lesson, 1, 2),
+            scene_frames._formula(lesson, 2, 3),
+            scene_frames._ladder_moving(lesson, 1.0),
+            scene_frames._split(lesson),
+        ):
+            blob = " ".join(layer.get("text") or "" for layer in img.text_layers)
+            self.assertIn(lesson["as_of"], blob)
+            self.assertEqual(scene_frames.frame_layout_notes(img), [])
+
     def test_watermark_misses_chart_and_card_content(self):
         lesson = self._lesson()
         for img in (
