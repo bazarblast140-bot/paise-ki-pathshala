@@ -299,5 +299,13 @@
   "video_id": "Lx2vFMDO5ws",
   "format": "short",
   "topic_key": "atr_sl"
+ },
+ {
+  "date_ist": "2026-10-02",
+  "slot": "21:00",
+  "video_id": null,
+  "format": "short",
+  "platform": "hold",
+  "note": "HOLD: S5KRdVkEJf0 withdrawn (narration did not match title/visuals), set private with publishAt cleared 02-Oct. Slot stays empty until the PR #14 topic-voice-visual sync gate is on main."
  }
 ]
