@@ -295,6 +295,14 @@
  },
  {
   "date_ist": "2026-10-02",
+  "slot": "08:30",
+  "video_id": "Z7PvCtS3a18",
+  "format": "short",
+  "topic_key": "intraday_risk_reward",
+  "note": "BACKFILL 02-Oct: old-pipeline upload whose ledger commit was skipped. Public since 2026-10-01T21:32:45Z (03:02 IST, snippet.publishedAt). Counted as the 2-Oct 08:30 slot fill. Topic #79."
+ },
+ {
+  "date_ist": "2026-10-02",
   "slot": "16:00",
   "video_id": "Lx2vFMDO5ws",
   "format": "short",
