@@ -513,7 +513,17 @@ def perform_fill(
     )
     ig = {"posted": False, "media_id": ""}
     if crosspost is not None:
-        ig = crosspost(item, video_id, payload) or ig
+        try:
+            ig = crosspost(item, video_id, payload) or ig
+        except SystemExit as exc:
+            # skip() exits 0. A failed Reel must not discard the YouTube upload.
+            if exc.code in (0, None):
+                raise
+            _soft_reel(video_id, f"Instagram publish rc={exc.code}")
+            ig = {"posted": False, "media_id": "", "ig_skipped": True}
+        except Exception as exc:  # noqa: BLE001 — the slot is already on YouTube
+            _soft_reel(video_id, f"{type(exc).__name__}: {exc}")
+            ig = {"posted": False, "media_id": "", "ig_skipped": True}
     return {
         "action": "fill",
         "reason": "buffer",
@@ -714,8 +724,31 @@ def stage_run(item, video_id, payload, run_dir=None):
     block.unlink(missing_ok=True)
 
 
+def _soft_reel(video_id, reason, run_dir=None):
+    """The Short is on YouTube. Leave a retry marker instead of failing the slot."""
+    import publish_instagram as ig
+    print(f"[buffer] Reel soft-fail ({reason}); YouTube upload stands", flush=True)
+    try:
+        ig.mark_ig_skipped(Path(run_dir) if run_dir else RUN, video_id, reason)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[buffer] ig_skipped note failed: {exc}", flush=True)
+
+
+def _ig_exit_code(exc):
+    code = exc.code
+    if code in (0, None):
+        return 0
+    if isinstance(code, int):
+        return code
+    return 1
+
+
 def crosspost_buffer(item, video_id, payload, run_dir=None):
-    """IG Reel via the existing idempotency guard. A live or ledger hit does not post again."""
+    """IG Reel via the existing idempotency guard. A live or ledger hit does not post again.
+
+    A failed Reel after this YouTube id exists is a soft miss: ig_status.txt
+    says skipped, and this function returns instead of exiting the process.
+    """
     import publish_instagram as ig
     run_dir = Path(run_dir) if run_dir else RUN
     stage_run(item, video_id, payload, run_dir)
@@ -729,7 +762,8 @@ def crosspost_buffer(item, video_id, payload, run_dir=None):
         already = ig.existing_media(ident)
     except ig.LiveCheckError as exc:
         print(f"[buffer] IG live check failed ({exc}); not posting a Reel", flush=True)
-        return {"posted": False, "media_id": "", "error": "live-check"}
+        _soft_reel(video_id, f"live Instagram check failed ({exc})", run_dir)
+        return {"posted": False, "media_id": "", "error": "live-check", "ig_skipped": True}
     if already:
         (run_dir / "ig_reel.txt").write_text(str(already), encoding="utf-8")
         print(f"[buffer] IG already has {already}; not posting again", flush=True)
@@ -737,7 +771,16 @@ def crosspost_buffer(item, video_id, payload, run_dir=None):
     if os.environ.get("IG_CROSSPOST", "").strip().lower() not in ("1", "true", "yes", "on"):
         print("[buffer] IG_CROSSPOST off; Reel skipped", flush=True)
         return {"posted": False, "media_id": ""}
-    ig.main()
+    try:
+        ig.main()
+    except SystemExit as exc:
+        code = _ig_exit_code(exc)
+        if code != 0:
+            _soft_reel(video_id, f"Instagram publish rc={code}", run_dir)
+            return {"posted": False, "media_id": "", "ig_skipped": True}
+    except Exception as exc:  # noqa: BLE001
+        _soft_reel(video_id, f"{type(exc).__name__}: {exc}", run_dir)
+        return {"posted": False, "media_id": "", "ig_skipped": True}
     media = ""
     reel = run_dir / "ig_reel.txt"
     if reel.exists():

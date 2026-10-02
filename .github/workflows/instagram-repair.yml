@@ -2,12 +2,15 @@ name: Instagram Reel Publish Watchdog
 
 on:
   workflow_run:
-    workflows: ["Paise Ki Pathshala"]
+    # Slot watch's buffer fill is the other path that uploads a Short and can
+    # leave the Reel for later. A soft-fail exits 0, so this cannot be
+    # failure-only: the artifact step looks for run/ig_status.txt.
+    workflows: ["Paise Ki Pathshala", "Slot watch"]
     types: [completed]
   workflow_dispatch:
     inputs:
       run_id:
-        description: "Failed Paise Ki Pathshala run ID (optional; auto-detected for workflow_run)"
+        description: "Paise Ki Pathshala or Slot watch run ID (optional; auto-detected for workflow_run)"
         required: false
         default: ""
 
@@ -23,22 +26,22 @@ permissions:
 
 jobs:
   retry-instagram:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion != 'cancelled' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download failed run artifact
+      - name: Download run artifact
         id: artifact
         env:
           GH_TOKEN: ${{ github.token }}
-          FAILED_RUN: ${{ inputs.run_id || github.event.workflow_run.id }}
+          SOURCE_RUN: ${{ inputs.run_id || github.event.workflow_run.id }}
         run: |
           rm -rf run
           mkdir -p run
-          gh run download "$FAILED_RUN" -D run || true
+          gh run download "$SOURCE_RUN" -D run || true
 
           # gh may place files under an artifact-named directory.
           if [ ! -s run/final.mp4 ]; then
@@ -51,27 +54,27 @@ jobs:
 
           # Safety gates (a retry must never post a second Reel, a Reel for an
           # unlisted test, or a video that failed QA / review):
-          #  1. the failed run must not have published a Reel already;
-          #  2. on automatic runs the failure must be the Instagram step itself.
-          #     run_pipeline.py prints this marker only after every gate passed,
-          #     the verdict was READY and IG_CROSSPOST was on (public runs only).
-          #     Any other failure (QA gate, NEEDS FIX, render error) is skipped.
+          #  1. ig_reel.txt already present means this Short was posted;
+          #  2. ig_status.txt must start with "skipped:" — written only after a
+          #     YouTube upload when the Reel was not confirmed. Unlisted tests
+          #     and blocked modes never write that file.
           #  publish_instagram.py additionally refuses unless report.md,
           #  verify_meta.json, and self_review.json agree the verdict is READY.
-          #  Those files are in the failed run's artifact. The gate is unchanged.
-          if [ -n "$(find run -type f -name ig_reel.txt -size +0 -print -quit)" ]; then
+          #  Those files are in the run's artifact. The gate is unchanged.
+          STATUS="$(find run -type f -name ig_status.txt -print -quit)"
+          REEL="$(find run -type f -name ig_reel.txt -size +0 -print -quit)"
+          if [ -n "$REEL" ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "Failed run already published a Reel (ig_reel.txt present); not posting again."
-          elif [ "${{ github.event_name }}" = "workflow_run" ] && \
-               ! gh run view "$FAILED_RUN" --log-failed 2>/dev/null | grep -q "Instagram Reel publish was not confirmed"; then
+            echo "Run already published a Reel (ig_reel.txt present); not posting again."
+          elif [ -z "$STATUS" ] || ! grep -q '^skipped:' "$STATUS"; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "Failure was not the Instagram publish step; not posting a Reel."
+            echo "No skipped Instagram status; not posting a Reel."
           elif [ -s run/final.mp4 ] && [ -s run/script.txt ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
-            echo "Short artifact found; Instagram-only retry is eligible."
+            echo "Short artifact has a skipped Reel; Instagram-only retry is eligible."
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "No usable short artifact in failed run; nothing to retry."
+            echo "No usable short artifact; nothing to retry."
           fi
 
       - name: Install dependencies

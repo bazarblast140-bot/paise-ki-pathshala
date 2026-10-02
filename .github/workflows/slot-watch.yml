@@ -103,7 +103,25 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: python buffer_shorts.py --fill-last-chance
+      - name: YouTube upload recorded
+        id: uploaded
+        if: ${{ !cancelled() }}
+        run: |
+          id=""
+          if [ -s run/uploaded.txt ]; then
+            id="$(tr -d '\r' < run/uploaded.txt | head -n 1 | awk '{print $1}')"
+          fi
+          if [ -n "$id" ]; then
+            echo "youtube_uploaded=true" >> "$GITHUB_OUTPUT"
+            echo "video_id=$id" >> "$GITHUB_OUTPUT"
+          else
+            echo "youtube_uploaded=false" >> "$GITHUB_OUTPUT"
+            echo "video_id=" >> "$GITHUB_OUTPUT"
+          fi
       - name: Commit ledger and buffer manifest
+        # Same rule as the publish workflow: a Reel failure after the YouTube
+        # id exists must still push the ledger, or the next watch fills again.
+        if: ${{ !cancelled() && (steps.uploaded.outputs.youtube_uploaded == 'true' || success()) }}
         run: |
           git add data/published.json data/buffer_manifest.json
           if git diff --cached --quiet; then
@@ -115,6 +133,23 @@ jobs:
             git pull --rebase --autostash || true
             git push
           fi
+      - name: Upload buffer fill artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: buffer-fill-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            run/final.mp4
+            run/script.txt
+            run/report.md
+            run/verify_meta.json
+            run/self_review.json
+            run/uploaded.txt
+            run/ig_reel.txt
+            run/ig_status.txt
+            run/thumbnail.jpg
 
   # Khali slot ka alert alag hai. Fill sirf tab jab next unfilled slot
   # 26h lookahead me ho (aur kam se kam 2h door). privacy=public -> private + publishAt. Instant

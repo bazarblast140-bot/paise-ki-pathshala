@@ -78,6 +78,10 @@ class GitHubHttpError(RuntimeError):
         super().__init__(f"HTTP {self.code} {url}: {self.body[:400]}")
 
 
+class HostNotReady(Exception):
+    """The public asset URL is not serving yet. The upload loop retries this."""
+
+
 # uploads.github.com 404s once in a while, and it also 404s (not 403) when the
 # token cannot write. Re-resolve the release and try again before blaming it.
 UPLOAD_ATTEMPTS = 3
@@ -217,14 +221,15 @@ def _upload_url(repo: str, release: dict, name: str) -> str:
     return base + "?name=" + urllib.parse.quote(name)
 
 
-def _drop_same_name(repo: str, token: str, release: dict, name: str) -> None:
+def _asset_download_url(release: dict, name: str) -> str:
+    """Public URL of an asset that already has this name, or ""."""
     for asset in release.get("assets") or []:
-        if asset.get("name") != name or not asset.get("id"):
+        if not isinstance(asset, dict) or asset.get("name") != name:
             continue
-        try:
-            _gh_json("DELETE", f"{API}/repos/{repo}/releases/assets/{asset['id']}", token)
-        except GitHubHttpError:
-            pass
+        url = str(asset.get("browser_download_url") or "")
+        if url.startswith("https://"):
+            return url
+    return ""
 
 
 def diagnose_upload_failure(repo: str, token: str, tag: str, err: BaseException) -> str:
@@ -324,21 +329,40 @@ def _url_serves(url: str) -> bool:
         return res.status == 200 and bool(res.read(8))
 
 
+def _wait_until_public(url: str, token: str) -> None:
+    """Poll the public URL. Not serving yet is retryable; it does not end the upload."""
+    for wait_i in range(1, 9):
+        try:
+            if _url_serves(url):
+                ok(f"hosted: {url}")
+                return
+        except Exception as err:
+            print(f"  host wait {wait_i}/8: {redact_text(str(err), token)}")
+        time.sleep(1.5)
+    raise HostNotReady(f"Public URL not serving yet: {url}")
+
+
 def host_release_asset(file: Path, *, name: str, content_type: str) -> str:
     """Upload a public release asset so Meta can fetch media without auth.
 
     The release id is resolved by tag at upload time (and again after a 404 or
-    5xx). GET and POST use the same token.
+    5xx). GET and POST use the same token. An asset that already has this name
+    is reused. It is never deleted — that used to remove another run's file.
     """
     repo, token, source = hosting_credentials()
     tag = media_tag()
     print(f"[ig] hosting repo={repo} tag={tag} token_source={source} date_basis=UTC")
     last: BaseException | None = None
     for attempt in range(UPLOAD_ATTEMPTS):
+        retryable = False
         try:
             release = ensure_release(repo, token, tag)
             print(f"[ig] upload {name} -> release {release.get('id')} tag {tag} (looked up by tag)")
-            _drop_same_name(repo, token, release, name)
+            existing = _asset_download_url(release, name)
+            if existing:
+                print(f"[ig] reuse existing asset {name}; not deleting it")
+                _wait_until_public(existing, token)
+                return existing
             payload = file.read_bytes()
             asset = _gh_json(
                 "POST", _upload_url(repo, release, name), token,
@@ -347,18 +371,33 @@ def host_release_asset(file: Path, *, name: str, content_type: str) -> str:
             url = asset.get("browser_download_url") or ""
             if not url.startswith("https://"):
                 die(f"No public download URL from release asset: {asset}")
-            for wait_i in range(1, 9):
-                try:
-                    if _url_serves(url):
-                        ok(f"hosted: {url}")
-                        return url
-                except Exception as err:
-                    print(f"  host wait {wait_i}/8: {redact_text(str(err), token)}")
-                time.sleep(1.5)
-            die(f"Public URL not serving yet: {url}")
-        except GitHubHttpError as e:
+            _wait_until_public(url, token)
+            return url
+        except HostNotReady as e:
             last = e
-            retryable = e.code == 404 or e.code >= 500
+            retryable = True
+        except GitHubHttpError as e:
+            if e.code == 422:
+                # Same name already exists (this attempt's earlier POST). Reuse it.
+                try:
+                    reused = _asset_download_url(ensure_release(repo, token, tag), name)
+                except GitHubHttpError as again:
+                    last = again
+                    retryable = again.code == 404 or again.code >= 500
+                else:
+                    if reused:
+                        try:
+                            _wait_until_public(reused, token)
+                            return reused
+                        except HostNotReady as not_ready:
+                            last = not_ready
+                            retryable = True
+                    else:
+                        last = e
+                        retryable = True
+            else:
+                last = e
+                retryable = e.code == 404 or e.code >= 500
         except TimeoutError as e:
             last = e
             retryable = True
@@ -373,16 +412,30 @@ def host_release_asset(file: Path, *, name: str, content_type: str) -> str:
         time.sleep(wait)
     if isinstance(last, (GitHubHttpError, TimeoutError)):
         die(diagnose_upload_failure(repo, token, tag, last))
-    die(redact_text(str(last), token))
+    die(redact_text(str(last), token) if last else "upload failed")
     return ""
 
 
+def release_asset_name(kind: str, file: Path, suffix: str) -> str:
+    """One name per Actions attempt and file bytes. Not a clock timestamp.
+
+    ``paise-short-{GITHUB_RUN_ID}-{GITHUB_RUN_ATTEMPT}-{content hash}.mp4``
+    (and the same shape for the cover). Two runs no longer share a name, so
+    a retry does not have to delete anything.
+    """
+    run_id = re.sub(r"[^A-Za-z0-9._-]", "", env("GITHUB_RUN_ID") or "local") or "local"
+    attempt = re.sub(r"[^A-Za-z0-9._-]", "", env("GITHUB_RUN_ATTEMPT") or "1") or "1"
+    return f"{kind}-{run_id}-{attempt}-{content_hash(file)}{suffix}"
+
+
 def host_mp4(file: Path) -> str:
-    return host_release_asset(file, name=f"paise-short-{int(time.time())}.mp4", content_type="video/mp4")
+    return host_release_asset(
+        file, name=release_asset_name("paise-short", file, ".mp4"), content_type="video/mp4")
 
 
 def host_cover(file: Path) -> str:
-    return host_release_asset(file, name=f"paise-cover-{int(time.time())}.jpg", content_type="image/jpeg")
+    return host_release_asset(
+        file, name=release_asset_name("paise-cover", file, ".jpg"), content_type="image/jpeg")
 
 def ig_host() -> str:
     surface = env("IG_SURFACE", "facebook")
@@ -811,6 +864,29 @@ def publish_reel(video_url: str, caption: str, cover_url: str = "", ident: dict 
             persist_ig_media(found, ident)
         return media_id
     return media_id
+
+
+def mark_ig_skipped(run_dir, video_id, reason) -> str:
+    """YouTube already has this Short. Record the Reel miss for a later retry.
+
+    Writes ``ig_status.txt`` as ``skipped: <reason>`` and notes that on the
+    existing ledger row. Does not append a second slot row.
+    """
+    reason = " ".join(str(reason or "Instagram Reel was not confirmed").split())
+    text = reason if reason.startswith("skipped:") else f"skipped: {reason}"
+    path = Path(run_dir) / "ig_status.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text + "\n", encoding="utf-8")
+    video_id = str(video_id or "").strip()
+    if video_id:
+        try:
+            import ledger
+            ledger.note_ig_skipped(video_id, text)
+        except Exception as exc:  # noqa: BLE001 — the YouTube slot must still stand
+            print(f"[ig] ledger ig_skipped note skipped: {exc}")
+    else:
+        print("[ig] no YouTube id; ledger ig_skipped note skipped")
+    return text
 
 
 def main() -> None:

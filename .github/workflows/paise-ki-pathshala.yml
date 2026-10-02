@@ -227,8 +227,26 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: python buffer_shorts.py --fill-scheduled
+      - name: YouTube upload recorded
+        id: uploaded
+        if: ${{ !cancelled() && steps.guard.outputs.taken != 'true' }}
+        run: |
+          id=""
+          if [ -s run/uploaded.txt ]; then
+            id="$(tr -d '\r' < run/uploaded.txt | head -n 1 | awk '{print $1}')"
+          fi
+          if [ -n "$id" ]; then
+            echo "youtube_uploaded=true" >> "$GITHUB_OUTPUT"
+            echo "video_id=$id" >> "$GITHUB_OUTPUT"
+          else
+            echo "youtube_uploaded=false" >> "$GITHUB_OUTPUT"
+            echo "video_id=" >> "$GITHUB_OUTPUT"
+          fi
       - name: Commit topic_bank (prevent topic repeats)
-        if: steps.guard.outputs.taken != 'true' && (success() || steps.buffer.outcome == 'success')
+        # An Instagram miss used to fail the job after YouTube had already
+        # uploaded, and success() then skipped this commit. The next cron saw
+        # an empty slot and uploaded again. Commit whenever a video id exists.
+        if: ${{ !cancelled() && steps.guard.outputs.taken != 'true' && (steps.uploaded.outputs.youtube_uploaded == 'true' || success() || steps.buffer.outcome == 'success') }}
         run: |
           FILES=""
           for f in topic_bank.json data/published.json data/buffer_manifest.json data/competitor_insights.json \
@@ -264,7 +282,9 @@ jobs:
             run/gate2_report.txt
             run/gate3_report.txt
             run/ig_reel.txt
+            run/ig_status.txt
             run/ig_cover.jpg
+            run/uploaded.txt
             run/youtube_status.txt
             run/auto_agent_last.log
             run/credits.json
