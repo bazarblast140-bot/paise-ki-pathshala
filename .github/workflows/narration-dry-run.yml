@@ -1,0 +1,42 @@
+name: Narration dry run
+
+# Text-only live narration check. workflow_dispatch only.
+# Picks N upcoming Short topics without marking them used, runs DeepSeek
+# narration, beat repair, trim, the text gates, and the duration estimate,
+# then stops before any TTS. No ElevenLabs key, no upload, no commit.
+on:
+  workflow_dispatch:
+    inputs:
+      topics:
+        description: "How many upcoming topics to narrate"
+        type: number
+        default: 3
+
+permissions:
+  contents: read
+
+concurrency:
+  group: narration-dry-run
+  cancel-in-progress: false
+
+jobs:
+  narrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Live narration text check
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+          DEEPSEEK_MAX_CALLS: "4"
+          VIDEO_FORMAT: short
+          DRY_RUN: "1"
+        run: python narration_dry_run.py --topics "${{ github.event.inputs.topics || 3 }}"

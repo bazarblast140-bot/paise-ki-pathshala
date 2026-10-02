@@ -837,6 +837,102 @@ def _join_sentences(sentences):
     return " ".join(bit.strip() for bit in sentences if str(bit).strip())
 
 
+def _clause_pieces(text):
+    """Clauses and sentences. A comma, danda, or question mark is a boundary."""
+    text = " ".join(str(text or "").split())
+    if not text:
+        return []
+    parts = re.split(r"(?<=[,،;:—–-])\s+|(?<=[।!?？])\s+", text)
+    return [part.strip() for part in parts if part and part.strip()]
+
+
+def _hook_question_and_rest(text, hook_line):
+    """The opening question, then whatever follows it."""
+    text = " ".join(str(text or "").split())
+    line = " ".join(str(hook_line or "").split()).rstrip("।")
+    if line and text.startswith(line):
+        return line, text[len(line):].strip()
+    match = re.search(r"[?？]", text)
+    if not match:
+        parts = _split_sentences(text)
+        if len(parts) <= 1:
+            return text, ""
+        return parts[0], _join_sentences(parts[1:])
+    return text[:match.end()].strip(), text[match.end():].strip()
+
+
+def _cut_question_to_max(question, hi):
+    """Shorten an over-long question at a clause boundary and keep the ?."""
+    body = str(question or "").strip()
+    mark = "?"
+    if body.endswith("?") or body.endswith("？"):
+        mark = body[-1]
+        body = body[:-1].strip()
+    pieces = _clause_pieces(body) or ([body] if body else [])
+    best = None
+    kept = []
+    for piece in pieces:
+        kept.append(piece)
+        trial_body = " ".join(kept).strip().rstrip(",،;:—–- ")
+        trial = " ".join((trial_body + mark).split())
+        if len(trial.split()) <= hi:
+            best = trial
+        else:
+            break
+    return best or " ".join(str(question or "").split())
+
+
+def fit_live_hook(text, lo, hi, hook_line=""):
+    """Keep the first question, then whole clauses, without going over the max.
+
+    The result is returned only when it lands inside the window. A question
+    that is itself over the max is cut at the clause boundary nearest that
+    max, and the question mark stays. If nothing lands in the window, the
+    original text is left for a repair.
+    """
+    text = " ".join(str(text or "").split())
+    if not text or lo <= len(text.split()) <= hi:
+        return text
+    question, rest = _hook_question_and_rest(text, hook_line)
+    if len(question.split()) > hi:
+        cut = _cut_question_to_max(question, hi)
+        if lo <= len(cut.split()) <= hi:
+            return cut
+        return text
+    built = question
+    for piece in _clause_pieces(rest):
+        trial = " ".join((built + " " + piece).split())
+        if len(trial.split()) > hi:
+            break
+        built = trial
+    if lo <= len(built.split()) <= hi:
+        return built
+    return text
+
+
+def _apply_hook_fit(narration, topic):
+    """Deterministic hook fit. No model call. False when the hook is unchanged."""
+    if not (topic or {}).get("_live_short") or (topic or {}).get("_atr"):
+        return False
+    if not isinstance(narration, dict):
+        return False
+    order, targets, _, _ = _lesson(topic)
+    beats = narration.setdefault("beats", {})
+    lo, hi = beat_word_window(targets["hook"], LIVE_BEAT_TOLERANCE)
+    current = str(beats.get("hook") or "")
+    fitted = fit_live_hook(current, lo, hi, narration.get("hook_line"))
+    if fitted == " ".join(current.split()):
+        return False
+    beats["hook"] = fitted
+    note = f"hook: kept the first question and landed at {len(fitted.split())} words"
+    notes = narration.setdefault("_trim_notes", [])
+    if isinstance(notes, list):
+        notes.append(note)
+    print(f"[trim] {note}", flush=True)
+    topic["_spoken_beats"] = {beat: str(beats.get(beat) or "") for beat in order}
+    return True
+
+
 def _sentence_protected(beat, sentence, index, example):
     """The hook keeps its opening line. The code-written udaharan example is never cut."""
     if beat == "hook" and index == 0:
@@ -871,8 +967,8 @@ def _drop_index(sentences, beat, example, lo):
 def apply_live_draft(narration, topic, total_hi=None):
     """Insert उदाहरण, then drop whole sentences from the end of long beats.
 
-    The model is not asked to shorten a script. A beat that is still too short
-    after this pass is the only reason to call the repair.
+    The model is not asked to shorten a script that this pass can finish.
+    A beat that is still outside its window, including a long hook, is repaired.
     """
     if not isinstance(narration, dict):
         return narration
@@ -928,13 +1024,19 @@ def apply_live_draft(narration, topic, total_hi=None):
             break
     for note in notes:
         print(f"[trim] {note}", flush=True)
-    topic["_spoken_beats"] = {beat: str(beats.get(beat) or "") for beat in order}
     narration["_trim_notes"] = notes
+    topic["_spoken_beats"] = {beat: str(beats.get(beat) or "") for beat in order}
+    _apply_hook_fit(narration, topic)
     return narration
 
 
 def beats_to_rewrite(n, topic, extra=""):
-    """Beats the model may rewrite. A live short asks only for beats that are too short."""
+    """Beats the model may rewrite.
+
+    A live short rewrites a beat that is still outside its window after the
+    trim, including a hook that stayed long because its first question is kept.
+    A beat that is only too short is still included.
+    """
     order, targets, total_window, _band = _lesson(topic)
     if topic.get("_atr"):
         return list(BEATS)
@@ -943,8 +1045,8 @@ def beats_to_rewrite(n, topic, extra=""):
     if topic.get("_live_short"):
         rewrite = []
         for beat in order:
-            lo, _hi = beat_word_window(targets[beat], LIVE_BEAT_TOLERANCE)
-            if counts[beat] < lo:
+            lo, hi = beat_word_window(targets[beat], LIVE_BEAT_TOLERANCE)
+            if counts[beat] < lo or counts[beat] > hi:
                 rewrite.append(beat)
         total = sum(counts.values())
         if total < total_window[0]:
@@ -1029,7 +1131,12 @@ def repair_instructions(draft, rewrite, topic=None):
                 f"REWRITE {beat}: current {current} words, target exactly {target} words "
                 f"(accept {lo}-{hi})."
             )
-            if beat == "hook" and order != LIVE_ORDER:
+            if beat == "hook" and order == LIVE_ORDER:
+                line += (
+                    " Keep the first question. Keep the topic and the allowed numbers. "
+                    f"The hook must land in {lo}-{hi} words."
+                )
+            elif beat == "hook":
                 line += " The hook must be 20-30 words."
             if beat in vague:
                 line += (
@@ -1238,7 +1345,11 @@ def narration(topic, c, spec=None):
             continue
         if kind == "repair":
             n = merge_repair(draft, n, rewrite, topic)
-            repair_done = True
+            # Live beats that stay outside the window get another repair
+            # inside the same 4-call budget. Four-beat scripts still stop
+            # after one contentful repair.
+            if not (topic.get("_live_short") and not topic.get("_atr")):
+                repair_done = True
         if topic.get("_live_short") and not topic.get("_atr"):
             n = apply_live_draft(n, topic)
         draft = n
@@ -1252,7 +1363,7 @@ def narration(topic, c, spec=None):
             return n, "llm"
         last = "; ".join(fails)
         print(f"[retry] narration call {calls}/{NARRATION_CALL_CAP}: {last}")
-        if kind == "repair":
+        if kind == "repair" and not (topic.get("_live_short") and not topic.get("_atr")):
             break
     reason = (
         "LLM narration failed the hook/teaching gate; "
