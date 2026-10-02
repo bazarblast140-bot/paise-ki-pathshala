@@ -797,6 +797,11 @@ def frame_layout_notes(img):
             notes.append("lone unit word with no number")
             break
     notes.extend(repeated_text_notes(layers))
+    if getattr(img, "panel_box", None) is not None:
+        frac = panel_fill_fraction(img)
+        img.panel_fill = frac
+        if frac + 1e-9 < 0.35:
+            notes.append(f"panel fill {frac:.0%} is under 35%")
     as_of = str(getattr(img, "market_as_of", "") or "")
     if as_of:
         blob = " ".join(str(layer.get("text") or "") for layer in (getattr(img, "text_layers", None) or []))
@@ -1371,11 +1376,104 @@ def _outline_card_text(topic, beat):
 
 
 def _scene_card_text(topic, beat, index, n):
-    """Words this scene says. A spoken beat is split so later numbers stay off early cards."""
+    """Words this scene says. A caption window wins over an even word split."""
+    cards = (topic or {}).get("_scene_cards")
+    if isinstance(cards, dict) and beat in cards and index < len(cards[beat]):
+        return str(cards[beat][index])
     spoken = _fold_card_text(((topic or {}).get("_spoken_beats") or {}).get(beat) or "")
     if spoken:
         return " ".join(_slice_words(spoken.split(), index, n))
     return _outline_card_text(topic, beat)
+
+
+def _scene_figure_list(topic, beat, index, card, spoken):
+    """Figures for this scene. An installed list may be empty after dedupe."""
+    preset = (topic or {}).get("_scene_figures")
+    if isinstance(preset, dict) and beat in preset and index < len(preset[beat]):
+        return list(preset[beat][index])
+    allowed = _digit_tokens(card)
+    return _spoken_figures(card, allowed) if spoken else _figure_tokens([card])
+
+
+def _summary_line(figures):
+    """A labelled figure line, not a bare number. Recovery pairs use the formula."""
+    perc = []
+    for fig in figures or []:
+        match = re.search(r"(\d+(?:\.\d+)?)\s*%", str(fig))
+        if match:
+            perc.append((str(fig), float(match.group(1))))
+    if len(perc) >= 2 and 0 < perc[0][1] < 100:
+        expected = 100.0 * perc[0][1] / (100.0 - perc[0][1])
+        if abs(perc[1][1] - expected) <= 0.51:
+            return f"नुकसान {perc[0][0]} से वापसी +{perc[1][0]}"
+    if figures:
+        return "आंकड़ा " + " · ".join(str(fig) for fig in figures[:3])
+    return ""
+
+
+def _chart_label(fig, index):
+    """A label with no extra digit. An index like 1. would show before it is said."""
+    text = " ".join(str(fig or "").split())
+    if not text:
+        return ""
+    if not re.search(r"[\u0900-\u097F]", text):
+        text = ("मान", "सीमा", "राशि", "कदम")[index % 4] + " " + text
+    return text[:24]
+
+
+def panel_fill_fraction(image):
+    """Share of the card panel covered by text or a labelled graphic.
+
+    An unlabelled bar does not count. Empty navy inside the panel fails
+    below about 35%.
+    """
+    panel = getattr(image, "panel_box", None)
+    if not panel:
+        return 1.0
+    x0, y0, x1, y1 = (float(v) for v in panel)
+    width = max(1.0, x1 - x0)
+    height = max(1.0, y1 - y0)
+    mask = np.zeros((int(height), int(width)), dtype=bool)
+    boxes = []
+    for layer in getattr(image, "text_layers", None) or []:
+        if layer.get("faint") or not layer.get("text") or not layer.get("box"):
+            continue
+        boxes.append(layer["box"])
+    boxes.extend(getattr(image, "labelled_graphic_boxes", None) or [])
+    for box in boxes:
+        left = int(max(0, min(width, float(box[0]) - x0)))
+        top = int(max(0, min(height, float(box[1]) - y0)))
+        right = int(max(0, min(width, float(box[2]) - x0)))
+        bottom = int(max(0, min(height, float(box[3]) - y0)))
+        if right > left and bottom > top:
+            mask[top:bottom, left:right] = True
+    return float(mask.mean())
+
+
+def _paint_labelled_chart(image, labels, panel):
+    """Bars inside the panel. Each bar has a label, or the chart is not drawn."""
+    labels = [_chart_label(label, i) for i, label in enumerate(labels or [])]
+    labels = [label for label in labels if label][:4]
+    if not labels:
+        return
+    x0, y0, x1, y1 = (int(v) for v in panel)
+    n = len(labels)
+    gap = 24
+    inner = (x1 - x0) - 80
+    bar_w = max(90, int((inner - gap * (n - 1)) / n))
+    bar_h = int((y1 - y0) * 0.40)
+    base = y1 - 64
+    top = base - bar_h
+    colors = ((96, 165, 250), (34, 197, 94), (250, 204, 21), (239, 68, 68))
+    draw = ImageDraw.Draw(image)
+    boxes = list(getattr(image, "labelled_graphic_boxes", None) or [])
+    left = x0 + 40
+    for i, label in enumerate(labels):
+        x = left + i * (bar_w + gap)
+        draw.rounded_rectangle([x, top, x + bar_w, base], 16, fill=colors[i % 4])
+        boxes.append((float(x), float(top), float(x + bar_w), float(base)))
+        _text(image, x + bar_w / 2, base + 6, label, (255, 255, 255), 26, anchor="mt")
+    image.labelled_graphic_boxes = boxes
 
 
 def _wrap_card(text, limit=22):
@@ -1426,45 +1524,46 @@ def _live_fact_frame(topic, beat, index, n=1):
     and a zoom then cut the title off both edges. Each scene now shows this
     beat's own line, and a spoken beat is split so a later figure is not on
     screen before the narration reaches it. Text stays in the middle band.
-    The bottom 30% is a bar footer, and the plate itself is brighter than
-    the dark-row cutoff.
+    Text and a labelled chart fill the panel. An unlabelled bar chart is not drawn.
     """
     width, height = K.W, K.H
     image = _live_plate(width, height)
     draw = ImageDraw.Draw(image)
     shift = (_BEAT_SHIFT.get(beat, 0) + int(index)) % 4
-    panel = (
+    panel_color = (
         (22, 48, 96),
         (30, 58, 110),
         (18, 52, 88),
         (26, 42, 102),
     )[shift]
-    draw.rounded_rectangle([70, 190, width - 70, 1300], 28, fill=panel, outline=GOLD, width=4)
-    _paint_bottom_band(image, beat, index)
+    panel_box = (70, 190, width - 70, 1300)
+    draw.rounded_rectangle(list(panel_box), 28, fill=panel_color, outline=GOLD, width=4)
+    image.panel_box = panel_box
+    image.labelled_graphic_boxes = []
     card = _scene_card_text(topic, beat, index, n)
-    allowed = _digit_tokens(card)
     spoken = bool(str(((topic or {}).get("_spoken_beats") or {}).get(beat) or "").strip())
-    figures = _spoken_figures(card, allowed) if spoken else _figure_tokens([card])
+    figures = _scene_figure_list(topic, beat, index, card, spoken)
+    summary = _summary_line(figures)
+    chart_labels = [_chart_label(fig, i) for i, fig in enumerate(figures[:4])]
+    chart_labels = [label for label in chart_labels if label]
+    if not chart_labels:
+        chart_labels = [_BEAT_HEAD.get(beat, "बात") + " चार्ट"]
     y = 230
     head = _BEAT_HEAD.get(beat, "बात")
     _text(image, 540, y, head, GOLD, 40, anchor="mt")
-    y += 78
-    shown_figures = figures[:4]
-    figure_size = 52 if len(shown_figures) > 3 else 60
-    figure_step = 78 if len(shown_figures) > 3 else 96
-    for token in shown_figures:
-        if y > 980:
-            break
-        _text(image, 540, y, token, (250, 250, 250), figure_size, anchor="mt")
-        y += figure_step
-    shown = 0
-    for part in _wrap_card(card, limit=24):
-        if shown >= 4 or y > 1140:
+    y += 70
+    if summary:
+        _text(image, 540, y, summary, (250, 250, 250), 40, anchor="mt")
+        y += 64
+    chart_top = panel_box[3] - 64 - int((panel_box[3] - panel_box[1]) * 0.40)
+    for part in _wrap_card(card, limit=26):
+        if y > chart_top - 24:
             break
         _text(image, 540, y, part, (186, 214, 255), 36, anchor="mt")
-        y += 68
-        shown += 1
+        y += 56
+    _paint_labelled_chart(image, chart_labels, panel_box)
     image.scene_kind = f"fact-{beat}"
+    image.panel_fill = panel_fill_fraction(image)
     return image
 
 

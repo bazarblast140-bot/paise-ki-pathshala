@@ -34,7 +34,9 @@ def allowed_numbers(topic):
         *[str(x) for x in (topic.get("facts") or [])],
         *[str(x) for pair in (topic.get("beats") or {}).values() for x in pair],
     ])
-    return extract_numbers(blob) | {"1", "2", "3"} | percentage_complements(topic)
+    # 100−p is not a free number. It is allowed only when the same sentence
+    # writes the subtraction. See spelled_complement_numbers.
+    return extract_numbers(blob) | {"1", "2", "3"}
 
 
 # Same markers the evergreen buffer uses. A figure counts as an example only
@@ -90,10 +92,11 @@ _PERCENT_RE = re.compile(
 
 
 def percentage_complements(topic):
-    """For each percentage p on the topic card, also allow 100−p.
+    """Complements of topic percentages. Not legal until the sentence subtracts.
 
-    A 40% win rate may be spoken as a 60% loss rate. The complement is not an
-    invented figure. Values outside 0–100 do not grow the allow list.
+    A 40% win rate is a 60% loss rate only when the same sentence writes
+    100−40 or 100 में से 40. The bare complement is not on the allow list.
+    Values outside 0–100 do not grow this set.
     """
     found = set()
     for match in _PERCENT_RE.finditer(_topic_blob(topic)):
@@ -105,6 +108,135 @@ def percentage_complements(topic):
             continue
         found.add(_canon_number(100 - value))
     return found
+
+
+def _topic_percents(topic):
+    found = []
+    for match in _PERCENT_RE.finditer(_topic_blob(topic)):
+        try:
+            value = float(match.group(1).replace(",", ""))
+        except ValueError:
+            continue
+        if 0 < value < 100 and value not in found:
+            found.append(value)
+    return found
+
+
+def spelled_complement_numbers(text, topic):
+    """100 and 100−p, only when this sentence writes the subtraction.
+
+    "100 − 40 = 60" and "100 में से 40 ... 60" pass. "हार 60 प्रतिशत" with
+    no subtraction does not.
+    """
+    percents = _topic_percents(topic)
+    if not percents:
+        return set()
+    found = set()
+    for sentence in re.split(r"[।!?？]+|\.\s+", text or ""):
+        for value in percents:
+            token = _canon_number(value)
+            comp = _canon_number(100 - value)
+            wrote = re.search(
+                rf"100\s*[-−–]\s*{re.escape(token)}\b",
+                sentence,
+            ) or re.search(
+                rf"100\s*में\s*से\s*{re.escape(token)}\b",
+                sentence,
+            )
+            if not wrote:
+                continue
+            found.add("100")
+            if comp in extract_numbers(sentence):
+                found.add(comp)
+    return found
+
+
+_LOSS_WORD = re.compile(r"घट|गिर|नुकसान|डूब|लॉस|loss", re.I)
+_RECOVERY_WORD = re.compile(r"चाहिए|वापसी|रिकवर|ऊपर|बढ़", re.I)
+_PERCENT_PAIR = re.compile(
+    r"(\d[\d,]*(?:\.\d+)?)(?:\s*/\s*(\d[\d,]*(?:\.\d+)?))?\s*(?:%|％|प्रतिशत)",
+    re.I,
+)
+
+
+def _is_loss_recovery_topic(topic):
+    if str((topic or {}).get("key") or "") == "loss_recovery":
+        return True
+    blob = _topic_blob(topic)
+    return "नुकसान का गणित" in blob or "loss recovery" in blob.lower()
+
+
+def _recovery_percent(loss):
+    """Percent needed to come back from a loss of `loss` percent. L/(1−L)."""
+    if loss <= 0 or loss >= 100:
+        return None
+    return 100.0 * loss / (100.0 - loss)
+
+
+def loss_recovery_pair_faults(text, topic):
+    """A stated loss and recovery must be recovery = L/(1−L). Any other pair blocks.
+
+    10% then 11% passes (11.11 rounds to 11). 75% then 89% or 90% does not;
+    that fall needs 300%. 50% then 11% is also a block, even though both
+    figures sit on the loss-recovery card.
+    """
+    if not _is_loss_recovery_topic(topic):
+        return set()
+    bad = set()
+    for sentence in re.split(r"[।!?？]+|\.\s+", text or ""):
+        if not _LOSS_WORD.search(sentence) or not _RECOVERY_WORD.search(sentence):
+            continue
+        pending = None
+        for match in _PERCENT_PAIR.finditer(sentence):
+            values = []
+            try:
+                values.append(float(match.group(1).replace(",", "")))
+            except ValueError:
+                continue
+            if match.group(2):
+                try:
+                    values.append(float(match.group(2).replace(",", "")))
+                except ValueError:
+                    pass
+            before = sentence[max(0, match.start() - 16):match.start()]
+            after = sentence[match.end():match.end() + 48]
+            is_loss = bool(_LOSS_WORD.search(before) or _LOSS_WORD.search(after))
+            is_rec = bool(_RECOVERY_WORD.search(before) or _RECOVERY_WORD.search(after))
+            if is_loss and not is_rec:
+                pending = values[0]
+                continue
+            if is_rec and is_loss and pending is None and len(values) == 1:
+                pending = values[0]
+                continue
+            if not is_rec or pending is None:
+                if is_loss:
+                    pending = values[-1]
+                continue
+            for value in values:
+                expected = _recovery_percent(pending)
+                if expected is None or abs(value - expected) > 0.51:
+                    bad.add(_canon_number(value))
+            pending = None
+    return bad
+
+
+_SAME_BOUNCE = re.compile(
+    r"उतन[ाीं]\s*ही(?:\s+\S+){0,6}\s*(?:ऊपर|चढ़|वापस|बढ़)"
+)
+
+
+def fact_contradiction_notes(text, topic):
+    """Claims that fight the topic's own facts.
+
+    Loss recovery needs more than the fall. "उतना ही ऊपर" says the opposite.
+    """
+    if not _is_loss_recovery_topic(topic):
+        return []
+    if _SAME_BOUNCE.search(text or ""):
+        return [
+            "claim contradicts the topic facts: a fall does not come back by the same percent"
+        ]
+    return []
 
 
 def _topic_blob(topic):
@@ -260,24 +392,41 @@ def same_sentence_stated_results(text, allowed):
     return found
 
 
+def _bare_list(text):
+    parts = [part.strip() for part in re.split(r"[,،]", text or "") if part.strip()]
+    if len(parts) < 3:
+        return False
+    bare = re.compile(r"^(?:उदाहरण|example)\s*[:：]?\s*[+\-−]?(?:₹)?\d[\d,]*(?:\.\d+)?%?$", re.I)
+    number = re.compile(r"^[+\-−]?(?:₹)?\d[\d,]*(?:\.\d+)?%?$")
+    return all(bare.match(part) or number.match(part) for part in parts)
+
+
+def _fact_worked_sentence(topic):
+    """A fact that is already a sentence, never a comma list of bare numbers."""
+    for raw in (topic or {}).get("facts") or []:
+        text = " ".join(str(raw).split()).strip().rstrip("।")
+        if not text or not re.search(r"\d", text):
+            continue
+        if _bare_list(text):
+            continue
+        if not re.search(r"[=%×x]|का\s", text):
+            continue
+        if not text.startswith("उदाहरण"):
+            text = "उदाहरण: " + text
+        return text + "।"
+    return ""
+
+
 def worked_example_sentence(topic):
     """The udaharan line the model should speak verbatim or near-verbatim.
 
     Built only from the card. A market-data topic does not get a multiplier
     formula; concept topics may show entry − factor × risk when that equals
-    the stop already on the card.
+    the stop already on the card. A bare list such as "उदाहरण: 98, 4000, 200000"
+    is never returned. The repair prompt asks for a worked sentence instead.
     """
     if _market_claim(topic):
-        nums = teaching_allowed_numbers(topic)
-
-        def key(value):
-            try:
-                return (0, float(value))
-            except (TypeError, ValueError):
-                return (1, str(value))
-
-        shown = ", ".join(sorted(nums, key=key)[:12])
-        return f"उदाहरण: {shown}।" if shown else "उदाहरण: दिए गए तथ्य।"
+        return _fact_worked_sentence(topic) or "उदाहरण: दिए गए तथ्य।"
     blob = _topic_blob(topic)
     entry = _labelled_level(blob, ["entry", "एंट्री", "buy"])
     stop = _labelled_level(blob, ["SL", "stop(?:-loss)?", "स्टॉप"])
@@ -311,21 +460,13 @@ def worked_example_sentence(topic):
             f"{_canon_number(qty)} शेयर पर रिस्क {_canon_number(risk_total)} और रिवॉर्ड {_canon_number(reward_total)}"
         )
     if len(parts) == 1:
-        nums = [n for n in allowed_numbers(topic) if n not in {"1", "2", "3"}]
-        if not nums:
-            nums = list(allowed_numbers(topic))
-
-        def key(value):
-            try:
-                return (0, float(str(value).replace(",", "")))
-            except (TypeError, ValueError):
-                return (1, str(value))
-
-        shown = ", ".join(sorted(nums, key=key)[:8])
-        if shown:
-            return f"उदाहरण: {shown}।"
+        sentence = _fact_worked_sentence(topic)
+        if sentence:
+            return sentence
         fact = next((str(x).strip().rstrip("।") for x in (topic.get("facts") or []) if str(x).strip()), "")
-        return f"उदाहरण: {fact}।" if fact else "उदाहरण: दिए गए तथ्य।"
+        if fact and not _bare_list(fact):
+            return f"उदाहरण: {fact}।"
+        return "उदाहरण: दिए गए तथ्य।"
     return " ".join(parts) + "।"
 
 
@@ -349,7 +490,7 @@ def teaching_allowed_numbers(topic, sourced=None):
     gets only figures already in the topic or the fetched series. A label
     such as उदाहरण does not add a number.
     """
-    extra = set(sourced or ()) | percentage_complements(topic)
+    extra = set(sourced or ())
     if _market_claim(topic):
         # Real prices stay on the card and the fetched series. Do not
         # invent a risk or a charge the source did not write.
@@ -363,9 +504,10 @@ def live_number_faults(beats, topic, order, allowed=None):
     udaharan and galti may also use a standard multiplier (1, 1.5, 2, 3) or a
     result that the beat's own expression evaluates to. Any other beat may use
     a sum, difference, product, or ratio of two topic numbers when that same
-    sentence writes the arithmetic and the result matches. A percentage p on
-    the card also allows 100−p. A label does not add a number. Real market
-    data stays on the sourced set only: no multiplier and no extra arithmetic.
+    sentence writes the arithmetic and the result matches. 100−p is allowed
+    only when that same sentence writes the subtraction. A loss-recovery pair
+    must be L/(1−L). A label does not add a number. Real market data stays on
+    the sourced set only: no multiplier and no extra arithmetic.
     """
     card = set(allowed if allowed is not None else allowed_numbers(topic))
     sourced = set()
@@ -373,7 +515,7 @@ def live_number_faults(beats, topic, order, allowed=None):
         sourced = set(allowed) - set(allowed_numbers(topic))
     teaching = teaching_allowed_numbers(topic, sourced=sourced)
     market = _market_claim(topic)
-    operands = set(extract_numbers(_topic_blob(topic))) | percentage_complements(topic)
+    operands = set(extract_numbers(_topic_blob(topic)))
     extra = set()
     for beat in order:
         text = str((beats or {}).get(beat) or "")
@@ -387,7 +529,9 @@ def live_number_faults(beats, topic, order, allowed=None):
             ok = set(card)
             if not market:
                 ok |= same_sentence_stated_results(text, operands)
-        extra |= nums - ok
+        ok |= spelled_complement_numbers(text, topic)
+        bad = (nums - ok) | loss_recovery_pair_faults(text, topic)
+        extra |= bad
     return extra
 
 

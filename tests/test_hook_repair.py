@@ -61,14 +61,14 @@ def _on_target(hook):
 
 
 def _clause_hook():
-    """28 words. The opening question stays, and a clause prefix fits 13-23."""
+    """28 words. The opening question stays, and whole sentences fit 13-23."""
     parts = [
         HOOK,
-        "नियम कदम एक है,",
-        "नियम कदम दो है,",
-        "नियम कदम तीन है,",
-        "नियम कदम चार है,",
-        "नियम कदम पांच है,",
+        "नियम कदम एक है।",
+        "नियम कदम दो है।",
+        "नियम कदम तीन है।",
+        "नियम कदम चार है।",
+        "नियम कदम पांच है।",
         "और छठा नियम।",
     ]
     return " ".join(parts)
@@ -131,7 +131,7 @@ class HookFitTests(unittest.TestCase):
         self.assertTrue(out["beats"]["hook"].startswith(HOOK))
         self.assertEqual(board_short.check_narration(out, topic), [])
 
-    def test_overlong_question_is_cut_at_a_clause_and_keeps_the_mark(self):
+    def test_overlong_question_is_not_cut_on_a_comma(self):
         question = (
             "क्या यह सेटअप गलत है, और नियम कदम एक है, "
             "और नियम कदम दो है, और नियम कदम तीन है, "
@@ -139,10 +139,17 @@ class HookFitTests(unittest.TestCase):
         )
         self.assertGreater(len(question.split()), 23)
         fitted = board_short.fit_live_hook(question, 13, 23, "")
-        self.assertGreaterEqual(len(fitted.split()), 13)
-        self.assertLessEqual(len(fitted.split()), 23)
+        self.assertEqual(fitted, " ".join(question.split()))
+        self.assertIn(",", fitted)
         self.assertTrue(fitted.endswith("?"))
-        self.assertTrue(fitted.startswith("क्या यह सेटअप गलत है"))
+        mid = (
+            "क्या premium देना खर्च है, और यह वाक्य यहीं खत्म नहीं होता "
+            "क्योंकि अल्पविराम के बाद और शब्द हैं और शब्द हैं और शब्द हैं?"
+        )
+        self.assertEqual(
+            board_short.fit_live_hook(mid, 4, 8, ""),
+            " ".join(mid.split()),
+        )
 
 
 class UsedShortFlagTests(unittest.TestCase):

@@ -462,6 +462,7 @@ def check_narration(n, topic):
     if topic.get("_live_short"):
         for beat in hook_check.unlabelled_example_beats(beats, order):
             fails.append(f"{beat} numbers must be labelled उदाहरण in the same sentence")
+        fails.extend(hook_check.fact_contradiction_notes(text, topic))
     low = text.lower()
     bad = [w for w in FORBIDDEN if w.lower() in low]
     if bad:
@@ -512,6 +513,7 @@ _LEAK_SNIPS = (
     "अब इसे chart पर पहचानने का तरीका समझिए",
     "इन features का मतलब समझिए",
     "अब आगे traders क्या check करते हैं",
+    "अब आगे ट्रेडर्स क्या चेक करते हैं",
     "कार्ड पर लिखा है",
     "कार्ड पर दिया हिसाब बोलो",
     "कार्ड का आंकड़ा ही बोलो",
@@ -535,10 +537,10 @@ _BARE_NUMBER = re.compile(
 _LATIN_WORD = re.compile(r"(?<![A-Za-z])([A-Za-z]{3,})(?![A-Za-z])")
 # Chart words already spoken in tests and shipped lessons. Romanized Hindi is not in here.
 _LATIN_ALLOW = {
-    "wick", "chart", "traders", "features", "price", "date", "return",
+    "wick", "chart", "features", "price", "date", "return",
     "explanation", "hook", "pehchan", "matlab", "karein", "udaharan", "galti",
-    "atr", "rsi", "vwap", "ema", "sma", "risk", "entry", "stop", "loss",
-    "low", "high", "sellers", "buyers",
+    "atr", "rsi", "vwap", "ema", "sma", "entry", "stop", "loss",
+    "low", "high", "sellers",
 }
 _ROMAN_FOLD = {
     "rakho": "रखो",
@@ -551,6 +553,23 @@ _ROMAN_FOLD = {
     "chhodo": "छोड़ो",
     "batao": "बताओ",
     "bolo": "बोलो",
+    # Finance English. Edge reads these in English and Whisper then garbles them.
+    "call": "कॉल",
+    "calls": "कॉल्स",
+    "premium": "प्रीमियम",
+    "strike": "स्ट्राइक",
+    "breakeven": "ब्रेकईवन",
+    "expiry": "एक्सपायरी",
+    "put": "पुट",
+    "puts": "पुट्स",
+    "charge": "चार्ज",
+    "charges": "चार्जेस",
+    "trader": "ट्रेडर",
+    "traders": "ट्रेडर्स",
+    "check": "चेक",
+    "risk": "रिस्क",
+    "buyer": "बायर",
+    "buyers": "बायर्स",
 }
 
 
@@ -1080,51 +1099,29 @@ def _hook_question_and_rest(text, hook_line):
     return text[:match.end()].strip(), text[match.end():].strip()
 
 
-def _cut_question_to_max(question, hi):
-    """Shorten an over-long question at a clause boundary and keep the ?."""
-    body = str(question or "").strip()
-    mark = "?"
-    if body.endswith("?") or body.endswith("？"):
-        mark = body[-1]
-        body = body[:-1].strip()
-    pieces = _clause_pieces(body) or ([body] if body else [])
-    best = None
-    kept = []
-    for piece in pieces:
-        kept.append(piece)
-        trial_body = " ".join(kept).strip().rstrip(",،;:—–- ")
-        trial = " ".join((trial_body + mark).split())
-        if len(trial.split()) <= hi:
-            best = trial
-        else:
-            break
-    return best or " ".join(str(question or "").split())
-
-
 def fit_live_hook(text, lo, hi, hook_line=""):
-    """Keep the first question, then whole clauses, without going over the max.
+    """Keep whole sentences. A comma is not a cut.
 
-    The result is returned only when it lands inside the window. A question
-    that is itself over the max is cut at the clause boundary nearest that
-    max, and the question mark stays. If nothing lands in the window, the
-    original text is left for a repair.
+    The trim lands inside the window only by dropping a sentence that already
+    ended at ।, ?, or !. "premium देना खर्च है," stays with the rest of its
+    sentence. If the only boundary is a comma, the hook is left for a repair.
     """
     text = " ".join(str(text or "").split())
     if not text or lo <= len(text.split()) <= hi:
         return text
-    question, rest = _hook_question_and_rest(text, hook_line)
-    if len(question.split()) > hi:
-        cut = _cut_question_to_max(question, hi)
-        if lo <= len(cut.split()) <= hi:
-            return cut
+    sentences = _split_sentences(text)
+    if len(sentences) <= 1:
         return text
-    built = question
-    for piece in _clause_pieces(rest):
-        trial = " ".join((built + " " + piece).split())
+    question, _rest = _hook_question_and_rest(text, hook_line)
+    if len(question.split()) > hi and len(_split_sentences(question)) <= 1:
+        return text
+    built = ""
+    for piece in sentences:
+        trial = piece if not built else " ".join((built + " " + piece).split())
         if len(trial.split()) > hi:
             break
         built = trial
-    if lo <= len(built.split()) <= hi:
+    if built and lo <= len(built.split()) <= hi:
         return built
     return text
 
@@ -1529,9 +1526,20 @@ def repair_instructions(draft, rewrite, topic=None, failures=None):
         )
         if topic.get("_live_short"):
             lines.append(
-                "Use this udaharan sentence verbatim or near-verbatim: "
-                + hook_check.worked_example_sentence(topic)
+                "Write every figure in a worked sentence such as "
+                "उदाहरण: ₹2,00,000 का 2% = ₹4,000. "
+                "Use this topic's own figures. A bare list such as "
+                "उदाहरण: 98, 4000, 200000 is rejected. The gate accepts the worked sentence."
             )
+            lines.append(
+                "100−p is allowed only when the same sentence writes the subtraction, "
+                "for example 100 − 40 = 60 or 100 में से 40. A bare complement is blocked."
+            )
+            example = hook_check.worked_example_sentence(topic)
+            if example and not _number_dump(example):
+                lines.append(
+                    "Use this udaharan sentence verbatim or near-verbatim: " + example
+                )
     tol = LIVE_BEAT_TOLERANCE if (topic or {}).get("_live_short") else None
     gate_fails = list(failures) if failures is not None else (
         narration_gate_failures(draft, topic) if topic is not None else []
@@ -1653,6 +1661,10 @@ def live_narration_system(topic):
         "The result is accepted only when the expression evaluates to it. "
         "Any other number is blocked. उदाहरण does not make an invented number legal.",
         "Every such number must sit in a sentence that contains उदाहरण.",
+        "Write that sentence as a worked example such as "
+        "उदाहरण: ₹2,00,000 का 2% = ₹4,000, using this topic's own figures. "
+        "A bare list such as उदाहरण: 98, 4000, 200000 is rejected. "
+        "The gate accepts the worked sentence.",
         "The four-beat evergreen permission to add a labelled figure does not apply.",
         "A real market price may use only the sourced figures. Multipliers do not apply there.",
         f"Allowed numbers for udaharan and galti: {_allowed_number_text(topic)}.",
@@ -1660,9 +1672,11 @@ def live_narration_system(topic):
         "Keep sentence punctuation (। . ?) so the voice can pause. Do not write run-on lines.",
         f"Pace coefficient: {wps:.2f} words/second. Target {target_lo}-{target_hi} words "
         "(about 75-90 seconds). Aim for about 155 words.",
-        "A percentage p on the topic also allows 100−p. "
+        "100−p is allowed only when the same sentence writes the subtraction, "
+        "for example 100 − 40 = 60 or 100 में से 40. A bare complement is blocked. "
         "A sum, difference, product, or ratio of two topic numbers is allowed "
         "only when the same sentence writes that arithmetic and the result matches. "
+        "On a loss-recovery lesson, recovery must be L/(1−L). Any other pair is blocked. "
         "Any other new number is blocked.",
         "Spoken audio must land in 70-95 seconds.",
         f"The script may land in {lo}-{hi} words. A long beat is shortened in code. Do not pad.",
@@ -1694,9 +1708,15 @@ def four_live_system(topic):
         "Do not invent a number. Do not instruct the narrator.",
         "Never mention कार्ड, card, script, or beat. Never say बोलो or बताओ.",
         f"Allowed numbers: {_allowed_number_text(topic)}.",
-        "A percentage p on the topic also allows 100−p. "
+        "Every number in the worked example sits in a sentence such as "
+        "उदाहरण: ₹2,00,000 का 2% = ₹4,000, using this topic's own figures. "
+        "A bare list such as उदाहरण: 98, 4000, 200000 is rejected. "
+        "The gate accepts the worked sentence.",
+        "100−p is allowed only when the same sentence writes the subtraction, "
+        "for example 100 − 40 = 60 or 100 में से 40. A bare complement is blocked. "
         "A sum, difference, product, or ratio of two topic numbers is allowed "
-        "only when the same sentence writes that arithmetic and the result matches.",
+        "only when the same sentence writes that arithmetic and the result matches. "
+        "On a loss-recovery lesson, recovery must be L/(1−L). Any other pair is blocked.",
         f"Pace coefficient: {wps:.2f} words/second. Target {target_lo}-{target_hi} words "
         f"(about 55-59 seconds on Rudra). The script may land in {lo}-{hi} words.",
         f"Spoken audio must land in {sec_lo:.0f}-{sec_hi:.0f} seconds.",
@@ -2683,11 +2703,12 @@ def stale_data_notes(as_of, today, allow_stale_sample=False):
     return [f"stale market data as of {as_of}"]
 
 
-def _script_near(spoken, beat_times, audio_words, t, radius=0.85):
+def _script_near(spoken, beat_times, audio_words, t, radius=0.2):
     """Narration words due around t, spelled as the script, not as the transcript.
 
     Whisper may split 2350 into 2 and 350. The gate compares the script's own
-    figures to the card.
+    figures to the card. The window stays short so the next beat's figure is
+    not required on the card that is still on screen.
     """
     t = float(t)
     parts = []
@@ -2727,6 +2748,83 @@ def _scene_pose_at(scenes, t):
     dur = float(chosen["end"]) - float(chosen["start"])
     local = 0.0 if dur <= 0 else (t - float(chosen["start"])) / dur
     return anim(max(0.0, min(1.0, local)))
+
+
+def scene_cards_for(spoken, beat_times, scenes, audio_words=None):
+    """Caption text and figures for each scene, from that scene's cue window.
+
+    A figure already shown on an earlier card is not repeated. The caption
+    words stay on the card so the sync gate still sees them.
+    """
+    import sync_gate
+    cues = plan_cues(spoken, beat_times, audio_words)
+    # A cue can be clamped to the next beat while Whisper already said the
+    # figure. Any script word with a digit whose time falls in this scene
+    # is part of the card.
+    spoken_here = {}
+    if audio_words:
+        for beat, span in (beat_times or {}).items():
+            script_words = str((spoken or {}).get(beat) or "").split()
+            if not script_words or beat not in (beat_times or {}):
+                continue
+            b0, b1 = (float(v) for v in span)
+            starts = _align_starts(script_words, audio_words, b0, b1)
+            for word, start in zip(script_words, starts):
+                if start is None or not re.search(r"\d", word):
+                    continue
+                for scene in scenes or []:
+                    t0, t1 = float(scene["start"]), float(scene["end"])
+                    if t0 - 1e-6 <= float(start) < t1 - 1e-6:
+                        spoken_here.setdefault(id(scene), []).append(word)
+                        break
+    texts = {}
+    figures = {}
+    shown = set()
+    for scene in scenes or []:
+        beat = scene.get("beat")
+        t0, t1 = float(scene["start"]), float(scene["end"])
+        parts = []
+        for cue in cues:
+            if float(cue["t1"]) <= t0 + 1e-6 or float(cue["t0"]) >= t1 - 1e-6:
+                continue
+            text = str(cue.get("text") or "").strip()
+            if text:
+                parts.append(text)
+        for word in spoken_here.get(id(scene), []):
+            if word not in " ".join(parts):
+                parts.append(word)
+        blob = " ".join(parts)
+        texts.setdefault(beat, []).append(blob)
+        raw = scene_frames._spoken_figures(blob, scene_frames._digit_tokens(blob))
+        if not raw:
+            raw = scene_frames._figure_tokens([blob])
+        kept = []
+        for label in raw:
+            nums = frozenset(sync_gate.numbers_in(label))
+            if nums and nums <= shown:
+                continue
+            if nums:
+                shown |= set(nums)
+            kept.append(label)
+        figures.setdefault(beat, []).append(kept)
+    return texts, figures
+
+
+def _install_scene_cards(topic, spoken, beat_times, scenes, audio_words=None):
+    texts, figures = scene_cards_for(spoken, beat_times, scenes, audio_words)
+    topic["_scene_cards"] = texts
+    topic["_scene_figures"] = figures
+
+
+def _word_timings(beat_audio, beat_times):
+    """Whisper words for the caption windows. None when transcription fails."""
+    import sync_gate
+    sources = {}
+    for beat in timed_beats(beat_times):
+        mp3 = RUN / f"tts_{beat}.mp3"
+        if mp3.exists():
+            sources[beat] = mp3
+    return sync_gate.transcribe_beats(beat_audio, beat_times, sources=sources or None)
 
 
 def number_faults_for(scenes, spoken, beat_times, audio_words=None, topic=None):
@@ -3138,16 +3236,12 @@ def visual_gate(beat_pngs):
     ok("visual QA: every board frame has visible educational graphics")
 
 
-def _sync_report(topic, narration, scenes, beat_audio, beat_times, spec):
+def _sync_report(topic, narration, scenes, beat_audio, beat_times, spec, words=None):
     """Transcribe the beat audio and fail closed on a mismatch or a whisper error."""
     import sync_gate
     try:
-        sources = {}
-        for beat in timed_beats(beat_times):
-            mp3 = RUN / f"tts_{beat}.mp3"
-            if mp3.exists():
-                sources[beat] = mp3
-        words = sync_gate.transcribe_beats(beat_audio, beat_times, sources=sources or None)
+        if words is None:
+            words = _word_timings(beat_audio, beat_times)
         rows = []
         for scene in scenes:
             frame = scene.get("frame")
@@ -3476,6 +3570,8 @@ def _static_craft_samples(topic, narration, spec):
         beat_times[beat] = (cursor, cursor + span)
         cursor += span
     scenes = scene_pace.plan_scenes(beat_times, beats=order)
+    spoken_map = {beat: str(beats.get(beat) or "") for beat in order}
+    _install_scene_cards(topic, spoken_map, beat_times, scenes, None)
     groups = {}
     for scene in scenes:
         groups.setdefault(scene["beat"], []).append(scene)
@@ -3609,11 +3705,10 @@ def prepare_spoken(spoken, narration, topic, c, spec):
     if os.environ.get("PROOF_FREE_AUDIO", "").strip().lower() == "silence":
         return _proof_silence_spoken(spoken, narration, topic, c, spec)
     order = _lesson(topic)[0] if topic.get("_live_short") else tuple(b for b in BEATS if b in spoken)
-    proof = os.environ.get("PROOF_FREE_AUDIO", "").strip().lower() == "edge"
     if topic.get("_live_short"):
         require_scene_frames(topic, spec, narration)
-        if not proof:
-            eleven_voice.ensure_library_voice(c)
+        # Adding a library voice is a write. It runs only on the paid pass,
+        # after PAID_TTS_ENABLED is checked, not on a path that skips the proof.
         topic["_voice"] = dict((c or {}).get("voice") or {})
         narration = fit_estimated_duration(narration, topic, c, spec)
         spoken = {beat: narration["beats"][beat] for beat in order}
@@ -3778,6 +3873,12 @@ def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
     cta = engagement.engagement_question(topic)
     hook_line = n.get("hook_line") or ""
     scenes = scene_pace.plan_scenes(beat_times, beats=order)
+    audio_words = None
+    try:
+        audio_words = _word_timings(beat_audio, beat_times)
+    except Exception as exc:  # noqa: BLE001 — cards fall back to even word timing
+        print(f"[cards] word timings unavailable ({exc}); using the beat clock")
+    _install_scene_cards(topic, spoken, beat_times, scenes, audio_words)
     groups = {b: [] for b in order}
     for scene in scenes:
         groups[scene["beat"]].append(scene)
@@ -3809,16 +3910,10 @@ def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
     visual_gate(paced)
     ok(f"scenes: {len(scenes)} cuts, longest {max(s['end'] - s['start'] for s in scenes):.2f}s")
     overlays = short_layout.overlay_plan(topic, beat_times, hook_line, cta)
-    if os.environ.get("PROOF_FREE_AUDIO", "").strip().lower() == "silence":
-        sync_report = {
-            "ok": True,
-            "reason": "timed silence; the paid voice is checked after this picture passes",
-            "words": [],
-            "scenes": [],
-        }
-    else:
-        sync_report = _sync_report(topic, n, scenes, beat_audio, beat_times, spec)
-    audio_words = sync_report.get("words") or None
+    sync_report = _sync_report(
+        topic, n, scenes, beat_audio, beat_times, spec, words=audio_words)
+    if not audio_words:
+        audio_words = sync_report.get("words") or None
     samples, text_frames, layout_notes = _craft_samples(
         scenes, topic, beat_times, spoken, hook_line, cta, audio_words=audio_words)
     review = self_review.full_review(
@@ -3841,6 +3936,7 @@ def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
         "ok": bool(sync_report.get("ok")),
         "reason": sync_report.get("reason") or "",
         "scenes": sync_report.get("scenes") or [],
+        "beats": sync_report.get("beats") or [],
     }
     review["attempts"] = n.get("review_attempts") or self_review.MAX_ATTEMPTS
     review["scenes"] = [
@@ -3906,14 +4002,27 @@ def _eleven_spent():
         return 0
 
 
+def _output_bounds(topic):
+    """Seconds final.mp4 must land in. A live short uses its voice window."""
+    if (topic or {}).get("_live_short"):
+        return live_voice_bounds(topic)
+    return (45.0, 62.0)
+
+
 def _needs_paid_proof(topic, c):
-    """A live ElevenLabs slot must prove the picture before any paid call."""
+    """ElevenLabs, live or ATR, must prove the picture before any paid call."""
     if os.environ.get("PROOF_FREE_AUDIO", "").strip():
         return False
-    if not (topic or {}).get("_live_short") or (topic or {}).get("_atr"):
+    topic = topic or {}
+    if not topic.get("_live_short") and not topic.get("_atr"):
         return False
     engine = str((((c or {}).get("voice") or {}).get("engine") or "elevenlabs")).strip().lower()
     return engine == "elevenlabs" and eleven_voice.paid_voice_allowed()
+
+
+def _spent_hold(message):
+    """Stop the slot after characters were already sent. Upload must not run."""
+    die(f"{message}; {_eleven_spent()} characters spent; no upload")
 
 
 def _reuse_proven_frames(old_scenes, beat_times, order):
@@ -3942,7 +4051,7 @@ def _reuse_proven_frames(old_scenes, beat_times, order):
 
 
 def _pay_and_remux(topic, n, c, spec, source, proven):
-    """ElevenLabs, then mux that voice onto the pictures that already passed."""
+    """ElevenLabs, then mux that voice and review the file that would upload."""
     eleven_voice.require_paid_tts()
     spoken = proven["spoken"]
     n = proven.get("narration") or n
@@ -3953,49 +4062,79 @@ def _pay_and_remux(topic, n, c, spec, source, proven):
     synthesize_short_voices(spoken, c, beats=order)
     raw = _trim_rendered(order)
     beat_times, total = _timeline(raw, order)
-    lo, hi = live_voice_bounds(topic)
+    lo, hi = _output_bounds(topic)
     if total < lo or total > hi:
-        die(
-            f"paid voice duration outside {lo:.0f}-{hi:.0f}s; "
-            f"refusing the slot: {total:.1f}s"
+        _spent_hold(
+            f"paid voice duration outside {lo:.0f}-{hi:.0f}s; refusing the slot: {total:.1f}s"
         )
     scenes, paced = _reuse_proven_frames(proven.get("scenes") or [], beat_times, order)
     beat_audio = {beat: RUN / f"voice_clean_{beat}.wav" for beat in order}
-    sync_report = _sync_report(topic, n, scenes, beat_audio, beat_times, spec)
-    review_path = RUN / "self_review.json"
-    review = {}
-    if review_path.exists():
-        try:
-            review = json.loads(review_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            review = {}
-    review["sync"] = {
-        "ok": bool(sync_report.get("ok")),
-        "reason": sync_report.get("reason") or "",
-        "scenes": sync_report.get("scenes") or [],
-    }
-    if not sync_report.get("ok"):
-        review["public_ok"] = False
-        review["passed"] = False
-        review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
-        die("sync gate failed after paid voice: " + str(sync_report.get("reason") or "mismatch"))
+    audio_words = None
+    try:
+        audio_words = _word_timings(beat_audio, beat_times)
+    except Exception as exc:  # noqa: BLE001 — the review still runs on the beat clock
+        print(f"[cards] paid word timings unavailable ({exc}); using the beat clock")
+    _install_scene_cards(topic, spoken, beat_times, scenes, audio_words)
     assemble(
         paced, beat_audio, beat_times,
-        build_ass(
-            topic, beat_times, spoken, hook_line, cta,
-            audio_words=sync_report.get("words") or None,
-        ),
+        build_ass(topic, beat_times, spoken, hook_line, cta, audio_words=audio_words),
         switch=proven.get("switch") or {},
         hook_line=hook_line,
         scenes=scenes,
     )
-    final_path = RUN / "final.mp4"
-    final_dur = duration(final_path)
+    final_dur = duration(RUN / "final.mp4")
+    sync_report = _sync_report(
+        topic, n, scenes, beat_audio, beat_times, spec, words=audio_words)
+    if not audio_words:
+        audio_words = sync_report.get("words") or None
+    samples, text_frames, layout_notes = _craft_samples(
+        scenes, topic, beat_times, spoken, hook_line, cta, audio_words=audio_words)
+    overlays = short_layout.overlay_plan(topic, beat_times, hook_line, cta)
+    labels = []
+    labels_ready = True
+    for scene in scenes:
+        boxes = getattr(scene.get("frame"), "label_boxes", None)
+        if boxes is None:
+            labels_ready = False
+        elif labels_ready:
+            labels.extend(boxes)
+    review = self_review.full_review(
+        topic, n, spec, overlays, scenes=scenes,
+        labels=(labels if labels_ready else None),
+        samples=samples, text_frames=text_frames,
+        sync=sync_report, layout_notes=layout_notes,
+    )
+    review = apply_upload_block(review, source)
     if final_dur < lo or final_dur > hi:
-        die(
-            f"final.mp4 duration outside {lo:.0f}-{hi:.0f}s after paid voice: {final_dur:.1f}s"
-        )
+        note = f"final.mp4 duration outside {lo:.0f}-{hi:.0f}s: {final_dur:.1f}s"
+        review["public_ok"] = False
+        review["passed"] = False
+        review.setdefault("notes", []).append(note)
+        review["summary"] = (str(review.get("summary") or "") + " — " + note).strip(" —")
+    outside = scene_frames.frames_safe_area_notes(
+        [scene.get("frame") for scene in scenes if scene.get("frame") is not None]
+    )
+    if outside:
+        review["public_ok"] = False
+        review["passed"] = False
+        review.setdefault("notes", []).extend(outside)
+        review["summary"] = (str(review.get("summary") or "") + " — " + "; ".join(outside[:2])).strip(" —")
+    review["narration_source"] = source
+    review["sync"] = {
+        "ok": bool(sync_report.get("ok")),
+        "reason": sync_report.get("reason") or "",
+        "scenes": sync_report.get("scenes") or [],
+        "beats": sync_report.get("beats") or [],
+    }
+    review["scenes"] = [
+        {"beat": s["beat"], "kind": s.get("kind") or "",
+         "start": round(float(s["start"]), 2), "end": round(float(s["end"]), 2)}
+        for s in scenes
+    ]
+    review_path = RUN / "self_review.json"
     review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
+    if not review.get("public_ok"):
+        _spent_hold("paid render HOLD; " + str(review.get("summary") or "self-review failed"))
     topic["_spoken_beats"] = {beat: spoken[beat] for beat in order}
     write_compat(topic, n, spoken, beat_times)
     (RUN / "narration.json").write_text(
@@ -4004,11 +4143,13 @@ def _pay_and_remux(topic, n, c, spec, source, proven):
     return final_dur
 
 
-def prove_full_render(topic, n, c, spec, source="llm", beat_pngs=None, free="silence"):
+def prove_full_render(topic, n, c, spec, source="llm", beat_pngs=None, free="edge"):
     """Chart Board through final.mp4 on free audio. Never calls ElevenLabs.
 
-    `free` is \"silence\" (timed at the voice pace) or \"edge\". A crash, a
-    safe-area miss, or a self-review hold exits with 0 characters spent.
+    The live proof uses Edge and the real whisper sync gate, the duration
+    gate, and the full self-review. `free=\"silence\"` only builds a timed
+    picture; it is not a passing live proof. A crash, an Edge failure, or a
+    self-review hold exits with 0 characters spent.
     The returned picture is what a later paid pass muxes onto.
     """
     kind = "edge" if str(free or "").strip().lower() == "edge" else "silence"
@@ -4017,9 +4158,11 @@ def prove_full_render(topic, n, c, spec, source="llm", beat_pngs=None, free="sil
     try:
         try:
             proven = _render_short(topic, n, c, spec, source, beat_pngs)
-        except SystemExit:
+        except SystemExit as exc:
             if _eleven_spent() != before:
                 die("ElevenLabs characters were spent during a failed pre-render")
+            if "0 characters" not in str(exc):
+                die(f"pre-render failed before paid TTS; 0 characters spent: {exc}")
             raise
         except Exception as exc:
             if _eleven_spent() != before:
@@ -4047,15 +4190,15 @@ def prove_full_render(topic, n, c, spec, source="llm", beat_pngs=None, free="sil
 def produce_short(topic, n, c, spec, source="llm", beat_pngs=None):
     """Voice, scenes, sync, and final.mp4. No upload and no git commit.
 
-    A live ElevenLabs slot renders the whole Short on free audio first.
-    Paid TTS runs only after that picture passes, then the voice is muxed
-    onto the frames that already passed.
+    A live or ATR ElevenLabs slot renders the whole Short on Edge first,
+    including whisper sync, duration, and craft. Paid TTS runs only after
+    that proof passes, then the paid file is reviewed again before upload.
     """
     if topic.get("_live_short") and not topic.get("_atr"):
         n["live_beats"] = resolve_live_beats(topic)
     if _needs_paid_proof(topic, c):
         proven = prove_full_render(
-            topic, n, c, spec, source=source, beat_pngs=beat_pngs, free="silence",
+            topic, n, c, spec, source=source, beat_pngs=beat_pngs, free="edge",
         )
         return _pay_and_remux(topic, n, c, spec, source, proven)
     return _render_short(topic, n, c, spec, source, beat_pngs)["final_dur"]

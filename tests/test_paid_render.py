@@ -100,7 +100,7 @@ class PaidRenderTests(unittest.TestCase):
             "notes": [] if ok else ["craft hold"],
         }
 
-    def _run(self, *, craft, review, env, post=None):
+    def _run(self, *, craft, review, env, post=None, topic=None, sync=None, review_fn=None, proof_seen=None):
         posts = []
 
         def craft_samples(*_args, **_kwargs):
@@ -111,7 +111,14 @@ class PaidRenderTests(unittest.TestCase):
 
         def assemble(*_args, **_kwargs):
             posts.append("encode")
+            if proof_seen is not None:
+                proof_seen.append(os.environ.get("PROOF_FREE_AUDIO", ""))
             (board_short.RUN / "final.mp4").write_bytes(b"mp4")
+
+        def reviewed(*_args, **kwargs):
+            if review_fn is not None:
+                return review_fn(*_args, **kwargs)
+            return review
 
         def http_post(*_args, **_kwargs):
             posts.append("eleven")
@@ -139,11 +146,11 @@ class PaidRenderTests(unittest.TestCase):
              mock.patch.object(scene_frames, "frames_safe_area_notes", return_value=[]), \
              mock.patch.object(board_short, "visual_gate", return_value=None), \
              mock.patch.object(board_short, "_craft_samples", side_effect=craft_samples), \
-             mock.patch.object(board_short.self_review, "full_review", return_value=review), \
+             mock.patch.object(board_short.self_review, "full_review", side_effect=reviewed), \
              mock.patch.object(board_short, "assemble", side_effect=assemble), \
              mock.patch.object(board_short, "duration", return_value=55.0), \
              mock.patch.object(board_short, "_trim_rendered", side_effect=lambda order: {b: 13.0 for b in order}), \
-             mock.patch.object(board_short, "_sync_report", return_value={"ok": True, "reason": "", "words": [], "scenes": []}), \
+             mock.patch.object(board_short, "_sync_report", return_value=sync or {"ok": True, "reason": "", "words": [], "scenes": []}), \
              mock.patch("requests.post", http_post), \
              mock.patch("requests.get", http_get), \
              redirect_stdout(out), redirect_stderr(err):
@@ -156,7 +163,7 @@ class PaidRenderTests(unittest.TestCase):
                 os.environ.pop("PAID_TTS_ENABLED", None)
             os.environ["ELEVENLABS_API_KEY"] = "test-key"
             try:
-                board_short.produce_short(_topic(), _narration(), _cfg(), spec, source="llm")
+                board_short.produce_short(topic or _topic(), _narration(), _cfg(), spec, source="llm")
             except SystemExit:
                 return posts, err.getvalue() + out.getvalue()
             credits = Path(tmp) / "credits.json"
@@ -247,3 +254,115 @@ class PaidRenderTests(unittest.TestCase):
         self.assertNotIn("PAID_TTS_ENABLED", health)
         self.assertIn("/v1/user/subscription", health)
         self.assertFalse(eleven_voice.paid_tts_enabled())
+
+    def test_atr_proves_on_edge_before_any_elevenlabs_call(self):
+        paid = {"PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"}
+        with mock.patch.dict(os.environ, paid, clear=False):
+            for key in ("DRY_RUN", "PIPELINE_MODE", "ELEVENLABS_OPT_IN", "RENDER_SAMPLE"):
+                os.environ.pop(key, None)
+            atr = _topic()
+            atr["_atr"] = {"distance": 42}
+            atr["_live_short"] = True
+            self.assertTrue(board_short._needs_paid_proof(atr, _cfg()))
+            atr["_live_short"] = False
+            self.assertTrue(board_short._needs_paid_proof(atr, _cfg()))
+        proof = []
+        posts, second = self._run(
+            craft=None,
+            review=self._review(),
+            env=paid,
+            topic=atr,
+            proof_seen=proof,
+        )
+        self.assertEqual(proof[0], "edge")
+        self.assertIn("eleven", posts)
+        self.assertLess(posts.index("encode"), posts.index("eleven"))
+        self.assertGreater(second, 0)
+
+    def test_edge_sync_hold_never_calls_elevenlabs(self):
+        def reviewed(*_args, **kwargs):
+            sync = kwargs.get("sync") or {}
+            if not sync.get("ok"):
+                return self._review(ok=False, summary="sync hold narration does not match")
+            return self._review()
+
+        proof = []
+        posts, log = self._run(
+            craft=None,
+            review=self._review(),
+            env={"PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
+            sync={"ok": False, "reason": "narration does not match the script", "words": [], "scenes": []},
+            review_fn=reviewed,
+            proof_seen=proof,
+        )
+        self.assertEqual(proof, ["edge"])
+        self.assertIn("0 characters spent", log)
+        self.assertIn("sync hold", log)
+        self.assertNotIn("eleven", posts)
+        self.assertNotIn("get", posts)
+
+    def test_paid_timeline_hold_blocks_upload_and_logs_characters(self):
+        calls = {"n": 0}
+
+        def reviewed(*_args, **_kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return self._review()
+            return self._review(ok=False, craft=0, summary="panel fill 20% is under 35%")
+
+        posts, log = self._run(
+            craft=None,
+            review=self._review(),
+            env={"PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
+            review_fn=reviewed,
+        )
+        self.assertGreaterEqual(calls["n"], 2)
+        self.assertIn("eleven", posts)
+        self.assertIn("no upload", log)
+        self.assertIn("characters spent", log)
+        self.assertNotIn("0 characters spent", log)
+        self.assertIn("panel fill", log)
+
+    def test_prepare_spoken_does_not_add_a_library_voice(self):
+        topic = _topic()
+        script = _narration()
+
+        def synthesize(*_args, **_kwargs):
+            return None
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(board_short, "require_scene_frames", return_value=None), \
+             mock.patch.object(board_short, "fit_estimated_duration", return_value=script), \
+             mock.patch.object(board_short, "synthesize_short_voices", side_effect=synthesize), \
+             mock.patch.object(board_short, "_trim_rendered", side_effect=lambda order: {b: 13.0 for b in order}), \
+             mock.patch.object(board_short.eleven_voice, "ensure_library_voice", side_effect=AssertionError("no voice api")):
+            board_short.prepare_spoken(dict(script["beats"]), script, topic, _cfg(), {})
+
+    def test_library_voice_write_waits_for_the_paid_flag(self):
+        order = []
+
+        def ensure(_c):
+            order.append("ensure")
+            return "ypnkIsDASPgHZuanrF0q"
+
+        spoken = {beat: "नियम" for beat in ORDER}
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.object(board_short.eleven_voice, "ensure_library_voice", side_effect=ensure), \
+             mock.patch.object(board_short, "preflight_eleven_credits", return_value=None), \
+             mock.patch.object(board_short, "tts", return_value=None), \
+             mock.patch.dict(os.environ, {
+                 "ELEVENLABS_API_KEY": "test-key",
+                 "PUBLISH_VISIBILITY": "public",
+             }, clear=False), \
+             redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            os.environ.pop("PAID_TTS_ENABLED", None)
+            os.environ.pop("PIPELINE_MODE", None)
+            with self.assertRaises(SystemExit):
+                board_short.synthesize_short_voices(spoken, _cfg(), beats=ORDER)
+            self.assertEqual(order, [])
+            os.environ["PAID_TTS_ENABLED"] = "true"
+            board_short.synthesize_short_voices(spoken, _cfg(), beats=("hook",))
+            self.assertEqual(order, ["ensure"])

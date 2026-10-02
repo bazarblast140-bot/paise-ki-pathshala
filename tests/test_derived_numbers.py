@@ -1,10 +1,11 @@
 """Derived numbers may pass the live gate. A bare invented figure may not.
 
 risk_journal was blocked on 60, the loss rate of a 40% win rate, after one
-DeepSeek call. A percentage p also allows 100-p. A written sum, difference,
-product, or ratio of two topic numbers is allowed when that same sentence
-evaluates correctly. 300 with no such arithmetic still fails, and that failure
-is repaired inside the 4-call budget before the run blocks.
+DeepSeek call. 100−p is allowed only when the same sentence writes the
+subtraction. A written sum, difference, product, or ratio of two topic numbers
+is allowed when that same sentence evaluates correctly. 300 with no such
+arithmetic still fails, and that failure is repaired inside the 4-call budget
+before the run blocks.
 
 A live estimate over 90s is trimmed toward 170 words before any TTS call.
 """
@@ -90,15 +91,23 @@ class DerivedNumberTests(unittest.TestCase):
     def test_risk_journal_loss_rate_is_the_complement_of_forty(self):
         topic = _journal()
         self.assertIn("60", hook_check.percentage_complements(topic))
-        spoken = {
+        self.assertNotIn("60", hook_check.allowed_numbers(topic))
+        bare = {
             "matlab": "हार की दर 60 प्रतिशत रहती है और जीत 40 है।",
             "udaharan": "उदाहरण में हार 60 और जीत 40 है।",
         }
+        self.assertIn(
+            "60",
+            hook_check.live_number_faults(bare, topic, ("matlab", "udaharan")),
+        )
+        spelled = {
+            "matlab": "100 − 40 = 60 तो हार की दर 60 प्रतिशत है।",
+            "udaharan": "उदाहरण: 100 में से 40 निकलें तो हार 60 है।",
+        }
         self.assertEqual(
-            hook_check.live_number_faults(spoken, topic, ("matlab", "udaharan")),
+            hook_check.live_number_faults(spelled, topic, ("matlab", "udaharan")),
             set(),
         )
-        self.assertIn("60", hook_check.allowed_numbers(topic))
 
     def test_three_hundred_without_arithmetic_is_blocked(self):
         topic = _journal()
