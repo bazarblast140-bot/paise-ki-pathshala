@@ -1,0 +1,10 @@
+Sound design in this directory is original synthesis (numpy). No third-party
+recording, sample, or melody is included.
+
+bed.wav    A two-note pad plus filtered noise, written by bed_audio.synthesize_bed.
+           Integrated loudness is about -22 LUFS before the voice ducks it.
+whoosh.wav Filtered-noise scene sweep, written by sfx.whoosh.
+click.wav  A short UI tick, written by sfx.click.
+
+All three are dedicated to the public domain under CC0 1.0 Universal.
+https://creativecommons.org/publicdomain/zero/1.0/

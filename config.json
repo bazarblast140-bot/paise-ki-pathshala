@@ -90,9 +90,16 @@
         "target_word_count": 105
       },
       "voice": {
-        "edge_voice": "hi-IN-SwaraNeural",
-        "edge_rate": "+0%",
-        "speed": 1.10
+        "_note": "Daniel (onwK4e9ZLuTAKqWW03F9) is a calm deep male narrator on every ElevenLabs account. eleven_multilingual_v2 speaks Hindi in that voice. Stability 0.72 and style 0.05 keep it adult, not cheerful. Speed 1.08 stays inside the 42-62s gate. Edge hi-IN-MadhurNeural at +36% is the male fallback when the paid key is absent, sped so the same 160-180 word lesson still fits that gate. Swara is not used for Shorts.",
+        "edge_voice": "hi-IN-MadhurNeural",
+        "edge_rate": "+36%",
+        "voice_id": "onwK4e9ZLuTAKqWW03F9",
+        "voice_name": "Daniel",
+        "model": "eleven_multilingual_v2",
+        "stability": 0.72,
+        "similarity_boost": 0.75,
+        "style": 0.05,
+        "speed": 1.08
       },
       "pipeline": {
         "word_count_tolerance": 0.3

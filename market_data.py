@@ -208,6 +208,73 @@ def _non_numeric(reason):
     }
 
 
+def atr_lesson(cache=None, today=None, name="HDFC BANK", period=14, multiple=1.5):
+    """ATR from real monthly closes. The printed ATR is the figure the chart uses.
+
+    Distance is 1.5 times that printed ATR, not a second rounding of the raw mean.
+    Candles later use these closes only: body from close to close, no invented wick.
+    Returns None when the series is missing or the stock print is too recent.
+    """
+    today = today or date.today()
+    if cache is None:
+        try:
+            cache = load_cache()
+        except (OSError, ValueError):
+            return None
+    series = series_from_cache(name, cache)
+    if not series or len(series["points"]) < period + 1:
+        return None
+    ok, _err = _stock_series_allowed("stock", series["points"], series["as_of"], today)
+    if not ok:
+        return None
+    points = series["points"][-(period + 1):]
+    closes = [float(p["close"]) for p in points]
+    changes = [abs(closes[i] - closes[i - 1]) for i in range(1, len(closes))]
+    atr_text = f"{(sum(changes) / len(changes)):.1f}"
+    atr = float(atr_text)
+    dist_text = f"{atr * float(multiple):.1f}"
+    dist = float(dist_text)
+    entry_text = f"{closes[-1]:.1f}"
+    entry = float(entry_text)
+    return {
+        "name": name,
+        "name_hi": "HDFC बैंक" if name == "HDFC BANK" else name,
+        "source": SOURCE_NAME,
+        "as_of": series["as_of"],
+        "period": int(period),
+        "multiple": f"{float(multiple):.1f}",
+        "atr": atr_text,
+        "distance": dist_text,
+        "entry": entry_text,
+        "sl": f"{entry - dist:.1f}",
+        "target": f"{entry + dist:.1f}",
+        "points": points,
+    }
+
+
+def apply_atr_card(topic, lesson):
+    """Put the chart's own figures on the topic card so the script may speak them."""
+    topic["_atr"] = lesson
+    topic["topic"] = f"ATR से SL की दूरी — {lesson['name']} ATR {lesson['atr']}"
+    topic["thumb"] = ["तंग SL बार-बार कटता?", f"ATR {lesson['atr']} से दूरी"]
+    topic["facts"] = [
+        f"ATR {lesson['period']} candles की औसत हलचल",
+        f"ATR {lesson['atr']} और {lesson['multiple']} गुना = {lesson['distance']} पॉइंट",
+        f"entry {lesson['entry']}, SL {lesson['sl']}, ऊपर रेखा {lesson['target']}",
+        f"SOURCE {lesson['source']} as of {lesson['as_of']}",
+        "ज़्यादा दूरी = कम मात्रा, जोखिम वही",
+        "ATR दिशा नहीं बताता, सिर्फ़ हलचल",
+        "ये शिक्षा है, किसी शेयर की खरीद-बिक्री सलाह नहीं",
+    ]
+    topic["beats"] = {
+        "hook": ["तंग SL क्यों कटता है?", "सामान्य हलचल से तंग रेखा कटती है"],
+        "pehchan": ["नियम", f"{lesson['period']} महीने की औसत = ATR {lesson['atr']}"],
+        "matlab": ["हिसाब", f"{lesson['multiple']} × {lesson['atr']} = {lesson['distance']} पॉइंट"],
+        "karein": ["गलती", "दूरी बढ़े तो मात्रा घटाओ"],
+    }
+    return topic
+
+
 def spec_for_topic(topic, today=None, fetcher=None, cache=None):
     """Chart contract for one topic.
 
@@ -217,6 +284,28 @@ def spec_for_topic(topic, today=None, fetcher=None, cache=None):
     """
     today = today or date.today()
     key = str((topic or {}).get("key") or "")
+    if key == "atr_sl":
+        if cache is None:
+            try:
+                cache = load_cache()
+            except (OSError, ValueError) as exc:
+                cache = {"series": {}}
+                print(f"[market_data] cache unreadable: {exc}")
+        lesson = atr_lesson(cache=cache, today=today)
+        full = series_from_cache("HDFC BANK", cache) if lesson else None
+        if not lesson or not full or values_are_fabricated(lesson["points"], full["points"]):
+            return _non_numeric("ATR lesson has no real monthly closes old enough to show")
+        return {
+            "mode": "series",
+            "source": lesson["source"],
+            "as_of": lesson["as_of"],
+            "series": [{"name": lesson["name"], "points": list(lesson["points"]), "kind": "stock"}],
+            "reason": None,
+            "fabricated": False,
+            "has_digits": False,
+            "labels": [],
+            "atr": lesson,
+        }
     names = TOPIC_SERIES.get(key)
     if not names:
         if (topic or {}).get("cat") == "REAL DATA":

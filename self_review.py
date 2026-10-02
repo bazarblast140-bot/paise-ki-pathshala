@@ -7,15 +7,20 @@ Parts (each 0-100):
             facts or in the fetched series
   trend     only when data/trends.json lists themes or topic clusters;
             skipped when the file is absent or is an empty research snapshot
+  craft     no scene held past about 5s, scene count >= duration/4, and every
+            spoken beat names a number, level, or step
 
 Pass bar: every included part >= PART_BAR (60) and the mean >= OVERALL_BAR (75).
 Below the bar, the narration is regenerated up to MAX_ATTEMPTS times. Still
 below, public_ok is false and the upload gate blocks a public post.
+Craft is scored in full_review. score_content stays hook / accuracy / trend,
+which a rewrite can fix; scene timing is fixed by the renderer.
 """
 import json
 import pathlib
 
 import hook_check
+import scene_pace
 import short_layout
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -226,17 +231,46 @@ def score_content(topic, narration, spec=None, trends=None):
     return _reject_fallback(narration, _pack({"hook": hook, "accuracy": accuracy, "trend": trend}, notes))
 
 
-def full_review(topic, narration, spec, overlays, trends=None):
-    """All parts, including the visual. public_ok follows `passed`."""
+def score_craft(narration, overlays=None, scenes=None):
+    """0 when a scene sits too long, there are too few scenes, or a beat is vague.
+
+    scenes=None derives the cut list from the on-screen beat spans, which is what
+    the renderer does. An explicit static list is scored as given.
+    """
+    notes = []
+    vague = scene_pace.vague_beats((narration or {}).get("beats"))
+    if vague:
+        notes.append("vague explanation (no number, level or step): " + ", ".join(vague))
+    if scenes is None:
+        times = scene_pace.beat_times_from_overlays(overlays or [])
+        if len(times) < len(scene_pace.BEATS):
+            planned = []
+            notes.append("scene plan missing")
+        else:
+            planned = scene_pace.plan_scenes(times)
+    else:
+        planned = list(scenes)
+    duration = max((float(s["end"]) for s in planned), default=0.0)
+    ok, scene_notes = scene_pace.check_scenes(planned, duration)
+    if not ok:
+        notes.extend(scene_notes)
+    if notes:
+        return 0, notes
+    return 100, []
+
+
+def full_review(topic, narration, spec, overlays, trends=None, scenes=None):
+    """All parts, including the visual and the craft cut. public_ok follows `passed`."""
     if trends is None:
         trends = load_trends()
     hook, hook_notes = score_hook(narration, topic)
     visual, vis_notes = score_visual(spec, overlays)
     accuracy, acc_notes = score_accuracy(narration, topic, spec)
     trend, trend_notes = score_trend(topic, trends)
-    notes = hook_notes + vis_notes + acc_notes + trend_notes
+    craft, craft_notes = score_craft(narration, overlays, scenes)
+    notes = hook_notes + vis_notes + acc_notes + trend_notes + craft_notes
     packed = _pack(
-        {"hook": hook, "visual": visual, "accuracy": accuracy, "trend": trend},
+        {"hook": hook, "visual": visual, "accuracy": accuracy, "trend": trend, "craft": craft},
         notes,
     )
     packed["chart"] = {

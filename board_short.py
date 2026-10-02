@@ -25,6 +25,7 @@ import sys
 from PIL import Image, ImageDraw
 import numpy as np
 
+import bed_audio
 import board_kit as K
 import board_scenes as S
 import credit_log
@@ -34,6 +35,8 @@ import hook_check
 import hook_motion
 import hook_sfx
 import market_data
+import scene_frames
+import scene_pace
 import self_review
 import short_layout
 import slot_guard
@@ -106,6 +109,9 @@ def _scene_images(topic, beat):
 def beat_images(topic, beat):
     """Scene art, then a real-data stamp or a non-numeric card. Never a fake price line."""
     spec = topic.get("_chart_spec") or market_data.spec_for_topic(topic)
+    if spec.get("atr"):
+        frames, _flags = scene_frames.frames_for(topic, beat, 3, spec)
+        return tuple(frames)
     mode = market_data.visual_mode(topic, spec)
     if mode == "non_numeric":
         return (market_data.non_numeric_frame(topic, beat, 0),
@@ -248,11 +254,19 @@ answer these four questions in order: "आज क्या सीख रहा �
 new concept before the previous one is understood.
 
 TEACHING VOICE:
-- Start by naming the exact topic in simple Hindi + the key English term.
+- Adult trader talking to another adult. Calm, direct Hinglish. No cheerleading, no "दोस्तों",
+  no baby-talk, no hype.
+- One lesson, in this order, mapped onto the four beats:
+  hook = the problem (do not give the answer yet);
+  pehchan = the rule, with the number that is on the chart;
+  matlab = one worked example using the chart's own prices;
+  karein = one common mistake, then one takeaway line.
+  The on-screen poll is the CTA. Do not speak a CTA.
+- Every sentence points at what is on screen in that beat: a number, a level, or a step.
+  No line like "यह बहुत important है" unless the next words name the number or the level.
 - Explain like a teacher pointing at the screen: first show it, then identify it, then explain its meaning,
   then explain the normal confirmation/risk check.
 - Every sentence must connect to the current screen. If a visual changes, the narration must explain why.
-- Do not use vague filler such as "यह बहुत important है" unless immediately followed by the specific reason.
 
 Return ONLY JSON:
 {"title": "<YouTube title, max 70 chars, Hindi + key English words, the hook itself>",
@@ -332,8 +346,67 @@ def _card_line(text):
     return " ".join(out.split())
 
 
+def _ensure_concrete(beats, hook_line):
+    """A vague beat fails the craft score. Add or swap one step-word, never a new number."""
+    caps = {"hook": 28, "pehchan": 46, "matlab": 54, "karein": 50}
+    prefix = hook_line.rstrip("।").split()
+    for beat in BEATS:
+        if scene_pace.segment_is_concrete(beats.get(beat)):
+            continue
+        words = str(beats.get(beat) or "").split()
+        total = sum(len(str(beats.get(b) or "").split()) for b in BEATS)
+        if len(words) < caps[beat] and total < 180:
+            beats[beat] = " ".join(words + ["उदाहरण"])
+            continue
+        if beat == "hook" and len(words) <= len(prefix):
+            continue
+        if words:
+            words[-1] = "उदाहरण"
+            beats[beat] = " ".join(words)
+    return beats
+
+
+def atr_narration(topic):
+    """Adult ATR lesson. Every figure is the one drawn from the monthly closes."""
+    lesson = topic["_atr"]
+    name = lesson["name_hi"]
+    hook_line = "तंग SL बार-बार कटता क्यों है?"
+    beats = {
+        "hook": (
+            f"{hook_line} भाव की सामान्य हलचल से तंग रेखा कट जाती है। "
+            f"ATR इसी हलचल को नापता है। आगे नियम और असली उदाहरण है।"
+        ),
+        "pehchan": (
+            f"नियम यह है। ATR पिछले {lesson['period']} कैंडल की औसत हलचल है। "
+            f"{name} के महीने के भाव पर ATR {lesson['atr']} है। "
+            f"आँकड़ा {lesson['as_of']} तक का है। "
+            f"यह दिशा नहीं बताता, सिर्फ़ हलचल बताता है। हर महीने का बदलाव इसी औसत में जुड़ता है।"
+        ),
+        "matlab": (
+            f"उदाहरण {name} का आखिरी भाव {lesson['entry']} है। "
+            f"दूरी {lesson['multiple']} गुना ATR रखी जाती है। "
+            f"{lesson['multiple']} गुना {lesson['atr']} बराबर {lesson['distance']} पॉइंट। "
+            f"एंट्री रेखा {lesson['entry']} पर है। SL रेखा {lesson['sl']} पर है। "
+            f"ऊपर वाली रेखा {lesson['target']} पर है। ये रेखाएँ शिक्षा हैं, सलाह नहीं। "
+            f"स्क्रीन पर एंट्री, फिर SL, फिर दूरी क्रम से बनती है।"
+        ),
+        "karein": (
+            f"गलती यह है कि SL को ATR से तंग रखना। "
+            f"{lesson['atr']} की हलचल में तंग रेखा शोर में कटती है। "
+            f"दूरी {lesson['distance']} पॉइंट हो तो मात्रा कम होती है, जोखिम वही रहता है। "
+            f"SL की दूरी ATR का {lesson['multiple']} गुना है। यह शिक्षा है, सलाह नहीं।"
+        ),
+    }
+    title = f"ATR से SL — {name} पर दूरी {lesson['distance']}"
+    if len(title) > 90:
+        title = title[:90].rstrip()
+    return {"title": title, "hook_line": hook_line, "beats": beats}
+
+
 def fallback_narration(topic):
     """Four-step lesson from the topic card. The first sentence is the punchy hook."""
+    if topic.get("_atr"):
+        return atr_narration(topic)
     src = {b: (_card_line(pair[0]), _card_line(pair[1])) for b, pair in topic["beats"].items()}
     hook_line = _card_line(hook_check.make_hook_line(topic))
     if hook_check.check_hook_line(hook_line, hook_check.allowed_numbers(topic),
@@ -428,6 +501,7 @@ def fallback_narration(topic):
             break
         if not placed:
             break
+    _ensure_concrete(beats, hook_line)
     title = _fallback_title(topic)
     return {"title": title, "hook_line": hook_line, "beats": beats}
 
@@ -542,6 +616,9 @@ def narration(topic, c, spec=None):
         if not isinstance(n, dict):
             n = {}
         fails = check_narration(n, topic)
+        vague = scene_pace.vague_beats(n.get("beats"))
+        if vague:
+            fails.append("vague explanation (no number, level or step): " + ", ".join(vague))
         content = _content_ok(topic, n, spec) if not fails else None
         if content and not content["passed"]:
             fails.append("self-review below bar: " + content["summary"])
@@ -936,13 +1013,27 @@ def beat_clip(pngs, dur, out, fps=30, switch=0.58):
                     "-map", "[v]", "-t", f"{dur:.3f}", "-r", str(fps), *X264, str(out)], check=True)
 
 
-def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, hook_line=""):
+def still_clip(png, dur, out, fps=30):
+    """One picture, one cut. Duration is the scene slice, not the whole beat."""
+    dur = max(0.4, float(dur))
+    subprocess.run(["ffmpeg", "-v", "error", "-y",
+                    "-loop", "1", "-t", f"{dur:.3f}", "-i", str(png),
+                    "-vf", f"fps={fps},format=yuv420p",
+                    "-t", f"{dur:.3f}", "-r", str(fps), *X264, str(out)], check=True)
+
+
+def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, hook_line="",
+             scenes=None):
+    scenes = scenes or scene_pace.plan_scenes(beat_times)
     clips = []
-    switch = switch or {}
-    for b in BEATS:
-        t0, t1 = beat_times[b]
-        out = RUN / f"beat_{b}.mp4"
-        beat_clip(beat_pngs[b], t1 - t0, out, fps, switch.get(b, 0.58))
+    for i, scene in enumerate(scenes):
+        png = scene.get("png")
+        if not png:
+            pics = beat_pngs[scene["beat"]]
+            png = pics[min(scene["index"], len(pics) - 1)]
+            scene["png"] = str(png)
+        out = RUN / f"scene_{i:02d}.mp4"
+        still_clip(png, float(scene["end"]) - float(scene["start"]), out, fps)
         clips.append(out.name)
     (RUN / "clips.txt").write_text("\n".join(f"file '{c}'" for c in clips), encoding="utf-8")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", "clips.txt",
@@ -962,15 +1053,22 @@ def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, h
     # is not delayed, and the music mix below still starts from this same file.
     if str(hook_line or "").strip():
         hook_sfx.mix_file(RUN / "voice.wav", hook_motion.click_times(hook_line))
-    music = ROOT / "assets" / "music.mp3"
-    if music.exists():
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "voice.wav", "-stream_loop", "-1", "-i", str(music),
-                        "-filter_complex", "[0:a]volume=1.0[v];[1:a]volume=0.10[m];"
-                        "[v][m]amix=inputs=2:duration=first:dropout_transition=2[a]",
-                        "-map", "[a]", "-c:a", "aac", "-b:a", "192k", "audio.m4a"], cwd=RUN, check=True)
-    else:
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "voice.wav", "-c:a", "aac", "-b:a", "192k",
+    bed = ROOT / "assets" / "bed" / "bed.wav"
+    if bed.exists():
+        mixed = RUN / "mixed.wav"
+        bed_audio.mix_into(RUN / "voice.wav", scenes, mixed)
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(mixed), "-c:a", "aac", "-b:a", "192k",
                         "audio.m4a"], cwd=RUN, check=True)
+    else:
+        music = ROOT / "assets" / "music.mp3"
+        if music.exists():
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "voice.wav", "-stream_loop", "-1", "-i", str(music),
+                            "-filter_complex", "[0:a]volume=1.0[v];[1:a]volume=0.10[m];"
+                            "[v][m]amix=inputs=2:duration=first:dropout_transition=2[a]",
+                            "-map", "[a]", "-c:a", "aac", "-b:a", "192k", "audio.m4a"], cwd=RUN, check=True)
+        else:
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "voice.wav", "-c:a", "aac", "-b:a", "192k",
+                            "audio.m4a"], cwd=RUN, check=True)
     (RUN / "subs.ass").write_text(ass_text, encoding="utf-8")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "silent.mp4", "-i", "audio.m4a",
                     "-vf", f"fps={fps},ass=subs.ass", *X264, "-c:a", "copy", "-shortest", "final.mp4"],
@@ -1071,6 +1169,8 @@ def main():
     # Script prices and the गुना line use the same closes the chart divides.
     market_data.sync_topic_numbers(topic)
     spec = market_data.spec_for_topic(topic)
+    if spec.get("atr"):
+        market_data.apply_atr_card(topic, spec["atr"])
     topic["_chart_spec"] = spec
     if spec.get("mode") == "non_numeric":
         print(f"[market_data] non-numeric card: {spec.get('reason')}")
@@ -1145,19 +1245,43 @@ def main():
         ok("3rd picture at " + ", ".join(f"{b} {f:.0%}" for b, f in switch.items()))
     cta = engagement.engagement_question(topic)
     hook_line = n.get("hook_line") or ""
+    scenes = scene_pace.plan_scenes(beat_times)
+    groups = {b: [] for b in BEATS}
+    for scene in scenes:
+        groups[scene["beat"]].append(scene)
+    paced = {}
+    for beat, group in groups.items():
+        if not group:
+            continue
+        frames, flags = scene_frames.frames_for(topic, beat, len(group), spec)
+        paths = []
+        for i, (scene, frame, flag) in enumerate(zip(group, frames, flags)):
+            path = RUN / f"sc_{beat}_{i}.png"
+            frame.save(path)
+            scene["png"] = str(path)
+            scene["callout"] = bool(scene.get("callout") or flag)
+            paths.append(path)
+        paced[beat] = tuple(paths)
+    visual_gate(paced)
+    ok(f"scenes: {len(scenes)} cuts, longest {max(s['end'] - s['start'] for s in scenes):.2f}s")
     overlays = short_layout.overlay_plan(topic, beat_times, hook_line, cta)
-    review = self_review.full_review(topic, n, spec, overlays)
+    review = self_review.full_review(topic, n, spec, overlays, scenes=scenes)
     review["narration_source"] = source
     review["attempts"] = n.get("review_attempts") or self_review.MAX_ATTEMPTS
+    review["scenes"] = [
+        {"beat": s["beat"], "start": round(s["start"], 2), "end": round(s["end"], 2),
+         "callout": bool(s.get("callout"))}
+        for s in scenes
+    ]
     (RUN / "self_review.json").write_text(
         json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
     if review["public_ok"]:
         ok("self-review passed: " + review["summary"])
     else:
         print("[HOLD] self-review below the bar — public upload blocked. " + review["summary"])
-    assemble(beat_pngs, beat_audio, beat_times,
+    assemble(paced, beat_audio, beat_times,
              build_ass(topic, beat_times, spoken, hook_line, cta), switch=switch,
-             hook_line=hook_line)
+             hook_line=hook_line, scenes=scenes)
 
     # Final-file hard gate: never retime the finished video.
     # If duration is outside the publishing window, fail and regenerate narration.
