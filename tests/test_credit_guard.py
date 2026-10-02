@@ -220,9 +220,12 @@ class SlotPaidCallTests(unittest.TestCase):
             "platform": "hold",
         }]
         early = datetime(2026, 10, 2, 5, 47, tzinfo=slot_guard.IST)
-        self.assertIsNone(slot_guard.next_unfilled(early, [{
+        # The hold is skipped. 16:00 is still inside the lookahead, so that slot is next.
+        moved = slot_guard.next_unfilled(early, [{
             "date_ist": "2026-10-02", "slot": "08:30", "video_id": None, "platform": "hold",
-        }]))
+        }])
+        self.assertEqual(moved["slot"], "16:00")
+        self.assertNotEqual(moved["slot"], "08:30")
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "published.json"
             path.write_text(json.dumps(entries), encoding="utf-8")
@@ -282,8 +285,9 @@ class SlotPaidCallTests(unittest.TestCase):
         self.assertIn("run/credits.json", publish)
 
 
-# Slots held on main. Clock is inside the 45-minute to 6-hour lead window
-# for that slot, so --next would select it if the hold were ignored.
+# Slots held on main. The clock is inside the 45-minute to 14-hour window
+# for that slot, and every later slot still inside the lookahead is held too,
+# so --next stays empty. A hold on only the nearest slot would move on.
 _HELD_SLOTS = (
     ("2026-10-02", "16:00", datetime(2026, 10, 2, 13, 0)),
     ("2026-10-02", "21:00", datetime(2026, 10, 2, 18, 0)),

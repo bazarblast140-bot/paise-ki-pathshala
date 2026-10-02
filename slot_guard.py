@@ -1,10 +1,11 @@
 """Which upcoming slot should this run fill? (ledger: data/published.json)
 
 Scheduled runs build AHEAD of the slot and YouTube publishes at publishAt.
-GitHub cron is late and drops :00 / :30 schedules, so each slot has extra
-early triggers. A run is idempotent: it takes the next unfilled slot whose
-publish time is still far enough ahead, and it never rolls a missed slot
-onto the next day (that was pushing today's video into tomorrow's slot).
+GitHub cron is late, drops :00 / :30, and often misses the 22:30–01:30 UTC
+crush entirely. Crons are spread across the rest of the day. A run is
+idempotent: it takes the earliest unfilled slot still inside the lookahead
+and schedules it with publishAt. A missed slot is never rolled onto another
+slot and never published instantly.
 
 Usage:
   python slot_guard.py --next
@@ -29,41 +30,68 @@ SLOTS = ("08:30", "16:00", "21:00")
 UPLOAD_BUFFER = timedelta(minutes=20)
 
 # Selection-time lead. The build has to finish before UPLOAD_BUFFER is all
-# that is left. 45 minutes is the floor; the crons themselves fire 1.5–4h early.
+# that is left. 45 minutes is the floor. Crons themselves fire at least 2h early.
 MIN_LEAD = timedelta(minutes=45)
 
-# Only the upcoming slot. The gap to the slot after next is longer than this,
-# so an early trigger for 08:30 cannot also fill 16:00.
-MAX_LOOKAHEAD = timedelta(hours=6)
+# How far ahead one run may build. About 14h, so any cron outside the busy
+# UTC window can still reach the next empty slot, including 08:30 from the
+# previous afternoon. Pass max_lookahead= to next_unfilled to override.
+# Longer than this starts to reach the slot after next when the near one is
+# still the one that should be built first — the picker still takes the
+# earliest open slot, and stops at this horizon.
+MAX_LOOKAHEAD = timedelta(hours=14)
 
-# UTC crons, odd minutes only. GitHub sheds :00 and :30 under load.
-# Per slot: about 3–4h before, about 2–3h before, and a backup still before
-# the publish time. 08:30 IST = 03:00 UTC.
-#   23:47 UTC = 05:17 IST (3h13m lead) — still before 03:00 UTC on a same-day merge
-#   00:17 UTC = 05:47 IST (2h43m)
-#   01:23 UTC = 06:53 IST (1h37m backup)
+# GitHub's busiest window (UTC). Schedules here are often late or dropped.
+# 22:30 inclusive through 01:30 exclusive.
+BUSY_UTC_START = 22 * 60 + 30
+BUSY_UTC_END = 1 * 60 + 30
+
+# Eight UTC crons, odd minutes, all outside 22:30–01:30 UTC. The label is the
+# slot that trigger is counted toward. The picker ignores the label: whichever
+# cron fires, it builds the earliest unfilled slot inside
+# [MIN_LEAD, MAX_LOOKAHEAD] and schedules it with publishAt.
+# Each slot has at least three chances at least 2h ahead. 21:00 (the night
+# slot) gets those chances from the morning onward, not only just before it.
+# 08:30 IST = 03:00 UTC is never armed inside the midnight crush; its chances
+# are the previous afternoon and evening.
+#
+#   02:17 UTC = 07:47 IST  → 16:00 in 8h13m, 21:00 in 13h13m
+#   04:43 UTC = 10:13 IST  → 16:00 in 5h47m, 21:00 in 10h47m
+#   07:07 UTC = 12:37 IST  → 16:00 in 3h23m, 21:00 in 8h23m
+#   13:13 UTC = 18:43 IST  → 21:00 in 2h17m, next 08:30 in 13h47m
+#   15:47 UTC = 21:17 IST  → next 08:30 in 11h13m
+#   17:23 UTC = 22:53 IST  → next 08:30 in 9h37m
+#   19:41 UTC = 01:11 IST  → next 08:30 in 7h19m
+#   21:17 UTC = 02:47 IST  → next 08:30 in 5h43m, 16:00 in 13h13m
 PUBLISH_CRONS = (
-    ("47 23 * * *", "08:30"),
-    ("17 0 * * *", "08:30"),
-    ("23 1 * * *", "08:30"),
-    ("41 6 * * *", "16:00"),
-    ("47 7 * * *", "16:00"),
-    ("53 8 * * *", "16:00"),
-    ("47 11 * * *", "21:00"),
+    ("17 2 * * *", "16:00"),
+    ("43 4 * * *", "16:00"),
+    ("7 7 * * *", "16:00"),
     ("13 13 * * *", "21:00"),
-    ("7 14 * * *", "21:00"),
+    ("47 15 * * *", "08:30"),
+    ("23 17 * * *", "08:30"),
+    ("41 19 * * *", "08:30"),
+    ("17 21 * * *", "08:30"),
 )
 
-# Read-only health check, odd minute, before that slot's earliest build.
+# Read-only health check, odd minute, outside the busy UTC window, and before
+# that slot's earliest build (the build with the longest in-window lead).
 # (cron UTC, check IST, slot IST, lead minutes before the slot)
+#   11:47 UTC = 17:17 IST → 08:30 (before the 13:13 UTC / 18:43 IST build)
+#   19:53 UTC = 01:23 IST → 16:00 (before the 21:17 UTC / 02:47 IST build)
+#   21:47 UTC = 03:17 IST → 21:00 (before the 02:17 UTC / 07:47 IST build)
 HEALTH_SCHEDULE = (
-    ("17 23 * * *", "04:47", "08:30", 223),
-    ("11 6 * * *", "11:41", "16:00", 259),
-    ("17 11 * * *", "16:47", "21:00", 253),
+    ("47 11 * * *", "17:17", "08:30", 913),
+    ("53 19 * * *", "01:23", "16:00", 877),
+    ("47 21 * * *", "03:17", "21:00", 1063),
 )
 
-# After the slot, odd minutes. Alert only; a fill uses the same ahead-of-slot
-# picker (scheduled publishAt), never an extra instant-public post.
+# After the slot, odd minutes, outside 22:30–01:30 UTC. Alert only; a fill
+# uses the same lookahead picker (scheduled publishAt), never an extra
+# instant-public post.
+#   03:19 UTC = 08:49 IST → 08:30 (19 min after)
+#   11:19 UTC = 16:49 IST → 16:00 (49 min after)
+#   16:19 UTC = 21:49 IST → 21:00 (49 min after)
 WATCH_CRONS = (
     ("19 3 * * *", "08:30"),
     ("19 11 * * *", "16:00"),
@@ -152,6 +180,30 @@ def cron_lead_minutes(cron, slot):
     return (slot_utc - cron_min) % (24 * 60)
 
 
+def cron_in_busy_window(cron):
+    """True when this UTC cron sits in GitHub's 22:30–01:30 crush."""
+    minute, hour, *_ = cron.split()
+    minute_of_day = int(hour) * 60 + int(minute)
+    return minute_of_day >= BUSY_UTC_START or minute_of_day < BUSY_UTC_END
+
+
+def covering_leads(slot, min_minutes=120, max_minutes=None):
+    """(cron, lead minutes) for triggers that can still build this slot.
+
+    A chance counts when the lead is at least min_minutes and not past
+    MAX_LOOKAHEAD. The cron label is ignored; any trigger in that window
+    can fill the slot if it is the earliest open one.
+    """
+    if max_minutes is None:
+        max_minutes = int(MAX_LOOKAHEAD.total_seconds() // 60)
+    found = []
+    for cron, _label in PUBLISH_CRONS:
+        lead = cron_lead_minutes(cron, slot)
+        if min_minutes <= lead <= max_minutes:
+            found.append((cron, lead))
+    return found
+
+
 def target_date(slot, now=None):
     """IST date for a ledger row.
 
@@ -190,10 +242,12 @@ def scheduled_publish_at(slot, now=None, date_ist=None):
 
 
 def next_unfilled(now=None, entries=None, min_lead=None, max_lookahead=None):
-    """The next ledger-empty slot inside the lead window, or None.
+    """The earliest ledger-open slot inside the lead window, or None.
 
-    One slot per call. A filled slot is skipped. Nothing outside the window
-    is chosen, so a duplicate early run does not fill the rest of the day.
+    One slot per call, in time order. Hold rows and filled rows are skipped.
+    A missed slot (inside MIN_LEAD, or already past) is left missed: it is
+    not rolled onto a later slot and not published instantly. The following
+    open slot is chosen only when it is still inside max_lookahead.
     """
     now = now or datetime.now(IST)
     if entries is None:

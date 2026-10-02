@@ -63,8 +63,9 @@ def gha_output(key, value):
 
 def _flags(missing, fill=False):
     gha_output("missing", "true" if missing else "false")
-    # fill is the next unfilled future slot, scheduled via publishAt.
-    # A missed slot does not become an extra instant-public video.
+    # fill is the earliest unfilled slot still inside the lookahead,
+    # scheduled via publishAt. A missed slot is not rolled and does not
+    # become an extra instant-public video.
     gha_output("fill", "true" if fill else "false")
 
 

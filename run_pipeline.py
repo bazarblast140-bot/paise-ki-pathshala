@@ -134,6 +134,13 @@ def main():
 
     # optional publish
     if status == "success" and "--publish" in sys.argv:
+        # Second ledger read. The opening guard ran before paid APIs; this
+        # one runs after the build and before YouTube or Instagram.
+        reason = slot_guard.scheduled_slot_block()
+        if reason:
+            print(f"[skip] {reason}; ledger re-read before upload, not publishing")
+            _finish_credits()
+            sys.exit(0)
         print("\n=== Publish (opt-in) ===")
         (RUN / "uploaded.txt").unlink(missing_ok=True)
         (RUN / "youtube_status.txt").unlink(missing_ok=True)

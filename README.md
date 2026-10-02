@@ -109,8 +109,9 @@ error — step skip hota hai, video phir bhi banta hai. Quota: ~350 units/run, h
 `trend_research.py` aur workflow **Daily trend research**
 (`.github/workflows/daily-trend-research.yml`).
 
-- **Schedule:** roz 00:00 UTC = **05:30 IST**, 08:30 wale publish slot se pehle.
-  GitHub cron late ho sakta hai. **Run workflow** se bhi chalega (`dry_run` = fetch only,
+- **Schedule:** roz 11:23 UTC = **16:53 IST** (odd minute, 22:30–01:30 UTC ke bahar).
+  08:30 wala build usi shaam 18:43 IST se shuru ho sakta hai, isliye research usse pehle chalti hai.
+  **Run workflow** se bhi chalega (`dry_run` = fetch only,
   commit nahi). Is workflow par `push:` trigger nahi hai.
 - **Kabhi publish / upload / Reel nahi.** Sirf `data/trends.json` aur
   `reports/trends-YYYY-WW.md` (IST ISO week, jaise `reports/trends-2026-40.md`) commit
@@ -292,25 +293,32 @@ Monetization thresholds + checklist: `MONETIZATION.md`.
 
 ## Schedule (build ahead, 3 slots)
 
-GitHub cron late hota hai aur `:00` / `:30` minutes gira deta hai. Isliye har slot **pehle** banta hai (odd minute) aur YouTube `publishAt` usi slot par public karta hai. Ek run agla **khali** slot leta hai jiska time abhi kaafi door ho; ledger me bhara ho to skip. Din me public posts 3 hi rehte hain.
+GitHub cron late hota hai, `:00` / `:30` gira deta hai, aur **22:30–01:30 UTC** par aksar run banata hi nahi. Isliye 8 trigger din bhar odd minutes par hain, us window ke bahar. YouTube `publishAt` slot ka public time hai. Ek run agla **khali** slot leta hai jo abhi se lagbhag **14 ghante** ke andar ho (hold aur filled skip). Missed slot doosre slot par roll nahi hota aur turant public nahi hota. Din me public posts 3 hi rehte hain.
 
-| Slot (IST) | UTC publish | Early crons (UTC) |
+| UTC cron | IST | Kis slot ke liye (≥2h lead) |
 |---|---|---|
-| 08:30 | 03:00 | `47 23`, `17 0`, `23 1` (05:17, 05:47, 06:53 IST) |
-| 16:00 | 10:30 | `41 6`, `47 7`, `53 8` (12:11, 13:17, 14:23 IST) |
-| 21:00 | 15:30 | `47 11`, `13 13`, `7 14` (17:17, 18:43, 19:37 IST) |
+| `17 2 * * *` | 07:47 | 16:00 (8h13m), 21:00 (13h13m) |
+| `43 4 * * *` | 10:13 | 16:00 (5h47m), 21:00 (10h47m) |
+| `7 7 * * *` | 12:37 | 16:00 (3h23m), 21:00 (8h23m) |
+| `13 13 * * *` | 18:43 | 21:00 (2h17m), agla 08:30 (13h47m) |
+| `47 15 * * *` | 21:17 | agla 08:30 (11h13m) |
+| `23 17 * * *` | 22:53 | agla 08:30 (9h37m) |
+| `41 19 * * *` | 01:11 | agla 08:30 (7h19m) |
+| `17 21 * * *` | 02:47 | agla 08:30 (5h43m), 16:00 (13h13m) |
 
-Slot watch (alert): `19 3` (08:49 IST), `19 11` (16:49 IST), `19 16` (21:49 IST). Khali slot par extra instant-public video nahi.
+08:30 IST = 03:00 UTC. 16:00 IST = 10:30 UTC. 21:00 IST = 15:30 UTC.
+
+Slot watch (alert): `19 3` (08:49 IST), `19 11` (16:49 IST), `19 16` (21:49 IST). Khali slot par extra instant-public video nahi; fill sirf tab jab agla khali slot 14h me ho.
 
 ## Health check (build se pehle)
 
-Workflow: **Health check** (`.github/workflows/health-check.yml`). Actions cron UTC hai; IST = UTC+5:30. Check us slot ke sabse pehle build se pehle chalti hai, odd minute par:
+Workflow: **Health check** (`.github/workflows/health-check.yml`). Actions cron UTC hai; IST = UTC+5:30. Check us slot ke sabse pehle build se pehle chalti hai, odd minute par, 22:30–01:30 UTC ke bahar:
 
 | Check (IST) | UTC cron | Slot |
 |---|---|---|
-| 04:47 | `17 23 * * *` | 08:30 |
-| 11:41 | `11 6 * * *` | 16:00 |
-| 16:47 | `17 11 * * *` | 21:00 |
+| 17:17 | `47 11 * * *` | 08:30 |
+| 01:23 | `53 19 * * *` | 16:00 |
+| 03:17 | `47 21 * * *` | 21:00 |
 
 `workflow_dispatch` bhi hai (slot = auto / 08:30 / 16:00 / 21:00). Sirf read: YouTube **refresh** (access token discard, koi Data API call nahi), DeepSeek `GET /user/balance`, Kimi balance **agar key set ho**, Anthropic `GET /v1/models` **agar key set ho**, ElevenLabs `GET /v1/user/subscription`, Instagram `debug_token` (warna ek `fields=id` read). Koi upload / publish / Reel post nahi.
 

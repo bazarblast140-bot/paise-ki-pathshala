@@ -39,8 +39,9 @@ for _stream in (sys.stdout, sys.stderr):
 ROOT = Path(__file__).resolve().parent
 IST = timezone(timedelta(hours=5, minutes=30))
 
-# Before the earliest build cron for that slot, odd minutes (GitHub sheds :00/:30).
-# cron is UTC. IST = UTC+5:30. Lead is minutes before the slot, not a fixed 90.
+# Before the earliest build cron for that slot. Odd minutes, outside
+# 22:30–01:30 UTC (GitHub sheds :00/:30 and drops that window).
+# cron is UTC. IST = UTC+5:30. Lead is minutes before the slot.
 SCHEDULE = slot_guard.HEALTH_SCHEDULE
 SLOT_NAMES = tuple(row[2] for row in SCHEDULE)
 
