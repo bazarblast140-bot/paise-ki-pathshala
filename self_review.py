@@ -120,16 +120,10 @@ def score_accuracy(narration, topic, spec=None):
             allowed.add(str(int(close)) if float(close).is_integer() else str(close))
             allowed |= hook_check.extract_numbers(str(close))
             allowed |= hook_check.extract_numbers(str(point.get("date") or ""))
-    blobs = []
     beats = (narration or {}).get("beats") or {}
-    blobs.extend(str(beats.get(b) or "") for b in short_layout.BEATS)
-    blobs.append(str((narration or {}).get("hook_line") or ""))
-    for pair in ((topic or {}).get("beats") or {}).values():
-        blobs.extend(str(x) for x in pair)
-    extra = set()
-    for blob in blobs:
-        extra |= hook_check.extract_numbers(blob)
-    extra -= allowed
+    spoken = " ".join(str(beats.get(b) or "") for b in short_layout.BEATS)
+    spoken = spoken + " " + str((narration or {}).get("hook_line") or "")
+    extra = hook_check.unsourced_numbers(spoken, topic, allowed=allowed)
     if extra:
         return 0, [f"numbers with no source: {sorted(extra)}"]
     return 100, []

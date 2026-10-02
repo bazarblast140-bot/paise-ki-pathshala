@@ -37,6 +37,43 @@ def allowed_numbers(topic):
     return extract_numbers(blob) | {"1", "2", "3"}
 
 
+# Same markers the evergreen buffer uses. A figure counts as an example only
+# when one of these sits in the same sentence.
+_EXAMPLE_MARK = re.compile(r"(example|misal|मिसाल|उदाहरण|illustrative)", re.I)
+
+
+def example_labelled_numbers(text):
+    """Digits that share a sentence with an explicit example label."""
+    found = set()
+    for sentence in re.split(r"[।!?]+|\.\s+", text or ""):
+        if not _EXAMPLE_MARK.search(sentence):
+            continue
+        found |= extract_numbers(sentence)
+    return found
+
+
+def allows_example_numbers(topic):
+    """Evergreen concept with no live market series. Real prices stay strict."""
+    if not isinstance(topic, dict) or topic.get("_atr"):
+        return False
+    import buffer_shorts
+    ok, _why = buffer_shorts.is_evergreen_topic(topic)
+    return bool(ok)
+
+
+def unsourced_numbers(text, topic, allowed=None):
+    """Spoken digits that are neither on the card nor a labelled example.
+
+    A labelled example is accepted only for an evergreen topic with no market
+    data. REAL DATA, a fetched series, and an unlabelled figure still fail.
+    """
+    allowed = set(allowed if allowed is not None else allowed_numbers(topic))
+    extra = extract_numbers(text) - allowed
+    if extra and allows_example_numbers(topic):
+        extra -= example_labelled_numbers(text)
+    return extra
+
+
 def hook_word_limit(topic=None):
     if topic and topic.get("cat") == "REAL DATA":
         return REAL_DATA_MAX_WORDS
