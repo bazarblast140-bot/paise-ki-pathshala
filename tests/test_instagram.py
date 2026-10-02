@@ -356,15 +356,229 @@ class WatchdogVerdictTests(unittest.TestCase):
             }), encoding="utf-8")
             (run / "self_review.json").write_text(json.dumps({"public_ok": True}), encoding="utf-8")
             env = {"IG_CROSSPOST": "1", "IG_CROSSPOST_FORCE": "1", "VIDEO_FORMAT": "short",
-                   "TOPIC_KEY": "", "PIPELINE_MODE": "", "BOARD_QA": ""}
+                   "TOPIC_KEY": "", "PIPELINE_MODE": "", "BOARD_QA": "",
+                   "IG_USER_ID": "1789", "IG_ACCESS_TOKEN": "ig-token-test"}
             with mock.patch.object(IG, "RUN", run), mock.patch.dict("os.environ", env), \
                  mock.patch.object(IG, "video_format", return_value="short"), \
+                 mock.patch.object(IG, "fetch_recent_media", return_value=[]), \
                  mock.patch.object(IG, "host_mp4", return_value="https://example.com/a.mp4") as host, \
                  mock.patch.object(IG, "publish_reel", return_value="1789") as reel:
                 IG.main()
             self.assertTrue(host.called)
             self.assertTrue(reel.called)
             self.assertEqual((run / "ig_reel.txt").read_text(encoding="utf-8"), "1789")
+            marker = reel.call_args.args[1]
+            self.assertIn("pkp:option_bull_call_spread", marker)
+
+
+READY_META = {"ai_verdict_valid": True, "verdict": "READY", "public_ready": True}
+ATR_TITLE = "SL बार-बार हिट? ATR से दूरी तय करो"
+
+
+def _ready_tree(root: Path, *, topic_key="atr_sl", title=ATR_TITLE, youtube_id="Lx2vFMDO5ws", mp4=b"same-bytes"):
+    run = root / "run"
+    run.mkdir()
+    (run / "final.mp4").write_bytes(mp4)
+    (run / "script.txt").write_text(f"TITLE:\n{title}\n", encoding="utf-8")
+    (run / "topic.json").write_text(json.dumps({"key": topic_key, "cat": "INDICATOR", "thumb": [title]}), encoding="utf-8")
+    (run / "report.md").write_text("VERDICT: [READY TO PUBLISH]\n", encoding="utf-8")
+    (run / "verify_meta.json").write_text(json.dumps(READY_META), encoding="utf-8")
+    (run / "self_review.json").write_text(json.dumps({"public_ok": True}), encoding="utf-8")
+    if youtube_id:
+        (run / "uploaded.txt").write_text(youtube_id + "\n", encoding="utf-8")
+    ledger_path = root / "published.json"
+    ledger_path.write_text("[]\n", encoding="utf-8")
+    return run, ledger_path
+
+
+class IdempotencyTests(unittest.TestCase):
+    """One video, one Reel. Every entry point goes through publish_instagram.main."""
+
+    def _env(self):
+        return {
+            "IG_CROSSPOST": "1", "IG_CROSSPOST_FORCE": "1", "VIDEO_FORMAT": "short",
+            "TOPIC_KEY": "", "PIPELINE_MODE": "", "BOARD_QA": "",
+            "IG_USER_ID": "178900", "IG_ACCESS_TOKEN": "ig-token-secret",
+        }
+
+    def _run_main(self, run, ledger_path, live, host=None):
+        host = host if host is not None else mock.Mock(side_effect=AssertionError("must not upload"))
+        reel = mock.Mock(side_effect=AssertionError("must not publish"))
+        with mock.patch.object(IG, "RUN", run), mock.patch.dict("os.environ", self._env()), \
+             mock.patch.object(IG, "video_format", return_value="short"), \
+             mock.patch("ledger.PATH", ledger_path), \
+             mock.patch.object(IG, "fetch_recent_media", live) as fetched, \
+             mock.patch.object(IG, "host_mp4", host), \
+             mock.patch.object(IG, "publish_reel", reel):
+            with self.assertRaises(SystemExit) as cm:
+                IG.main()
+        return cm.exception.code, host, reel, fetched
+
+    def test_ledger_youtube_id_blocks_every_entry_point(self):
+        with tempfile.TemporaryDirectory() as d:
+            run, ledger_path = _ready_tree(Path(d))
+            ledger_path.write_text(json.dumps([{
+                "video_id": "Lx2vFMDO5ws", "topic_key": "atr_sl", "ig_media_id": "17896148799412730",
+            }]), encoding="utf-8")
+            code, host, reel, fetched = self._run_main(run, ledger_path, mock.Mock(return_value=[]))
+            self.assertEqual(code, 0)
+            self.assertFalse(host.called)
+            self.assertFalse(reel.called)
+            self.assertEqual((run / "ig_reel.txt").read_text(encoding="utf-8"), "17896148799412730")
+            self.assertTrue(fetched.called)
+
+    def test_ledger_topic_and_hash_blocks_rereender_with_a_new_youtube_id(self):
+        with tempfile.TemporaryDirectory() as d:
+            run, ledger_path = _ready_tree(Path(d), youtube_id="yLGrcUS8-u4")
+            digest = IG.content_hash(run / "final.mp4")
+            ledger_path.write_text(json.dumps([{
+                "video_id": "Lx2vFMDO5ws", "topic_key": "atr_sl", "content_hash": digest,
+                "ig_media_id": "111",
+            }]), encoding="utf-8")
+            code, host, reel, _fetched = self._run_main(run, ledger_path, mock.Mock(return_value=[]))
+            self.assertEqual(code, 0)
+            self.assertFalse(host.called)
+            self.assertFalse(reel.called)
+            self.assertEqual((run / "ig_reel.txt").read_text(encoding="utf-8"), "111")
+
+    def test_live_marker_blocks_when_the_ledger_has_no_ig_id(self):
+        with tempfile.TemporaryDirectory() as d:
+            run, ledger_path = _ready_tree(Path(d))
+            ident = None
+            with mock.patch.object(IG, "RUN", run):
+                ident = IG.video_identity(run / "final.mp4")
+            caption = "SL बार-बार हिट? ATR से दूरी तय करो\n\n" + IG.caption_marker(ident)
+            live = mock.Mock(return_value=[{"id": "18110931077268518", "caption": caption, "permalink": "https://instagram.com/reel/abc"}])
+            code, host, reel, _fetched = self._run_main(run, ledger_path, live)
+            self.assertEqual(code, 0)
+            self.assertFalse(host.called)
+            self.assertFalse(reel.called)
+            self.assertEqual((run / "ig_reel.txt").read_text(encoding="utf-8"), "18110931077268518")
+
+    def test_live_title_fallback_blocks_a_rereender_without_a_marker(self):
+        with tempfile.TemporaryDirectory() as d:
+            run, ledger_path = _ready_tree(Path(d), youtube_id="yLGrcUS8-u4", mp4=b"different-render")
+            live = mock.Mock(return_value=[{
+                "id": "17896148799412730",
+                "caption": ATR_TITLE + "\n\n📌 याद रखो",
+                "permalink": "https://instagram.com/reel/old",
+            }])
+            code, host, reel, _fetched = self._run_main(run, ledger_path, live)
+            self.assertEqual(code, 0)
+            self.assertFalse(reel.called)
+            self.assertFalse(host.called)
+            self.assertEqual((run / "ig_reel.txt").read_text(encoding="utf-8"), "17896148799412730")
+
+    def test_live_check_failure_does_not_post(self):
+        with tempfile.TemporaryDirectory() as d:
+            run, ledger_path = _ready_tree(Path(d))
+            live = mock.Mock(side_effect=IG.LiveCheckError("HTTP 500 graph"))
+            code, host, reel, _fetched = self._run_main(run, ledger_path, live)
+            self.assertEqual(code, 1)
+            self.assertFalse(host.called)
+            self.assertFalse(reel.called)
+            self.assertFalse((run / "ig_reel.txt").exists())
+
+    def test_live_error_hides_the_access_token(self):
+        with tempfile.TemporaryDirectory() as d:
+            run, ledger_path = _ready_tree(Path(d))
+            token = "ig-token-secret"
+            live = mock.Mock(side_effect=IG.LiveCheckError(f"HTTP 401 https://graph.facebook.com?access_token={token}"))
+            buf = __import__("io").StringIO()
+            with mock.patch.object(IG, "RUN", run), mock.patch.dict("os.environ", self._env()), \
+                 mock.patch.object(IG, "video_format", return_value="short"), \
+                 mock.patch("ledger.PATH", ledger_path), \
+                 mock.patch.object(IG, "fetch_recent_media", live), \
+                 mock.patch.object(IG, "host_mp4", side_effect=AssertionError("must not upload")), \
+                 mock.patch("sys.stderr", buf):
+                with self.assertRaises(SystemExit) as cm:
+                    IG.main()
+            self.assertEqual(cm.exception.code, 1)
+            self.assertNotIn(token, buf.getvalue())
+
+    def test_confirm_timeout_persists_before_poll_and_does_not_publish_again(self):
+        with tempfile.TemporaryDirectory() as d:
+            run, ledger_path = _ready_tree(Path(d))
+            with mock.patch.object(IG, "RUN", run):
+                ident = IG.video_identity(run / "final.mp4")
+            events = []
+
+            def ig_call(path, method="GET", params=None):
+                events.append((method, path))
+                if method == "POST" and path.endswith("/media"):
+                    return {"id": "container-1"}
+                if method == "GET" and path == "container-1":
+                    return {"status_code": "FINISHED"}
+                if method == "POST" and str(path).endswith("/media_publish"):
+                    return {"id": "media-new"}
+                if method == "GET" and path == "media-new":
+                    stored_now = json.loads(ledger_path.read_text(encoding="utf-8"))
+                    if not stored_now or stored_now[-1].get("ig_media_id") != "media-new":
+                        raise AssertionError("media id must be in the ledger before the confirm poll")
+                    raise RuntimeError("confirm timeout")
+                if method == "GET" and path.endswith("/media"):
+                    return {"data": [{"id": "media-new", "caption": ATR_TITLE, "permalink": ""}]}
+                raise AssertionError(method + " " + path)
+
+            with mock.patch.object(IG, "RUN", run), mock.patch.dict("os.environ", self._env()), \
+                 mock.patch("ledger.PATH", ledger_path), \
+                 mock.patch.object(IG, "ig_call", side_effect=ig_call), \
+                 mock.patch.object(IG, "time") as clock:
+                clock.sleep.return_value = None
+                media_id = IG.publish_reel("https://example.com/a.mp4", ATR_TITLE, ident=ident)
+            self.assertEqual(media_id, "media-new")
+            publishes = [e for e in events if e[0] == "POST" and str(e[1]).endswith("/media_publish")]
+            self.assertEqual(len(publishes), 1)
+            stored = json.loads(ledger_path.read_text(encoding="utf-8"))
+            self.assertEqual(stored[-1]["ig_media_id"], "media-new")
+            self.assertEqual(stored[-1]["slot"], "ig")
+            self.assertEqual((run / "ig_reel.txt").read_text(encoding="utf-8"), "media-new")
+            # The ledger write happens on media_publish, before the confirm GETs.
+            publish_at = next(i for i, e in enumerate(events) if e[0] == "POST" and str(e[1]).endswith("media_publish"))
+            confirm_at = next(i for i, e in enumerate(events) if e[1] == "media-new")
+            self.assertLess(publish_at, confirm_at)
+
+    def test_processing_timeout_rechecks_live_list_and_does_not_publish(self):
+        with tempfile.TemporaryDirectory() as d:
+            run, ledger_path = _ready_tree(Path(d))
+            with mock.patch.object(IG, "RUN", run):
+                ident = IG.video_identity(run / "final.mp4")
+            calls = []
+
+            def ig_call(path, method="GET", params=None):
+                calls.append((method, path))
+                if method == "POST" and path.endswith("/media"):
+                    return {"id": "container-1"}
+                if method == "GET" and path == "container-1":
+                    return {"status_code": "IN_PROGRESS"}
+                if method == "GET" and path.endswith("/media"):
+                    return {"data": [{"id": "17896148799412730", "caption": ATR_TITLE, "permalink": ""}]}
+                if method == "POST" and str(path).endswith("/media_publish"):
+                    raise AssertionError("must not publish after a processing timeout")
+                raise AssertionError(method + " " + path)
+
+            with mock.patch.object(IG, "RUN", run), mock.patch.dict("os.environ", self._env()), \
+                 mock.patch("ledger.PATH", ledger_path), \
+                 mock.patch.object(IG, "ig_call", side_effect=ig_call), \
+                 mock.patch.object(IG.time, "sleep"):
+                media_id = IG.publish_reel("https://example.com/a.mp4", ATR_TITLE, ident=ident)
+            self.assertEqual(media_id, "17896148799412730")
+            self.assertFalse(any(m == "POST" and str(p).endswith("media_publish") for m, p in calls))
+            self.assertEqual((run / "ig_reel.txt").read_text(encoding="utf-8"), "17896148799412730")
+
+    def test_manual_second_call_does_not_host(self):
+        """pipeline, watchdog, slot-watch and a hand run all enter main()."""
+        with tempfile.TemporaryDirectory() as d:
+            run, ledger_path = _ready_tree(Path(d))
+            ledger_path.write_text(json.dumps([{
+                "topic_key": "atr_sl", "title_norm": IG.normalize_title(ATR_TITLE),
+                "ig_media_id": "17896148799412730", "slot": "ig",
+            }]), encoding="utf-8")
+            code, host, _reel, _fetched = self._run_main(
+                run, ledger_path, mock.Mock(side_effect=IG.LiveCheckError("down")))
+            self.assertEqual(code, 0)
+            self.assertFalse(host.called)
+            self.assertEqual((run / "ig_reel.txt").read_text(encoding="utf-8"), "17896148799412730")
 
 
 if __name__ == "__main__":
