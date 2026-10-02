@@ -79,6 +79,8 @@ def chunk(text, limit=MAX_CHARS):
 
 
 def tts_request(text, c, key, prev=None, nxt=None, retries=3):
+    if str((c.get("voice") or {}).get("engine") or "edge").strip().lower() != "elevenlabs":
+        die("ElevenLabs TTS is disabled while voice.engine is edge")
     vid = c["voice"]["voice_id"]
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{vid}"
     payload = {
@@ -165,6 +167,7 @@ def synthesize(text, c):
     engine = str(c["voice"].get("engine", "edge")).strip().lower()
     if engine not in ("edge", "elevenlabs"):
         die(f"Unknown voice.engine '{engine}' in config.json — use 'edge' or 'elevenlabs'.")
+    # A present API key does not override voice.engine. Edge never calls ElevenLabs.
 
     key = os.environ.get("ELEVENLABS_API_KEY")
     if engine == "elevenlabs":

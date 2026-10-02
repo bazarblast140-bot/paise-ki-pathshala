@@ -1,7 +1,7 @@
 """Narration word tolerance and the one-shot beat repair.
 
-A beat may land ±20% from its target. The total may land in 150-190
-(target 160-180). After the first real draft, one repair rewrites only the
+A beat may land ±20% from its target. The total may land in 95-114
+(about 48-58s on Edge MadhurNeural at +0%). After the first real draft, one repair rewrites only the
 beats that missed. An empty or timed-out reply stays inside the 4-call cap
 and never becomes the topic-card template.
 """
@@ -47,7 +47,7 @@ def _pad(n, prefix=""):
     return " ".join(have + rest)
 
 
-def _script(hook=25, pehchan=42, matlab=50, karein=46, hook_line=HOOK):
+def _script(hook=16, pehchan=27, matlab=32, karein=29, hook_line=HOOK):
     return {
         "title": "सेटअप का नियम समझिए",
         "hook_line": hook_line,
@@ -62,37 +62,47 @@ def _script(hook=25, pehchan=42, matlab=50, karein=46, hook_line=HOOK):
 
 class WordWindowTests(unittest.TestCase):
     def test_windows_are_twenty_percent_and_hook_stays_short(self):
-        self.assertEqual(board_short.beat_word_window(25), (20, 30))
-        self.assertEqual(board_short.beat_word_window(42), (34, 50))
-        self.assertEqual(board_short.beat_word_window(50), (40, 60))
-        self.assertEqual(board_short.beat_word_window(46), (37, 55))
-        self.assertEqual(board_short.TOTAL_WORDS, (150, 190))
-        self.assertEqual(board_short.TOTAL_WORD_TARGET, (160, 180))
+        self.assertEqual(board_short.BEAT_WORD_TARGET, {
+            "hook": 16, "pehchan": 27, "matlab": 32, "karein": 29,
+        })
+        self.assertEqual(board_short.beat_word_window(16), (13, 19))
+        self.assertEqual(board_short.beat_word_window(27), (22, 32))
+        self.assertEqual(board_short.beat_word_window(32), (26, 38))
+        self.assertEqual(board_short.beat_word_window(29), (23, 35))
+        self.assertEqual(board_short.TOTAL_WORDS, (95, 114))
+        self.assertEqual(board_short.EDGE_WORDS_PER_SECOND, 1.97)
+        aim = sum(board_short.BEAT_WORD_TARGET.values())
+        self.assertEqual(aim, 104)
+        self.assertGreater(aim / board_short.EDGE_WORDS_PER_SECOND, 48)
+        self.assertLess(aim / board_short.EDGE_WORDS_PER_SECOND, 58)
+        lo, hi = board_short.TOTAL_WORDS
+        self.assertGreater(lo / board_short.EDGE_WORDS_PER_SECOND, 42)
+        self.assertLess(hi / board_short.EDGE_WORDS_PER_SECOND, 62)
         self.assertEqual(board_short.NARRATION_CALL_CAP, 4)
 
     def test_prompt_states_each_target_and_a_short_example(self):
         text = board_short.NARR_SYSTEM
-        self.assertIn("target exactly 25 words", text)
-        self.assertIn("target exactly 42 words", text)
-        self.assertIn("target exactly 50 words", text)
-        self.assertIn("target exactly 46 words", text)
-        self.assertIn("Accept 150-190", text)
-        self.assertIn('"hook":"<exactly 25 words, first sentence is hook_line>"', text)
+        self.assertIn("target exactly 16 words", text)
+        self.assertIn("target exactly 27 words", text)
+        self.assertIn("target exactly 32 words", text)
+        self.assertIn("target exactly 29 words", text)
+        self.assertIn("Accept 95-114", text)
+        self.assertIn('"hook":"<exactly 16 words, first sentence is hook_line>"', text)
 
     def test_off_by_a_few_words_passes_and_a_long_hook_does_not(self):
         topic = _topic()
         # matlab 45 and karein 55 sat outside the old hard windows.
-        near = _script(hook=30, pehchan=34, matlab=45, karein=55)
+        near = _script(hook=19, pehchan=22, matlab=38, karein=35)
         self.assertEqual(board_short.check_narration(near, topic), [])
-        long_hook = _script(hook=41, pehchan=35, matlab=45, karein=55)
+        long_hook = _script(hook=24, pehchan=27, matlab=32, karein=29)
         fails = board_short.check_narration(long_hook, topic)
-        self.assertTrue(any(f.startswith("hook beat 41") for f in fails))
+        self.assertTrue(any(f.startswith("hook beat 24") for f in fails))
         self.assertFalse(any(f.startswith("pehchan") for f in fails))
-        short = _script(hook=25, pehchan=42, matlab=50, karein=20)
+        short = _script(hook=16, pehchan=27, matlab=32, karein=18)
         total = sum(board_short.beat_word_counts(short).values())
-        self.assertLess(total, 150)
+        self.assertLess(total, 95)
         total_fails = board_short.check_narration(short, topic)
-        self.assertTrue(any("150-190" in f for f in total_fails))
+        self.assertTrue(any("95-114" in f for f in total_fails))
 
     def test_invented_number_still_fails(self):
         topic = _topic()
@@ -134,8 +144,8 @@ class RepairLoopTests(unittest.TestCase):
         return calls, result, block
 
     def test_one_repair_rewrites_only_the_failing_beat(self):
-        bad = _script(hook=41, pehchan=42, matlab=50, karein=46)
-        good = _script(hook=25)
+        bad = _script(hook=24, pehchan=27, matlab=32, karein=29)
+        good = _script(hook=16)
         good["beats"]["pehchan"] = "यह बदलना नहीं चाहिए " + _pad(38)
         calls, result, block = self._run([bad, good])
         self.assertIsNone(block)
@@ -145,14 +155,14 @@ class RepairLoopTests(unittest.TestCase):
         self.assertEqual(calls[0]["attempts"], 1)
         self.assertEqual(calls[0]["retries"], 1)
         repair = calls[1]["user"]
-        self.assertIn("REWRITE hook: current 41 words, target exactly 25 words", repair)
+        self.assertIn("REWRITE hook: current 24 words, target exactly 16 words", repair)
         self.assertIn("KEEP pehchan VERBATIM", repair)
         self.assertIn(bad["beats"]["pehchan"], repair)
         self.assertEqual(script["beats"]["pehchan"], bad["beats"]["pehchan"])
         self.assertEqual(script["beats"]["matlab"], bad["beats"]["matlab"])
         self.assertEqual(script["beats"]["karein"], bad["beats"]["karein"])
         self.assertTrue(script["beats"]["hook"].startswith(HOOK))
-        self.assertEqual(len(script["beats"]["hook"].split()), 25)
+        self.assertEqual(len(script["beats"]["hook"].split()), 16)
 
     def test_near_miss_is_accepted_without_a_repair(self):
         near = _script(hook=30, pehchan=34, matlab=45, karein=55)
@@ -187,12 +197,12 @@ class RepairLoopTests(unittest.TestCase):
         self.assertIn("empty or timeout", block["reason"])
 
     def test_a_contentful_repair_is_not_repeated(self):
-        bad = _script(hook=41)
-        still = _script(hook=40)
+        bad = _script(hook=24)
+        still = _script(hook=22)
         calls, result, block = self._run([bad, still, _script()])
         self.assertIsInstance(result, SystemExit)
         self.assertEqual(len(calls), 2)
-        self.assertIn("REWRITE hook: current 41 words, target exactly 25 words", calls[1]["user"])
+        self.assertIn("REWRITE hook: current 24 words, target exactly 16 words", calls[1]["user"])
         self.assertIn("topic-card", block["reason"])
 
 
@@ -229,15 +239,15 @@ def _dark_draft(hook, pehchan, matlab, karein, *, concrete_karein=True):
 
 
 def _dark_fixed():
-    hook = _pad(25, DARK_HOOK + " उदाहरण के लिए भाव 100 पर काला बादल देखिए")
+    hook = _pad(16, DARK_HOOK + " उदाहरण के लिए भाव 100 पर काला बादल देखिए")
     return {
         "title": "काले बादल का मतलब",
         "hook_line": DARK_HOOK,
         "beats": {
             "hook": hook,
-            "pehchan": _pad(42, "नियम"),
-            "matlab": _pad(50, "कदम"),
-            "karein": _pad(46, "गलती"),
+            "pehchan": _pad(27, "नियम"),
+            "matlab": _pad(32, "कदम"),
+            "karein": _pad(29, "गलती"),
         },
     }
 
@@ -261,9 +271,10 @@ class DarkCloudRepairTests(unittest.TestCase):
     def test_logged_failures_repair_vague_beats_and_shrink_the_hook(self):
         cloud = _dark_cloud()
         cases = [
-            {"hook": 47, "pehchan": 42, "matlab": 43, "karein": 46, "keep": ("karein",)},
+            # Logged hooks of 47 and 48 words. Passing beats stay inside the new window.
+            {"hook": 47, "pehchan": 27, "matlab": 32, "karein": 29, "keep": ("karein",)},
             {"hook": 48, "pehchan": 56, "matlab": 64, "karein": 58, "keep": ()},
-            {"hook": 26, "pehchan": 34, "matlab": 33, "karein": 38, "keep": ("karein",)},
+            {"hook": 26, "pehchan": 34, "matlab": 33, "karein": 29, "keep": ("karein",)},
         ]
         for case in cases:
             with self.subTest(hook=case["hook"], total=(
@@ -294,10 +305,10 @@ class DarkCloudRepairTests(unittest.TestCase):
                 self.assertEqual(len(calls), 2)
                 repair = calls[1]
                 self.assertIn(
-                    f"REWRITE hook: current {case['hook']} words, target exactly 25 words (accept 20-30).",
+                    f"REWRITE hook: current {case['hook']} words, target exactly 16 words (accept 13-19).",
                     repair,
                 )
-                self.assertIn("The hook must be 20-30 words.", repair)
+                self.assertIn("The hook must be 13-19 words.", repair)
                 for beat in ("hook", "pehchan", "matlab"):
                     row = next(line for line in repair.splitlines() if line.startswith(f"REWRITE {beat}:"))
                     self.assertIn("This beat is vague: it needs a concrete number, level, or step", row)
@@ -305,8 +316,8 @@ class DarkCloudRepairTests(unittest.TestCase):
                 self.assertNotIn("is vague", karein_row)
                 self.assertIn("evergreen topic with no market data", repair)
                 self.assertIn("उदाहरण", repair)
-                self.assertGreaterEqual(len(script["beats"]["hook"].split()), 20)
-                self.assertLessEqual(len(script["beats"]["hook"].split()), 30)
+                self.assertGreaterEqual(len(script["beats"]["hook"].split()), 13)
+                self.assertLessEqual(len(script["beats"]["hook"].split()), 19)
                 self.assertEqual(board_short.check_narration(script, cloud), [])
                 for beat in case["keep"]:
                     self.assertIn(f"KEEP {beat} VERBATIM", repair)
@@ -328,6 +339,68 @@ class DarkCloudRepairTests(unittest.TestCase):
         self.assertEqual(captured["args"][-2:], ["--format", "short"])
         self.assertIn("board_short.py", [script for _name, script in run_pipeline.SHORT_STAGES])
         self.assertIn("n, source = narration(", inspect.getsource(board_short.main))
+
+
+class DurationRepairTests(unittest.TestCase):
+    def test_a_long_read_is_repaired_once_and_spoken_again(self):
+        topic = _topic()
+        narration = _script(hook=19, pehchan=32, matlab=38, karein=25)
+        spoken = dict(narration["beats"])
+        measures = [
+            {beat: 18.0 for beat in board_short.BEATS},
+            {beat: 13.0 for beat in board_short.BEATS},
+        ]
+        seen = {"speak": 0, "json": 0, "user": ""}
+
+        def measure(_spoken, _c):
+            seen["speak"] += 1
+            return measures[seen["speak"] - 1]
+
+        def fake_json(_system, user, model=None, max_tokens=2000, retries=3, attempts=None):
+            seen["json"] += 1
+            seen["user"] = user
+            self.assertEqual(attempts, 1)
+            self.assertEqual(retries, 1)
+            return _script()
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(board_short, "measure_spoken", side_effect=measure), \
+             mock.patch.object(board_short, "claude_json", side_effect=fake_json):
+            _spoken, fixed, _raw, _times, total = board_short.fit_spoken_duration(
+                spoken, narration, topic, CFG)
+        self.assertEqual(seen["speak"], 2)
+        self.assertEqual(seen["json"], 1)
+        self.assertIn("42-62", seen["user"])
+        self.assertIn("longest", seen["user"])
+        self.assertGreaterEqual(total, 42)
+        self.assertLessEqual(total, 62)
+        self.assertEqual(board_short.check_narration(fixed, topic), [])
+        self.assertEqual(len(fixed["beats"]["hook"].split()), 16)
+
+    def test_a_second_miss_stops_without_another_repair_or_a_template(self):
+        topic = _topic()
+        narration = _script(hook=19, pehchan=32, matlab=38, karein=25)
+        seen = {"json": 0}
+
+        def measure(_spoken, _c):
+            return {beat: 18.0 for beat in board_short.BEATS}
+
+        def fake_json(*_args, **_kwargs):
+            seen["json"] += 1
+            return _script()
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(board_short, "measure_spoken", side_effect=measure), \
+             mock.patch.object(board_short, "claude_json", side_effect=fake_json), \
+             mock.patch.object(
+                 board_short, "fallback_narration",
+                 side_effect=AssertionError("template must not be built"),
+             ):
+            with self.assertRaises(SystemExit):
+                board_short.fit_spoken_duration(dict(narration["beats"]), narration, topic, CFG)
+        self.assertEqual(seen["json"], 1)
 
 
 if __name__ == "__main__":

@@ -148,16 +148,40 @@ class ShortFallbackTests(unittest.TestCase):
     def test_default_voice_choice_is_unchanged(self):
         import common
         data = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
-        self.assertEqual(data["voice"]["engine"], "elevenlabs")
+        self.assertEqual(data["voice"]["engine"], "edge")
         self.assertEqual(data["voice"]["voice_id"], "7qBNUtXRGP0jPi0H4r8k")
+        self.assertEqual(data["voice"]["edge_voice"], "hi-IN-MadhurNeural")
+        self.assertEqual(data["voice"]["edge_rate"], "+0%")
         with mock.patch.dict(os.environ, {"VIDEO_FORMAT": "short"}):
             merged = common.cfg()
-        self.assertEqual(merged["voice"]["engine"], "elevenlabs")
+        self.assertEqual(merged["voice"]["engine"], "edge")
         # Shorts use the Hindi narrator. The long-form id above stays put.
         self.assertEqual(merged["voice"]["voice_name"], "Kamal")
         self.assertEqual(merged["voice"]["voice_id"], "qsz5tTEjPvsiIJZIpM8S")
         self.assertEqual(merged["voice"]["edge_voice"], "hi-IN-MadhurNeural")
         self.assertEqual(merged["voice"]["edge_rate"], "+0%")
+
+    def test_run_voice_does_not_call_elevenlabs_when_engine_is_edge(self):
+        import run_voice
+
+        def post(*_args, **_kwargs):
+            raise AssertionError("ElevenLabs must not be called when engine is edge")
+
+        cfg = {"voice": {
+            "engine": "edge",
+            "voice_id": "7qBNUtXRGP0jPi0H4r8k",
+            "model": "eleven_multilingual_v2",
+            "stability": 0.5,
+            "style": 0.0,
+        }}
+        err = io.StringIO()
+        with mock.patch.dict(os.environ, {
+            "ELEVENLABS_API_KEY": "test-key",
+            "ELEVENLABS_VOICE_ID": "7qBNUtXRGP0jPi0H4r8k",
+        }), mock.patch("requests.post", post), redirect_stderr(err):
+            with self.assertRaises(SystemExit):
+                run_voice.tts_request("नमस्ते नियम", cfg, "test-key")
+        self.assertIn("edge", err.getvalue().lower())
 
     def test_quota_on_a_later_beat_redoes_the_whole_run_on_edge(self):
         posts = {"n": 0, "urls": []}

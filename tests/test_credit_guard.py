@@ -283,6 +283,12 @@ class SlotPaidCallTests(unittest.TestCase):
         window = publish[publish.index("DeepSeek balance"):publish.index("DeepSeek balance") + 400]
         self.assertIn("steps.guard.outputs.taken != 'true'", window)
         self.assertIn("run/credits.json", publish)
+        pipeline = publish[publish.index("name: Run Pipeline"):publish.index("name: Buffer fill")]
+        self.assertIn("GITHUB_TOKEN:", pipeline)
+        self.assertIn("GITHUB_REPOSITORY:", pipeline)
+        watch_fill = watch[watch.index("name: Fill this slot from the buffer"):]
+        self.assertIn("GITHUB_TOKEN:", watch_fill)
+        self.assertIn("GITHUB_REPOSITORY:", watch_fill)
 
 
 # Slots still held on main after #21 lifted 2-Oct 21:00 and 3-Oct 08:30.
@@ -455,7 +461,7 @@ class DeepSeekCapTests(unittest.TestCase):
 
 
 class PreviewVoiceTests(unittest.TestCase):
-    def _speak(self, env, post_status=200):
+    def _speak(self, env, post_status=200, voice=None):
         posts = []
         gets = []
 
@@ -487,7 +493,7 @@ class PreviewVoiceTests(unittest.TestCase):
             os.environ.pop("RENDER_SAMPLE", None)
             for key, value in env.items():
                 os.environ[key] = value
-            engine = board_short.synthesize_short_voices(spoken, VOICE)
+            engine = board_short.synthesize_short_voices(spoken, voice or VOICE)
             meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
             credits = json.loads((Path(tmp) / "credits.json").read_text(encoding="utf-8"))
         return engine, meta, credits, posts, gets, edge.calls
@@ -538,7 +544,7 @@ class PreviewVoiceTests(unittest.TestCase):
 
         engine, meta, credits, _posts, calls = self._speak_with(
             {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public"},
-            get=low, post=post,
+            get=low, post=post, voice=_paid_voice(),
         )
         self.assertEqual(engine, "edge")
         self.assertEqual(credits["tts_engine"], "edge")
@@ -557,7 +563,7 @@ class PreviewVoiceTests(unittest.TestCase):
 
         engine, _meta, credits, posts, calls = self._speak_with(
             {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public"},
-            get=at_floor,
+            get=at_floor, voice=_paid_voice(),
         )
         self.assertEqual(engine, "elevenlabs")
         self.assertGreaterEqual(len(posts), 1)
@@ -572,14 +578,14 @@ class PreviewVoiceTests(unittest.TestCase):
 
         engine, _meta, credits, _posts, _calls = self._speak_with(
             {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public"},
-            get=boom, post=post_no,
+            get=boom, post=post_no, voice=_paid_voice(),
         )
         self.assertEqual(engine, "edge")
         self.assertEqual(credits["tts_engine"], "edge")
         self.assertEqual(credits["elevenlabs_characters_sent"], 0)
         self.assertIn("ConnectionError", credits["tts_reason"])
 
-    def _speak_with(self, env, get=None, post=None):
+    def _speak_with(self, env, get=None, post=None, voice=None):
         posts = []
 
         def default_post(_url, **_kwargs):
@@ -609,7 +615,7 @@ class PreviewVoiceTests(unittest.TestCase):
             os.environ.pop("RENDER_SAMPLE", None)
             for key, value in env.items():
                 os.environ[key] = value
-            engine = board_short.synthesize_short_voices(spoken, VOICE)
+            engine = board_short.synthesize_short_voices(spoken, voice or VOICE)
             meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
             credits = json.loads((Path(tmp) / "credits.json").read_text(encoding="utf-8"))
         return engine, meta, credits, posts, edge.calls
@@ -620,7 +626,7 @@ class PreviewVoiceTests(unittest.TestCase):
             {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "unlisted", "ELEVENLABS_OPT_IN": "1"},
         ):
             with self.subTest(env=env):
-                engine, meta, credits, posts, gets, calls = self._speak(env)
+                engine, meta, credits, posts, gets, calls = self._speak(env, voice=_paid_voice())
                 self.assertEqual(engine, "elevenlabs")
                 self.assertGreaterEqual(len(posts), 1)
                 self.assertEqual(calls, [])
@@ -628,6 +634,43 @@ class PreviewVoiceTests(unittest.TestCase):
                 self.assertGreater(credits["elevenlabs_characters_sent"], 0)
                 self.assertEqual(credits["elevenlabs_characters_remaining"], 100000)
                 self.assertEqual(credits["tts_engine"], "elevenlabs")
+
+    def test_edge_engine_ignores_elevenlabs_secrets(self):
+        edge = json.loads(json.dumps(VOICE))
+        edge["voice"]["engine"] = "edge"
+        edge["voice"]["edge_voice"] = "hi-IN-MadhurNeural"
+        edge["voice"]["edge_rate"] = "+0%"
+        env = {
+            "ELEVENLABS_API_KEY": "test-key",
+            "ELEVENLABS_VOICE_ID": "7qBNUtXRGP0jPi0H4r8k",
+            "PUBLISH_VISIBILITY": "public",
+        }
+        engine, meta, credits, posts, gets, calls = self._speak(env, voice=edge)
+        self.assertEqual(posts, [])
+        self.assertEqual(gets, [])
+        self.assertEqual(engine, "edge")
+        self.assertEqual(meta["engine"], "edge")
+        self.assertFalse(meta["elevenlabs_attempted"])
+        self.assertEqual(credits["elevenlabs_characters_sent"], 0)
+        self.assertEqual(calls[0], ("hi-IN-MadhurNeural", "+0%"))
+        posts.clear()
+
+        def post(*_args, **_kwargs):
+            posts.append("post")
+            raise AssertionError("ElevenLabs must not be called when engine is edge")
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch("requests.post", post), \
+             mock.patch("requests.get", side_effect=AssertionError("no subscription read")):
+            self.assertFalse(board_short._eleven("नमस्ते नियम", Path(tmp) / "a.mp3", edge))
+        self.assertEqual(posts, [])
+
+
+def _paid_voice():
+    voice = json.loads(json.dumps(VOICE))
+    voice["voice"]["engine"] = "elevenlabs"
+    return voice
 
 
 class CreditLogTests(unittest.TestCase):
