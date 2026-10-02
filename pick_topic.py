@@ -138,9 +138,12 @@ def main():
         die(f"saare fresh non-placeholder topics '{flag}' khatam hain. "
             "Templated placeholder topics pick nahi honge — pehle naye verified topics jodo.")
 
-    nxt[flag] = True
-    nxt[at_key] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    bank_path.write_text(json.dumps(bank, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    # A Short is marked used_short only after a successful upload. Picking it,
+    # or blocking on the narration gate, must leave the bank flags alone.
+    if flag != "used_short":
+        nxt[flag] = True
+        nxt[at_key] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        bank_path.write_text(json.dumps(bank, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     save("topic.txt", nxt["topic"])
     save("topic.json", json.dumps(nxt, ensure_ascii=False, indent=1))
     ok(f"Today's topic (#{nxt['id']} {nxt.get('cat','')}): {nxt['topic']}")

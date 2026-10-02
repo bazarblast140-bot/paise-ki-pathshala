@@ -48,10 +48,9 @@ SHORT_STAGES = [
 
 
 def settle_topic(uploaded):
-    """pick_topic topic ko pehle hi used mark kar deta hai. Upload na hua (verify
-    NOT READY / upload error) to use rotation me wapas daalo — 14-Sep-2026 ko
-    nifty_base aise hi bina video ke kharch ho gaya tha. Har fail ginti hoti hai;
-    MAX_TOPIC_TRIES ke baad topic chhoot jaata hai. Upload hone par ginti saaf."""
+    """Long topics are reserved at pick time. A Short is marked used_short only
+    after a successful upload. A failed or blocked Short leaves that flag false
+    unless the topic was already live."""
     if os.environ.get("TOPIC_KEY", "").strip():
         return  # test run: pick_topic ne used mark hi nahi kiya
     try:
@@ -63,7 +62,30 @@ def settle_topic(uploaded):
     t = next((t for t in bank["topics"] if t.get("id") == tid), None)
     flag = "used_short" if video_format() == "short" else "used"
     fails_key = f"{flag}_fails"
-    if not t or (uploaded and fails_key not in t):
+    if not t:
+        return
+    if flag == "used_short":
+        from datetime import datetime, timezone
+        if uploaded:
+            t["used_short"] = True
+            t["used_short_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            t.pop("used_short_fails", None)
+            print(f"[info] upload hua — topic #{tid} used_short")
+        else:
+            t["used_short_fails"] = int(t.get("used_short_fails") or 0) + 1
+            if t.get("used_short"):
+                print(f"[info] upload nahi hua — topic #{tid} pehle se live hai, flag same")
+            else:
+                t["used_short"] = False
+                if t["used_short_fails"] < MAX_TOPIC_TRIES:
+                    print(f"[info] upload nahi hua — topic #{tid} agle slot me dobara "
+                          f"({t['used_short_fails']}/{MAX_TOPIC_TRIES})")
+                else:
+                    print(f"[warn] topic #{tid} {t['used_short_fails']} baar upload nahi hua — "
+                          "used_short ab bhi false")
+        bank_path.write_text(json.dumps(bank, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+        return
+    if uploaded and fails_key not in t:
         return
     if uploaded:
         del t[fails_key]
