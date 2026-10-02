@@ -165,7 +165,7 @@ class RepairLoopTests(unittest.TestCase):
         self.assertEqual(len(script["beats"]["hook"].split()), 16)
 
     def test_near_miss_is_accepted_without_a_repair(self):
-        near = _script(hook=30, pehchan=34, matlab=45, karein=55)
+        near = _script(hook=19, pehchan=22, matlab=38, karein=35)
         calls, result, block = self._run([near])
         self.assertIsNone(block)
         script, source = result
@@ -376,7 +376,9 @@ class DurationRepairTests(unittest.TestCase):
         self.assertGreaterEqual(total, 42)
         self.assertLessEqual(total, 62)
         self.assertEqual(board_short.check_narration(fixed, topic), [])
-        self.assertEqual(len(fixed["beats"]["hook"].split()), 16)
+        # The hook was already the duration target, so the repair leaves it.
+        self.assertEqual(fixed["beats"]["hook"], spoken["hook"])
+        self.assertNotEqual(fixed["beats"]["matlab"], spoken["matlab"])
 
     def test_a_second_miss_stops_without_another_repair_or_a_template(self):
         topic = _topic()
