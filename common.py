@@ -211,7 +211,7 @@ def deepseek_message_text(message):
     return _message_text(reasoning)
 
 
-def claude(system, user, model=None, max_tokens=16000, retries=3, raise_on_truncate=False):
+def claude(system, user, model=None, max_tokens=16000, retries=3, raise_on_truncate=False, attempts=None):
     """One LLM call. Retries transient errors.
 
     raise_on_truncate: a finish_reason of length is an error. The partial body
@@ -255,7 +255,10 @@ def claude(system, user, model=None, max_tokens=16000, retries=3, raise_on_trunc
             extra_body={"thinking": {"type": "disabled"}},
         )
         last = None
-        effective_retries = max(retries, 2)
+        # attempts, when set, is the exact HTTP try count. Narration uses 1 so
+        # an empty or timed-out reply is one call, and the outer loop stays
+        # inside the 4-call cap. The default still retries at least twice.
+        effective_retries = attempts if attempts is not None else max(retries, 2)
         deadline, deadline_token = _begin_deadline()
         try:
             for attempt in range(effective_retries):
@@ -496,29 +499,32 @@ INVALID_AI_VERDICT = {
 }
 
 
-def claude_json(system, user, model=None, max_tokens=4000, retries=3):
+def claude_json(system, user, model=None, max_tokens=4000, retries=3, attempts=None):
     """For agents that must return JSON. Strips fences, extracts JSON blocks, retries.
 
     A transport failure already used claude()'s own attempts inside the shared
     wall-time budget. This loop does not start that ladder again. Bad JSON may
     retry until the same budget is spent. Unavailable reviewer -> NOT READY.
+    attempts, when set, is the exact HTTP try count inside each claude() call.
     """
     c = cfg()
     model = model or c["models"]["script_model"]
     deadline, deadline_token = _begin_deadline()
     try:
-        return _claude_json_loop(system, user, model, max_tokens, retries, deadline)
+        return _claude_json_loop(system, user, model, max_tokens, retries, deadline, attempts)
     finally:
         _end_deadline(deadline_token)
 
 
-def _claude_json_loop(system, user, model, max_tokens, retries, deadline):
+def _claude_json_loop(system, user, model, max_tokens, retries, deadline, attempts=None):
     for attempt in range(retries):
         if time.monotonic() >= deadline - 5:
             print("[warn] LLM wall-time budget exhausted; AI verdict is NOT READY.")
             return dict(INVALID_AI_VERDICT)
         try:
-            raw = claude(system, user, model=model, max_tokens=max_tokens).strip()
+            raw = claude(
+                system, user, model=model, max_tokens=max_tokens, attempts=attempts,
+            ).strip()
         except TruncatedResponse:
             raise
         except RuntimeError as e:
