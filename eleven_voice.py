@@ -358,11 +358,24 @@ def require_paid_tts():
     raise SystemExit(message)
 
 
-def paid_voice_allowed():
-    """ElevenLabs only on a real public publish, or an explicit sample opt-in.
+def _approved_paid_render():
+    """render_only stays unlisted. The locked approved script is still Rudra.
 
-    Unlisted renders, previews, tests, dry runs, and repair retries use Edge.
-    ELEVENLABS_OPT_IN=1 is the only way a sample spends voice credits.
+    PAID_TTS_ENABLED must be the exact string true. A dry run, repair, or
+    preview is refused earlier and stays on Edge.
+    """
+    approved = os.environ.get("APPROVED", "").strip().lower() in {"1", "true", "yes"}
+    locked = bool(os.environ.get("NARRATION_FROM_RUN", "").strip())
+    return approved and locked and paid_tts_enabled()
+
+
+def paid_voice_allowed():
+    """ElevenLabs on a public publish, an approved narration render, or an opt-in.
+
+    A plain unlisted test, a preview, a dry run, and a repair retry use Edge.
+    render_only keeps privacy unlisted and does not upload. That run still
+    voices the approved narration_from_run script with Rudra when
+    PAID_TTS_ENABLED=true. ELEVENLABS_OPT_IN=1 is the only other sample spend.
     """
     if os.environ.get("ELEVENLABS_OPT_IN", "").strip().lower() in _TRUTHY:
         return True
@@ -372,5 +385,7 @@ def paid_voice_allowed():
     for key in ("DRY_RUN", "RENDER_SAMPLE", "SAMPLE_NO_UPLOAD"):
         if os.environ.get(key, "").strip().lower() in _TRUTHY:
             return False
+    if _approved_paid_render():
+        return True
     vis = os.environ.get("PUBLISH_VISIBILITY", "").strip().lower()
     return vis in ("public", "now")

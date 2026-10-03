@@ -233,6 +233,9 @@ FOUR_LIVE_SHARE = {"hook": 18, "pehchan": 26, "matlab": 32, "karein": 29}
 FOUR_LIVE_WORD_TARGET = (105, 112)
 FOUR_LIVE_TOTAL_WORDS = (88, 122)
 FOUR_LIVE_VOICE_SECONDS = (45.0, 65.0)
+# The locked daily-loss script is 138 words. Rudra at 0.90 was measured at
+# 1.9 words/s, about 73s, past the 65s four-beat cap. It is not trimmed.
+APPROVED_VOICE_SECONDS = (45.0, 85.0)
 FOUR_LIVE_MARGIN_S = 60.0
 VISUAL_ALIAS = {"udaharan": "matlab", "galti": "karein"}
 CARD_LINES = {
@@ -356,7 +359,13 @@ def four_margin_words(wps):
 
 
 def live_voice_bounds(topic):
-    """Seconds the pre-TTS estimate and the finished voice must land in."""
+    """Seconds the pre-TTS estimate and the finished voice must land in.
+
+    A hash-locked approved script is voiced as stored. The 65s four-beat cap
+    would discard Rudra after the characters were already spent.
+    """
+    if _approved_narration(None, topic):
+        return APPROVED_VOICE_SECONDS
     if four_live(topic):
         return FOUR_LIVE_VOICE_SECONDS
     return LIVE_VOICE_SECONDS

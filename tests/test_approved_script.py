@@ -614,5 +614,231 @@ def sync_gate_lines(frame):
     return sync_gate.lesson_lines(frame)
 
 
+class _SpeakResp:
+    def __init__(self, status, body, headers=None):
+        self.status_code = status
+        self.headers = headers or {}
+        if isinstance(body, (bytes, bytearray)):
+            self.content = bytes(body)
+            self.text = ""
+            self._json = None
+        else:
+            self._json = body
+            self.text = json.dumps(body)
+            self.content = self.text.encode("utf-8")
+
+    def json(self):
+        return self._json
+
+
+# The render-only dispatch: privacy unlisted, approved script, paid switch on.
+RENDER_ONLY_ENV = {
+    "PAID_TTS_ENABLED": "true",
+    "APPROVED": "true",
+    "NARRATION_FROM_RUN": "37095205924",
+    "PUBLISH_VISIBILITY": "unlisted",
+    "ELEVENLABS_VOICE_ID": "ypnkIsDASPgHZuanrF0q",
+    "ELEVENLABS_API_KEY": "test-key",
+    "VIDEO_FORMAT": "short",
+}
+
+
+class RenderOnlyRudraTests(unittest.TestCase):
+    def tearDown(self):
+        approved_script._LOCKED = {}
+        board_short._reset_voice_state()
+
+    def _quiet_env(self, extra):
+        env = dict(RENDER_ONLY_ENV)
+        env.update(extra)
+        for key in (
+            "DRY_RUN", "RENDER_SAMPLE", "SAMPLE_NO_UPLOAD", "ELEVENLABS_OPT_IN",
+            "PIPELINE_MODE", "PROOF_FREE_AUDIO",
+        ):
+            env.setdefault(key, "")
+        return env
+
+    def test_unlisted_approved_narration_from_run_uses_rudra_at_0_90(self):
+        import eleven_voice
+        self.assertEqual(eleven_voice.LIVE_CREDIT_FLOOR, 1000)
+        spoken = {beat: f"{beat} की तय लाइन।" for beat in ORDER}
+        posts = []
+
+        def get(url, **_kwargs):
+            if "subscription" in url:
+                return _SpeakResp(200, {
+                    "character_count": 0,
+                    "character_limit": 100000,
+                    "status": "active",
+                })
+            return _SpeakResp(200, {"voice_id": "ypnkIsDASPgHZuanrF0q"})
+
+        def post(url, **kwargs):
+            posts.append((url, kwargs.get("json") or {}))
+            return _SpeakResp(200, b"E" * 2500, headers={"character-cost": "12"})
+
+        async def edge(*_args):
+            raise AssertionError("Edge must not speak this approved render")
+
+        env = self._quiet_env({})
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch("requests.get", get), \
+             mock.patch("requests.post", post), \
+             mock.patch.object(board_short, "_edge", edge), \
+             redirect_stdout(io.StringIO()):
+            for key, value in env.items():
+                if value == "":
+                    os.environ.pop(key, None)
+            self.assertTrue(eleven_voice.paid_voice_allowed())
+            c = common.cfg()
+            self.assertEqual(c["voice"]["voice_id"], "ypnkIsDASPgHZuanrF0q")
+            self.assertEqual(c["voice"]["speed"], 0.90)
+            topic = _topic()
+            self.assertTrue(board_short._live_lesson(c))
+            topic["_live_short"] = True
+            self.assertTrue(board_short._needs_paid_proof(topic, c))
+            approved_script.remember({"beats": spoken, "source": "approved"})
+            engine = board_short.synthesize_short_voices(spoken, c, beats=ORDER)
+            credits = json.loads((Path(tmp) / "credits.json").read_text(encoding="utf-8"))
+        self.assertEqual(engine, "elevenlabs")
+        self.assertEqual(len(posts), len(ORDER))
+        for url, payload in posts:
+            self.assertIn("/text-to-speech/ypnkIsDASPgHZuanrF0q", url)
+            self.assertEqual(payload["voice_settings"]["speed"], 0.90)
+        self.assertGreater(credits["elevenlabs_characters_sent"], 0)
+        self.assertEqual(credits["tts_engine"], "elevenlabs")
+        self.assertEqual(credits["deepseek_calls"], 0)
+
+        blocked = [
+            {"APPROVED": "false"},
+            {"PAID_TTS_ENABLED": "false"},
+            {"NARRATION_FROM_RUN": ""},
+            {"DRY_RUN": "1"},
+            {"PIPELINE_MODE": "repair"},
+            {"RENDER_SAMPLE": "1"},
+        ]
+        for extra in blocked:
+            with self.subTest(extra=extra):
+                with mock.patch.dict(os.environ, self._quiet_env(extra), clear=False):
+                    self.assertFalse(eleven_voice.paid_voice_allowed())
+
+    def test_the_1000_floor_and_the_hash_lock_still_stop_before_a_post(self):
+        spoken = {beat: f"{beat} की तय लाइन।" for beat in ORDER}
+        approved_script.remember({"beats": spoken, "source": "approved"})
+
+        def low(_url, **_kwargs):
+            return _SpeakResp(200, {
+                "character_count": 10000 - 999,
+                "character_limit": 10000,
+                "status": "active",
+            })
+
+        def post(*_args, **_kwargs):
+            raise AssertionError("below the floor must not POST")
+
+        env = self._quiet_env({})
+        err = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch("requests.get", low), \
+             mock.patch("requests.post", post), \
+             redirect_stdout(io.StringIO()), redirect_stderr(err):
+            for key, value in env.items():
+                if value == "":
+                    os.environ.pop(key, None)
+            with self.assertRaises(SystemExit):
+                board_short.synthesize_short_voices(spoken, common.cfg(), beats=ORDER)
+        self.assertIn("1000", err.getvalue())
+
+        err = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch("requests.post", side_effect=AssertionError("hash mismatch must not POST")), \
+             redirect_stderr(err):
+            for key, value in env.items():
+                if value == "":
+                    os.environ.pop(key, None)
+            with self.assertRaises(SystemExit):
+                board_short.tts(
+                    spoken["pehchan"] + " बदल गया।",
+                    Path(tmp) / "tts_pehchan.mp3",
+                    common.cfg(),
+                )
+            self.assertEqual(credit_log.snapshot()["elevenlabs_characters_sent"], 0)
+        self.assertIn("0 characters spent", err.getvalue())
+
+    def test_approved_narration_makes_zero_deepseek_calls(self):
+        topic = _topic()
+        env = self._quiet_env({"APPROVED_SCRIPT_DIR": ""})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "narration.json").write_text(
+                json.dumps({
+                    "title": "डेली लॉस लिमिट",
+                    "hook_line": "डेली लॉस लिमिट क्यों ज़रूरी है?",
+                    "beats": {beat: f"{beat} की तय लाइन।" for beat in ORDER},
+                    "source": "approved",
+                }, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            env["APPROVED_SCRIPT_DIR"] = str(root)
+            with mock.patch.dict(os.environ, env, clear=False), \
+                 mock.patch.object(board_short, "RUN", root / "run"), \
+                 mock.patch.object(credit_log, "PATH", root / "credits.json"), \
+                 mock.patch.object(board_short, "claude_json", side_effect=AssertionError("narration DeepSeek")), \
+                 mock.patch.object(common, "claude", side_effect=AssertionError("narration DeepSeek")), \
+                 redirect_stdout(io.StringIO()):
+                (root / "run").mkdir()
+                for key, value in env.items():
+                    if value == "":
+                        os.environ.pop(key, None)
+                script, source = board_short.narration(topic, common.cfg())
+                saved = credit_log.snapshot()
+                self.assertFalse(common.narration_llm_blocked(run_verify.FINAL_SYSTEM))
+                self.assertTrue(common.narration_llm_blocked(board_short.four_live_system(topic)))
+            self.assertEqual(source, "approved")
+            self.assertEqual(script["beats"]["pehchan"], "pehchan की तय लाइन।")
+            self.assertEqual(saved["deepseek_calls"], 0)
+
+    def test_approved_script_keeps_the_rudra_duration_window(self):
+        import auto_agent
+        import quality_check
+        self.assertEqual(board_short.APPROVED_VOICE_SECONDS, (45.0, 85.0))
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NARRATION_FROM_RUN", None)
+            self.assertEqual(board_short.live_voice_bounds(_topic()), (45.0, 65.0))
+        with mock.patch.dict(os.environ, {"NARRATION_FROM_RUN": "37095205924"}, clear=False):
+            self.assertEqual(
+                board_short.live_voice_bounds(_topic()),
+                board_short.APPROVED_VOICE_SECONDS,
+            )
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            (run / "narration.json").write_text(json.dumps({
+                "source": "approved",
+                "live_beats": "four",
+                "beats": {beat: "लाइन" for beat in ORDER},
+            }), encoding="utf-8")
+            with mock.patch.object(quality_check, "RUN", run):
+                self.assertEqual(quality_check.short_duration_bounds(), (45.0, 85.0, "45-85s"))
+            with mock.patch.object(auto_agent, "RUN", run):
+                self.assertEqual(auto_agent.short_duration_window(), (45.0, 85.0, "45-85s"))
+            (run / "narration.json").write_text(json.dumps({
+                "live_beats": "four",
+                "beats": {"hook": "सवाल", "karein": "कदम"},
+            }), encoding="utf-8")
+            with mock.patch.object(quality_check, "RUN", run):
+                self.assertEqual(quality_check.short_duration_bounds(), (45.0, 65.0, "45-65s"))
+            with mock.patch.object(auto_agent, "RUN", run):
+                self.assertEqual(auto_agent.short_duration_window(), (45.0, 65.0, "45-65s"))
+
+
 if __name__ == "__main__":
     unittest.main()
