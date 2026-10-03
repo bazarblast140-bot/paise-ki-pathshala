@@ -6,6 +6,7 @@
     "piercing",
     "confirmation",
     "intraday_volume_price",
-    "option_covered_call"
+    "option_covered_call",
+    "option_protective_put"
   ]
 }
