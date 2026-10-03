@@ -364,6 +364,13 @@ class LatinAndNumberGateTests(unittest.TestCase):
             {"karein": "यह foobar नियम है।"}, order,
         )
         self.assertTrue(any("foobar" in note for note in leftover))
+        journal = "Win rate 40% पर profit expectancy हिसाब कैसे निकलेगा"
+        self.assertEqual(board_short.latin_misread_words(journal), [])
+        charges = "brokerage, STT और slippage के बाद +0.2R घट सकता है"
+        self.assertEqual(board_short.latin_misread_words(charges), [])
+        folded_journal = board_short.fold_roman_words(journal)
+        self.assertNotIn("Win", folded_journal)
+        self.assertIn("विन रेट", folded_journal)
 
         self.assertIn("75", hook_check.extract_numbers("पचहत्तर प्रतिशत गलत है"))
         self.assertIn("89", hook_check.extract_numbers("नवासी लिख दिया"))
