@@ -6,6 +6,7 @@ Each line is `tts_<beat>: <speakable text>`. Newer runs also store
 `narration_<topic>.json`.
 """
 import argparse
+import hashlib
 import io
 import json
 import os
@@ -20,6 +21,50 @@ ORDER = ("hook", "pehchan", "matlab", "karein")
 _LINE = __import__("re").compile(
     r"^(?:tts_)?(hook|pehchan|matlab|udaharan|galti|karein)\s*:\s*(.*)$"
 )
+# Set once, when the dry-run beats are loaded. A later narration.json rewrite
+# must not replace these. Paid TTS dies unless the sent string still matches.
+_LOCKED = {}
+
+
+def beat_digest(text):
+    """sha256 of the exact beat string that may be sent to ElevenLabs."""
+    return hashlib.sha256(str(text or "").encode("utf-8")).hexdigest()
+
+
+def hashes_for(beats):
+    return {beat: beat_digest((beats or {}).get(beat) or "") for beat in ORDER}
+
+
+def remember(script):
+    """Lock the approved beat hashes for this process. Later edits do not move them."""
+    global _LOCKED
+    beats = (script or {}).get("beats") or {}
+    stored = (script or {}).get("approved_hashes") or hashes_for(beats)
+    _LOCKED = {beat: stored[beat] for beat in ORDER if stored.get(beat)}
+    if isinstance(script, dict):
+        script["approved_hashes"] = {beat: _LOCKED[beat] for beat in ORDER if beat in _LOCKED}
+    return script
+
+
+def locked_hashes():
+    return dict(_LOCKED)
+
+
+def refuse_paid_mismatch(text):
+    """Die before any ElevenLabs character unless `text` is an approved beat.
+
+    Run 37098045611 sent the dry-run lines unchanged (tts_text matched, 626
+    characters). The live voice path can still rewrite a later script:
+    fold_roman_words, then a second speak.speakable() inside tts(). Either
+    one changes the sha256, and this refuses the paid call.
+    """
+    if not active():
+        return
+    digest = beat_digest(text)
+    if not _LOCKED or digest not in set(_LOCKED.values()):
+        die(
+            "approved voice text hash mismatch; refusing paid TTS with 0 characters spent"
+        )
 
 
 def _shares():
@@ -125,8 +170,9 @@ def narration_from_payload(payload, topic, run_id=""):
         "narration_fallback": False,
         "review_attempts": 1,
         "from_run": str(run_id or ""),
+        "approved_hashes": hashes_for(beats),
     }
-    return script
+    return remember(script)
 
 
 def active():
@@ -145,6 +191,7 @@ def load_for_topic(topic):
             f"narration_from_run {run_id} has no edge-dry-run script in {directory}"
         )
     script = narration_from_payload(payload, topic, run_id)
+    remember(script)
     if isinstance(topic, dict):
         topic["_approved_script"] = True
     return script

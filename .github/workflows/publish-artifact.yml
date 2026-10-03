@@ -1,0 +1,97 @@
+name: Publish an artifact
+
+# Upload one run's final.mp4 as a NEW YouTube video, then cross-post the Reel.
+# This does not change the privacy of a video that is already on the channel.
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Actions run id whose final.mp4 to upload as a new video"
+        required: true
+        type: string
+      privacy:
+        description: "public or now uploads a new public video. unlisted stays unlisted."
+        required: true
+        type: choice
+        options: [public, unlisted, now]
+        default: public
+
+concurrency:
+  group: paise-ki-pathshala-publish
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Download source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run_id }}
+        run: |
+          rm -rf run
+          mkdir -p run
+          gh run download "$SOURCE_RUN" -D run
+          if [ ! -s run/final.mp4 ]; then
+            MP4="$(find run -type f -name final.mp4 -print -quit)"
+            if [ -n "$MP4" ]; then
+              SRC="$(dirname "$MP4")"
+              cp -f "$SRC"/* run/ 2>/dev/null || true
+            fi
+          fi
+          test -s run/final.mp4
+          test -s run/script.txt
+      - name: Upload a new YouTube video
+        env:
+          VIDEO_FORMAT: short
+          PUBLISH_VISIBILITY: ${{ inputs.privacy == 'now' && 'public' || inputs.privacy }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YT_FIN_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
+          EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
+          APPROVED: "true"
+        run: python publish.py
+      - name: Cross-post the Reel
+        env:
+          VIDEO_FORMAT: short
+          IG_CROSSPOST: "1"
+          APPROVED: "true"
+          IG_USER_ID: ${{ vars.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_SURFACE: ${{ vars.IG_SURFACE || 'facebook' }}
+          IG_API_VERSION: v23.0
+          MEDIA_REPO: ${{ vars.MEDIA_REPO || 'bazarblast140-bot/HEYGEN--INSTAGRAM-' }}
+          MEDIA_REPO_TOKEN: ${{ secrets.MEDIA_REPO_TOKEN || secrets.GITHUB_TOKEN }}
+          ACTIONS_TOKEN_FOR_COMPARE: ${{ secrets.GITHUB_TOKEN }}
+        run: python publish_instagram.py
+      - name: Commit the ledger fill
+        if: ${{ !cancelled() }}
+        run: |
+          if [ ! -s run/uploaded.txt ]; then
+            echo "No YouTube id; ledger not committed"
+            exit 0
+          fi
+          git add -N data/published.json
+          if git diff --quiet -- data/published.json; then
+            echo "Ledger unchanged"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add data/published.json
+            git commit -m "chore: ledger fill from published artifact [skip ci]"
+            git pull --rebase --autostash || true
+            git push
+          fi
