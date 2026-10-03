@@ -47,6 +47,16 @@ SHORT_STAGES = [
 ]
 
 
+def _remember_narration_skip():
+    """The gate blocked this Short. Leave the topic unused and try the next one."""
+    try:
+        key = json.loads((RUN / "topic.json").read_text(encoding="utf-8")).get("key")
+    except (OSError, ValueError, TypeError):
+        return
+    import pick_topic
+    pick_topic.remember_gate_skip(key)
+
+
 def settle_topic(uploaded):
     """Long topics are reserved at pick time. A Short is marked used_short only
     after a successful upload. A failed or blocked Short leaves that flag false
@@ -189,6 +199,8 @@ def main():
         if rc != 0:
             print(f"[STOP] {label} failed (rc={rc}). Pipeline halted.")
             status = f"failed at: {label}"
+            if video_format() == "short" and (RUN / "narration_block.json").exists():
+                _remember_narration_skip()
             break
 
     # optional publish

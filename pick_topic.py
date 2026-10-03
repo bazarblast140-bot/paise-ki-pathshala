@@ -19,6 +19,7 @@ Trend weighting (data/trends.json, written by trend_research.py):
 import json
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 from common import ROOT, save, ok, die, video_format
 from competitor_patterns import (
@@ -91,12 +92,51 @@ def _is_competitor_duplicate(topic):
     return is_near_competitor_duplicate(topic.get("topic", ""), _seen_competitor_phrases())
 
 
-def _pick_fresh(bank, flag, avoid_cats, research, fmt, now=None):
+def load_gate_skips(path=None):
+    """Topic keys whose narration gate already blocked a Short.
+
+    The topic bank stays unused, so a later rewrite can still publish them.
+    Without this list the highest-scoring blocked topic is picked forever
+    and the slot stays empty.
+    """
+    path = path or (ROOT / "data" / "gate_skips.json")
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return []
+    raw = data.get("keys") if isinstance(data, dict) else data
+    if not isinstance(raw, list):
+        return []
+    keys = []
+    for key in raw:
+        text = str(key or "").strip()
+        if text and text not in keys:
+            keys.append(text)
+    return keys
+
+
+def remember_gate_skip(key, path=None):
+    text = str(key or "").strip()
+    if not text:
+        return []
+    path = path or (ROOT / "data" / "gate_skips.json")
+    keys = load_gate_skips(path)
+    if text not in keys:
+        keys.append(text)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"keys": keys}, indent=1) + "\n", encoding="utf-8")
+    print(f"[info] narration gate skipped topic {text} for the next Short")
+    return keys
+
+
+def _pick_fresh(bank, flag, avoid_cats, research, fmt, now=None, skips=None):
     weights, market, own = research[0], research[1], research[2]
     trends = research[3] if len(research) > 3 else None
     blocked = blocked_topic_keys(market, now)
+    skipped = {str(key).strip() for key in (skips or []) if str(key or "").strip()}
     unused = [t for t in bank["topics"]
               if not t.get(flag) and t.get("key") not in blocked
+              and t.get("key") not in skipped
               and not _is_competitor_duplicate(t) and not is_placeholder_topic(t)]
     if not unused:
         return None
@@ -133,7 +173,7 @@ def main():
         return
 
     avoid = _bank_recent_cats(bank, flag, CAT_COOLDOWN)
-    nxt = _pick_fresh(bank, flag, avoid, research, video_format())
+    nxt = _pick_fresh(bank, flag, avoid, research, video_format(), skips=load_gate_skips())
     if not nxt:
         die(f"saare fresh non-placeholder topics '{flag}' khatam hain. "
             "Templated placeholder topics pick nahi honge — pehle naye verified topics jodo.")

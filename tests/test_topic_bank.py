@@ -1,5 +1,6 @@
 """Topic bank shape, placeholder rewrite, visuals, and dated-topic expiry."""
 import json
+import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -11,7 +12,7 @@ from competitor_patterns import (
     blocked_topic_keys, is_near_competitor_duplicate, market_entry_expired,
     market_priority, score_topic,
 )
-from pick_topic import _pick_fresh, is_placeholder_topic
+from pick_topic import _pick_fresh, is_placeholder_topic, remember_gate_skip
 
 ROOT = Path(__file__).resolve().parent.parent
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -182,6 +183,17 @@ class TopicBankTests(unittest.TestCase):
         after_rbi = _pick_fresh(bank, "used_short", [], research, "short", now=datetime(2026, 10, 7, 10, 0, tzinfo=IST))
         self.assertEqual(after_rbi["key"], "ipo_timeline")
         after_ipo = _pick_fresh(bank, "used_short", [], research, "short", now=datetime(2026, 10, 9, 0, 0, tzinfo=IST))
+        skipped = _pick_fresh(
+            bank, "used_short", [], research, "short",
+            now=datetime(2026, 10, 1, 8, 0, tzinfo=IST),
+            skips=["market_rbi_policy_oct2026"],
+        )
+        self.assertEqual(skipped["key"], "ipo_timeline")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "gate_skips.json"
+            remember_gate_skip("risk_journal", path)
+            remember_gate_skip("risk_journal", path)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["keys"], ["risk_journal"])
         self.assertEqual(after_ipo["key"], "pf_sip_power")
         self.assertIn("ipo_timeline", blocked_topic_keys(self.market, datetime(2026, 10, 9, tzinfo=IST)))
         self.assertNotIn("pf_sip_power", blocked_topic_keys(self.market, datetime(2026, 10, 9, tzinfo=IST)))
