@@ -738,7 +738,8 @@ def repeated_text_notes(layers, extra_texts=None, active_caption=""):
     skip = normalize_label(active_caption)
     texts = []
     for layer in layers or []:
-        if layer.get("faint") or layer.get("role") in ("brand", "glow"):
+        # A chart value label is meant to echo the card's own number.
+        if layer.get("faint") or layer.get("role") in ("brand", "glow", "chart", "bar"):
             continue
         if layer.get("text"):
             texts.append(layer.get("text"))
@@ -1585,7 +1586,10 @@ def _paint_labelled_chart(image, figures, panel, text_bottom=None, fill_zone=Fal
     for i, (label, value, x, top, bar_h) in enumerate(planned):
         draw.rounded_rectangle([x, top, x + bar_w, base], 12, fill=colors[i % 4])
         bars.append((float(x), float(top), float(x + bar_w), float(base), float(value)))
-        _text(image, x + bar_w / 2, base + 4, label, (255, 255, 255), 26, anchor="mt", band=False)
+        _text(
+            image, x + bar_w / 2, base + 4, label, (255, 255, 255), 26,
+            anchor="mt", band=False, role="chart",
+        )
     image.chart_bar_boxes = bars
 
 

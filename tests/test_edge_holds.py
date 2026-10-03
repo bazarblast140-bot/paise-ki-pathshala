@@ -270,6 +270,50 @@ class BoardVisualTests(unittest.TestCase):
         quiet = scene_frames.frames_for(blank, "hook", 1, {"mode": "schematic"})[0][0]
         self.assertEqual(quiet.chart_bar_boxes, [])
 
+    def test_chart_labels_may_repeat_the_card_numbers(self):
+        """Dry run 37087619108: ₹4,000 and ₹2,00,000 on the chart and the card."""
+        import io
+        from contextlib import redirect_stderr, redirect_stdout
+        line = "पूँजी ₹2,00,000 पर दिन की हद 2% है, यानी ₹4,000।"
+        topic = _topic("risk_daily_loss_limit")
+        topic["_spoken_beats"] = {"hook": line}
+        topic["_scene_cards"] = {"hook": [line]}
+        topic["_scene_figures"] = {"hook": [["₹2,00,000", "₹4,000", "2%"]]}
+        frame = scene_frames.frames_for(topic, "hook", 1, {"mode": "schematic"})[0][0]
+        notes = scene_frames.frame_layout_notes(frame)
+        self.assertFalse(any(note.startswith("repeated text") for note in notes), notes)
+        chart = {
+            layer.get("text") for layer in frame.text_layers if layer.get("role") == "chart"
+        }
+        self.assertTrue({"₹2,00,000", "₹4,000"} <= chart, chart)
+        echoed = scene_frames._blank()
+        for text, x in (("₹4,000", 180), ("₹2,00,000", 620)):
+            scene_frames._text(echoed, x, 420, text, (255, 255, 255), 64, anchor="lt", band=False)
+            scene_frames._text(
+                echoed, x, 1400, text, (255, 255, 255), 26,
+                anchor="lt", band=False, role="chart",
+            )
+        echoed_notes = scene_frames.frame_layout_notes(echoed)
+        self.assertFalse(any("repeated text" in note for note in echoed_notes), echoed_notes)
+        pair = scene_frames._blank()
+        scene_frames._text(pair, 180, 420, "₹4,000", (255, 255, 255), 64, anchor="lt", band=False)
+        scene_frames._text(pair, 180, 820, "₹4,000", (255, 255, 255), 64, anchor="lt", band=False)
+        self.assertTrue(any(
+            note == "repeated text: ₹4,000" for note in scene_frames.frame_layout_notes(pair)
+        ))
+        beats = {
+            "hook": line,
+            "pehchan": "₹2,00,000 का 2% निकालो, वह ₹4,000 की हद है।",
+            "matlab": "₹4,000 की हद बुरे दिन को पूरे महीने से रोकती है।",
+            "karein": "हद ₹4,000 हिट हो तो टर्मिनल बंद करो।",
+        }
+        narration = {"title": "दिन की हद", "hook_line": "2% नियम", "beats": beats, "source": "llm"}
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            board_short._refuse_craft_hold(topic, {}, narration)
+        self.assertNotIn("craft would HOLD", err.getvalue())
+        self.assertNotIn("repeated text", err.getvalue())
+
     def test_a_card_transition_shows_one_card_and_captions_are_not_burned(self):
         from PIL import Image
         import scene_transition
