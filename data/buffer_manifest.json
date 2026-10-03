@@ -7,6 +7,7 @@
     "confirmation",
     "intraday_volume_price",
     "option_covered_call",
-    "option_protective_put"
+    "option_protective_put",
+    "option_straddle"
   ]
 }
