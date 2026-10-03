@@ -1903,15 +1903,28 @@ def _attach_live_motion(image):
         u = max(0.0, min(1.0, float(u)))
         zoom = 1.0 + 0.03 * u
         width, height = base.size
+        # Zoom the chart plate only. The shaped lines stay whole sprites, so a
+        # wipe cannot cut a glyph that was baked into the moving picture.
+        source = getattr(base, "plate", None)
+        if source is None:
+            source = base
         scaled_w = max(width + 1, int(round(width * zoom)))
         scaled_h = max(height + 1, int(round(height * zoom)))
-        scaled = base.resize((scaled_w, scaled_h), Image.Resampling.BILINEAR)
+        scaled = source.convert("RGB").resize((scaled_w, scaled_h), Image.Resampling.BILINEAR)
         left = max(0, (scaled_w - width) // 2)
         top = max(0, (scaled_h - height) // 2)
         frame = scaled.crop((left, top, left + width, top + height))
+        frame.plate = frame.copy()
+        for layer in getattr(base, "text_layers", None) or []:
+            sprite = layer.get("image")
+            xy = layer.get("xy")
+            if sprite is None or xy is None:
+                continue
+            frame.paste(sprite, xy, sprite)
         for name in (
             "text_layers", "label_boxes", "scene_kind", "panel_box", "panel_fill",
             "chart_bar_boxes", "labelled_graphic_boxes", "shapes", "chart_region",
+            "chart_spec",
         ):
             if hasattr(base, name):
                 setattr(frame, name, getattr(base, name))

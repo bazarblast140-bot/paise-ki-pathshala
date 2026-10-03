@@ -2044,6 +2044,85 @@ def _draw_chrome(img, beat, card, index=0):
         img.panel_fill = 1.0
 
 
+def _bare_word(word):
+    import sync_gate
+    text = sync_gate._alias(str(word or ""))
+    return re.sub(r"[^\dA-Za-z\u0900-\u097F%]", "", text)
+
+
+def _pair_figure(word, nxt):
+    """A Hindi amount or percent that occupies this word and the next."""
+    import sync_gate
+    left, right = _bare_word(word), _bare_word(nxt)
+    if left in sync_gate._ONES and right in ("प्रतिशत", "percent"):
+        return "pct", _norm_num("pct", sync_gate._ONES[left]), 2
+    if left in sync_gate._FRACTION and right in ("प्रतिशत", "percent"):
+        return "pct", _norm_num("pct", sync_gate._FRACTION[left]), 2
+    if left in sync_gate._ONES and right in sync_gate._SCALE:
+        return "inr", _norm_num("inr", sync_gate._ONES[left] * sync_gate._SCALE[right]), 2
+    if left in sync_gate._FRACTION and right in sync_gate._SCALE:
+        return "inr", _norm_num("inr", sync_gate._FRACTION[left] * sync_gate._SCALE[right]), 2
+    return None, None, 1
+
+
+def _allowed_figure_keys(topic, beat, index):
+    """Figures this scene may draw. None when the scene has no installed list."""
+    preset = (topic or {}).get("_scene_figures")
+    if not isinstance(preset, dict) or beat not in preset:
+        return None
+    rows = preset.get(beat) or []
+    if index >= len(rows):
+        return None
+    allowed = set()
+    for label in rows[index] or []:
+        kind, value = _classify_label(label)
+        if kind:
+            allowed.add((kind, value))
+    return allowed
+
+
+def _drop_unsaid_figures(text, allowed):
+    """Remove ₹/% phrases this scene has not reached yet."""
+    words = str(text or "").split()
+    if not words:
+        return ""
+    drop = [False] * len(words)
+    i = 0
+    while i < len(words):
+        kind, value, width = _pair_figure(words[i], words[i + 1] if i + 1 < len(words) else "")
+        if kind:
+            if (kind, value) not in allowed:
+                for j in range(i, min(len(words), i + width)):
+                    drop[j] = True
+            i += width
+            continue
+        kind, value = _classify_label(words[i])
+        if kind and (kind, value) not in allowed:
+            drop[i] = True
+        i += 1
+    return " ".join(word for word, gone in zip(words, drop) if not gone)
+
+
+def _voice_for_scene(topic, beat, index, card):
+    """The card, without a figure whose words have not started."""
+    allowed = _allowed_figure_keys(topic, beat, index)
+    if allowed is None:
+        return card
+    voice = _drop_unsaid_figures(card, allowed)
+    have = {(kind, value) for _label, kind, value in labels_from_voice(voice)}
+    extra = []
+    rows = ((topic or {}).get("_scene_figures") or {}).get(beat) or []
+    for label in (rows[index] if index < len(rows) else []) or []:
+        kind, value = _classify_label(label)
+        if not kind or (kind, value) not in allowed or (kind, value) in have:
+            continue
+        extra.append(str(label))
+        have.add((kind, value))
+    if extra:
+        voice = (voice + " " + " ".join(extra)).strip()
+    return voice
+
+
 def _prefer_installed_labels(topic, beat, index, spec):
     """Use the scene's own figure spelling when it names the same amount."""
     preset = (topic or {}).get("_scene_figures")
@@ -2065,7 +2144,8 @@ def _prefer_installed_labels(topic, beat, index, spec):
 def paint_chart_board(topic, beat, index=0, n=1):
     """One Chart Board frame. The spec is this scene's line, or the render fails."""
     import scene_frames
-    card = scene_frames._scene_card_text(topic, beat, index, n)
+    spoken = scene_frames._scene_card_text(topic, beat, index, n)
+    card = _voice_for_scene(topic, beat, index, spoken)
     spec = _prefer_installed_labels(topic, beat, index, chart_spec_for(card))
     enforce_chart_voice(spec, card)
     img = K.background()
@@ -2079,7 +2159,7 @@ def paint_chart_board(topic, beat, index=0, n=1):
     img.chart_spec = spec
     geom = _draw_geometry(img, spec, index=index)
     _draw_labels(img, spec, geom or {})
-    _draw_chrome(img, beat, card, index=index)
+    _draw_chrome(img, beat, spoken, index=index)
     return img
 
 

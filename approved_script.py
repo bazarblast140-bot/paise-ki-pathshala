@@ -147,6 +147,20 @@ def load_payload(directory, topic_key):
     return None
 
 
+def _opening_hook(beats, topic):
+    """First hook sentence, when it already passes the hook-line check."""
+    import hook_check
+    text = str((beats or {}).get("hook") or "").strip()
+    sentence = __import__("re").split(r"(?<=[।?!])\s+", text, maxsplit=1)[0].strip()
+    if not sentence:
+        return ""
+    allowed = hook_check.allowed_numbers(topic or {})
+    limit = hook_check.hook_word_limit(topic)
+    if hook_check.check_hook_line(sentence, allowed, max_words=limit):
+        return ""
+    return sentence
+
+
 def narration_from_payload(payload, topic, run_id=""):
     """Exact beats. Title falls back to the topic line. Nothing is trimmed."""
     beats_in = (payload or {}).get("beats") or {}
@@ -162,6 +176,8 @@ def narration_from_payload(payload, topic, run_id=""):
     if not title:
         title = " ".join(str((topic or {}).get("topic") or (topic or {}).get("key") or "पाठ").split())
     hook_line = " ".join(str((payload or {}).get("hook_line") or "").split())
+    if not hook_line:
+        hook_line = _opening_hook(beats, topic)
     script = {
         "title": title,
         "hook_line": hook_line,

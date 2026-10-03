@@ -3574,8 +3574,15 @@ def frame_text_boxes(scenes, topic, beat_times, spoken, hook_line, cta, fps=30, 
             if start <= t:
                 index = k
         boxes = list(scene_boxes(index, t))
-        boxes.extend(on_screen_boxes(
-            topic, beat_times, spoken, hook_line, cta, t, audio_words=audio_words))
+        extra = on_screen_boxes(
+            topic, beat_times, spoken, hook_line, cta, t, audio_words=audio_words)
+        layers = getattr(frames[index], "text_layers", None) or []
+        if any(layer.get("role") == "caption" and layer.get("text") for layer in layers):
+            # The Chart Board already paints the cue under the chart. The
+            # unburned cue box would sit on those same pixels.
+            import safe_area
+            extra = [box for box in extra if float(box[1]) >= safe_area.BRAND_TOP - 0.5]
+        boxes.extend(extra)
         text_frames.append((t, boxes))
     return text_frames
 
