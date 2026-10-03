@@ -72,13 +72,15 @@ jobs:
           VIDEO_FORMAT: short
           DRY_RUN: "1"
           LIVE_BEATS: ${{ inputs.beats }}
+          NARRATION_FROM_RUN: ${{ inputs.narration_from_run }}
+          NARRATION_OVERRIDES: ${{ inputs.overrides }}
         run: |
-          ARGS=(--topics "${{ github.event.inputs.topics || 3 }}" --topic-keys "${{ github.event.inputs.topic_keys }}" --beats "${{ inputs.beats }}")
-          if [ "${{ inputs.full }}" = "true" ] || [ -n "${{ inputs.narration_from_run }}" ]; then
+          ARGS=(--topics "${{ github.event.inputs.topics || 3 }}" --topic-keys "${{ inputs.topic_keys }}" --beats "${{ inputs.beats }}")
+          if [ "${{ inputs.full }}" = "true" ] || [ -n "$NARRATION_FROM_RUN" ]; then
             ARGS+=(--full)
           fi
-          if [ -n "${{ inputs.narration_from_run }}" ]; then
-            ARGS+=(--narration-from-run "${{ inputs.narration_from_run }}" --overrides "${{ inputs.overrides }}")
+          if [ -n "$NARRATION_FROM_RUN" ]; then
+            ARGS+=(--narration-from-run "$NARRATION_FROM_RUN")
           fi
           python narration_dry_run.py "${ARGS[@]}"
       - name: Upload Edge dry-run video

@@ -148,16 +148,14 @@ def load_payload(directory, topic_key):
 
 
 def _opening_hook(beats, topic):
-    """First hook sentence, when it already passes the hook-line check."""
-    import hook_check
+    """First sentence of the approved hook. That sentence is the hook line.
+
+    An approved script is not dropped when the opening line is a statement.
+    An empty hook line is what the later gate reports as 'hook line missing'.
+    """
+    del topic
     text = str((beats or {}).get("hook") or "").strip()
     sentence = __import__("re").split(r"(?<=[।?!])\s+", text, maxsplit=1)[0].strip()
-    if not sentence:
-        return ""
-    allowed = hook_check.allowed_numbers(topic or {})
-    limit = hook_check.hook_word_limit(topic)
-    if hook_check.check_hook_line(sentence, allowed, max_words=limit):
-        return ""
     return sentence
 
 

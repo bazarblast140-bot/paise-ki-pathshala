@@ -274,6 +274,8 @@ def main(argv=None):
     parser.add_argument("--overrides", default="", help="JSON object of beat text replacements.")
     parser.add_argument("--approved-dir", default="run/approved_script")
     args = parser.parse_args(argv)
+    if not str(args.overrides or "").strip():
+        args.overrides = os.environ.get("NARRATION_OVERRIDES", "")
     os.environ["VIDEO_FORMAT"] = "short"
     os.environ["DRY_RUN"] = "1"
     os.environ.pop("ELEVENLABS_API_KEY", None)
