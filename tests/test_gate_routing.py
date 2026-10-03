@@ -85,7 +85,7 @@ def _live_script(counts=None, vague=()):
         else:
             beats[beat] = _packed(counts[beat], salts[beat], HOOK if beat == "hook" else "")
     return {
-        "title": "सेटअप का नियम समझिए",
+        "title": "यह नियम है",
         "hook_line": HOOK,
         "beats": beats,
     }
@@ -106,6 +106,8 @@ class VagueRepairTests(unittest.TestCase):
         counts = dict(targets)
         counts["karein"] = _windows(topic)["karein"][0]
         bad = _live_script(counts, vague={"karein"})
+        # The vague beat has no "नियम", so the title promise is a word it does say.
+        bad["title"] = "क्या यह है"
         fails = board_short.narration_gate_failures(bad, topic)
         self.assertEqual(fails, ["vague explanation (no number, level or step): karein"])
         self.assertEqual(board_short.beats_to_rewrite(bad, topic), ["karein"])
@@ -320,7 +322,7 @@ class MarginRecheckTests(unittest.TestCase):
             )
             self.assertEqual(len(beats[beat].split()), count)
         script = {
-            "title": "सेटअप का नियम समझिए",
+            "title": "यह नियम है",
             "hook_line": HOOK,
             "beats": beats,
             "source": "llm",
@@ -381,7 +383,7 @@ class MarginRecheckTests(unittest.TestCase):
             lo, hi = windows[beat]
             self.assertTrue(lo <= count <= hi)
         script = {
-            "title": "सेटअप का नियम समझिए",
+            "title": "यह नियम है",
             "hook_line": HOOK,
             "beats": beats,
         }

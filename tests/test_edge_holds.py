@@ -1,5 +1,6 @@
 """Holds from Edge dry run 37008112236. One test for each fix."""
 import json
+import re
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -344,6 +345,220 @@ class FactWordingTests(unittest.TestCase):
             loss,
         )
         self.assertEqual(score, 0)
+
+
+_CARD_END = re.compile(
+    r"(?:[,，]|(?:^|\s)(?:और|तो|पर|कि|या|लेकिन|मगर|तथा|क्योंकि))\s*$"
+)
+
+
+def _beat_clock(spoken):
+    t = 0.0
+    times = {}
+    for beat in ("hook", "pehchan", "matlab", "karein"):
+        words = str(spoken.get(beat) or "").split()
+        dur = max(4.0, len(words) / 1.9)
+        times[beat] = (t, t + dur)
+        t += dur
+    return times
+
+
+class CaptionSentenceCardTests(unittest.TestCase):
+    def test_every_caption_number_is_on_its_scene_and_the_card_is_not_cut(self):
+        spoken = {
+            "hook": "रोज़ का घाटा ₹4,000 पर क्यों रोकें? पूँजी ₹2 लाख है, और दिन की हद सिर्फ 2% मानी जाती है।",
+            "pehchan": "अब इसे पहचानें: हिसाब सीधा है। उदाहरण: ₹2,00,000 का 2% = ₹4,000। यह ₹4,000 खाते में घाटा दिखने पर वह दिन किताब बंद करने की रेखा है।",
+            "matlab": "इसका मतलब: ₹4,000 की हद पहले तय है। दिन खराब हो तो नुकसान ₹2,00,000 के 2% पर रुक जाता है। बाकी पूँजी अगले दिन के लिए सुरक्षित रहती है।",
+            "karein": "हद पहले लिखो। ₹4,000 हिट हुई तो टर्मिनल बंद। यह 2% उदाहरण है। हद अपनी क्षमता से तय करो। एक बुरा दिन पूरा महीना न बिगाड़े।",
+        }
+        loss = {
+            "hook": "50% घटे तो 100% क्यों चाहिए? यही नुकसान का गणित है। 10% नुकसान के बाद 11% चाहिए।",
+            "pehchan": "इसे पहचानें: पहले 10% घटे तो 11% चाहिए। फिर 20% घटे तो 25% चाहिए। ऐसे ही 50% घटे तो 100% चाहिए।",
+            "matlab": "इसका मतलब: वापसी छोटे हुए पैसे पर गिनी जाती है। उदाहरण: 10% नुकसान के बाद 11% चाहिए। यह 10% नहीं, 11% है।",
+            "karein": "50% गिरने के बाद 100% वापसी चाहिए। 20% पर 25% चाहिए। इसलिए एसएल छोटा रखें, ताकि पूंजी बचे।",
+        }
+        # A following figure stays on its own cue. Joining it onto "2% ="
+        # puts ₹4,000 on the caption before that scene's card has it.
+        example = board_short._cue_texts("उदाहरण: ₹2,00,000 का 2% = ₹4,000।")
+        self.assertFalse(any("2%" in cue and "4,000" in cue for cue in example), example)
+        for script in (spoken, loss):
+            times = _beat_clock(script)
+            audio = []
+            for beat, (t0, t1) in times.items():
+                tokens = script[beat].split()
+                dur = max(1e-6, t1 - t0)
+                for i, word in enumerate(tokens):
+                    start = t0 + dur * (i + 0.5) / len(tokens)
+                    audio.append({"word": word, "start": start, "end": start + 0.15})
+            scenes = scene_pace.plan_scenes(times)
+            board_short._CUE_CACHE.clear()
+            texts, _figures = board_short.scene_cards_for(script, times, scenes, audio)
+            cards = []
+            cursor = {}
+            for scene in scenes:
+                beat = scene["beat"]
+                i = cursor.get(beat, 0)
+                cursor[beat] = i + 1
+                cards.append(texts[beat][i])
+            for card in cards:
+                self.assertFalse(_CARD_END.search(card or ""), card)
+            topic = {"_scene_cards": texts, "_spoken_beats": script}
+            groups = {}
+            for scene in scenes:
+                groups.setdefault(scene["beat"], []).append(scene)
+            for beat, group in groups.items():
+                frames, _flags = scene_frames.frames_for(
+                    {**topic, "_live_short": True}, beat, len(group), {"mode": "schematic"},
+                )
+                for scene, frame in zip(group, frames):
+                    scene["frame"] = frame
+                    blob = scene_frames.frame_card_text(frame)
+                    self.assertNotIn("आंकड़ा ", blob)
+            notes = [
+                note for note in board_short.number_faults_for(scenes, script, times, audio)
+                if note.startswith("caption number")
+            ]
+            self.assertEqual(notes, [])
+
+    def test_numbers_are_highlighted_and_a_chart_needs_two_comparable_figures(self):
+        topic = _topic("loss_recovery")
+        topic["_spoken_beats"] = {
+            "matlab": "उदाहरण: 20% घटे तो 25% चाहिए।",
+            "hook": "₹4,000 की हद पहले तय है।",
+        }
+        pair = scene_frames.frames_for(topic, "matlab", 1, {"mode": "schematic"})[0][0]
+        self.assertGreaterEqual(len(pair.chart_bar_boxes), 2)
+        body = [
+            layer for layer in pair.text_layers
+            if layer.get("text") and layer.get("text") not in ("हिसाब", "एक बात", "पहचान", "जाँच")
+        ]
+        self.assertTrue(body)
+        gold = False
+        for layer in body:
+            sprite = layer.get("image")
+            if sprite is None:
+                continue
+            arr = np.asarray(sprite)
+            if arr.ndim != 3 or arr.shape[2] < 3:
+                continue
+            ink = arr[:, :, 3] > 40 if arr.shape[2] == 4 else arr.max(axis=2) > 40
+            hit = ink & (arr[:, :, 0] > 170) & (arr[:, :, 1] > 120) & (arr[:, :, 2] < 140)
+            if int(hit.sum()) > 8:
+                gold = True
+        self.assertTrue(gold)
+        self.assertIn("20", scene_frames.frame_card_text(pair))
+        self.assertNotIn("आंकड़ा", scene_frames.frame_card_text(pair))
+        lone = _topic("risk_daily_loss_limit")
+        lone["_spoken_beats"] = {"hook": "₹4,000 की हद पहले तय है।"}
+        one = scene_frames.frames_for(lone, "hook", 1, {"mode": "schematic"})[0][0]
+        self.assertEqual(one.chart_bar_boxes, [])
+        rupees = scene_frames.comparable_chart_figures(["₹4,000", "₹2,00,000"])
+        self.assertEqual(rupees, [])
+        percents = scene_frames.comparable_chart_figures(["20%", "25%"])
+        self.assertEqual(len(percents), 2)
+
+
+class TitleTermRepairTests(unittest.TestCase):
+    def test_the_prompt_and_the_repair_name_the_missing_devanagari_term(self):
+        topic = _topic("risk_daily_loss_limit")
+        system = board_short.four_live_system(topic)
+        self.assertIn("डेली लॉस लिमिट", system)
+        self.assertIn("कैसे", system)
+        self.assertIn("hook", system)
+        self.assertIn("karein", system)
+        draft = {
+            "title": "डेली लॉस लिमिट पर रुकें",
+            "hook_line": "रोज़ का घाटा क्यों रोकें?",
+            "beats": {
+                "hook": "रोज़ का घाटा ₹4,000 पर क्यों रोकें?",
+                "pehchan": "उदाहरण: ₹2,00,000 का 2% = ₹4,000।",
+                "matlab": "₹4,000 की हद पहले तय है।",
+                "karein": "₹4,000 हिट हुई तो टर्मिनल बंद।",
+            },
+        }
+        notes = board_short.title_term_notes(draft)
+        self.assertIn("hook missing title term: डेली", notes)
+        self.assertIn("karein missing title term: लिमिट", notes)
+        self.assertEqual(
+            board_short.route_gate_failure("hook missing title term: डेली", board_short.BEATS),
+            ["hook"],
+        )
+        repair = board_short.repair_instructions(
+            draft, ["hook", "karein"], topic,
+            failures=["hook missing title term: डेली", "karein missing title term: लिमिट"],
+        )
+        self.assertIn("डेली लॉस लिमिट", repair)
+        self.assertIn("Missing title term: डेली", repair)
+        self.assertIn("लिमिट", repair)
+        covered = dict(draft)
+        covered["title"] = "डेली लॉस लिमिट"
+        covered["beats"] = dict(draft["beats"])
+        covered["beats"]["hook"] = "डेली लॉस लिमिट पर ₹4,000 क्यों रोकें?"
+        covered["beats"]["karein"] = "डेली लॉस लिमिट पर ₹4,000 हिट हुई तो टर्मिनल बंद।"
+        self.assertEqual(board_short.title_term_notes(covered), [])
+        loss = _topic("loss_recovery")
+        how = {
+            "title": "नुकसान वापस कैसे आए",
+            "beats": {
+                "hook": "50% घटे तो 100% क्यों चाहिए?",
+                "karein": "50% गिरने के बाद 100% वापसी चाहिए।",
+            },
+        }
+        how_notes = board_short.title_term_notes(how)
+        self.assertTrue(any(note == "hook missing title term: कैसे" for note in how_notes))
+        self.assertTrue(any("karein missing title term: कैसे" in note for note in how_notes))
+
+
+class LeakAndDoubleTests(unittest.TestCase):
+    def test_chart_filler_traders_and_latin_sl_are_blocked(self):
+        order = board_short.BEATS
+        chart = board_short.narrator_leak_notes(
+            {"pehchan": "यही नियम चार्ट पर दिखता है।"}, order,
+        )
+        self.assertTrue(chart)
+        shown = board_short.narrator_leak_notes(
+            {"pehchan": "10% और 20% चार्ट पर दिखता है।"}, order,
+        )
+        self.assertTrue(shown)
+        quiet = board_short.narrator_leak_notes(
+            {"pehchan": "10% और 20% का यही नियम है।"}, order,
+        )
+        self.assertEqual(quiet, [])
+        no_chart = board_short.narrator_leak_notes(
+            {"matlab": "यह नियम चार्ट में है।"}, order,
+        )
+        self.assertTrue(no_chart)
+        traders = board_short.narrator_leak_notes(
+            {"karein": "अब आगे ट्रेडर्स यही चेक करते हैं: 50% वापसी चाहिए।"}, order,
+        )
+        self.assertTrue(traders)
+        self.assertEqual(board_short.latin_misread_words("इसलिए SL छोटा रखें"), ["SL"])
+        latin = board_short.narrator_leak_notes(
+            {"karein": "इसलिए SL छोटा रखें।"}, order,
+        )
+        self.assertTrue(any("SL" in note for note in latin))
+        self.assertEqual(board_short.latin_misread_words("कार्ड पर OK लिखा"), ["OK"])
+
+    def test_a_vague_double_is_blocked_and_the_50_percent_pair_is_not(self):
+        topic = _topic("loss_recovery")
+        bad = "20% पर 25% चाहिए, यानी नुकसान बड़ा तो मेहनत दुगनी।"
+        notes = hook_check.fact_contradiction_notes(bad, topic)
+        self.assertTrue(any("25%" in note and "double" in note for note in notes))
+        vague = "नुकसान बड़ा तो मेहनत दुगनी।"
+        self.assertTrue(hook_check.fact_contradiction_notes(vague, topic))
+        backed = "50% घटे तो 100% चाहिए, यानी वापसी दुगनी।"
+        self.assertEqual(hook_check.fact_contradiction_notes(backed, topic), [])
+        pair = "50% घटे तो 100% चाहिए।"
+        self.assertEqual(hook_check.fact_contradiction_notes(pair, topic), [])
+        system = board_short.four_live_system(topic)
+        self.assertIn("25%", system)
+        self.assertIn("दुगनी", system)
+        score, acc = self_review.score_accuracy(
+            {"hook_line": "वापसी क्यों?", "beats": {"karein": bad}},
+            topic,
+        )
+        self.assertEqual(score, 0)
+        self.assertTrue(acc)
 
 
 if __name__ == "__main__":

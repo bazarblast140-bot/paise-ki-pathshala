@@ -78,7 +78,7 @@ def _live_script(counts=None):
         "udaharan": "उदाहरण", "galti": "गलती", "karein": "करें",
     }
     return {
-        "title": "सेटअप का नियम समझिए",
+        "title": "यह नियम है",
         "hook_line": HOOK,
         "beats": {
             beat: _words(counts[beat], salts[beat], HOOK if beat == "hook" else "")
@@ -168,7 +168,7 @@ class DerivedNumberTests(unittest.TestCase):
         }
         self.assertEqual(sum(counts.values()), 177)
         script = {
-            "title": "सेटअप का नियम समझिए",
+            "title": "यह नियम है",
             "hook_line": HOOK,
             "beats": {
                 beat: _packed(counts[beat], {

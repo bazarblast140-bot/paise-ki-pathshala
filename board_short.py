@@ -505,6 +505,7 @@ def check_narration(n, topic):
     if topic.get("_live_short") and not topic.get("_atr"):
         fold_roman_beats(n)
         fails.extend(narrator_leak_notes(beats, order))
+        fails.extend(title_term_notes(n))
     return fails
 
 
@@ -516,6 +517,8 @@ _LEAK_SNIPS = (
     "इन फीचर्स का मतलब समझिए",
     "अब आगे traders क्या check करते हैं",
     "अब आगे ट्रेडर्स क्या चेक करते हैं",
+    "ट्रेडर्स यही चेक करते",
+    "चार्ट पर दिखता",
     "कार्ड पर लिखा है",
     "कार्ड पर दिया हिसाब बोलो",
     "कार्ड का आंकड़ा ही बोलो",
@@ -538,7 +541,11 @@ _BARE_NUMBER = re.compile(
     rf"(?:[+\-−]?\d[\d,]*(?:\.\d+)?%?"
     rf"|(?:{_HINDI_NUMBER})(?:\s+(?:{_HINDI_NUMBER}))?)"
 )
-_LATIN_WORD = re.compile(r"(?<![A-Za-z])([A-Za-z]{3,})(?![A-Za-z])")
+# Two letters too: "SL" is Latin on the card, and Edge then reads it as "इसल".
+_LATIN_WORD = re.compile(r"(?<![A-Za-z])([A-Za-z]{2,})(?![A-Za-z])")
+_CHART_FILLER = re.compile(r"चार्ट\s*पर\s*दिख")
+_CHART_MENTION = re.compile(r"चार्ट|स्क्रीन")
+_TRADER_FILLER = re.compile(r"ट्रेडर्स\s+(?:\S+\s+){0,4}चेक\s+करते")
 # Phrases first, so "daily limit" becomes the lesson words and not "डेली लिमिट".
 _ROMAN_PHRASES = (
     ("daily loss limit", "दिन की नुकसान हद"),
@@ -624,8 +631,9 @@ def _number_dump(sentence):
 
 
 def latin_misread_words(text):
-    """Any Latin word still in the narration. Known words are folded before this runs.
+    """Any Latin word still in the narration or on a card. Known words are folded first.
 
+    Two letters count. SL is not exempt, and neither is any longer leftover.
     daily, limit, terminal, chart, edge and the rest are not exempt. A leftover
     word fails the leak gate so the repair writes it again in Devanagari.
     """
@@ -662,11 +670,22 @@ def fold_roman_beats(narration):
     return narration
 
 
+def _beat_draws_chart(text):
+    """True when this beat's own figures can share one labelled chart."""
+    figs = scene_frames._figure_tokens([text or ""])
+    return len(scene_frames.comparable_chart_figures(figs)) >= 2
+
+
 def narrator_leak_notes(beats, order):
-    """Sentences that instruct the narrator, dump numbers, or leave Latin for the voice."""
+    """Sentences that instruct the narrator, dump numbers, or leave Latin for the voice.
+
+    A chart or screen reference is a leak when this beat draws no chart.
+    "चार्ट पर दिखता" and "ट्रेडर्स यही चेक करते" are narrator filler either way.
+    """
     notes = []
     for beat in order or ():
         text = str((beats or {}).get(beat) or "")
+        draws = _beat_draws_chart(text)
         for sent in re.split(r"[।!?？]+", text):
             line = " ".join(sent.split())
             if not line:
@@ -677,6 +696,10 @@ def narrator_leak_notes(beats, order):
                 leaked = True
             if _number_dump(line):
                 leaked = True
+            if _CHART_FILLER.search(line) or _TRADER_FILLER.search(line):
+                leaked = True
+            if _CHART_MENTION.search(line) and not draws:
+                leaked = True
             latin = latin_misread_words(line)
             if latin:
                 leaked = True
@@ -684,6 +707,32 @@ def narrator_leak_notes(beats, order):
             if leaked:
                 notes.append(f"{beat} narrator leak: {line[:90]}")
                 break
+    return notes
+
+
+def title_term_notes(narration):
+    """Hook and karein must say each title term in the Devanagari the sync gate checks.
+
+    The failure names the missing term, so the repair writes that word and no other.
+    Numbers in the title are not terms: the sync gate already requires those figures.
+    """
+    import sync_gate
+    title = str((narration or {}).get("title") or "")
+    terms = []
+    for term in sync_gate.answer_terms_for(title):
+        if str(term)[:1].isdigit() or term in terms:
+            continue
+        terms.append(term)
+    if not terms:
+        return []
+    beats = (narration or {}).get("beats") or {}
+    notes = []
+    for beat in ("hook", "karein"):
+        blob = set(sync_gate.tokens(str(beats.get(beat) or "")))
+        for term in terms:
+            if sync_gate.term_covered(term, blob):
+                continue
+            notes.append(f"{beat} missing title term: {term}")
     return notes
 
 
@@ -1637,6 +1686,17 @@ def repair_instructions(draft, rewrite, topic=None, failures=None):
                 "for example 100 − 40 = 60 or 100 में से 40. A bare complement is blocked."
             )
             lines.extend(_topic_fact_rules(topic))
+            import sync_gate
+            terms = [
+                term for term in sync_gate.answer_terms_for(str((draft or {}).get("title") or ""))
+                if not str(term)[:1].isdigit()
+            ]
+            if terms:
+                lines.append(
+                    "The hook and the karein must each contain the title's key terms "
+                    "in this Devanagari form: " + ", ".join(terms) + ". "
+                    "For example डेली लॉस लिमिट and कैसे."
+                )
             example = hook_check.worked_example_sentence(topic)
             if example and not _number_dump(example):
                 lines.append(
@@ -1646,6 +1706,17 @@ def repair_instructions(draft, rewrite, topic=None, failures=None):
     gate_fails = list(failures) if failures is not None else (
         narration_gate_failures(draft, topic) if topic is not None else []
     )
+    missing_terms = []
+    for message in gate_fails:
+        found = re.findall(r"missing title term:\s*(\S+)", message)
+        for term in found:
+            if term not in missing_terms:
+                missing_terms.append(term)
+    if missing_terms:
+        lines.append(
+            "Missing title term: " + ", ".join(missing_terms) + ". "
+            "Write each missing term in the hook and in the karein."
+        )
     for beat in order:
         target = targets[beat]
         lo, hi = beat_word_window(target, tol)
@@ -1753,6 +1824,10 @@ def _topic_fact_rules(topic):
             "not on the money that was lost. Say that वापसी छोटे हुए पैसे पर गिनी जाती है. "
             "Do not say the loss itself is counted on the smaller money."
         )
+        lines.append(
+            "Do not say मेहनत दुगनी or any vague double. A 20% loss needs 25%, not double. "
+            "दुगनी is allowed only in the same sentence as the 50% loss that needs 100%."
+        )
     if hook_check._is_option_breakeven_topic(topic):
         lines.append(
             "On a call, between the strike and the breakeven only part of the premium is lost. "
@@ -1838,6 +1913,9 @@ def four_live_system(topic):
         "A sum, difference, product, or ratio of two topic numbers is allowed "
         "only when the same sentence writes that arithmetic and the result matches. "
         "On a loss-recovery lesson, recovery must be L/(1−L). Any other pair is blocked.",
+        "The hook and the karein must each contain the title's key terms in the same "
+        "Devanagari form the gate checks, for example डेली लॉस लिमिट and कैसे. "
+        "A missing term is named in the repair, such as hook missing title term: डेली.",
         *_topic_fact_rules(topic),
         f"Pace coefficient: {wps:.2f} words/second. Target {target_lo}-{target_hi} words "
         f"(about 55-59 seconds on Rudra). The script may land in {lo}-{hi} words.",
@@ -2553,10 +2631,14 @@ def _cue_texts(text):
             glued = (bool(re.search(r"\d", word)) and nxt.strip("।.,?!") in UNITS) or (
                 word in ("करीब", "लगभग", "₹") and bool(re.search(r"\d", nxt))
             )
-            # A later figure gets its own cue, so the subtitle does not say 2350
-            # while the voice is still on 23.5.
-            cur_has_digit = any(re.search(r"\d", item) for item in cur)
-            if re.search(r"\d", word) and cur_has_digit and cur and not glued:
+            # Each figure gets its own cue, including the first, so the subtitle
+            # does not say ₹2,00,000 while the voice is still on the words before it.
+            # Gluing keeps "2%" with the following "पर", not with the figure before it.
+            prev = cur[-1] if cur else ""
+            stuck = prev in ("करीब", "लगभग", "₹") or (
+                bool(re.search(r"\d", prev)) and word.strip("।.,?!") in UNITS
+            )
+            if re.search(r"\d", word) and cur and not stuck:
                 out.append(" ".join(cur))
                 cur = [word]
                 continue
@@ -2580,8 +2662,14 @@ def _cue_texts(text):
             cur = [last]
     merged = []
     for part in out:
-        if merged and len(part.split()) == 1:
-            combo = merged[-1] + " " + part
+        # A one-word orphan can join the previous line. A figure, or the first
+        # word of the next sentence, must not: that is how "2% =" started
+        # showing ₹4,000 while the card had already cut it.
+        orphan = len(part.split()) == 1 and not re.search(r"\d", part)
+        previous = merged[-1] if merged else ""
+        boundary = bool(re.search(r"[।.!?？]$", previous.strip()))
+        if merged and orphan and not boundary:
+            combo = previous + " " + part
             if len(_wrap_caption(combo)) <= 2:
                 merged[-1] = combo
                 continue
@@ -2914,16 +3002,58 @@ def _timed_sentences(rows):
     return sentences
 
 
-def scene_cards_for(spoken, beat_times, scenes, audio_words=None):
-    """One card per scene, from the sentences spoken in that scene.
+_CARD_CONJUNCTIONS = frozenset({
+    "और", "तो", "पर", "कि", "या", "लेकिन", "मगर", "तथा", "क्योंकि",
+})
 
-    A figure is drawn on the scene that contains its spoken start, never on
-    a scene that ends before the word. Dedupe is only inside that scene, so
-    a later scene that says the figure again still shows it. Cue slices are
-    not joined: a card is whole sentences, not "₹2,00,000 ₹4,000,".
+
+def _trim_card_clause(text):
+    """Drop a trailing comma or conjunction left when a sentence is cut."""
+    words = str(text or "").split()
+    while words:
+        bare = words[-1].strip("।.!?？…")
+        if bare.endswith(",") or bare.endswith("，"):
+            bare = bare.rstrip(",，").strip("।.!?？… ")
+            if not bare:
+                words.pop()
+                continue
+            words[-1] = bare
+            continue
+        if bare in _CARD_CONJUNCTIONS:
+            words.pop()
+            continue
+        break
+    return " ".join(words)
+
+
+def _scene_clause(sent, t1):
+    """The full caption sentence, unless a later digit is not said yet.
+
+    Words after the last spoken digit stay, so the card does not end on
+    "पर" or "और". A digit whose start is still ahead of this scene is omitted.
+    """
+    cut = len(sent)
+    for i, (_beat, word, start) in enumerate(sent):
+        if float(start) >= float(t1) - 1e-9 and re.search(r"\d", word or ""):
+            cut = i
+            break
+    if cut == len(sent):
+        text = " ".join(word for _beat, word, _start in sent)
+    else:
+        text = " ".join(word for _beat, word, _start in sent[:cut])
+    return _trim_card_clause(text)
+
+
+def scene_cards_for(spoken, beat_times, scenes, audio_words=None):
+    """One card per scene, from the caption cues on screen during that scene.
+
+    The card shows those cue sentences in full, so every caption number is an
+    on-screen value. A cue that has not started is not painted, and the text
+    does not end on a comma or a conjunction. Dedupe is only inside the scene,
+    so a later scene that says the figure again still shows it.
     """
     import sync_gate
-    sentences = _timed_sentences(_script_word_times(spoken, beat_times, audio_words))
+    cues = plan_cues(spoken, beat_times, audio_words)
     texts = {}
     figures = {}
     for scene in scenes or []:
@@ -2931,37 +3061,28 @@ def scene_cards_for(spoken, beat_times, scenes, audio_words=None):
         t0, t1 = float(scene["start"]), float(scene["end"])
         parts = []
         latest = ""
-        for sent in sentences:
-            if sent[0][0] != beat:
+        for cue in cues:
+            c0, c1 = float(cue["t0"]), float(cue["t1"])
+            text = _trim_card_clause(cue.get("text") or "")
+            if not text:
                 continue
-            ready = [word for _b, word, start in sent if float(start) < t1 - 1e-9]
-            if not ready:
-                continue
-            latest = " ".join(ready)
-            overlaps = any(t0 - 1e-6 <= float(start) < t1 - 1e-6 for _b, _w, start in sent)
-            if not overlaps:
-                continue
-            if latest not in parts:
-                parts.append(latest)
-        # A digit spoken inside this scene stays on this card even when the
-        # rest of its sentence is tagged to the next beat.
-        have = set()
-        for part in parts:
-            have.update(part.split())
-        for sent in sentences:
-            for _b, word, start in sent:
-                if word in have or not re.search(r"\d", word or ""):
-                    continue
-                if t0 - 1e-6 <= float(start) < t1 - 1e-6:
-                    parts.append(word)
-                    have.add(word)
-        # A slice with no word of its own keeps the phrase already being said.
+            if c0 < t1 - 1e-9:
+                latest = text
+            spoken_at = cue.get("word_start")
+            spoken_in = (
+                spoken_at is not None
+                and t0 - 1e-6 <= float(spoken_at) < t1 - 1e-6
+            )
+            # Visible caption, or a figure already said whose cue was clamped
+            # to the next beat. A cue that has not started stays off this card.
+            visible = c1 > t0 + 1e-6 and c0 < t1 - 1e-6
+            if spoken_in or visible:
+                if text not in parts:
+                    parts.append(text)
         if not parts and latest:
             parts.append(latest)
-        blob = " ".join(parts)
+        blob = _trim_card_clause(" ".join(parts))
         texts.setdefault(beat, []).append(blob)
-        # Digit labels only. "दो लाख" stays words until the ₹ figure itself is said,
-        # so a scene that ends first cannot paint 2,00,000 early.
         raw = scene_frames._figure_tokens([blob])
         kept = []
         shown = set()

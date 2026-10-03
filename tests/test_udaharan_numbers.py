@@ -75,7 +75,7 @@ def _script(hook=None, udaharan=None, karein=None):
     if karein is None:
         karein = targets["karein"]
     return {
-        "title": "सेटअप का हिसाब समझिए",
+        "title": "यह नियम है",
         "hook_line": HOOK,
         "beats": {
             "hook": _words(hook, "हुक", HOOK),
@@ -121,7 +121,7 @@ class UdaharanNumberTests(unittest.TestCase):
         targets = _targets()
         pad = targets["udaharan"] - len(("एंट्री 200 एसएल 198 है।").split())
         labelled = {
-            "title": "सेटअप का हिसाब समझिए", "hook_line": HOOK, "beats": {
+            "title": "यह नियम है", "hook_line": HOOK, "beats": {
                 "hook": _words(targets["hook"], "हुक", HOOK),
                 "pehchan": _words(targets["pehchan"], "पहचान"),
                 "matlab": _words(targets["matlab"], "मतलब"),
@@ -173,7 +173,7 @@ class UdaharanNumberTests(unittest.TestCase):
         topic = _topic()
         example = hook_check.worked_example_sentence(topic)
         long = {
-            "title": "सेटअप का हिसाब समझिए",
+            "title": "यह नियम है",
             "hook_line": HOOK,
             "beats": {
                 "hook": _packed(44, "हुक", HOOK),

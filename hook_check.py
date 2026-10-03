@@ -356,12 +356,28 @@ def _is_option_breakeven_topic(topic):
     return "ब्रेकईवन" in blob or "breakeven" in blob.lower()
 
 
+_VAGUE_DOUBLE = re.compile(r"दुगन|दोगुन|दुगुना|दोगुना|double", re.I)
+
+
+def _double_is_backed(sentence):
+    """True only when this sentence's pair is the 50% loss that needs 100%."""
+    values = _sentence_percents(sentence)
+    for i in range(len(values) - 1):
+        loss, rec = values[i], values[i + 1]
+        expected = _recovery_percent(loss)
+        if expected is None:
+            continue
+        if abs(rec - expected) <= 0.51 and abs(rec - 2.0 * loss) <= 0.51:
+            return True
+    return False
+
+
 def fact_contradiction_notes(text, topic):
     """Claims that fight the topic's own facts.
 
     Loss recovery needs more than the fall, and the recovery (not the loss)
     is computed on the smaller base. Between strike and breakeven only part
-    of the premium is lost.
+    of the premium is lost. A vague double is not the recovery formula.
     """
     notes = []
     blob = text or ""
@@ -375,6 +391,15 @@ def fact_contradiction_notes(text, topic):
                 "claim contradicts the topic facts: the recovery, not the loss, "
                 "is computed on the smaller base"
             )
+        for sentence in re.split(r"[।!?？]+", blob):
+            if not _VAGUE_DOUBLE.search(sentence):
+                continue
+            if _double_is_backed(sentence):
+                continue
+            notes.append(
+                "claim contradicts the topic facts: a 20% loss needs 25%, not double"
+            )
+            break
     if _is_option_breakeven_topic(topic) and _BELOW_BREAKEVEN_LOST.search(blob):
         notes.append(
             "claim contradicts the topic facts: between the strike and the breakeven "

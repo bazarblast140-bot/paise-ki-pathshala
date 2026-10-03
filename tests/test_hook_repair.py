@@ -54,7 +54,7 @@ def _on_target(hook):
     }
     beats["hook"] = hook
     return {
-        "title": "सेटअप का नियम समझिए",
+        "title": "यह नियम है",
         "hook_line": HOOK,
         "beats": beats,
     }

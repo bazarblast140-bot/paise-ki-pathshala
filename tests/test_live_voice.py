@@ -131,7 +131,7 @@ def _live_script(counts=None, salts=None):
         "karein": "करें",
     }
     return {
-        "title": "सेटअप का नियम समझिए",
+        "title": "यह नियम है",
         "hook_line": HOOK_LINE,
         "beats": {
             beat: _words(counts[beat], salts[beat], HOOK_LINE if beat == "hook" else "")
