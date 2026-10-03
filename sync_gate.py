@@ -328,8 +328,8 @@ def term_covered(term, full):
     return True
 
 
-def outline_until(beats_text, beat_times, end, beats=None):
-    """Outline words whose spoken center is at or before `end`. Whisper spelling is separate."""
+def outline_until(beats_text, beat_times, end, beats=None, words=None):
+    """Outline words spoken at or before `end`. Whisper spelling is separate."""
     if beats is None:
         beats = tuple(
             b for b in ("hook", "pehchan", "matlab", "udaharan", "galti", "karein")
@@ -343,30 +343,72 @@ def outline_until(beats_text, beat_times, end, beats=None):
         t0, t1 = (float(v) for v in beat_times[beat])
         if t0 >= limit:
             break
-        words = str((beats_text or {}).get(beat) or "").split()
-        if not words or t1 <= limit:
-            parts.extend(words)
+        script = str((beats_text or {}).get(beat) or "").split()
+        if not script or t1 <= limit:
+            parts.extend(script)
+            continue
+        starts = _spoken_starts(script, words, t0, t1) if words else None
+        if starts:
+            for word, start in zip(script, starts):
+                if start is not None and float(start) <= limit:
+                    parts.append(word)
             continue
         dur = max(1e-6, t1 - t0)
-        for i, word in enumerate(words):
-            center = t0 + (i + 0.5) / len(words) * dur
+        for i, word in enumerate(script):
+            center = t0 + (i + 0.5) / len(script) * dur
             if center <= limit:
                 parts.append(word)
     return " ".join(parts)
 
 
-def script_slice(beat_text, beat_t0, beat_t1, start, end):
-    words = str(beat_text or "").split()
-    if not words:
+def _spoken_starts(script_words, audio_words, beat_t0, beat_t1):
+    """Whisper time for each script word. None when the beat has no transcript."""
+    if not audio_words or not script_words:
+        return None
+    import board_short
+    starts = board_short._align_starts(script_words, audio_words, beat_t0, beat_t1)
+    if not starts or all(item is None for item in starts):
+        return None
+    return starts
+
+
+def _slice_by_audio(script_words, audio_words, beat_t0, beat_t1, start, end):
+    starts = _spoken_starts(script_words, audio_words, beat_t0, beat_t1)
+    if not starts:
+        return None
+    chosen = []
+    limit0, limit1 = float(start), float(end)
+    beat_end = float(beat_t1)
+    for i, (word, spoken_at) in enumerate(zip(script_words, starts)):
+        if spoken_at is None:
+            continue
+        nxt = beat_end
+        for later in starts[i + 1:]:
+            if later is not None:
+                nxt = float(later)
+                break
+        if nxt >= limit0 and float(spoken_at) <= limit1:
+            chosen.append(word)
+    return " ".join(chosen)
+
+
+def script_slice(beat_text, beat_t0, beat_t1, start, end, words=None):
+    """Script words for this window. Whisper times win over an even word split."""
+    script_words = str(beat_text or "").split()
+    if not script_words:
         return ""
+    if words:
+        timed = _slice_by_audio(script_words, words, beat_t0, beat_t1, start, end)
+        if timed is not None:
+            return timed
     dur = max(1e-6, float(beat_t1) - float(beat_t0))
-    a = int(round((float(start) - float(beat_t0)) / dur * len(words)))
-    b = int(round((float(end) - float(beat_t0)) / dur * len(words)))
-    a = max(0, min(len(words), a))
-    b = max(0, min(len(words), b))
+    a = int(round((float(start) - float(beat_t0)) / dur * len(script_words)))
+    b = int(round((float(end) - float(beat_t0)) / dur * len(script_words)))
+    a = max(0, min(len(script_words), a))
+    b = max(0, min(len(script_words), b))
     if b <= a:
-        b = min(len(words), a + 1)
-    return " ".join(words[a:b])
+        b = min(len(script_words), a + 1)
+    return " ".join(script_words[a:b])
 
 
 def lesson_lines(frame):
@@ -448,7 +490,7 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
         span = beat_times.get(beat) or (start, end)
         spoken = script_slice(
             (beats_text or {}).get(beat, ""), span[0], span[1],
-            start - WINDOW_PAD, end + WINDOW_PAD,
+            start - WINDOW_PAD, end + WINDOW_PAD, words,
         )
         heard = _window_text(words, start - WINDOW_PAD, end + WINDOW_PAD)
         # Whisper's word clock drifts inside a beat. The scene slice is what
@@ -464,7 +506,7 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
         heard_set = set(tokens(heard))
         # A figure counts once the outline has reached it, or the transcript has.
         # Whisper often writes तेइस as तीस; the outline is the number the scene teaches.
-        outlined = set(tokens(outline_until(beats_text, beat_times, end)))
+        outlined = set(tokens(outline_until(beats_text, beat_times, end, words=words)))
         script_set = set(tokens(spoken))
         missing_numbers = [
             num for num in numbers_in(show)

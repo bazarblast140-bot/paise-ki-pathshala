@@ -83,6 +83,57 @@ class SyncGateTests(unittest.TestCase):
         self.assertEqual(self_review.PART_BAR, 60)
         self.assertEqual(self_review.OVERALL_BAR, 75)
 
+    def test_a_slow_sentence_is_scored_on_its_spoken_window(self):
+        """Dry run 37095205924: 3.4s windows failed while the whole beat passed.
+
+        An even word split reads the later sentence during the earlier audio.
+        The threshold stays 0.5. The window must use the words actually spoken.
+        """
+        self.assertEqual(sync_gate.MIN_RECALL, 0.5)
+        heard = [
+            "सीमा", "पूँजी", "नुकसान", "महीने", "कमाई",
+            "सुरक्षित", "उदाहरण", "मतलब", "रुकता", "रहती",
+        ]
+        missed = [
+            "गुप्तकथा", "अदृश्यपाठ", "लुप्तवाक्य", "छिपाशब्द", "अनसुनावाक्य",
+            "गायबपंक्ति", "ओझलपाठ", "विलीनशब्द", "नदारदवाक्य", "अप्रकटपाठ",
+        ]
+        script = " ".join(heard + missed)
+        beats = {"matlab": script}
+        times = {"matlab": (20.0, 40.0)}
+        audio = []
+        for i, word in enumerate(heard):
+            start = 20.0 + i * 1.8
+            audio.append({"word": word, "start": start, "end": start + 1.7})
+        scene = {
+            "start": 32.2, "end": 35.6, "beat": "matlab", "kind": "matlab",
+            "show": ["रुकता"],
+        }
+        even = sync_gate.script_slice(
+            script, 20.0, 40.0,
+            32.2 - sync_gate.WINDOW_PAD, 35.6 + sync_gate.WINDOW_PAD,
+        )
+        self.assertLess(sync_gate.recall(even, " ".join(heard)), sync_gate.MIN_RECALL)
+        report = sync_gate.check(audio, [scene], beats, times, [])
+        row = report["scenes"][0]
+        self.assertGreaterEqual(row["recall"], sync_gate.MIN_RECALL, row["script"])
+        self.assertNotIn("गुप्तकथा", row["script"])
+        self.assertIn("रुकता", row["script"])
+        spoken = {"matlab": "सीमा पूँजी नुकसान। गुप्तकथा अदृश्यपाठ लुप्तवाक्य।"}
+        cue_audio = [
+            {"word": "सीमा", "start": 20.0, "end": 25.0},
+            {"word": "पूँजी", "start": 25.0, "end": 30.0},
+            {"word": "नुकसान।", "start": 30.0, "end": 36.0},
+            {"word": "गुप्तकथा", "start": 36.2, "end": 37.4},
+            {"word": "अदृश्यपाठ", "start": 37.4, "end": 38.6},
+            {"word": "लुप्तवाक्य।", "start": 38.6, "end": 39.8},
+        ]
+        board_short._CUE_CACHE.clear()
+        cues = board_short.plan_cues(spoken, times, cue_audio)
+        late = [cue for cue in cues if "गुप्तकथा" in cue["text"]]
+        self.assertTrue(late, [cue["text"] for cue in cues])
+        self.assertGreaterEqual(late[0]["t0"], 34.0)
+
     def test_a_failed_transcription_blocks(self):
         empty = sync_gate.check([], self.scenes, self.beats, self.times, self.terms)
         self.assertFalse(empty["ok"])
