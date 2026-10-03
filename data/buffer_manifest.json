@@ -10,6 +10,7 @@
     "option_protective_put",
     "option_straddle",
     "option_strangle",
-    "multibagger_case_eicher"
+    "multibagger_case_eicher",
+    "multibagger_case_bajajfinance"
   ]
 }
