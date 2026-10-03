@@ -723,6 +723,12 @@ class LayoutGateTests(unittest.TestCase):
         self.assertTrue(any("watermark" in note for note in scene_frames.frame_layout_notes(covered)))
 
 
+class GlyphTests(unittest.TestCase):
+    def test_a_formula_arrow_still_draws(self):
+        self.assertNotIn("→", scene_frames.drawable_text("P/E 30 → PEG 1"))
+        self.assertTrue(scene_frames._runs("P/E 30 → PEG 1"))
+
+
 class BedTests(unittest.TestCase):
     def test_bed_is_in_the_ducking_window_and_licensed(self):
         bed = ROOT / "assets" / "bed" / "bed.wav"
