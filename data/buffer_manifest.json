@@ -16,6 +16,7 @@
     "opt_protective_put",
     "opt_theta_decay",
     "intraday_trend_range",
-    "risk_leverage"
+    "risk_leverage",
+    "ipo_drhp"
   ]
 }
