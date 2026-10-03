@@ -13,6 +13,7 @@
     "multibagger_case_eicher",
     "multibagger_case_bajajfinance",
     "multibagger_case_trent",
-    "opt_protective_put"
+    "opt_protective_put",
+    "opt_theta_decay"
   ]
 }
