@@ -1,4 +1,5 @@
 {
   "tag": "buffer-shorts",
-  "items": []
+  "items": [],
+  "skipped_topics": ["dark_cloud"]
 }

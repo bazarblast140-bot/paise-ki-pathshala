@@ -98,6 +98,13 @@ def save_manifest(manifest, path=None):
     file = Path(path) if path else MANIFEST
     file.parent.mkdir(parents=True, exist_ok=True)
     payload = {"tag": RELEASE_TAG, "items": list(manifest.get("items") or [])}
+    skipped = []
+    for key in manifest.get("skipped_topics") or []:
+        text = str(key or "").strip()
+        if text and text not in skipped:
+            skipped.append(text)
+    if skipped:
+        payload["skipped_topics"] = skipped
     file.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -846,17 +853,41 @@ def cmd_fill(last_chance):
 
 # ---------------------------------------------------------------- refill
 def next_evergreen(bank_topics, entries, manifest):
-    """First unused concept topic. At most one is built per refill run."""
+    """First unused concept topic. At most one is built per refill run.
+
+    A topic whose Edge build already failed is listed on the manifest and
+    skipped. The topic bank is not marked used, so a live slot can still
+    pick it later.
+    """
+    skipped = {
+        str(key).strip()
+        for key in (manifest or {}).get("skipped_topics") or []
+        if str(key or "").strip()
+    }
     for topic in bank_topics or []:
         if not isinstance(topic, dict):
             continue
         ok, _why = is_evergreen_topic(topic)
         if not ok:
             continue
+        if str(topic.get("key") or "") in skipped:
+            continue
         if topic_blocked(topic.get("key"), entries, bank_topics, manifest):
             continue
         return topic
     return None
+
+
+def remember_skip(manifest, topic_key):
+    """Remember a failed Edge build. Does not mark the topic bank used."""
+    key = str(topic_key or "").strip()
+    if not key:
+        return manifest
+    skipped = [str(item).strip() for item in (manifest.get("skipped_topics") or []) if str(item or "").strip()]
+    if key not in skipped:
+        skipped.append(key)
+    manifest["skipped_topics"] = skipped
+    return manifest
 
 
 def _mark_bank_used(topic_key):
@@ -985,18 +1016,26 @@ def refill(*, runner=None, store=None, now=None, manifest_path=None):
         runner = runner or default_preview_runner
         rc = runner(topic["key"])
         if rc != 0:
-            print(f"[buffer] Edge build failed rc={rc}; nothing stored", flush=True)
+            remember_skip(manifest, topic.get("key"))
+            save_manifest(manifest, manifest_path)
+            print(f"[buffer] Edge build failed rc={rc}; nothing stored; skip {topic.get('key')}", flush=True)
             return 1
         preview_gates = evaluate_gates(RUN, topic, now=now)
         if not gates_pass(preview_gates):
             failed = [name for name in _GATE_NAMES if not preview_gates[name]["passed"]]
-            print(f"[buffer] gates failed ({', '.join(failed)}); not stored", flush=True)
+            remember_skip(manifest, topic.get("key"))
+            save_manifest(manifest, manifest_path)
+            print(f"[buffer] gates failed ({', '.join(failed)}); not stored; skip {topic.get('key')}", flush=True)
             return 1
         if _voice_engine(RUN) != "edge":
+            remember_skip(manifest, topic.get("key"))
+            save_manifest(manifest, manifest_path)
             print("[buffer] buffer items are Edge only; refusing a non-Edge render", flush=True)
             return 1
         mp4_path = RUN / "final.mp4"
         if not mp4_path.exists():
+            remember_skip(manifest, topic.get("key"))
+            save_manifest(manifest, manifest_path)
             print("[buffer] final.mp4 missing after the Edge render", flush=True)
             return 1
         import publish
@@ -1019,6 +1058,8 @@ def refill(*, runner=None, store=None, now=None, manifest_path=None):
             now=now,
         )
         if item is None:
+            remember_skip(manifest, topic.get("key"))
+            save_manifest(manifest, manifest_path)
             print("[buffer] admit refused the Edge render", flush=True)
             return 1
         save_manifest(manifest, manifest_path)

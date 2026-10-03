@@ -147,6 +147,7 @@ class GateAndFreshnessTests(unittest.TestCase):
         ok, why = buffer_shorts.is_evergreen_topic(series)
         self.assertFalse(ok)
         self.assertIn("market series", why)
+
         live = dict(series, key="dated_price_print")
         ok, why = buffer_shorts.is_evergreen_topic(live)
         self.assertFalse(ok)
@@ -187,6 +188,21 @@ class GateAndFreshnessTests(unittest.TestCase):
             still = buffer_shorts.evaluate_gates(run, live, today=today)
             self.assertFalse(still["freshness"]["passed"])
             self.assertNotEqual(still["freshness"]["mode"], "evergreen")
+
+    def test_failed_edge_topic_is_skipped_without_marking_the_bank(self):
+        first = _topic()
+        second = _topic()
+        second["key"] = "buffer_example_next"
+        manifest = {"tag": "buffer-shorts", "items": [], "skipped_topics": ["dark_cloud", first["key"]]}
+        picked = buffer_shorts.next_evergreen([first, second], [], manifest)
+        self.assertEqual(picked["key"], "buffer_example_next")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "buffer_manifest.json"
+            buffer_shorts.remember_skip(manifest, "dark_cloud")
+            buffer_shorts.save_manifest(manifest, path)
+            saved = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(saved["skipped_topics"], ["dark_cloud", first["key"]])
+        self.assertNotIn("used_short", first)
 
     def test_fallback_narration_and_duplicate_text_fail_closed(self):
         topic = _topic()
@@ -536,6 +552,12 @@ class CreditAndRefillTests(unittest.TestCase):
             self.assertEqual(saved["deepseek_calls"], 0)
             self.assertEqual(saved["elevenlabs_characters_sent"], 0)
             self.assertEqual(os.environ.get("DEEPSEEK_MAX_CALLS"), "4")
+            failed = buffer_shorts.load_manifest(manifest_path)
+            self.assertEqual(buffer_shorts.count_ready(failed), 0)
+            self.assertIn(_topic()["key"], failed.get("skipped_topics") or [])
+            # A later successful render of that same topic is still allowed.
+            failed["skipped_topics"] = []
+            buffer_shorts.save_manifest(failed, manifest_path)
 
             def preview_ok(_key):
                 _write_ready_run(run, _topic())
