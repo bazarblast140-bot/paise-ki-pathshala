@@ -310,5 +310,19 @@
   "topic_key": "atr_sl",
   "status": "withdrawn",
   "note": "WITHDRAWN 02-Oct: fallback narration, never mentions SL (title promise), chart says 2 ATR vs voice 1.5x. Set private, publishAt cleared. Do not republish video id Lx2vFMDO5ws. Clock slot reopened for a new gated Short after the sync gate landed on main."
+ },
+ {
+  "date_ist": "2026-10-03",
+  "slot": "10:29",
+  "video_id": "nxfA4sACCkU",
+  "format": "short",
+  "topic_key": "risk_daily_loss_limit",
+  "voice_engine": "elevenlabs",
+  "deepseek_calls": 1,
+  "deepseek_prompt_tokens": 1341,
+  "deepseek_completion_tokens": 304,
+  "elevenlabs_characters_sent": 626,
+  "elevenlabs_characters_remaining": 4949,
+  "tts_engine": "elevenlabs"
  }
 ]
