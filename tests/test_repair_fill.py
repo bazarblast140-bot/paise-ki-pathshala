@@ -85,6 +85,29 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(repair_fill.count_ready_manifest({}), 0)
 
 
+class NextActionTests(unittest.TestCase):
+    def test_empty_buffer_is_built_before_a_comfortable_slot(self):
+        self.assertEqual(repair_fill.next_action(0, 0, False, 0), "buffer")
+        self.assertEqual(repair_fill.next_action(0, 3, False, 0), "buffer")
+
+    def test_ready_buffer_goes_to_the_slot(self):
+        self.assertEqual(repair_fill.next_action(1, 1, False, 0), "slot")
+
+    def test_failed_slot_builds_more_buffer_before_the_retry(self):
+        self.assertEqual(repair_fill.next_action(0, 3, False, 1), "buffer")
+
+    def test_exhausted_buffer_still_tries_the_slot_then_stops(self):
+        self.assertEqual(repair_fill.next_action(0, repair_fill.MAX_BUFFER_BUILDS, False, 0), "slot")
+        self.assertEqual(repair_fill.next_action(0, repair_fill.MAX_BUFFER_BUILDS, False, repair_fill.SLOT_TRIES), "stop")
+
+    def test_short_lead_posts_the_slot_before_more_buffer(self):
+        self.assertEqual(repair_fill.next_action(0, 0, True, 0), "slot")
+
+    def test_no_slot_only_tops_up_buffer(self):
+        self.assertEqual(repair_fill.next_action(1, 1, False, None), "buffer")
+        self.assertEqual(repair_fill.next_action(2, 1, False, None), "stop")
+
+
 class WorkflowGuardTests(unittest.TestCase):
     def test_dispatcher_is_public_and_does_not_touch_quiz(self):
         text = (ROOT / ".github" / "workflows" / "repair-fill-2026-10-03.yml").read_text(encoding="utf-8")

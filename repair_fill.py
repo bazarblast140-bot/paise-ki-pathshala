@@ -28,8 +28,9 @@ BUFFER_WORKFLOW = "Buffer refill"
 BUFFER_FILE = "buffer-refill.yml"
 SLOT_WORKFLOW = "Paise Ki Pathshala"
 SLOT_FILE = "paise-ki-pathshala.yml"
-MAX_BUFFER_BUILDS = 3
+MAX_BUFFER_BUILDS = 8
 TARGET_READY = 2
+SLOT_TRIES = 2
 # Start the public slot before another buffer build once the lead is this short.
 # The picker itself still requires MIN_LEAD (2h) and will not start a slot inside that lead.
 SLOT_BEFORE_BUFFER = timedelta(hours=3, minutes=30)
@@ -73,6 +74,25 @@ def lead_is_short(now, choice):
         return False
     when = slot_guard._at(choice["date_ist"], choice["slot"])
     return when - now <= SLOT_BEFORE_BUFFER
+
+
+def next_action(ready, builds, lead_short, slot_tries):
+    """buffer, slot, or stop.
+
+    slot_tries is None when no 3 Oct target is far enough ahead.
+    A comfortable lead keeps building Edge Shorts until one is ready,
+    then the public slot can fall back to that Short if the gated
+    narration fails. A failed slot is retried up to SLOT_TRIES. Further
+    Edge builds stay ahead of that retry while nothing is ready.
+    """
+    need_buffer = ready < TARGET_READY and builds < MAX_BUFFER_BUILDS
+    if ready < 1 and need_buffer and not lead_short:
+        return "buffer"
+    if slot_tries is not None and slot_tries < SLOT_TRIES:
+        return "slot"
+    if need_buffer:
+        return "buffer"
+    return "stop"
 
 
 def _run(args, check=True):
@@ -209,7 +229,7 @@ def restore():
         return 1
     urls = []
     builds = 0
-    attempted = set()
+    attempted = {}
     while True:
         now = datetime.now(slot_guard.IST)
         if not on_repair_day(now):
@@ -219,21 +239,22 @@ def restore():
         ready = remote_ready()
         choice = next_public_slot(now, entries)
         key = (choice["date_ist"], choice["slot"]) if choice else None
+        short = lead_is_short(now, choice)
+        tries = attempted.get(key) if key else None
+        action = next_action(ready, builds, short, tries)
         print(
-            f"[repair] ready={ready} builds={builds} next={key} open={open_targets(entries)}",
+            f"[repair] ready={ready} builds={builds} next={key} "
+            f"open={open_targets(entries)} action={action}",
             flush=True,
         )
-        short = lead_is_short(now, choice)
-        need_buffer = ready < TARGET_READY and builds < MAX_BUFFER_BUILDS
-        # One Edge Short before the paid slot, unless the publishAt lead is short.
-        if ready < 1 and need_buffer and not short:
+        if action == "buffer":
             not_before = datetime.now(timezone.utc) - timedelta(seconds=20)
             run = dispatch_and_find(BUFFER_WORKFLOW, BUFFER_FILE, [], not_before)
             urls.append(run.get("url"))
             builds += 1
             watch(run)
             continue
-        if choice and key not in attempted:
+        if action == "slot":
             active = active_runs(SLOT_FILE)
             if active:
                 print(f"[repair] waiting for in-progress slot run {active[0].get('url')}", flush=True)
@@ -246,17 +267,7 @@ def restore():
                 not_before,
             )
             urls.append(run.get("url"))
-            attempted.add(key)
-            watch(run)
-            continue
-        # Top up the Edge buffer after the open slot has been dispatched,
-        # including when the lead is already short, so Slot watch still has
-        # a ready Short for its last-chance fill.
-        if need_buffer:
-            not_before = datetime.now(timezone.utc) - timedelta(seconds=20)
-            run = dispatch_and_find(BUFFER_WORKFLOW, BUFFER_FILE, [], not_before)
-            urls.append(run.get("url"))
-            builds += 1
+            attempted[key] = (attempted.get(key) or 0) + 1
             watch(run)
             continue
         break
