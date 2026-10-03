@@ -5,6 +5,7 @@
     "dark_cloud",
     "piercing",
     "confirmation",
-    "intraday_volume_price"
+    "intraday_volume_price",
+    "option_covered_call"
   ]
 }
