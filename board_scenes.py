@@ -2556,8 +2556,126 @@ def _picture_spec(topic, beat, index, scene_spec):
     return display
 
 
+DAILY_LOSS_KEY = "risk_daily_loss_limit"
+_LOSS_CHROME = (
+    "Ek bura din",
+    "Limit poore din",
+    "Limit hit",
+    "Pehle limit",
+    "ONE BAD DAY",
+    "THE LIMIT",
+    "WHAT IT MEANS",
+    "WHAT TO DO",
+    "EK BURA DIN",
+)
+
+
+def topic_chart_block(topic):
+    """Why this topic must not use the daily-loss curve. Empty when it may render.
+
+    risk_daily_loss_limit is the lesson that curve was drawn for. Every other
+    topic needs its own SCENES entry. A missing entry would paint the crash
+    curve or the flat 3-point line, so the build stops before TTS.
+    """
+    key = str((topic or {}).get("key") or "").strip()
+    if key == DAILY_LOSS_KEY or not key:
+        return ""
+    if key in SCENES:
+        return ""
+    return (
+        f"{key} has no SCENES entry; a beat would fall back to the crash curve "
+        "or a placeholder line"
+    )
+
+
+def _scene_pair(rendered, img):
+    if isinstance(rendered, tuple) and len(rendered) >= 2 and rendered[0] is not None:
+        return rendered[0], rendered[1]
+    return img, img
+
+
+def _paint_topic_scene(topic, beat, index=0, n=1):
+    """The topic's own scene in the top board, and this beat's words underneath."""
+    import safe_area
+    import scene_frames
+    key = str((topic or {}).get("key") or "").strip()
+    spoken = scene_frames._scene_card_text(topic, beat, index, n)
+    img = K.background()
+    plain, annotated = _scene_pair(render_beat(key, beat, img), img)
+    picture = plain if int(index) <= 0 else annotated
+    if picture is None:
+        picture = img
+    picture = picture.copy()
+    picture.label_boxes = []
+    picture.text_layers = []
+    picture.shapes = []
+    picture.labelled_graphic_boxes = []
+    picture.chart_bar_boxes = []
+    lines = _caption_lines(spoken)
+    y = safe_area.SUBTITLE_TOP + 18
+    for line in lines:
+        scene_frames._text(
+            img=picture, x=540, y=y, text=line, fill=(250, 250, 250), size=36,
+            anchor="mt", band=False, role="caption",
+        )
+        y += 70
+    scene_frames._brand(picture)
+    caps = [
+        layer["box"] for layer in (picture.text_layers or [])
+        if layer.get("role") == "caption" and layer.get("box")
+    ]
+    if caps:
+        picture.panel_box = (
+            min(box[0] for box in caps), min(box[1] for box in caps),
+            max(box[2] for box in caps), max(box[3] for box in caps),
+        )
+        picture.panel_fill = scene_frames.panel_fill_fraction(picture)
+    else:
+        picture.panel_fill = 1.0
+    picture.chart_region = tuple(float(v) for v in BOARD)
+    picture.scene_kind = f"chart-{beat}"
+    picture.chart_spec = {
+        "concept": "topic_scene",
+        "rupees": [],
+        "percents": [],
+        "labels": [],
+        "scene": key,
+    }
+    return picture
+
+
+def _paint_topic_cover(topic):
+    """Hook scene for this topic, with cover_hook under the board."""
+    import safe_area
+    import scene_frames
+    key = str((topic or {}).get("key") or "").strip()
+    img = K.background()
+    _plain, annotated = _scene_pair(render_beat(key, "hook", img), img)
+    picture = (annotated if annotated is not None else img).copy()
+    picture.label_boxes = []
+    picture.text_layers = []
+    picture.shapes = []
+    picture.labelled_graphic_boxes = []
+    picture.chart_bar_boxes = []
+    scene_frames._text(
+        picture, 540, safe_area.SUBTITLE_TOP + 18, cover_hook(topic),
+        (255, 255, 255), 48, anchor="mt", band=False, role="caption",
+    )
+    picture.chart_region = tuple(float(v) for v in BOARD)
+    picture.scene_kind = "chart-cover"
+    picture.chart_spec = {
+        "concept": "topic_scene", "rupees": [], "percents": [], "labels": [], "scene": key,
+    }
+    return picture
+
+
 def paint_chart_board(topic, beat, index=0, n=1):
     """One Chart Board frame. The spec is this scene's line, or the render fails."""
+    reason = topic_chart_block(topic)
+    if reason:
+        raise ChartVoiceError(reason)
+    if str((topic or {}).get("key") or "").strip() not in ("", DAILY_LOSS_KEY):
+        return _paint_topic_scene(topic, beat, index, n)
     import scene_frames
     spoken = scene_frames._scene_card_text(topic, beat, index, n)
     card = _voice_for_scene(topic, beat, index, spoken)
@@ -2629,6 +2747,11 @@ def _bold_amount(spec):
 
 def paint_cover(topic):
     """1080x1920 Chart Board cover. Same gate as a beat: numbers match the line."""
+    reason = topic_chart_block(topic)
+    if reason:
+        raise ChartVoiceError(reason)
+    if str((topic or {}).get("key") or "").strip() not in ("", DAILY_LOSS_KEY):
+        return _paint_topic_cover(topic)
     import safe_area
     import scene_frames
     from PIL import ImageDraw

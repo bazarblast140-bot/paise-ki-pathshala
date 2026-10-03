@@ -272,7 +272,8 @@ class CardChartTests(unittest.TestCase):
             if layer.get("text") and not layer.get("faint") and layer.get("role") != "brand"
         ]
         self.assertTrue(body)
-        self.assertGreaterEqual(max(layer["size"] for layer in body), 64)
+        self.assertEqual(frame.chart_spec["concept"], "topic_scene")
+        self.assertEqual(frame.chart_spec["scene"], "loss_recovery")
         blob = scene_frames.frame_card_text(frame)
         self.assertIn("चाहिए", blob)
         self.assertNotRegex(blob, r"₹[\d,]+\s+₹[\d,]+,")
@@ -611,27 +612,18 @@ class CaptionSentenceCardTests(unittest.TestCase):
             "hook": "₹4,000 की हद पहले तय है।",
         }
         pair = scene_frames.frames_for(topic, "matlab", 1, {"mode": "schematic"})[0][0]
-        self.assertGreaterEqual(len(pair.chart_bar_boxes), 2)
-        body = [
-            layer for layer in pair.text_layers
-            if layer.get("text") and layer.get("text") not in ("हिसाब", "एक बात", "पहचान", "जाँच")
-        ]
-        self.assertTrue(body)
-        gold = False
-        for layer in body:
-            sprite = layer.get("image")
-            if sprite is None:
-                continue
-            arr = np.asarray(sprite)
-            if arr.ndim != 3 or arr.shape[2] < 3:
-                continue
-            ink = arr[:, :, 3] > 40 if arr.shape[2] == 4 else arr.max(axis=2) > 40
-            hit = ink & (arr[:, :, 0] > 170) & (arr[:, :, 1] > 120) & (arr[:, :, 2] < 140)
-            if int(hit.sum()) > 8:
-                gold = True
-        self.assertTrue(gold)
+        self.assertEqual(pair.chart_spec["scene"], "loss_recovery")
+        import board_kit
+        plot = np.asarray(pair.convert("RGB"))
+        x0, y0, x1, y1 = board_kit.BOARD
+        crop = plot[int(y0):int(y1), int(x0):int(x1)]
+        red = int(((crop[:, :, 0] > 200) & (crop[:, :, 1] < 90)).sum())
+        green = int(((crop[:, :, 1] > 160) & (crop[:, :, 0] < 80)).sum())
+        self.assertGreater(red, 40)
+        self.assertGreater(green, 40)
         self.assertIn("20", scene_frames.frame_card_text(pair))
         self.assertNotIn("आंकड़ा", scene_frames.frame_card_text(pair))
+        self.assertNotIn("Ek bura din", scene_frames.frame_card_text(pair))
         lone = _topic("risk_daily_loss_limit")
         lone["_spoken_beats"] = {"hook": "₹4,000 की हद पहले तय है।"}
         one = scene_frames.frames_for(lone, "hook", 1, {"mode": "schematic"})[0][0]

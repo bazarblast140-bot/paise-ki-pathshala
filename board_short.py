@@ -793,6 +793,28 @@ _TITLE_FUNCTION = {"कैसे", "करें", "तय", "नियम", "�
 _TITLE_CONNECTORS = {"का", "की", "के"}
 
 
+# Title checks keep Latin when we have no spoken form. Letter-by-letter
+# transliteration ("Piercing" → पइएरकइनग) is not a pronunciation.
+_SPOKEN_TITLE = {
+    "piercing": "पियर्सिंग",
+    "line": "लाइन",
+}
+
+
+def fold_title_words(text):
+    """Known finance English becomes Devanagari. Other Latin title words stay Latin."""
+    out = str(text or "")
+    for src, dst in _ROMAN_PHRASES:
+        out = re.sub(re.escape(src), dst, out, flags=re.I)
+
+    def repl(match):
+        word = match.group(0)
+        mapped = _ROMAN_FOLD.get(word.lower()) or _SPOKEN_TITLE.get(word.lower())
+        return mapped if mapped else word
+
+    return _LATIN_WORD.sub(repl, out)
+
+
 def key_phrase_for(title):
     """The title's longest noun phrase. Function words and figures are not part of it.
 
@@ -800,7 +822,7 @@ def key_phrase_for(title):
     is "नुकसान का गणित". A title that is only function words has no phrase.
     """
     import sync_gate
-    folded = fold_roman_words(title or "")
+    folded = fold_title_words(title or "")
     groups = []
     current = []
     pending = None
@@ -846,20 +868,52 @@ def key_phrase_for(title):
     return " ".join(best)
 
 
+def _token_forms(tok):
+    """Latin, the spoken Hindi, and the finance fold all count as the same word."""
+    forms = {str(tok or ""), str(tok or "").casefold()}
+    low = str(tok or "").casefold()
+    mapped = _ROMAN_FOLD.get(low) or _SPOKEN_TITLE.get(low)
+    if mapped:
+        forms.add(mapped)
+    for latin, hindi in _SPOKEN_TITLE.items():
+        if tok == hindi or low == hindi.casefold():
+            forms.add(latin)
+            forms.add(hindi)
+    for latin, hindi in _ROMAN_FOLD.items():
+        if tok == hindi:
+            forms.add(latin)
+            forms.add(hindi)
+    return {form for form in forms if form}
+
+
 def phrase_in_text(text, phrase):
-    """True when the key phrase is spoken as one stretch, not scattered words."""
+    """True when the key phrase is spoken as one stretch, not scattered words.
+
+    A Latin title word matches its spoken Hindi (पियर्सिंग लाइन) or the Latin
+    spelling. It does not match a letter-by-letter transliteration.
+    """
     phrase = " ".join(str(phrase or "").split())
     if not phrase:
         return False
     if phrase in " ".join(str(text or "").split()):
         return True
     import sync_gate
-    need = sync_gate.tokens(phrase)
-    got = sync_gate.tokens(fold_roman_words(text or ""))
+    folded_phrase = fold_title_words(phrase)
+    folded_text = fold_title_words(text or "")
+    if folded_phrase and folded_phrase in folded_text:
+        return True
+    need = sync_gate.tokens(folded_phrase)
+    got = sync_gate.tokens(folded_text)
     width = len(need)
     if not width:
         return False
-    return any(got[i:i + width] == need for i in range(len(got) - width + 1))
+    if any(got[i:i + width] == need for i in range(len(got) - width + 1)):
+        return True
+    forms = [_token_forms(tok) for tok in need]
+    for i in range(len(got) - width + 1):
+        if all(got[i + j] in forms[j] or got[i + j].casefold() in {f.casefold() for f in forms[j]} for j in range(width)):
+            return True
+    return False
 
 
 def title_term_notes(narration):
@@ -4359,6 +4413,10 @@ def require_scene_frames(topic, spec, narration=None):
     """Die before TTS when a lesson beat has no picture, or craft would hold."""
     if (topic or {}).get("_atr"):
         return
+    import board_scenes
+    reason = board_scenes.topic_chart_block(topic)
+    if reason:
+        die(reason + "; refusing TTS with 0 characters spent")
     order = _lesson(topic)[0] if (topic or {}).get("_live_short") else BEATS
     missing = []
     for beat in order:

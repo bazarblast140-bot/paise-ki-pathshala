@@ -162,12 +162,11 @@ class UdaharanNumberTests(unittest.TestCase):
             shown = " ".join(event["text"] for event in events if event["beat"] == beat)
             self.assertIn("उदाहरण", shown)
             self.assertIn("200", shown)
-        frames, _flags = scene_frames.frames_for(topic, "udaharan", 1, {"mode": "schematic"})
-        blob = " ".join(layer.get("text") or "" for layer in frames[0].text_layers)
-        self.assertIn("उदाहरण", blob)
-        self.assertIn("200", blob)
-        self.assertIn("198", blob)
-        self.assertIn("204", blob)
+        import board_scenes
+        with self.assertRaises(board_scenes.ChartVoiceError) as painted:
+            scene_frames.frames_for(topic, "udaharan", 1, {"mode": "schematic"})
+        self.assertIn("intraday_risk_reward", str(painted.exception))
+        self.assertIn("no SCENES entry", str(painted.exception))
 
     def test_a_312_word_hook_44_script_is_trimmed_into_range(self):
         topic = _topic()

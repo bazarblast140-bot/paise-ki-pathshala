@@ -39,6 +39,10 @@ _TITLE_EQUIV = {
     "daily": ("रोज", "दिन", "डेली", "daily"),
     "loss": ("नुकसान", "घाटा", "लॉस", "हार", "loss"),
     "limit": ("सीमा", "लिमिट", "हद", "limit"),
+    "piercing": ("पियर्सिंग", "piercing"),
+    "line": ("लाइन", "line"),
+    "पियर्सिंग": ("piercing", "पियर्सिंग"),
+    "लाइन": ("line", "लाइन"),
 }
 _WORD = {
     "स्ल": "एसएल", "क्यो": "क्यों", "ल": "एसएल", "एल": "एसएल",
@@ -449,7 +453,7 @@ def answer_terms_for(title, lesson=None):
     if lesson:
         return ["एटीआर", "एसएल", str(lesson.get("distance") or ""), "हलचल"]
     import board_short
-    folded = board_short.fold_roman_words(title or "")
+    folded = board_short.fold_title_words(title or "")
     phrase = board_short.key_phrase_for(title or "")
     found = []
     for tok in content_tokens(phrase):
