@@ -1,5 +1,8 @@
 {
   "tag": "buffer-shorts",
   "items": [],
-  "skipped_topics": ["dark_cloud"]
+  "skipped_topics": [
+    "dark_cloud",
+    "piercing"
+  ]
 }
