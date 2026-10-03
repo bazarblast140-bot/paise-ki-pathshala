@@ -444,11 +444,8 @@ def paint_progress(img, frac):
 
 
 def set_progress(img, frac):
-    """Paint the bar on the still and on the plate the transition moves."""
+    """One bar on the still. The moving plate stays clear so the encode does not draw a second bar."""
     paint_progress(img, frac)
-    plate = getattr(img, "plate", None)
-    if plate is not None and plate is not img:
-        paint_progress(plate, frac)
     img.progress = max(0.0, min(1.0, float(frac)))
 
 

@@ -1757,11 +1757,16 @@ _BEAT_WORD = {
     "karein": "KYA KAREIN",
 }
 _GLOSS = {
-    "hook": "month, then one red day",
-    "pehchan": "daily total, not one trade",
-    "matlab": "loss flattens at the stop",
-    "karein": "write, then stop, then exit",
+    "hook": "Ek bura din = poora mahina loss",
+    "pehchan": "Limit poore din ka total hai",
+    "matlab": "Limit hit = trading band",
+    "karein": "Pehle limit fix karo",
 }
+# About 1.5x the previous chart type. _text shrinks a line that would leave the safe area.
+_HEADLINE_SIZE = 48
+_VALUE_SIZE = 78
+_STOP_SIZE = 48
+_AXIS_SIZE = 40
 
 
 def _norm_num(kind, value):
@@ -1929,9 +1934,8 @@ def _headline(spec, beat):
     percents = [item for item in labels if item["kind"] == "pct"]
     concept = spec.get("concept")
     if concept == "capital_slice" and len(rupees) >= 2 and percents:
-        capital = max(rupees, key=lambda item: item["value"])
-        limit = min(rupees, key=lambda item: item["value"])
-        return f"{percents[0]['text']} OF {capital['text']} = {limit['text']} MAX LOSS"
+        # The two bars already name each amount once. The headline does not repeat them.
+        return "DAILY LOSS LIMIT"
     if concept == "pnl_stop":
         return _stop_caption(spec)
     if concept == "steps":
@@ -1969,25 +1973,35 @@ def _steps_reached(text):
     return reached
 
 
+# A month of closes: small up and down days, then the last day is the crash.
+_MONTH_LEVELS = (
+    0.20, 0.28, 0.24, 0.33, 0.29, 0.38, 0.34, 0.43,
+    0.48, 0.41, 0.50, 0.46, 0.56, 0.51, 0.61, 0.55,
+    0.66, 0.61, 0.72, 0.78,
+)
+_CRASH_LEVEL = 0.28
+
+
 def _equity_curve(img, plot):
-    """A month that rises, then one red day. The crash is the yellow ring."""
+    """A real month: daily ups and downs, then one red day. That day is circled."""
     from PIL import ImageDraw
     left, top, right, bottom = plot
-    n = 22
-    span = right - left - 64
-    room = bottom - top - 70
+    span = right - left - 72
+    room = bottom - top - 80
+    base = bottom - 28
+    n = len(_MONTH_LEVELS)
     pts = []
-    for i in range(n - 1):
-        x = left + 32 + span * i / (n - 1)
-        y = bottom - 36 - room * (0.18 + 0.72 * i / (n - 2))
+    for i, level in enumerate(_MONTH_LEVELS):
+        x = left + 36 + span * i / n
+        y = base - room * level
         pts.append((x, y))
-    crash = (left + 32 + span, bottom - 28)
+    crash = (left + 36 + span, base - room * _CRASH_LEVEL)
     draw = ImageDraw.Draw(img)
-    poly = pts + [crash, (crash[0], bottom - 16), (pts[0][0], bottom - 16)]
+    poly = pts + [crash, (crash[0], base), (pts[0][0], base)]
     draw.polygon(poly, fill=(14, 110, 62))
     polyline(img, pts, GREEN, 8)
-    polyline(img, [pts[-1], crash], RED, 8)
-    ring(img, crash[0], crash[1], 34, 34, YELLOW)
+    polyline(img, [pts[-1], crash], RED, 10)
+    ring(img, crash[0], crash[1], 36, 36, YELLOW)
     return {"plot": plot, "equity": True}
 
 
@@ -2005,33 +2019,40 @@ def _draw_geometry(img, spec, index=0, plot=None, beat="", card=""):
         capital = max(rupees, key=lambda item: item["value"])
         limit = min(rupees, key=lambda item: item["value"])
         left, top, right, bottom = plot
+        # Horizontal rows across the box. Thickness stays under the capital width
+        # so the large-vs-small test compares widths, and the red bar stays a bar.
+        gap = 48
+        bracket = 84
+        bar_h = 132.0
+        span = right - left
         ratio = float(limit["value"]) / float(capital["value"]) if capital["value"] else 0.02
-        room = (bottom - top) - 24
-        large_h = room
-        small_h = max(4.0, room * ratio)
-        bw = 78
-        base = bottom - 12
-        x_big = left + 210
-        x_small = x_big + bw + 70
-        # The callout sits beside the bars. It is not a bar, so the ratio stays the values.
-        draw.rounded_rectangle(
-            [left + (right - left) * 0.52, top + 24, right - 8, bottom - 12],
-            22, fill=(36, 32, 12), outline=YELLOW, width=4,
-        )
-        draw.rounded_rectangle([x_big, base - large_h, x_big + bw, base], 16, fill=GREEN)
-        draw.rounded_rectangle([x_small, base - small_h, x_small + bw, base], 10, fill=YELLOW)
+        # Wide enough to see on a phone, still under 1/8 of the capital bar.
+        small_w = max(108.0, span * ratio)
+        if span / max(small_w, 1.0) <= 8.0:
+            small_w = span / 8.6
+        group = bar_h + gap + bar_h + bracket
+        y_big = top + max(8.0, ((bottom - top) - group) / 2.0)
+        y_small = y_big + bar_h + gap
+        draw.rounded_rectangle([left, y_big, right, y_big + bar_h], 18, fill=GREEN)
+        draw.rounded_rectangle([left, y_small, right, y_small + bar_h], 18, fill=(22, 28, 42))
+        draw.rounded_rectangle([left, y_small, left + small_w, y_small + bar_h], 18, fill=RED)
+        # Zoom bracket under the red bar only. Not a bar, so the width ratio stays the values.
+        by = y_small + bar_h + 14
+        draw.line([(left, by), (left, by + 16)], fill=YELLOW, width=5)
+        draw.line([(left, by + 16), (left + small_w, by + 16)], fill=YELLOW, width=5)
+        draw.line([(left + small_w, by), (left + small_w, by + 16)], fill=YELLOW, width=5)
         img.chart_bar_boxes = [
-            (float(x_big), float(base - large_h), float(x_big + bw), float(base), float(capital["value"])),
-            (float(x_small), float(base - small_h), float(x_small + bw), float(base), float(limit["value"])),
+            (float(left), float(y_big), float(right), float(y_big + bar_h), float(capital["value"])),
+            (float(left), float(y_small), float(left + small_w), float(y_small + bar_h), float(limit["value"])),
         ]
-        ring(img, x_small + bw / 2, base - small_h, 26, 18, YELLOW)
-        arrow(img, (x_small + bw + 8, base - small_h), (left + (right - left) * 0.56, top + 80), YELLOW, w=8, head=26)
         return {
             "plot": plot,
             "capital": capital,
             "limit": limit,
             "percents": percents,
             "bars": img.chart_bar_boxes,
+            "small_w": small_w,
+            "bracket_y": by + 22,
         }
     if concept == "compare" and len(labels) >= 2:
         rows = percents if len(percents) >= 2 else rupees
@@ -2068,10 +2089,15 @@ def _draw_geometry(img, spec, index=0, plot=None, beat="", card=""):
         return {"stop_y": stop_y, "plot": plot, "zero_y": ax.y(0), "ax": ax}
     if concept == "steps":
         left, top, right, bottom = plot
-        reached = _steps_reached(card)
+        reached = spec.get("_reached")
+        if reached is None:
+            reached = _steps_reached(card)
+        reached = int(reached)
+        badge = spec.get("_badge") or ""
+        reserve = 108 if badge else 0
         gap = 22
         count = 3
-        room = bottom - top
+        room = (bottom - reserve) - top
         row_h = (room - gap * (count - 1)) / count
         rows = []
         for i in range(count):
@@ -2079,7 +2105,18 @@ def _draw_geometry(img, spec, index=0, plot=None, beat="", card=""):
             tone = (18, 78, 48) if i < reached else (18, 26, 40)
             draw.rounded_rectangle([left, y, right, y + row_h], 18, fill=tone, outline=(90, 120, 160), width=4)
             rows.append((left, y, right, y + row_h))
-        return {"plot": plot, "rows": rows, "reached": reached, "step_card": card}
+        if badge:
+            draw.rounded_rectangle(
+                [left, bottom - 96, right, bottom - 8], 16, fill=(48, 36, 8), outline=YELLOW, width=4,
+            )
+        return {
+            "plot": plot,
+            "rows": rows,
+            "reached": reached,
+            "prev_reached": int(spec.get("_prev_reached") or 0),
+            "badge": badge,
+            "step_card": card,
+        }
     if beat == "hook" and concept in ("plain", "level"):
         return _equity_curve(img, plot)
     if concept == "level" and labels:
@@ -2136,39 +2173,44 @@ def _draw_labels(img, spec, geom, beat="", card=""):
         capital = geom["capital"]
         limit = geom["limit"]
         percents = geom.get("percents") or []
-        left, top, right, _bottom = plot
-        col = left + (right - left) * 0.56 + 24
-        _place(img, col, top + 28, "Capital", (236, 236, 236), 28, role="axis")
-        _place(img, col, top + 68, capital["text"], gold, 52)
-        _place(img, col, top + 150, "Daily limit", (236, 236, 236), 28, role="axis")
-        _place(img, col, top + 190, limit["text"], gold, 52)
-        if percents:
-            _place(img, col, top + 268, percents[0]["text"], gold, 40)
-        call = "sirf " + (percents[0]["text"] if percents else "") + " = " + limit["text"]
-        _place(img, col, top + 330, call.strip(), gold, 34)
+        bars = geom.get("bars") or []
+        if len(bars) >= 2:
+            big, small = bars[0], bars[1]
+            cy_big = (big[1] + big[3]) / 2
+            cy_small = (small[1] + small[3]) / 2
+            # One spelling of each amount. The name sits beside it, not a second copy.
+            _place(img, big[0] + 28, cy_big, "Capital", (255, 255, 255), 42, anchor="lm", role="axis")
+            _place(img, big[0] + 220, cy_big, capital["text"], gold, _VALUE_SIZE, anchor="lm")
+            _place(img, small[2] + 28, cy_small, "Daily limit", (255, 255, 255), 40, anchor="lm", role="axis")
+            _place(img, small[2] + 280, cy_small, limit["text"], gold, _VALUE_SIZE, anchor="lm")
+            if percents:
+                _place(
+                    img, small[0] + 8, geom.get("bracket_y", small[3] + 28),
+                    "sirf " + percents[0]["text"], gold, 44, anchor="lt",
+                )
         return
     if concept == "compare" and geom.get("bars"):
         rows = geom.get("rows") or labels
         for item, box in zip(rows, geom["bars"]):
             cx = (box[0] + box[2]) / 2
-            _place(img, cx, max(box[1] - 78, plot[1] + 8), item["text"], gold, 64, anchor="mt")
+            _place(img, cx, max(box[1] - 92, plot[1] + 8), item["text"], gold, 84, anchor="mt")
         return
     if concept == "pnl_stop":
         stop = _stop_caption(spec)
         stop_y = geom.get("stop_y", plot[3] - 80)
         zero_y = geom.get("zero_y", plot[1] + 40)
-        _place(img, plot[0] + 300, stop_y - 44, stop, (255, 228, 160), 32, anchor="lt", role="chart")
-        _place(img, plot[0] + 8, zero_y - 34, "₹0", (210, 214, 220), 26, anchor="lt", role="axis")
+        _place(img, plot[0] + 280, stop_y - 64, stop, (255, 228, 160), _STOP_SIZE, anchor="lt", role="chart")
+        _place(img, plot[0] + 8, zero_y - 48, "₹0", (210, 214, 220), _AXIS_SIZE, anchor="lt", role="axis")
         rupees = [item for item in labels if item["kind"] == "inr"]
         if rupees:
             loss = min(rupees, key=lambda item: item["value"])
-            _place(img, plot[0] + 8, stop_y + 10, _minus_amount(loss["text"]), (255, 180, 170), 26, anchor="lt", role="axis")
+            _place(img, plot[0] + 8, stop_y + 12, _minus_amount(loss["text"]), (255, 180, 170), _AXIS_SIZE, anchor="lt", role="axis")
             capital = max(rupees, key=lambda item: item["value"])
             if capital["value"] != loss["value"]:
-                _place(img, plot[0] + 300, plot[1] + 8, capital["text"], gold, 36, anchor="lt")
+                _place(img, plot[0] + 280, plot[1] + 8, capital["text"], gold, 54, anchor="lt")
         for item in labels:
             if item["kind"] == "pct" and item["text"] not in stop:
-                _place(img, plot[0] + 12, plot[1] + 48, item["text"], gold, 36)
+                _place(img, plot[0] + 12, plot[1] + 64, item["text"], gold, 48)
         return
     if concept == "steps" and geom.get("rows"):
         names = ["Limit likho", "SL + entry", "Hit = terminal band"]
@@ -2179,19 +2221,24 @@ def _draw_labels(img, spec, geom, beat="", card=""):
         if rupees:
             names[1] = "SL + entry  " + min(rupees, key=lambda item: item["value"])["text"]
         reached = int(geom.get("reached") or 0)
+        prev = int(geom.get("prev_reached") or 0)
         for i, box in enumerate(geom["rows"]):
             cy = (box[1] + box[3]) / 2
             if i < reached:
-                _add_tick(img, box[0] + 48, cy, arrive=(i == reached - 1))
-            _place(img, box[0] + 96, cy - 22, names[i], (245, 245, 245) if i < reached else (170, 176, 186), 36)
+                # A tick from an earlier scene stays on. Only the new one waits.
+                _add_tick(img, box[0] + 48, cy, arrive=(i == reached - 1 and i >= prev))
+            _place(img, box[0] + 96, cy - 28, names[i], (245, 245, 245) if i < reached else (170, 176, 186), 52)
+        badge = geom.get("badge") or ""
+        if badge:
+            _place(img, (plot[0] + plot[2]) / 2, plot[3] - 78, badge, gold, 44, anchor="mt", role="axis")
         return
     if labels:
         y = geom.get("level_y", (plot[1] + plot[3]) / 2) - 70
         if geom.get("equity"):
             y = plot[1] + 8
         for item in labels:
-            _place(img, plot[0] + 16, y, item["text"], gold, 56)
-            y += 68
+            _place(img, plot[0] + 16, y, item["text"], gold, 84)
+            y += 96
 
 
 def _phrase_parts(text):
@@ -2243,15 +2290,15 @@ def _draw_chrome(img, beat, card, index=0, spec=None):
     import scene_frames
     x0, y0, _x1, y1 = BOARD
     _place(
-        img, x0 + 28, y0 + 96, _headline(spec, beat), (248, 248, 248), 32,
+        img, x0 + 36, y0 + 88, _headline(spec, beat), (248, 248, 248), _HEADLINE_SIZE,
         anchor="lt", role="axis",
     )
     _place(
-        img, x0 + 28, y1 - 156, _BEAT_WORD.get(beat, str(beat).upper()), YELLOW, 30,
+        img, x0 + 36, y1 - 156, _BEAT_WORD.get(beat, str(beat).upper()), YELLOW, 34,
         anchor="lt", role="axis",
     )
     _place(
-        img, x0 + 28, y1 - 102, _GLOSS.get(beat, ""), (236, 236, 236), 28,
+        img, x0 + 36, y1 - 100, _GLOSS.get(beat, ""), (236, 236, 236), 34,
         anchor="lt", role="axis",
     )
     lines = _caption_lines(card)
@@ -2372,6 +2419,81 @@ def _prefer_installed_labels(topic, beat, index, spec):
     return spec
 
 
+def _said_through(topic, beat, index):
+    """Words of this beat up to and including this scene."""
+    cards = ((topic or {}).get("_scene_cards") or {}).get(beat)
+    if isinstance(cards, list) and cards:
+        return " ".join(str(part or "") for part in cards[: int(index) + 1])
+    return ""
+
+
+def _said_before(topic, beat, index):
+    cards = ((topic or {}).get("_scene_cards") or {}).get(beat)
+    if isinstance(cards, list) and cards and index:
+        return " ".join(str(part or "") for part in cards[: int(index)])
+    return ""
+
+
+def _forced_picture(beat_spec, scene_spec, concept):
+    """Same picture as the whole beat. Only figures this scene has already reached."""
+    scene_by = {
+        (item["kind"], item["value"]): item["text"]
+        for item in (scene_spec.get("labels") or [])
+    }
+    labels = []
+    for item in beat_spec.get("labels") or []:
+        key = (item["kind"], item["value"])
+        if key not in scene_by:
+            continue
+        labels.append({"text": scene_by[key], "kind": item["kind"], "value": item["value"]})
+    return {
+        "concept": concept,
+        "rupees": sorted(item["value"] for item in labels if item["kind"] == "inr"),
+        "percents": sorted(item["value"] for item in labels if item["kind"] == "pct"),
+        "labels": labels,
+    }
+
+
+def _daily_limit_badge(topic):
+    """The closing badge. Only when the narration already said 2%."""
+    blob = " ".join(str(v or "") for v in ((topic or {}).get("_spoken_beats") or {}).values())
+    if not blob.strip():
+        return ""
+    if any(abs(float(p) - 2.0) < 0.05 for p in chart_spec_for(blob).get("percents") or []):
+        return "Daily loss limit = 2%"
+    return ""
+
+
+def _picture_spec(topic, beat, index, scene_spec):
+    """Keep one picture for the whole beat. The gate still checks the scene line."""
+    full = " ".join(str(((topic or {}).get("_spoken_beats") or {}).get(beat) or "").split())
+    display = {
+        "concept": scene_spec.get("concept"),
+        "rupees": list(scene_spec.get("rupees") or []),
+        "percents": list(scene_spec.get("percents") or []),
+        "labels": [dict(item) for item in (scene_spec.get("labels") or [])],
+    }
+    if full:
+        beat_spec = chart_spec_for(full)
+        if beat == "matlab" and beat_spec["concept"] == "pnl_stop":
+            display = _forced_picture(beat_spec, scene_spec, "pnl_stop")
+        elif beat == "karein" and beat_spec["concept"] == "steps":
+            display = _forced_picture(beat_spec, scene_spec, "steps")
+    if display.get("concept") == "steps":
+        said = _said_through(topic, beat, index) or full
+        prev = _steps_reached(_said_before(topic, beat, index))
+        reached = _steps_reached(said)
+        cards = ((topic or {}).get("_scene_cards") or {}).get(beat) or []
+        is_last = (not cards) or index >= len(cards) - 1
+        if is_last and _steps_reached(full) >= 3:
+            reached = max(reached, 3)
+        display["_prev_reached"] = prev
+        display["_reached"] = reached
+        if reached >= 3:
+            display["_badge"] = _daily_limit_badge(topic)
+    return display
+
+
 def paint_chart_board(topic, beat, index=0, n=1):
     """One Chart Board frame. The spec is this scene's line, or the render fails."""
     import scene_frames
@@ -2379,6 +2501,7 @@ def paint_chart_board(topic, beat, index=0, n=1):
     card = _voice_for_scene(topic, beat, index, spoken)
     spec = _prefer_installed_labels(topic, beat, index, chart_spec_for(card))
     enforce_chart_voice(spec, card)
+    display = _picture_spec(topic, beat, index, spec)
     img = K.background()
     panel(img)
     img.label_boxes = []
@@ -2388,9 +2511,9 @@ def paint_chart_board(topic, beat, index=0, n=1):
     img.chart_region = tuple(float(v) for v in BOARD)
     img.scene_kind = f"chart-{beat}"
     img.chart_spec = spec
-    geom = _draw_geometry(img, spec, index=index, beat=beat, card=card)
-    _draw_labels(img, spec, geom or {}, beat=beat, card=card)
-    _draw_chrome(img, beat, spoken, index=index, spec=spec)
+    geom = _draw_geometry(img, display, index=index, beat=beat, card=card)
+    _draw_labels(img, display, geom or {}, beat=beat, card=card)
+    _draw_chrome(img, beat, spoken, index=index, spec=display)
     return img
 
 
@@ -2460,7 +2583,7 @@ def paint_cover(topic):
         raise ChartVoiceError("; ".join(faults))
     img = K.background()
     # The IG grid keeps y 240–1680. The hook, the chart, and the amount sit there.
-    box = (72, 330, 1008, 1600)
+    box = (48, 312, 1032, 1680)
     draw = ImageDraw.Draw(img)
     draw.rounded_rectangle(box, 28, fill=K.PANEL, outline=(60, 80, 110), width=4)
     img.label_boxes = []
@@ -2472,18 +2595,18 @@ def paint_cover(topic):
     img.chart_spec = spec
     img.scene_kind = "chart-cover"
     bold = _bold_amount(spec)
+    # The hook crash chart fills the frame. The badge sits on it. No bar chart.
+    plot = (box[0] + 20, box[1] + 16, box[2] - 20, box[3] - 20)
+    _equity_curve(img, plot)
     if bold:
-        draw.rounded_rectangle([250, 360, 830, 500], 20, fill=(48, 36, 8), outline=scene_frames.GOLD, width=4)
-    plot = (box[0] + 28, 520 if bold else box[1] + 28, box[2] - 28, box[3] - 24)
-    geom = _draw_geometry(img, spec, index=0, plot=plot, beat="cover", card=line)
-    _draw_labels(img, spec, geom or {}, beat="cover", card=line)
+        draw.rounded_rectangle([250, box[1] + 28, 830, box[1] + 168], 20, fill=(48, 36, 8), outline=scene_frames.GOLD, width=4)
     scene_frames._text(
-        img, 540, 286, "EK BURA DIN = MAHINA KHATAM?", (255, 255, 255), 40,
+        img, 540, 252, "EK BURA DIN = MAHINA KHATAM?", (255, 255, 255), 48,
         anchor="mt", band=False, role="axis",
     )
     if bold:
         scene_frames._text(
-            img, 540, 400, bold, scene_frames.GOLD, 64, anchor="mt", band=False, role="chart",
+            img, 540, box[1] + 48, bold, scene_frames.GOLD, 96, anchor="mt", band=False, role="chart",
         )
     del safe_area
     return img
