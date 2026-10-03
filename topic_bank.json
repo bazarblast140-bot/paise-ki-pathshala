@@ -2268,33 +2268,49 @@
    "used_short": false,
    "key": "piercing",
    "cat": "CANDLESTICK",
-   "topic": "Piercing Line — गिरावट में पलटवार",
+   "topic": "Piercing Line — गिरावट में रिवर्सल?",
    "thumb": [
-    "लाल को चीरती",
-    "हरी कैंडल"
+    "PIERCING LINE",
+    "= REVERSAL?"
    ],
+   "cover_lines": [
+    "PIERCING LINE",
+    "= REVERSAL?"
+   ],
+   "badge": "50% SE UPAR",
+   "levels": {
+    "red": {"open": 100, "high": 100, "low": 89, "close": 90},
+    "green": {"open": 88, "high": 98, "low": 87.5, "close": 97},
+    "mid": 95,
+    "mid_label": "95 (50%)",
+    "ticks": [100, 95, 90, 88, 97],
+    "sl": 87,
+    "badge": "50% SE UPAR",
+    "close_pct": 70
+   },
    "sticker": "ज़रूर जानो",
    "beats": {
     "hook": [
      "Piercing Line",
-     "गिरावट में पलटवार"
+     "70% काटा, रिवर्सल?"
     ],
     "pehchan": [
      "पहचान",
-     "हरी नीचे खुले, लाल के आधे से ऊपर बंद"
+     "100 से 90, हरी 88 से 97"
     ],
     "matlab": [
      "मतलब",
-     "नीचे के भाव पर ख़रीदारी"
+     "88 से 97, बायर्स लौटे"
     ],
     "karein": [
      "क्या करें",
-     "पुष्टि के बाद, SL low के नीचे"
+     "कन्फर्मेशन, SL 87"
     ]
    },
    "facts": [
-    "डाउनट्रेंड में बनता है",
-    "हरी कैंडल लाल के बीच से ऊपर बंद होती है"
+    "लाल कैंडल 100 से 90, लो 89",
+    "हरी कैंडल 88 से 97, बीच 95, करीब 70%",
+    "स्टॉप लॉस 87 पैटर्न के लो 87.5 के नीचे"
    ],
    "seo": "Piercing Line Pattern"
   },

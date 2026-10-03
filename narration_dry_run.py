@@ -118,13 +118,21 @@ def apply_beat_overrides(directory, overrides, topic_key=""):
     root = Path(directory)
     payload = approved_script.load_payload(root, topic_key) or {}
     beats = dict(payload.get("beats") or {})
-    for beat, text in (overrides or {}).items():
+    nested = overrides.get("beats") if isinstance((overrides or {}).get("beats"), dict) else None
+    incoming = nested if nested is not None else (overrides or {})
+    for beat, text in incoming.items():
         if beat not in approved_script.ORDER:
             continue
         cleaned = " ".join(str(text or "").split())
         if cleaned:
             beats[beat] = cleaned
     payload["beats"] = beats
+    title = " ".join(str((overrides or {}).get("title") or "").split())
+    hook_line = " ".join(str((overrides or {}).get("hook_line") or "").split())
+    if title:
+        payload["title"] = title
+    if hook_line:
+        payload["hook_line"] = hook_line
     payload["approved_hashes"] = approved_script.hashes_for(beats)
     payload["source"] = "approved"
     raw = json.dumps(payload, ensure_ascii=False, indent=2)
@@ -294,7 +302,7 @@ def main(argv=None):
     bank_before = bank_path.read_bytes()
     published_before = published.read_bytes() if published.exists() else None
     raw_keys = [piece.strip() for piece in str(args.topic_keys or "").split(",") if piece.strip()]
-    if str(args.narration_from_run or "").strip() and str(args.overrides or "").strip():
+    if str(args.overrides or "").strip():
         overrides = json.loads(args.overrides)
         if not isinstance(overrides, dict):
             print("FAIL overrides must be a JSON object")
@@ -303,6 +311,11 @@ def main(argv=None):
                 os.environ.pop("NARRATION_FROM_RUN", None)
                 os.environ.pop("APPROVED_SCRIPT_DIR", None)
             return 1
+        if not str(args.narration_from_run or "").strip():
+            os.environ["NARRATION_FROM_RUN"] = "overrides"
+            os.environ["APPROVED_SCRIPT_DIR"] = str(args.approved_dir)
+            os.environ["EDGE_SAMPLE_RATE"] = "+10%"
+            sample_rate = True
         apply_beat_overrides(args.approved_dir, overrides, raw_keys[0] if raw_keys else "")
     try:
         if raw_keys:

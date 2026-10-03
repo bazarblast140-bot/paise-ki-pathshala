@@ -17,7 +17,7 @@ from pick_topic import _pick_fresh, is_placeholder_topic, remember_gate_skip
 ROOT = Path(__file__).resolve().parent.parent
 IST = timezone(timedelta(hours=5, minutes=30))
 REQUIRED = ("id", "used", "used_short", "key", "cat", "topic", "thumb", "sticker", "beats", "facts", "seo")
-OPTIONAL = {"used_short_at", "used_short_fails"}
+OPTIONAL = {"used_short_at", "used_short_fails", "levels", "cover_lines", "badge"}
 BEAT_NAMES = ("hook", "pehchan", "matlab", "karein")
 
 
