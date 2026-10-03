@@ -743,6 +743,80 @@ class SoftReviewTests(unittest.TestCase):
         self.assertFalse(passed["review_flag"])
         self.assertEqual(passed["verdict"], "PASS")
 
+    def test_soft_trend_above_85_is_review_and_pre_render_does_not_hold(self):
+        """Dry run 37095205924: trend 45 with paid sync would be overall 89.2."""
+        import io
+        import tempfile
+        from contextlib import redirect_stderr
+        from pathlib import Path
+
+        parts = {
+            "hook": 100, "visual": 90, "accuracy": 100,
+            "trend": 45, "craft": 100, "sync": 100,
+        }
+        soft = self_review._apply_review_flag(self_review._pack(
+            parts, ["topic does not match data/trends.json"],
+        ))
+        self.assertEqual(soft["overall"], 89.2)
+        self.assertEqual(soft["verdict"], "REVIEW")
+        self.assertTrue(soft["review_flag"])
+        self.assertFalse(soft["public_ok"])
+        unpaid = dict(parts, sync=0)
+        held = self_review._apply_review_flag(self_review._pack(unpaid, ["sync"]))
+        self.assertEqual(held["overall"], 72.5)
+        self.assertEqual(held["verdict"], "HOLD")
+        self.assertFalse(held["review_flag"])
+        fallback = self_review._pack(parts, ["fallback"])
+        fallback["narration_fallback"] = True
+        blocked = self_review._apply_review_flag(fallback)
+        self.assertEqual(blocked["verdict"], "HOLD")
+
+        payload = {"review": soft}
+
+        def render(*_args, **_kwargs):
+            (board_short.RUN / "final.mp4").write_bytes(b"mp4")
+            (board_short.RUN / "self_review.json").write_text(
+                json.dumps(payload["review"]), encoding="utf-8",
+            )
+            return {"final_dur": 55.0}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            with mock.patch.object(board_short, "RUN", run), \
+                 mock.patch.object(board_short, "_render_short", side_effect=render), \
+                 mock.patch.object(board_short, "_eleven_spent", return_value=0), \
+                 mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("DRY_RUN", None)
+                os.environ.pop("APPROVED", None)
+                err = io.StringIO()
+                with redirect_stderr(err), self.assertRaises(SystemExit):
+                    board_short.prove_full_render({}, {}, {}, {})
+                text = err.getvalue()
+                self.assertNotIn("pre-render HOLD", text)
+                self.assertIn("REVIEW", text)
+                os.environ["APPROVED"] = "true"
+                allowed = board_short.prove_full_render({}, {}, {}, {})
+                self.assertEqual(allowed["final_dur"], 55.0)
+                payload["review"] = held
+                err = io.StringIO()
+                with redirect_stderr(err), self.assertRaises(SystemExit):
+                    board_short.prove_full_render({}, {}, {}, {})
+                self.assertIn("pre-render HOLD", err.getvalue())
+            os.environ.pop("APPROVED", None)
+
+        publish = (ROOT / ".github" / "workflows" / "paise-ki-pathshala.yml").read_text(
+            encoding="utf-8",
+        )
+        self.assertIn("vars.AUTO_APPROVE_REVIEW", publish)
+        line = "APPROVED: ${{ github.event_name == 'schedule' && vars.AUTO_APPROVE_REVIEW || inputs.approved }}"
+        self.assertEqual(publish.count(line), 2)
+        call = publish.split("workflow_dispatch:")[0]
+        self.assertIn("type: boolean", call)
+        self.assertIn("default: false", call)
+        dispatch = publish.split("workflow_dispatch:", 1)[1].split("concurrency:", 1)[0]
+        self.assertIn("approved:", dispatch)
+        self.assertIn('default: "false"', dispatch)
+
     def test_dry_run_keeps_a_review_mp4_and_live_refuses_without_approval(self):
         import io
         import tempfile

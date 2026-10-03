@@ -52,6 +52,10 @@ on:
         description: "Live Short length. four is the scheduled default. six is the override."
         type: string
         default: "four"
+      approved:
+        description: "Publish a soft REVIEW. Hard gates still block."
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       format:
@@ -73,6 +77,11 @@ on:
         type: choice
         options: [four, six]
         default: four
+      approved:
+        description: "Publish a soft REVIEW. Hard gates still block. A schedule uses vars.AUTO_APPROVE_REVIEW."
+        type: choice
+        options: ["false", "true"]
+        default: "false"
 concurrency:
   # One group for every trigger. The next run waits; it does not cancel the
   # run already building a slot. That run re-reads the ledger after checkout
@@ -221,6 +230,10 @@ jobs:
           # Compared to MEDIA_REPO_TOKEN so a GITHUB_TOKEN fallback is logged
           # by name. The value is never printed.
           ACTIONS_TOKEN_FOR_COMPARE: ${{ secrets.GITHUB_TOKEN }}
+          # Soft REVIEW may publish only when this is true. A schedule reads
+          # vars.AUTO_APPROVE_REVIEW (empty means false). A manual or called
+          # run uses the approved input, default false. Hard gates ignore it.
+          APPROVED: ${{ github.event_name == 'schedule' && vars.AUTO_APPROVE_REVIEW || inputs.approved }}
         run: python auto_agent.py --format ${{ steps.fmt.outputs.format }} --publish
       - name: Buffer fill if this slot is still empty
         id: buffer
@@ -241,6 +254,7 @@ jobs:
           IG_SURFACE: ${{ vars.IG_SURFACE || 'facebook' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          APPROVED: ${{ github.event_name == 'schedule' && vars.AUTO_APPROVE_REVIEW || inputs.approved }}
         run: python buffer_shorts.py --fill-scheduled
       - name: YouTube upload recorded
         id: uploaded

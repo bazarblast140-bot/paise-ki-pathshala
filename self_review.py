@@ -203,15 +203,20 @@ def _pack(parts, notes):
     }
 
 
-# A soft miss (craft, visual, trend) whose overall still lands here is REVIEW.
-# Wrong numbers, a failed hook check, and a sync miss stay HOLD.
+# A soft miss (craft, visual, trend) at overall >= 75 is REVIEW, with no
+# upper bound. Wrong numbers, a failed hook check, and a sync miss stay HOLD.
 _REVIEW_LO = 75
-_REVIEW_HI = 85
 _HARD_PARTS = ("hook", "accuracy", "sync")
+_SOFT_PARTS = ("visual", "trend", "craft")
 
 
 def _apply_review_flag(packed):
-    """Mark a soft 75–85 review. public_ok stays false, so it does not auto-publish."""
+    """A soft-part miss at overall >= 75 is REVIEW. public_ok stays false.
+
+    There is no upper bound: trend 45 with the other parts high (overall ~89)
+    is still REVIEW. Hook, accuracy, and sync below the part bar stay HOLD,
+    as do fallback narration and an overall under 75.
+    """
     if not isinstance(packed, dict):
         return packed
     if packed.get("public_ok"):
@@ -223,8 +228,7 @@ def _apply_review_flag(packed):
         packed["verdict"] = "HOLD"
         return packed
     parts = packed.get("parts") or {}
-    for name in _HARD_PARTS:
-        raw = parts.get(name)
+    for name, raw in parts.items():
         if raw is None:
             continue
         try:
@@ -233,7 +237,7 @@ def _apply_review_flag(packed):
             packed["review_flag"] = False
             packed["verdict"] = "HOLD"
             return packed
-        if score < PART_BAR:
+        if score < PART_BAR and name not in _SOFT_PARTS:
             packed["review_flag"] = False
             packed["verdict"] = "HOLD"
             return packed
@@ -243,7 +247,7 @@ def _apply_review_flag(packed):
         packed["review_flag"] = False
         packed["verdict"] = "HOLD"
         return packed
-    if _REVIEW_LO <= overall <= _REVIEW_HI:
+    if overall >= _REVIEW_LO:
         packed["review_flag"] = True
         packed["verdict"] = "REVIEW"
         packed["public_ok"] = False
