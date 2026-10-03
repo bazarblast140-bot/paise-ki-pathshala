@@ -3415,14 +3415,12 @@ def _ass_rows(rows, t0, t1, colour, fade):
 
 def build_ass(topic, beat_times, spoken, hook_line, cta, audio_words=None):
     import safe_area
-    del topic, hook_line, cta  # one spoken cue; the poll is a card sprite
+    del topic, hook_line, cta, spoken, audio_words
+    # The card already shows the spoken line at a phone-readable size. A 40px
+    # bottom caption is too small to read and sits on the card, so it is not
+    # burned. plan_cues still times those lines for the number check. Sync
+    # reads the audio, not this track.
     ev = []
-    for cue in plan_cues(spoken, beat_times, audio_words):
-        t0, t1 = float(cue["t0"]), float(cue["t1"])
-        if t1 <= t0:
-            continue
-        for piece, _rect, size, y in _cue_rows(cue["text"]):
-            ev.append(K.ass_caption(t0, t1, piece, y=y, size=size))
     t0, t1 = beat_times["karein"]
     # Grey disclaimer sits in the brand band, under the fixed subtitle box.
     ev.append(K.ass_text(t0, t1, 540, safe_area.SOURCE_Y, 26, "&H00B8A394&", DISCLAIMER, 8))
@@ -3472,6 +3470,21 @@ def still_clip(png, dur, out, fps=30):
                     "-loop", "1", "-t", f"{dur:.3f}", "-i", str(png),
                     "-vf", f"fps={fps},format=yuv420p",
                     "-t", f"{dur:.3f}", "-r", str(fps), *X264, str(out)], check=True)
+
+
+def _join_hard(clips, out):
+    """One card, then the next. A slide leaves the old words on the new card."""
+    import pathlib
+    listing = pathlib.Path(out).parent / "scene_list.txt"
+    listing.write_text(
+        "\n".join(f"file '{pathlib.Path(clip).name}'" for clip in clips) + "\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0",
+         "-i", listing.name, "-c", "copy", pathlib.Path(out).name],
+        cwd=listing.parent, check=True,
+    )
 
 
 def join_scenes(clips, durations, out, fps=30):
@@ -3529,17 +3542,16 @@ def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, h
         )
     else:
         clips = []
-        for i, scene in enumerate(scenes):
+        for scene in scenes:
             png = scene.get("png")
             if not png:
                 pics = beat_pngs[scene["beat"]]
                 png = pics[min(scene["index"], len(pics) - 1)]
                 scene["png"] = str(png)
-            pad = SCENE_FADE_S if i < len(scenes) - 1 else 0.0
-            out = RUN / f"scene_{i:02d}.mp4"
-            still_clip(png, durations[i] + pad, out, fps)
+            out = RUN / f"scene_{len(clips):02d}.mp4"
+            still_clip(png, durations[len(clips)], out, fps)
             clips.append(out)
-        join_scenes(clips, durations, RUN / "silent.mp4", fps)
+        _join_hard(clips, RUN / "silent.mp4")
     # voice: each beat's audio padded to its beat length
     parts = []
     for b in timed_beats(beat_times):

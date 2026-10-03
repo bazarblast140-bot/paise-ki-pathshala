@@ -206,8 +206,15 @@ class CardChartTests(unittest.TestCase):
             "matlab": "उदाहरण: 20% घटे तो 25% चाहिए। नुकसान 25% के बाद वापसी अलग है।",
         }
         frame = scene_frames.frames_for(topic, "matlab", 1, {"mode": "schematic"})[0][0]
-        head = next(layer for layer in frame.text_layers if layer.get("text") == "हिसाब")
-        self.assertGreaterEqual(head["size"], 64)
+        names = {layer.get("text") for layer in frame.text_layers}
+        for banned in ("हिसाब", "एक बात", "पहचान", "जाँच"):
+            self.assertNotIn(banned, names)
+        body = [
+            layer for layer in frame.text_layers
+            if layer.get("text") and not layer.get("faint") and layer.get("role") != "brand"
+        ]
+        self.assertTrue(body)
+        self.assertGreaterEqual(max(layer["size"] for layer in body), 64)
         blob = scene_frames.frame_card_text(frame)
         self.assertIn("चाहिए", blob)
         self.assertNotRegex(blob, r"₹[\d,]+\s+₹[\d,]+,")
@@ -227,6 +234,59 @@ class CardChartTests(unittest.TestCase):
         shown = scene_frames.frame_card_text(small)
         self.assertIn("दो लाख की हद", shown)
         self.assertNotIn("2,00,000", shown)
+
+
+class BoardVisualTests(unittest.TestCase):
+    def test_chart_is_proportional_or_absent_and_headers_are_not_beat_names(self):
+        import safe_area
+        topic = _topic("risk_daily_loss_limit")
+        topic["_spoken_beats"] = {
+            "hook": "पूँजी ₹2,00,000 पर दिन की हद 2% है, यानी ₹4,000।",
+        }
+        topic["_scene_cards"] = {"hook": ["पूँजी ₹2,00,000 पर दिन की हद 2% है, यानी ₹4,000।"]}
+        topic["_scene_figures"] = {"hook": [["₹2,00,000", "₹4,000", "2%"]]}
+        frame = scene_frames.frames_for(topic, "hook", 1, {"mode": "schematic"})[0][0]
+        bars = frame.chart_bar_boxes
+        self.assertEqual(len(bars), 2)
+        small = [bar for bar in bars if bar[4] == 4000.0][0]
+        large = [bar for bar in bars if bar[4] == 200000.0][0]
+        self.assertGreater((large[3] - large[1]) / (small[3] - small[1]), 8)
+        card_bottom = frame.panel_box[3]
+        for bar in bars:
+            self.assertGreaterEqual(bar[1], card_bottom + 20)
+        labels = [
+            layer for layer in frame.text_layers
+            if layer.get("text") in ("₹2,00,000", "₹4,000", "₹200,000")
+        ]
+        self.assertGreaterEqual(len(labels), 1)
+        for layer in frame.text_layers:
+            self.assertNotIn(layer.get("text"), ("एक बात", "पहचान", "हिसाब", "जाँच", "मान 2%", "सीमा 2%"))
+            if layer.get("box"):
+                self.assertTrue(safe_area.inside(layer["box"]), layer.get("text"))
+        blank = _topic("risk_daily_loss_limit")
+        blank["_spoken_beats"] = {"hook": "दिन की हद 2% पर रुकें, फिर 2% याद रखें।"}
+        blank["_scene_cards"] = {"hook": ["दिन की हद 2% पर रुकें, फिर 2% याद रखें।"]}
+        blank["_scene_figures"] = {"hook": [["2%", "2%"]]}
+        quiet = scene_frames.frames_for(blank, "hook", 1, {"mode": "schematic"})[0][0]
+        self.assertEqual(quiet.chart_bar_boxes, [])
+
+    def test_a_card_transition_shows_one_card_and_captions_are_not_burned(self):
+        from PIL import Image
+        import scene_transition
+        first = Image.new("RGB", (40, 40), (10, 20, 30))
+        second = Image.new("RGB", (40, 40), (200, 10, 10))
+        mid = scene_transition.composite(first, second, 0.5, "slideleft")
+        late = scene_transition.composite(first, second, 0.9, "slideleft")
+        self.assertEqual(list(mid.getdata()), list(first.convert("RGB").getdata()))
+        self.assertEqual(list(late.getdata()), list(second.convert("RGB").getdata()))
+        topic = _topic("risk_daily_loss_limit")
+        times = {"hook": (0.0, 8.0), "pehchan": (8.0, 18.0), "matlab": (18.0, 32.0), "karein": (32.0, 48.0)}
+        spoken = {beat: "₹4,000 की हद पहले तय है।" for beat in times}
+        ass = board_short.build_ass(topic, times, spoken, "हद क्यों?", "पोल")
+        self.assertNotIn("Dialogue: 2,", ass)
+        self.assertIn(board_short.DISCLAIMER, ass)
+        cues = board_short.plan_cues(spoken, times, None)
+        self.assertTrue(cues)
 
 
 class HindiConcreteTests(unittest.TestCase):
@@ -452,7 +512,8 @@ class CaptionSentenceCardTests(unittest.TestCase):
         one = scene_frames.frames_for(lone, "hook", 1, {"mode": "schematic"})[0][0]
         self.assertEqual(one.chart_bar_boxes, [])
         rupees = scene_frames.comparable_chart_figures(["₹4,000", "₹2,00,000"])
-        self.assertEqual(rupees, [])
+        self.assertEqual(len(rupees), 2)
+        self.assertEqual(scene_frames.comparable_chart_figures(["2%", "2%"]), [])
         percents = scene_frames.comparable_chart_figures(["20%", "25%"])
         self.assertEqual(len(percents), 2)
 

@@ -1220,12 +1220,6 @@ _FIGURE_RE = re.compile(
     r"|\d{1,3}(?:,\d{2,3})+"
     r"|\d+(?:\.\d+)?\s*लाख"
 )
-_BEAT_HEAD = {
-    "hook": "एक बात",
-    "pehchan": "पहचान",
-    "matlab": "हिसाब",
-    "karein": "जाँच",
-}
 _BEAT_SHIFT = {"hook": 0, "pehchan": 1, "matlab": 2, "karein": 3}
 
 
@@ -1412,12 +1406,9 @@ def _summary_line(figures):
 
 
 def _chart_label(fig, index):
-    """A label with no extra digit. An index like 1. would show before it is said."""
+    """The figure itself. A prefix such as मान or सीमा is not a second number."""
+    del index
     text = " ".join(str(fig or "").split())
-    if not text:
-        return ""
-    if not re.search(r"[\u0900-\u097F]", text):
-        text = ("मान", "सीमा", "राशि", "कदम")[index % 4] + " " + text
     return text[:24]
 
 
@@ -1494,13 +1485,28 @@ def comparable_chart_figures(figures):
             continue
         values = [_figure_value(fig) for fig in rows]
         peak, floor = max(values), min(values)
-        if peak <= 0:
+        if peak <= 0 or floor <= 0:
             continue
-        if unit != "pct" and floor * 8 < peak:
+        # Two equal 2% bars are not a comparison. A ₹2,00,000 bar beside a
+        # ₹4,000 sliver is: the ratio can be large and the short bar stays short.
+        if abs(peak - floor) <= peak * 0.02:
             continue
-        if len(rows) > len(best):
+        if len(rows) > len(best) or (
+            len(rows) == len(best) and peak / floor > _spread(best)
+        ):
             best = list(rows)
     return best[:4]
+
+
+def _spread(figures):
+    values = [_figure_value(fig) for fig in figures or []]
+    values = [value for value in values if value]
+    if len(values) < 2:
+        return 0.0
+    floor = min(values)
+    if floor <= 0:
+        return 0.0
+    return max(values) / floor
 
 
 def _chart_rows(figures):
@@ -1520,42 +1526,66 @@ def _chart_rows(figures):
 def _paint_labelled_chart(image, figures, panel, text_bottom=None, fill_zone=False):
     """Two or more bars, scaled to the values, each labelled with its figure.
 
-    A single label draws nothing. Bars are not added to the fill boxes.
-    fill_zone uses the whole panel as the chart, so a live card can give
-    the bars the bottom half of the frame.
+    A single label draws nothing. Equal values draw nothing: two bars of the
+    same height labelled मान 2% and सीमा 2% are not a comparison. A ₹4,000
+    bar stays a sliver beside ₹2,00,000. Bars sit below the card and inside
+    the safe area. They are not added to the fill boxes.
     """
+    del fill_zone
     rows = _chart_rows(figures)
     if len(rows) < 2:
         return
+    values = [value for _label, value in rows]
+    peak = max(values) or 1.0
+    if abs(peak - min(values)) <= peak * 0.02:
+        return
     x0, y0, x1, y1 = (int(v) for v in panel)
+    left_lim, top_lim, right_lim, bottom_lim = safe_area.limits(*image.size)
+    x0 = max(x0, int(left_lim) + 8)
+    x1 = min(x1, int(right_lim) - 8)
+    y0 = max(y0, int(top_lim) + 8)
+    y1 = min(y1, int(bottom_lim) - 8)
+    if text_bottom is not None:
+        y0 = max(y0, int(text_bottom) + 36)
+    label_h = 44
+    if y1 - y0 < label_h + 80 or x1 - x0 < 160:
+        return
     n = len(rows)
     gap = 28
-    inner = (x1 - x0) - 80
-    bar_w = max(80, int((inner - gap * (n - 1)) / n))
-    if fill_zone:
-        base = y1 - 48
-        max_h = max(36, int(base - y0 - 8))
-        min_h = max(28, int(max_h * 0.18))
-    else:
-        max_h = int((y1 - y0) * 0.22)
-        min_h = max(36, int((y1 - y0) * 0.07))
-        base = y1 - 72
-    zone_top = base - max_h
-    if text_bottom is not None and float(text_bottom) > zone_top - 16:
-        return
-    peak = max(value for _label, value in rows) or 1.0
-    colors = ((96, 165, 250), (34, 197, 94), (250, 204, 21), (239, 68, 68))
-    draw = ImageDraw.Draw(image)
-    bars = []
-    left = x0 + 40
-    for i, (label, value) in enumerate(rows):
+    inner = (x1 - x0) - 48
+    bar_w = max(48, int((inner - gap * (n - 1)) / n))
+    base = y1 - label_h
+    max_h = max(24, base - y0 - 4)
+    heights = []
+    for value in values:
         frac = max(0.0, min(1.0, value / peak))
-        bar_h = int(min_h + (max_h - min_h) * frac)
+        if frac >= 0.999:
+            heights.append(max_h)
+        else:
+            heights.append(max(8, int(round(max_h * frac))))
+    seen = {}
+    for value, height in zip(values, heights):
+        other = seen.get(height)
+        if other is not None and abs(other - value) > peak * 0.02:
+            return
+        seen[height] = value
+    colors = ((96, 165, 250), (34, 197, 94), (250, 204, 21), (239, 68, 68))
+    planned = []
+    left = x0 + 24
+    for i, ((label, value), bar_h) in enumerate(zip(rows, heights)):
         top = base - bar_h
         x = left + i * (bar_w + gap)
-        draw.rounded_rectangle([x, top, x + bar_w, base], 16, fill=colors[i % 4])
+        if top < y0 or x + bar_w > x1:
+            return
+        if text_bottom is not None and top < int(text_bottom) + 28:
+            return
+        planned.append((label, value, x, top, bar_h))
+    draw = ImageDraw.Draw(image)
+    bars = []
+    for i, (label, value, x, top, bar_h) in enumerate(planned):
+        draw.rounded_rectangle([x, top, x + bar_w, base], 12, fill=colors[i % 4])
         bars.append((float(x), float(top), float(x + bar_w), float(base), float(value)))
-        _text(image, x + bar_w / 2, base + 8, label, (255, 255, 255), 28, anchor="mt")
+        _text(image, x + bar_w / 2, base + 4, label, (255, 255, 255), 26, anchor="mt", band=False)
     image.chart_bar_boxes = bars
 
 
@@ -1733,11 +1763,19 @@ def _body_spans(text):
 
 
 def _paint_body_line(image, cx, y, text, size, fill, number_fill):
-    """One wrapped sentence line. Every number in it is gold. One sprite, so boxes do not overlap."""
+    """One wrapped sentence line. Every number in it is gold. One sprite, so boxes do not overlap.
+
+    The line shrinks until it sits inside the frame margin. A transition must
+    not be what keeps a word from running off the right edge.
+    """
     spans = _body_spans(text)
     if not spans:
         return 0
     size = int(size)
+    left_lim, _top, right_lim, _bottom = safe_area.limits(*image.size)
+    max_w = right_lim - left_lim - 24
+    while size > 32 and _text_width(text, size) > max_w:
+        size -= 4
     widths = [_text_width(piece, size) for piece, _flag in spans]
     left = float(cx) - sum(widths) / 2.0
     _width, row_h = _text_extent(text, size)
@@ -1804,7 +1842,7 @@ def _fit_phrase(phrase, head, head_size, top, bottom, sizes, max_width=900):
             seen.add(key)
         if not unique:
             continue
-        block = _text_extent(head, head_size)[1] + 24
+        block = (_text_extent(head, head_size)[1] + 24) if head else 0
         block += sum(_text_extent(row, size)[1] + 24 for row in trial)
         if top + block <= bottom:
             return size, trial, block
@@ -1826,9 +1864,10 @@ def _beat_chart_figures(topic, beat, index, figures):
 def _paint_live_card(topic, beat, index, n, body_size=None):
     """The scene's own sentences, wrapped, with every number highlighted.
 
-    No separate figure line. Two or more comparable figures fill the bottom
-    half with a labelled chart. Otherwise the sentence is centred and larger.
-    Chart bars are not part of the fill. The headline stays at least 64px.
+    No separate figure line and no beat-name header. Two or more comparable
+    figures fill the bottom half with a labelled chart. Otherwise the sentence
+    is centred and larger. Chart bars are not part of the fill. Body text
+    stays at least 64px.
     """
     del body_size
     width, height = K.W, K.H
@@ -1844,7 +1883,7 @@ def _paint_live_card(topic, beat, index, n, body_size=None):
     figures = _scene_figure_list(topic, beat, index, card, spoken)
     phrase = card
     chart_figs = _beat_chart_figures(topic, beat, index, figures)
-    head = _BEAT_HEAD.get(beat, "बात")
+    head = ""
     content_top = safe_area.CONTENT_TOP + 36
     content_bottom = safe_area.CONTENT_BOTTOM - 28
     span = content_bottom - content_top
@@ -1881,12 +1920,13 @@ def _paint_live_card(topic, beat, index, n, body_size=None):
         image = _live_plate(width, height)
         image.labelled_graphic_boxes = []
         image.chart_bar_boxes = []
-        head_h = _text_extent(head, head_size)[1]
-        block_h = head_h + gap + sum(_text_extent(row, chosen)[1] + gap for row in rows)
+        head_h = _text_extent(head, head_size)[1] if head else 0
+        block_h = (head_h + gap if head else 0) + sum(_text_extent(row, chosen)[1] + gap for row in rows)
         zone_bottom = content_top + span * 0.42 if charting else content_bottom
         y = content_top + max(0, (zone_bottom - content_top - block_h) / 2)
-        _text(image, 540, y, head, GOLD, head_size, anchor="mt")
-        y += head_h + gap
+        if head:
+            _text(image, 540, y, head, GOLD, head_size, anchor="mt")
+            y += head_h + gap
         for row in rows:
             row_h = _paint_body_line(image, 540, y, row, chosen, (250, 250, 250), GOLD)
             y += row_h + gap

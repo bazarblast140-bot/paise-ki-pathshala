@@ -141,6 +141,11 @@ def composite(a, b, t, mode="wipe", direction="left"):
     """
     mode, direction = _normalize(mode, direction)
     u = ease(t)
+    # A baked card has no separate plate. Sliding it cuts the words and leaves
+    # the old card on top of the new one. One full card, then the other.
+    if getattr(a, "plate", None) is None and getattr(b, "plate", None) is None:
+        shown = a if u <= 0.5 else b
+        return shown.convert("RGB")
     base = blend_plates(_plate(a), _plate(b), u, mode, direction)
     _paint_layers(base, a, outgoing_alpha(u), persist=False)
     _paint_layers(base, b, incoming_alpha(u), persist=False)
