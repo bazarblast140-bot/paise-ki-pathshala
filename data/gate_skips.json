@@ -7,6 +7,7 @@
   "fund_roce",
   "market_fed_hike_india",
   "pf_inflation",
-  "peg_ratio"
+  "peg_ratio",
+  "cashflow_profit"
  ]
 }
