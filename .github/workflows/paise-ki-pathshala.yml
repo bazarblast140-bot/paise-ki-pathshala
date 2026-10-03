@@ -292,10 +292,12 @@ jobs:
         # An Instagram miss used to fail the job after YouTube had already
         # uploaded, and success() then skipped this commit. The next cron saw
         # an empty slot and uploaded again. Commit whenever a video id exists.
-        if: ${{ !cancelled() && steps.guard.outputs.taken != 'true' && (steps.uploaded.outputs.youtube_uploaded == 'true' || success() || steps.buffer.outcome == 'success') }}
+        # A narration-gate failure writes data/gate_skips.json. That skip has
+        # to land too, or the next run picks the same blocked topic.
+        if: ${{ !cancelled() && steps.guard.outputs.taken != 'true' && (steps.uploaded.outputs.youtube_uploaded == 'true' || success() || steps.buffer.outcome == 'success' || steps.pipeline.outcome == 'failure') }}
         run: |
           FILES=""
-          for f in topic_bank.json data/published.json data/buffer_manifest.json data/competitor_insights.json \
+          for f in topic_bank.json data/published.json data/buffer_manifest.json data/gate_skips.json data/competitor_insights.json \
                    data/competitor_performance.json data/own_topic_performance.json; do
             [ -e "$f" ] && FILES="$FILES $f"
           done
