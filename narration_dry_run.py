@@ -107,6 +107,35 @@ def _calls_used():
         return 0
 
 
+def apply_beat_overrides(directory, overrides, topic_key=""):
+    """Write replacement beat lines into the approved script before the hash lock.
+
+    narration() locks whatever narration.json says. The override has to be
+    the file on disk first, or Edge dies on a hash mismatch.
+    """
+    import approved_script
+    from pathlib import Path
+    root = Path(directory)
+    payload = approved_script.load_payload(root, topic_key) or {}
+    beats = dict(payload.get("beats") or {})
+    for beat, text in (overrides or {}).items():
+        if beat not in approved_script.ORDER:
+            continue
+        cleaned = " ".join(str(text or "").split())
+        if cleaned:
+            beats[beat] = cleaned
+    payload["beats"] = beats
+    payload["approved_hashes"] = approved_script.hashes_for(beats)
+    payload["source"] = "approved"
+    raw = json.dumps(payload, ensure_ascii=False, indent=2)
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "narration.json").write_text(raw, encoding="utf-8")
+    key = str(topic_key or "").strip()
+    if key:
+        (root / f"narration_{key}.json").write_text(raw, encoding="utf-8")
+    return payload
+
+
 def evaluate_topic(topic, c, beats=None):
     """Narrate one topic. Returns (passed, report, narration). Never calls TTS."""
     credit_log.reset()
@@ -120,11 +149,15 @@ def evaluate_topic(topic, c, beats=None):
     try:
         narration, _source = board_short.narration(live, c)
         before = board_short._live_estimate(narration, live)[0]
-        board_short.tighten_duration_margin(narration, live)
+        approved = isinstance(narration, dict) and narration.get("source") == "approved"
+        if not approved:
+            board_short.tighten_duration_margin(narration, live)
         gate = []
         if board_short._live_estimate(narration, live)[0] != before:
             gate = board_short.check_narration(narration, live)
-        note = board_short._estimate_note(narration, live)
+        # An approved script is spoken as stored. The voice duration gate
+        # decides, not the 1.9 words/s estimate (the sample rate is faster).
+        note = "" if approved else board_short._estimate_note(narration, live)
         if gate:
             reason = "; ".join(gate)
         elif note:
@@ -237,12 +270,22 @@ def main(argv=None):
     parser.add_argument("--topic-keys", default="", help="Comma-separated keys. Empty picks upcoming topics.")
     parser.add_argument("--beats", default="", choices=["", "four", "six"])
     parser.add_argument("--full", action="store_true", help="Render final.mp4 with free Edge TTS.")
+    parser.add_argument("--narration-from-run", default="", help="Actions run id of an edge-dry-run script.")
+    parser.add_argument("--overrides", default="", help="JSON object of beat text replacements.")
+    parser.add_argument("--approved-dir", default="run/approved_script")
     args = parser.parse_args(argv)
     os.environ["VIDEO_FORMAT"] = "short"
     os.environ["DRY_RUN"] = "1"
     os.environ.pop("ELEVENLABS_API_KEY", None)
     os.environ.pop("ELEVENLABS_OPT_IN", None)
     os.environ.pop("PUBLISH_VISIBILITY", None)
+    sample_rate = False
+    if str(args.narration_from_run or "").strip():
+        os.environ["NARRATION_FROM_RUN"] = str(args.narration_from_run).strip()
+        os.environ["APPROVED_SCRIPT_DIR"] = str(args.approved_dir)
+        # Faster than the +0% preview so the sample matches a reel pace.
+        os.environ["EDGE_SAMPLE_RATE"] = "+10%"
+        sample_rate = True
     if args.beats in ("four", "six"):
         os.environ["LIVE_BEATS"] = args.beats
     bank_path = ROOT / "topic_bank.json"
@@ -250,56 +293,80 @@ def main(argv=None):
     bank_before = bank_path.read_bytes()
     published_before = published.read_bytes() if published.exists() else None
     raw_keys = [piece.strip() for piece in str(args.topic_keys or "").split(",") if piece.strip()]
+    if str(args.narration_from_run or "").strip() and str(args.overrides or "").strip():
+        overrides = json.loads(args.overrides)
+        if not isinstance(overrides, dict):
+            print("FAIL overrides must be a JSON object")
+            if sample_rate:
+                os.environ.pop("EDGE_SAMPLE_RATE", None)
+                os.environ.pop("NARRATION_FROM_RUN", None)
+                os.environ.pop("APPROVED_SCRIPT_DIR", None)
+            return 1
+        apply_beat_overrides(args.approved_dir, overrides, raw_keys[0] if raw_keys else "")
     if raw_keys:
         topics, missing = select_by_keys(raw_keys)
         if missing:
             print(f"FAIL unknown topic keys: {', '.join(missing)}")
+            if sample_rate:
+                os.environ.pop("EDGE_SAMPLE_RATE", None)
+                os.environ.pop("NARRATION_FROM_RUN", None)
+                os.environ.pop("APPROVED_SCRIPT_DIR", None)
             return 1
     else:
         count = max(1, int(args.topics))
         topics = select_upcoming(count)
         if len(topics) < count:
             print(f"FAIL only {len(topics)} upcoming topics, wanted {count}")
+            if sample_rate:
+                os.environ.pop("EDGE_SAMPLE_RATE", None)
+                os.environ.pop("NARRATION_FROM_RUN", None)
+                os.environ.pop("APPROVED_SCRIPT_DIR", None)
             return 1
     c = cfg()
     failed = 0
     rendered = 0
-    for topic in topics:
-        key = topic.get("key") or "topic"
-        try:
-            passed, report, narration = evaluate_topic(topic, c, beats=args.beats)
-        except (Exception, SystemExit):
-            print(f"FAIL {key}\n{traceback.format_exc()}")
-            failed += 1
-            print("")
-            continue
-        print(report)
-        if passed and args.full:
+    try:
+        for topic in topics:
+            key = topic.get("key") or "topic"
             try:
-                render_topic(topic, narration, c, beats=args.beats)
-                rendered += 1
-                print(f"RENDER {key} run/final_{key}.mp4")
+                passed, report, narration = evaluate_topic(topic, c, beats=args.beats)
             except (Exception, SystemExit):
-                print(f"FAIL render {key}\n{traceback.format_exc()}")
-                _keep_topic_artifacts(key)
+                print(f"FAIL {key}\n{traceback.format_exc()}")
                 failed += 1
-        print("")
-        if not passed:
-            failed += 1
-    if bank_path.read_bytes() != bank_before:
-        print("FAIL topic_bank.json was written")
-        return 1
-    if published.exists() and published_before is not None and published.read_bytes() != published_before:
-        print("FAIL data/published.json was written")
-        return 1
-    if failed:
-        print(f"FAIL {failed} of {len(topics)} topics")
-        return 1
-    if args.full:
-        print(f"PASS {len(topics)} topics, Edge render {rendered}")
-    else:
-        print(f"PASS {len(topics)} topics, no TTS")
-    return 0
+                print("")
+                continue
+            print(report)
+            if passed and args.full:
+                try:
+                    render_topic(topic, narration, c, beats=args.beats)
+                    rendered += 1
+                    print(f"RENDER {key} run/final_{key}.mp4")
+                except (Exception, SystemExit):
+                    print(f"FAIL render {key}\n{traceback.format_exc()}")
+                    _keep_topic_artifacts(key)
+                    failed += 1
+            print("")
+            if not passed:
+                failed += 1
+        if bank_path.read_bytes() != bank_before:
+            print("FAIL topic_bank.json was written")
+            return 1
+        if published.exists() and published_before is not None and published.read_bytes() != published_before:
+            print("FAIL data/published.json was written")
+            return 1
+        if failed:
+            print(f"FAIL {failed} of {len(topics)} topics")
+            return 1
+        if args.full:
+            print(f"PASS {len(topics)} topics, Edge render {rendered}")
+        else:
+            print(f"PASS {len(topics)} topics, no TTS")
+        return 0
+    finally:
+        if sample_rate:
+            os.environ.pop("EDGE_SAMPLE_RATE", None)
+            os.environ.pop("NARRATION_FROM_RUN", None)
+            os.environ.pop("APPROVED_SCRIPT_DIR", None)
 
 
 if __name__ == "__main__":

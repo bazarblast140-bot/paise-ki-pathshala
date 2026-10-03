@@ -2530,7 +2530,12 @@ def _edge_voice_rate(c):
     if eleven_voice.paid_voice_allowed():
         voice = c["voice"]
         return voice.get("edge_voice", "hi-IN-SwaraNeural"), voice.get("edge_rate", "+10%")
-    return eleven_voice.PREVIEW_EDGE_VOICE, eleven_voice.PREVIEW_EDGE_RATE
+    voice, rate = eleven_voice.PREVIEW_EDGE_VOICE, eleven_voice.PREVIEW_EDGE_RATE
+    # Sample renders only. The paid voice path above does not read this.
+    sample = os.environ.get("EDGE_SAMPLE_RATE", "").strip()
+    if sample:
+        rate = sample
+    return voice, rate
 
 
 def _paid_voice_this_beat():
@@ -3618,16 +3623,27 @@ def _ass_rows(rows, t0, t1, colour, fade):
     return ev
 
 
+def _live_cue_rows(text):
+    """Readable 1–2 line captions inside the subtitle band, under the chart."""
+    groups = layout_in_box([text or " "], _subtitle_limits(), 56, 36)
+    return groups[0] if groups else []
+
+
 def build_ass(topic, beat_times, spoken, hook_line, cta, audio_words=None):
     import safe_area
-    del topic, hook_line, cta, spoken, audio_words
-    # The card already shows the spoken line at a phone-readable size. A 40px
-    # bottom caption is too small to read and sits on the card, so it is not
-    # burned. plan_cues still times those lines for the number check. Sync
-    # reads the audio, not this track.
+    del hook_line, cta
     ev = []
+    # Four-beat Shorts burn the spoken line under the chart, timed to the
+    # whisper word starts. Other formats keep the picture free of that track.
+    if four_live(topic):
+        for cue in plan_cues(spoken, beat_times, audio_words):
+            rows = _live_cue_rows(cue.get("text") or "")
+            for piece, _rect, size, y in rows[:2]:
+                ev.append(K.ass_caption(
+                    float(cue["t0"]), float(cue["t1"]), piece, y=int(round(y)), size=int(size),
+                ))
     t0, t1 = beat_times["karein"]
-    # Grey disclaimer sits in the brand band, under the fixed subtitle box.
+    # Grey disclaimer sits under the captions, in the last beat only.
     ev.append(K.ass_text(t0, t1, 540, safe_area.SOURCE_Y, 26, "&H00B8A394&", DISCLAIMER, 8))
     return K.ASS_HEAD + "\n".join(ev) + "\n"
 
@@ -3745,12 +3761,16 @@ def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, h
         durations.append(float(scene["end"]) - float(scene["start"]))
         frames.append(scene.get("frame"))
     if _layered(frames):
-        faults = scene_transition.transition_faults(frames, SCENE_TRANSITIONS)
+        # One chart box for the whole Short. A wipe would slide that box off.
+        transitions = SCENE_TRANSITIONS
+        if all(getattr(frame, "chart_region", None) for frame in frames):
+            transitions = ("fade",)
+        faults = scene_transition.transition_faults(frames, transitions)
         if faults:
             die("shaped text was sliced at a transition: " + "; ".join(faults[:4]))
         scene_transition.write_timeline(
             frames, durations, RUN / "silent.mp4", fps=fps,
-            transitions=SCENE_TRANSITIONS, fade_s=SCENE_FADE_S,
+            transitions=transitions, fade_s=SCENE_FADE_S,
             overlay=scene_frames.paint_progress,
         )
     else:
@@ -4510,6 +4530,23 @@ def main():
     produce_short(topic, n, c, spec, source, beat_pngs=beat_pngs)
 
 
+def _stamp_scene_clock(topic, scenes, audio_words=None):
+    """Whisper times for the yellow callout. Absent on a still test frame."""
+    if not isinstance(topic, dict):
+        return
+    if audio_words is not None:
+        topic["_audio_words"] = list(audio_words)
+    spans = {}
+    for scene in scenes or []:
+        beat = scene.get("beat")
+        if not beat:
+            continue
+        spans[(beat, int(scene.get("index") or 0))] = (
+            float(scene["start"]), float(scene["end"]),
+        )
+    topic["_scene_spans"] = spans
+
+
 def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
     """Picture, free or paid audio, and final.mp4. Callers decide which voice."""
     if topic.get("_live_short") and not topic.get("_atr"):
@@ -4539,6 +4576,7 @@ def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
     except Exception as exc:  # noqa: BLE001 — cards fall back to even word timing
         print(f"[cards] word timings unavailable ({exc}); using the beat clock")
     _install_scene_cards(topic, spoken, beat_times, scenes, audio_words)
+    _stamp_scene_clock(topic, scenes, audio_words)
     groups = {b: [] for b in order}
     for scene in scenes:
         groups[scene["beat"]].append(scene)
@@ -4766,6 +4804,7 @@ def _pay_and_remux(topic, n, c, spec, source, proven):
     except Exception as exc:  # noqa: BLE001 — the review still runs on the beat clock
         print(f"[cards] paid word timings unavailable ({exc}); using the beat clock")
     _install_scene_cards(topic, spoken, beat_times, scenes, audio_words)
+    _stamp_scene_clock(topic, scenes, audio_words)
     paced = _repaint_scene_frames(topic, spec, scenes, order)
     assemble(
         paced, beat_audio, beat_times,

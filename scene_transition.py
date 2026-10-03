@@ -248,8 +248,19 @@ def render_at(images, durations, t, transitions=(), fade_s=0.28, overlay=None):
     fade = float(fade_s)
     hit = _window(t, starts, fade) if len(images) > 1 else None
     if hit is not None:
-        i, _u = hit
-        if getattr(images[i], "animate", None) and getattr(images[i + 1], "animate", None):
+        i, u = hit
+        left, right = images[i], images[i + 1]
+        both_move = getattr(left, "animate", None) and getattr(right, "animate", None)
+        both_chart = getattr(left, "chart_region", None) and getattr(right, "chart_region", None)
+        # The chart box stays put. Elements crossfade inside it instead of a hard cut.
+        if both_move and both_chart:
+            a = left.animate(1.0).convert("RGB")
+            b = right.animate(0.0).convert("RGB")
+            mixed = Image.blend(a, b, ease(u))
+            if overlay is not None:
+                overlay(mixed, 0.0 if total <= 0 else min(1.0, t / total))
+            return mixed
+        if both_move:
             hit = None
     if hit is None:
         idx = _scene_index(t, starts, durations)

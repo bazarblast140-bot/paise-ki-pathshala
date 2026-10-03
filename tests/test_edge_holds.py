@@ -250,10 +250,15 @@ class BoardVisualTests(unittest.TestCase):
         self.assertEqual(len(bars), 2)
         small = [bar for bar in bars if bar[4] == 4000.0][0]
         large = [bar for bar in bars if bar[4] == 200000.0][0]
-        self.assertGreater((large[3] - large[1]) / (small[3] - small[1]), 8)
-        card_bottom = frame.panel_box[3]
+        wide = (large[2] - large[0]) >= (large[3] - large[1])
+        if wide:
+            self.assertGreater((large[2] - large[0]) / (small[2] - small[0]), 8)
+        else:
+            self.assertGreater((large[3] - large[1]) / (small[3] - small[1]), 8)
+        region = frame.chart_region
         for bar in bars:
-            self.assertGreaterEqual(bar[1], card_bottom + 20)
+            self.assertGreaterEqual(bar[1], region[1] - 1)
+            self.assertLessEqual(bar[3], region[3] + 1)
         labels = [
             layer for layer in frame.text_layers
             if layer.get("text") in ("₹2,00,000", "₹4,000", "₹200,000")
@@ -327,8 +332,9 @@ class BoardVisualTests(unittest.TestCase):
         times = {"hook": (0.0, 8.0), "pehchan": (8.0, 18.0), "matlab": (18.0, 32.0), "karein": (32.0, 48.0)}
         spoken = {beat: "₹4,000 की हद पहले तय है।" for beat in times}
         ass = board_short.build_ass(topic, times, spoken, "हद क्यों?", "पोल")
-        self.assertNotIn("Dialogue: 2,", ass)
+        self.assertIn("Dialogue: 2,", ass)
         self.assertIn(board_short.DISCLAIMER, ass)
+        self.assertNotIn(spoken["hook"], ass.split("Dialogue: 2,", 1)[0])
         cues = board_short.plan_cues(spoken, times, None)
         self.assertTrue(cues)
 
