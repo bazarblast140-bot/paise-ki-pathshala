@@ -1901,7 +1901,7 @@ def _attach_live_motion(image):
 
     def animate(u, base=image):
         u = max(0.0, min(1.0, float(u)))
-        zoom = 1.0 + 0.08 * u
+        zoom = 1.0 + 0.03 * u
         width, height = base.size
         # Zoom the chart plate only. The shaped lines stay whole sprites, so a
         # wipe cannot cut a glyph that was baked into the moving picture.
