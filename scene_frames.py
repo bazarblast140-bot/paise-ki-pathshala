@@ -1891,17 +1891,17 @@ def _paint_live_card(topic, beat, index, n, body_size=None):
 
 
 def _attach_live_motion(image):
-    """A slow 3% zoom. A card held for 4s must not be the same pixels twice.
+    """A slow zoom. A card held for 4s must not be the same pixels twice.
 
     The lesson layers stay on the original boxes, so a number check still
-    reads the card. The crop is about 1.5% per side, inside the 6% margin.
+    reads the card. The crop stays inside the 6% margin.
     """
     if image is None:
         return image
 
     def animate(u, base=image):
         u = max(0.0, min(1.0, float(u)))
-        zoom = 1.0 + 0.03 * u
+        zoom = 1.0 + 0.08 * u
         width, height = base.size
         # Zoom the chart plate only. The shaped lines stay whole sprites, so a
         # wipe cannot cut a glyph that was baked into the moving picture.

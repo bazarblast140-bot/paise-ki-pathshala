@@ -50,6 +50,9 @@ _ALIAS = (
     # Whisper often glues a Hindi number to the next word. Split those
     # before tokenization so "दो प्रतिशत" still counts as said.
     # Traders say परसेंट; the number parser looks for प्रतिशत.
+    # This Edge voice says "दो परसेंट" as "तो पर्ष्ट" and "दो लाख रुपये" as "तो लाक्रुपै".
+    ("तो लाक्रुपै", "दो लाख रुपये"),
+    ("तो पर्ष्ट", "दो प्रतिशत"),
     ("दोपरसेंट", "दो प्रतिशत"),
     ("दोप्रतिषत", "दो प्रतिशत"),
     ("दोप्रतिशत", "दो प्रतिशत"),
