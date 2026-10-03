@@ -156,6 +156,55 @@ class ApprovedScriptTests(unittest.TestCase):
         self.assertIn("actions: read", live)
         self.assertIn("approved_script.py --download", live)
         self.assertIn("NARRATION_FROM_RUN:", live)
+        self.assertIn("render_only:", live)
+        self.assertIn("run/sc_*.png", live)
+        self.assertIn("install_repo_beats", live)
+        self.assertIn("ypnkIsDASPgHZuanrF0q", live)
+        publish = (ROOT / ".github" / "workflows" / "publish-artifact.yml").read_text(encoding="utf-8")
+        self.assertIn("PUBLISH_SLOT_IST:", publish)
+        self.assertIn("PUBLISH_AT_UTC:", publish)
+        self.assertIn('default: "16:00"', publish)
+        self.assertIn("test -s run/thumbnail.jpg", publish)
+        self.assertIn("slot_guard.py --publish-at", publish)
+        self.assertIn("python publish_instagram.py", publish)
+
+    def test_committed_hinglish_replaces_the_dry_run_before_the_hash_lock(self):
+        import slot_guard
+        approved = json.loads(
+            (ROOT / "approved" / "risk_daily_loss_limit.json").read_text(encoding="utf-8")
+        )
+        total = sum(len(approved["beats"][beat]) for beat in ORDER)
+        self.assertEqual(
+            [len(approved["beats"][beat]) for beat in ORDER],
+            [96, 182, 189, 186],
+        )
+        self.assertEqual(total, 653)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "tts_risk_daily_loss_limit.txt").write_text(_lines(), encoding="utf-8")
+            installed = approved_script.install_repo_beats(root, "risk_daily_loss_limit")
+            self.assertEqual(installed["title"], "डेली लॉस लिमिट")
+            self.assertEqual(installed["beats"]["pehchan"], approved["beats"]["pehchan"])
+            self.assertNotIn("पूँजी", installed["beats"]["hook"])
+            script = approved_script.narration_from_payload(
+                approved_script.load_payload(root, "risk_daily_loss_limit"),
+                _topic(),
+                "37095205924",
+            )
+        self.assertEqual(
+            script["approved_hashes"]["pehchan"],
+            approved_script.beat_digest(approved["beats"]["pehchan"]),
+        )
+        self.assertEqual(script["beats"]["karein"], approved["beats"]["karein"])
+        out = io.StringIO()
+        with redirect_stdout(out):
+            slot_guard.emit_publish_at("16:00", "2026-10-04")
+        lines = dict(part.split("=", 1) for part in out.getvalue().splitlines())
+        self.assertEqual(lines["slot"], "16:00")
+        self.assertEqual(lines["date_ist"], "2026-10-04")
+        self.assertEqual(lines["publish_at"], "2026-10-04T10:30:00Z")
+        with self.assertRaises(SystemExit):
+            slot_guard.emit_publish_at("16:00", "2020-01-01")
 
     def test_a_number_stays_off_the_card_and_chart_until_it_is_spoken(self):
         spoken = {
@@ -542,8 +591,13 @@ class ApprovedHashLockTests(unittest.TestCase):
         self.assertNotIn("उदाहरण:", card)
         bars = getattr(frames[1], "chart_bar_boxes", None) or []
         self.assertGreaterEqual(len(bars), 2)
-        heights = sorted(bar[3] - bar[1] for bar in bars)
-        self.assertGreater(heights[-1] / heights[0], 8)
+        large = max(bars, key=lambda bar: bar[4])
+        small = min(bars, key=lambda bar: bar[4])
+        if (large[2] - large[0]) >= (large[3] - large[1]):
+            ratio = (large[2] - large[0]) / max(1.0, small[2] - small[0])
+        else:
+            ratio = (large[3] - large[1]) / max(1.0, small[3] - small[1])
+        self.assertGreater(ratio, 8)
         labels = " ".join(sync_gate_lines(frames[1]))
         self.assertIn("₹2,00,000", labels)
         self.assertIn("₹4,000", labels)

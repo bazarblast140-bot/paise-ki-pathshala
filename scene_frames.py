@@ -437,7 +437,7 @@ def _glow_line(img, x0, y, x1, color):
 def _brand(img):
     """Channel mark in the brand band, under the subtitles and above the progress bar."""
     _text(
-        img, 88, safe_area.BRAND_Y, "PKP", GOLD, 26, anchor="lt", persist=True, band=False,
+        img, 88, safe_area.BRAND_Y, "@ThePaiseKiPathshala", GOLD, 26, anchor="lt", persist=True, band=False,
         role="brand",
     )
 
@@ -454,11 +454,8 @@ def paint_progress(img, frac):
 
 
 def set_progress(img, frac):
-    """Paint the bar on the still and on the plate the transition moves."""
+    """One bar on the still. The moving plate stays clear so the encode does not draw a second bar."""
     paint_progress(img, frac)
-    plate = getattr(img, "plate", None)
-    if plate is not None and plate is not img:
-        paint_progress(plate, frac)
     img.progress = max(0.0, min(1.0, float(frac)))
 
 
@@ -1889,121 +1886,22 @@ def _beat_chart_figures(topic, beat, index, figures):
 
 
 def _paint_live_card(topic, beat, index, n, body_size=None):
-    """The scene's own sentences, wrapped, with every number highlighted.
+    """Chart Board for a four-beat scene: the enlarged chart, then the caption.
 
-    No separate figure line and no beat-name header. Two or more comparable
-    figures fill the bottom half with a labelled chart. Otherwise the sentence
-    is centred and larger. Chart bars are not part of the fill. Body text
-    stays at least 64px.
+    The picture is the existing board (dark ground, chart box, badge). The
+    chart's figures are this scene's voice line. A full-screen text card is
+    not used.
     """
     del body_size
-    width, height = K.W, K.H
-    shift = (_BEAT_SHIFT.get(beat, 0) + int(index)) % 4
-    panel_color = (
-        (22, 48, 96),
-        (30, 58, 110),
-        (18, 52, 88),
-        (26, 42, 102),
-    )[shift]
-    card = _scene_card_text(topic, beat, index, n)
-    spoken = bool(str(((topic or {}).get("_spoken_beats") or {}).get(beat) or "").strip())
-    figures = _scene_figure_list(topic, beat, index, card, spoken)
-    phrase = card
-    chart_figs = _beat_chart_figures(topic, beat, index, figures)
-    head = ""
-    content_top = safe_area.CONTENT_TOP + 36
-    content_bottom = safe_area.CONTENT_BOTTOM - 28
-    span = content_bottom - content_top
-    # A wide one-line sentence beside a short headline leaves the panel under
-    # 35%. The second pass wraps tighter, drops the chart, and centres larger.
-    attempts = []
-    if len(chart_figs) >= 2:
-        attempts.append({"chart": True, "width": 900, "gap": 24, "head": 72})
-    attempts.append({"chart": False, "width": 640, "gap": 8, "head": 96})
-    seated = None
-    for attempt in attempts:
-        charting = attempt["chart"]
-        head_size = attempt["head"]
-        gap = attempt["gap"]
-        full_sizes = (168, 152, 136, 120, 104, 88, 72, 64)
-        fit = None
-        if charting:
-            zone_bottom = content_top + span * 0.42
-            sizes = full_sizes + (56, 48, 40)
-            fit = _fit_phrase(
-                phrase, head, head_size, content_top, zone_bottom,
-                sizes, max_width=attempt["width"],
-            )
-            # A long sentence must not drop the ₹ chart. Keep the opening
-            # lines that fit and draw the bars under them.
-            if fit is None:
-                sentences = _card_sentences(phrase)
-                for keep in range(len(sentences) - 1, 0, -1):
-                    shorter = " ".join(sentences[:keep])
-                    fit = _fit_phrase(
-                        shorter, head, head_size, content_top, zone_bottom,
-                        sizes, max_width=attempt["width"],
-                    )
-                    if fit is not None:
-                        break
-            if fit is None:
-                charting = False
-        if not charting:
-            fit = _fit_phrase(
-                phrase, head, head_size, content_top, content_bottom, full_sizes,
-                max_width=attempt["width"],
-            )
-        if fit is None:
-            chosen = 64
-            rows = _phrase_rows(phrase, chosen, max_width=attempt["width"]) if phrase else []
-        else:
-            chosen, rows, _block = fit
-        image = _live_plate(width, height)
-        image.labelled_graphic_boxes = []
-        image.chart_bar_boxes = []
-        head_h = _text_extent(head, head_size)[1] if head else 0
-        block_h = (head_h + gap if head else 0) + sum(_text_extent(row, chosen)[1] + gap for row in rows)
-        zone_bottom = content_top + span * 0.42 if charting else content_bottom
-        y = content_top + max(0, (zone_bottom - content_top - block_h) / 2)
-        if head:
-            _text(image, 540, y, head, GOLD, head_size, anchor="mt")
-            y += head_h + gap
-        for row in rows:
-            row_h = _paint_body_line(image, 540, y, row, chosen, (250, 250, 250), GOLD)
-            y += row_h + gap
-        image.scene_kind = f"fact-{beat}"
-        boxes = [
-            layer["box"] for layer in (image.text_layers or [])
-            if layer.get("text") and layer.get("box") and not layer.get("faint")
-        ]
-        if not boxes:
-            image.panel_box = (70, 190, width - 70, 1300)
-            image.panel_fill = panel_fill_fraction(image)
-            seated = image
-            break
-        for pad in (72, 56, 44, 32, 24):
-            panel = _tight_panel(boxes, pad)
-            trial = _seat_panel(image, panel, panel_color)
-            seated = trial
-            if trial.panel_fill + 1e-9 >= 0.35:
-                break
-        if charting and seated.panel_fill + 1e-9 >= 0.35:
-            chart_top = max(content_top + span * 0.50, float(seated.panel_box[3]) + 12)
-            if content_bottom - chart_top >= 220:
-                _paint_labelled_chart(
-                    seated, chart_figs, (80, chart_top, width - 80, content_bottom),
-                    text_bottom=float(seated.panel_box[3]), fill_zone=True,
-                )
-        if seated.panel_fill + 1e-9 >= 0.35:
-            break
-    return _attach_live_motion(seated)
+    import board_scenes
+    return _attach_live_motion(board_scenes.paint_chart_board(topic, beat, index, n))
 
 
 def _attach_live_motion(image):
-    """A slow 3% zoom. A card held for 4s must not be the same pixels twice.
+    """A slow zoom. A card held for 4s must not be the same pixels twice.
 
     The lesson layers stay on the original boxes, so a number check still
-    reads the card. The crop is about 1.5% per side, inside the 6% margin.
+    reads the card. The crop stays inside the 6% margin.
     """
     if image is None:
         return image
@@ -2012,18 +1910,37 @@ def _attach_live_motion(image):
         u = max(0.0, min(1.0, float(u)))
         zoom = 1.0 + 0.03 * u
         width, height = base.size
+        # Zoom the chart plate only. The shaped lines stay whole sprites, so a
+        # wipe cannot cut a glyph that was baked into the moving picture.
+        source = getattr(base, "plate", None)
+        if source is None:
+            source = base
         scaled_w = max(width + 1, int(round(width * zoom)))
         scaled_h = max(height + 1, int(round(height * zoom)))
-        scaled = base.resize((scaled_w, scaled_h), Image.Resampling.BILINEAR)
+        scaled = source.convert("RGB").resize((scaled_w, scaled_h), Image.Resampling.BILINEAR)
         left = max(0, (scaled_w - width) // 2)
         top = max(0, (scaled_h - height) // 2)
         frame = scaled.crop((left, top, left + width, top + height))
+        frame.plate = frame.copy()
+        layers = []
+        for layer in getattr(base, "text_layers", None) or []:
+            # A new checklist tick stays off until this scene has played a bit.
+            if layer.get("arrive") and u < 0.35:
+                continue
+            layers.append(layer)
+            sprite = layer.get("image")
+            xy = layer.get("xy")
+            if sprite is None or xy is None:
+                continue
+            frame.paste(sprite, xy, sprite)
         for name in (
-            "text_layers", "label_boxes", "scene_kind", "panel_box", "panel_fill",
-            "chart_bar_boxes", "labelled_graphic_boxes", "shapes",
+            "label_boxes", "scene_kind", "panel_box", "panel_fill",
+            "chart_bar_boxes", "labelled_graphic_boxes", "shapes", "chart_region",
+            "chart_spec",
         ):
             if hasattr(base, name):
                 setattr(frame, name, getattr(base, name))
+        frame.text_layers = layers
         return frame
 
     image.animate = animate
@@ -2099,37 +2016,15 @@ def fill_live_frame(src, beat, index=0):
 
 
 def _generic_frames(topic, beat, n, spec):
-    if _wants_filled_plate(topic):
-        frames = [_live_fact_frame(topic, beat, i, n) for i in range(n)]
-        return frames, [False] * n
-    mode = (spec or {}).get("mode")
-    if mode == "non_numeric":
-        bases = [market_data.non_numeric_frame(topic, beat, i % 2) for i in range(min(n, 2))]
-    else:
-        img = K.background()
-        pair = S.render_beat(topic["key"], beat, img)
-        bases = [pair[-1]]
-    labels = ("KEY AREA", "RULE", "LOOK HERE", "NEXT STEP")
-    frames = []
-    flags = []
-    for i in range(n):
-        src = bases[min(i, len(bases) - 1)].copy()
-        if i == 0:
-            frame = src
-            flag = False
-        elif i % 2 == 1:
-            frame = zoom_at(src, 560, 640, 0.70 + (i % 3) * 0.03, shift_x=(i % 5 - 2) * 36)
-            frame = screen_callout(frame, labels[i % len(labels)])
-            flag = True
-        else:
-            frame = zoom_at(src, 460 + (i * 24), 720, 0.62, shift_x=-50)
-            flag = False
-        if mode == "series":
-            frame = market_data.stamp(frame, spec)
-        _stamp_teaching_card(frame, topic, beat, spec)
-        frames.append(frame)
-        flags.append(flag)
-    return frames, flags
+    """Chart Board is the only Short picture. The text-card path is disabled.
+
+    Live, buffer, slot-watch, and sample shorts all come through here.
+    An ATR lesson still uses `_atr_frames` before this function is called.
+    `spec` is unused: non_numeric and scene-card modes no longer paint a card.
+    """
+    del spec
+    frames = [_live_fact_frame(topic, beat, i, n) for i in range(n)]
+    return frames, [False] * n
 
 
 def frames_for(topic, beat, n, spec):

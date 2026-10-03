@@ -11,6 +11,7 @@ import json
 import math
 import pathlib
 import random
+import re
 
 import board_kit as K
 from board_kit import (BOARD, BLUE, GREEN, INK, MUTED, RED, YELLOW, SL_RED, TARGET_GREEN, Axes, arrow, bars, big_text,
@@ -1740,3 +1741,897 @@ def render_beat(key, beat, img):
 def cue(key):
     """Regex: the spoken phrase at which a beat's third picture should appear."""
     return getattr(_scene_factory(key)(), "cue", None)
+
+
+# ================================================================ voice ↔ chart
+class ChartVoiceError(RuntimeError):
+    """The chart's ₹ / % figures or its concept do not match this beat's line."""
+
+
+_STOP_MARKS = ("रुक", "रोक", "बंद", "हिट", "स्टॉप", "टर्मिनल", "ज्यादा न")
+_STEP_MARKS = ("लिखो", "एंट्री", "एन्ट्री")
+_BEAT_WORD = {
+    "hook": "HOOK",
+    "pehchan": "PEHCHAN",
+    "matlab": "MATLAB",
+    "karein": "KYA KAREIN",
+}
+_GLOSS = {
+    "hook": "Ek bura din = poora mahina loss",
+    "pehchan": "Limit poore din ka total hai",
+    "matlab": "Limit hit = trading band",
+    "karein": "Pehle limit fix karo",
+}
+# About 1.5x the previous chart type. _text shrinks a line that would leave the safe area.
+_HEADLINE_SIZE = 48
+_VALUE_SIZE = 78
+_STOP_SIZE = 48
+_AXIS_SIZE = 40
+
+
+def _norm_num(kind, value):
+    if kind == "pct":
+        return round(float(value), 4)
+    return int(round(float(value)))
+
+
+def _classify_label(label):
+    """('inr'|'pct'|None, value) for one on-chart or spoken figure."""
+    import sync_gate
+    raw = str(label or "")
+    text = sync_gate._alias(raw).replace(",", "")
+    match = re.search(r"(\d+(?:\.\d+)?)", text)
+    if not match:
+        return None, None
+    value = float(match.group(1))
+    if "%" in raw or "प्रतिशत" in text:
+        return "pct", _norm_num("pct", value)
+    if "लाख" in text:
+        value *= 100000
+    elif "करोड" in text:
+        value *= 10000000
+    elif "हजार" in text and value < 1000:
+        value *= 1000
+    if "₹" in raw or "रुप" in text or "लाख" in text or "हजार" in text:
+        return "inr", _norm_num("inr", value)
+    return None, None
+
+
+def _surface_label(text, kind, value, fallback):
+    """Keep the spelling the line already uses. Hindi amounts stay readable."""
+    import scene_frames
+    if fallback and fallback in (text or ""):
+        return fallback
+    if kind == "pct":
+        shown = int(value) if float(value).is_integer() else value
+        return f"{shown}%"
+    amount = int(value)
+    aliased = __import__("sync_gate")._alias(text or "")
+    if "लाख" in aliased and amount % 100000 == 0 and amount >= 100000:
+        return f"₹{amount // 100000} लाख"
+    return scene_frames._indian_rupee(amount)
+
+
+def labels_from_voice(text):
+    """(label, kind, value) for every ₹ or % this line says, once each."""
+    import scene_frames
+    pool = list(scene_frames._figure_tokens([text or ""]))
+    pool.extend(scene_frames._spoken_figures(text or "", scene_frames._digit_tokens(text or "")))
+    found = []
+    seen = set()
+    for label in pool:
+        kind, value = _classify_label(label)
+        if kind not in ("inr", "pct"):
+            continue
+        key = (kind, value)
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append((_surface_label(text, kind, value, label), kind, value))
+    return found
+
+
+def concept_for(text, labels=None):
+    """The picture this line is teaching. A checklist beats a stop line."""
+    import sync_gate
+    labels = labels_from_voice(text) if labels is None else labels
+    rupees = [value for _label, kind, value in labels if kind == "inr"]
+    percents = [value for _label, kind, value in labels if kind == "pct"]
+    raw = sync_gate._alias(text or "")
+    # लिखो / एंट्री is the checklist. Matlab says ज्यादा न and has neither.
+    if any(mark in raw for mark in _STEP_MARKS):
+        return "steps"
+    if any(mark in raw for mark in _STOP_MARKS) and (rupees or percents):
+        return "pnl_stop"
+    if len(rupees) >= 2 and percents:
+        capital, limit = max(rupees), min(rupees)
+        if capital > 0 and abs((limit / capital) * 100.0 - percents[0]) <= 0.25:
+            return "capital_slice"
+    if len(rupees) + len(percents) >= 2:
+        return "compare"
+    if rupees or percents:
+        return "level"
+    return "plain"
+
+
+def chart_spec_for(text):
+    """Figures and concept taken only from this beat's voice line."""
+    labels = labels_from_voice(text)
+    return {
+        "concept": concept_for(text, labels),
+        "rupees": sorted({value for _label, kind, value in labels if kind == "inr"}),
+        "percents": sorted({value for _label, kind, value in labels if kind == "pct"}),
+        "labels": [{"text": label, "kind": kind, "value": value} for label, kind, value in labels],
+    }
+
+
+def chart_voice_faults(spec, narration):
+    """₹ or % on the chart but not in the line, or the other way around, or the wrong picture."""
+    spec = spec or {}
+    voice = chart_spec_for(narration)
+    faults = []
+    chart_r = {int(v) for v in (spec.get("rupees") or [])}
+    chart_p = {round(float(v), 4) for v in (spec.get("percents") or [])}
+    voice_r = set(voice["rupees"])
+    voice_p = set(voice["percents"])
+    for value in sorted(chart_r - voice_r):
+        faults.append(f"chart shows ₹{value} which this beat does not say")
+    for value in sorted(voice_r - chart_r):
+        faults.append(f"narration ₹{value} is missing from the chart")
+    for value in sorted(chart_p - voice_p):
+        faults.append(f"chart shows {value:g}% which this beat does not say")
+    for value in sorted(voice_p - chart_p):
+        faults.append(f"narration {value:g}% is missing from the chart")
+    expected = voice["concept"]
+    if spec.get("concept") != expected:
+        faults.append(f"chart concept {spec.get('concept')} does not match {expected}")
+    return faults
+
+
+def enforce_chart_voice(spec, narration):
+    faults = chart_voice_faults(spec, narration)
+    if faults:
+        raise ChartVoiceError("; ".join(faults))
+    return spec
+
+
+def _plot_box(box=None):
+    """Room above the plot for the English line, and below it for the beat word."""
+    x0, y0, x1, y1 = box or BOARD
+    return (x0 + 40, y0 + 188, x1 - 40, y1 - 200)
+
+
+def _minus_amount(text):
+    raw = str(text or "")
+    if raw.startswith("−") or raw.startswith("-"):
+        return "−" + raw.lstrip("−-")
+    if raw.startswith("₹"):
+        return "−" + raw
+    return "−₹" + raw
+
+
+def _stop_caption(spec):
+    """One stop label. The percent is included only when this line says it."""
+    labels = (spec or {}).get("labels") or []
+    rupees = [item for item in labels if item["kind"] == "inr"]
+    percents = [item for item in labels if item["kind"] == "pct"]
+    if rupees:
+        loss = min(rupees, key=lambda item: item["value"])
+        text = "STOP " + _minus_amount(loss["text"])
+        if percents:
+            text += " (" + percents[0]["text"] + ")"
+        return text
+    if percents:
+        return "STOP " + percents[0]["text"]
+    return "STOP"
+
+
+def _headline(spec, beat):
+    """ALL CAPS English. A ₹ or % appears only when this scene's spec has it."""
+    spec = spec or {}
+    labels = spec.get("labels") or []
+    rupees = [item for item in labels if item["kind"] == "inr"]
+    percents = [item for item in labels if item["kind"] == "pct"]
+    concept = spec.get("concept")
+    if concept == "capital_slice" and len(rupees) >= 2 and percents:
+        # The two bars already name each amount once. The headline does not repeat them.
+        return "DAILY LOSS LIMIT"
+    if concept == "pnl_stop":
+        return _stop_caption(spec)
+    if concept == "steps":
+        if rupees:
+            return "FIX " + min(rupees, key=lambda item: item["value"])["text"]
+        return "THREE STEPS"
+    if concept == "compare" and len(labels) >= 2:
+        return f"{labels[0]['text']} VS {labels[1]['text']}"
+    if beat == "hook" and concept in ("plain", "level"):
+        for item in labels:
+            if item.get("kind") == "inr" and int(item.get("value") or 0) == 200000:
+                return "CAPITAL ₹2 LAKH"
+        if labels:
+            return "CAPITAL " + labels[0]["text"]
+        return "ONE BAD DAY"
+    if len(labels) == 1:
+        return labels[0]["text"]
+    if labels:
+        return "  ".join(item["text"] for item in labels[:3])
+    return {
+        "hook": "ONE BAD DAY",
+        "pehchan": "THE LIMIT",
+        "matlab": "WHAT IT MEANS",
+        "karein": "WHAT TO DO",
+    }.get(beat, "THE RULE")
+
+
+def _steps_reached(text):
+    import sync_gate
+    raw = sync_gate._alias(text or "")
+    reached = 0
+    if "लिखो" in raw:
+        reached = max(reached, 1)
+    if "एंट्री" in raw or "एन्ट्री" in raw or "स्टॉप" in raw:
+        reached = max(reached, 2)
+    if "टर्मिनल" in raw or "हिट" in raw:
+        reached = max(reached, 3)
+    return reached
+
+
+# A month of closes: small up and down days, then the last day is the crash.
+_MONTH_LEVELS = (
+    0.20, 0.28, 0.24, 0.33, 0.29, 0.38, 0.34, 0.43,
+    0.48, 0.41, 0.50, 0.46, 0.56, 0.51, 0.61, 0.55,
+    0.66, 0.61, 0.72, 0.78,
+)
+_CRASH_LEVEL = 0.28
+
+
+def _equity_curve(img, plot):
+    """A real month: daily ups and downs, then one red day. That day is circled."""
+    from PIL import ImageDraw
+    left, top, right, bottom = plot
+    span = right - left - 72
+    room = bottom - top - 80
+    base = bottom - 28
+    n = len(_MONTH_LEVELS)
+    pts = []
+    for i, level in enumerate(_MONTH_LEVELS):
+        x = left + 36 + span * i / n
+        y = base - room * level
+        pts.append((x, y))
+    crash = (left + 36 + span, base - room * _CRASH_LEVEL)
+    draw = ImageDraw.Draw(img)
+    poly = pts + [crash, (crash[0], base), (pts[0][0], base)]
+    draw.polygon(poly, fill=(14, 110, 62))
+    polyline(img, pts, GREEN, 8)
+    polyline(img, [pts[-1], crash], RED, 10)
+    ring(img, crash[0], crash[1], 36, 36, YELLOW)
+    return {"plot": plot, "equity": True}
+
+
+def _draw_geometry(img, spec, index=0, plot=None, beat="", card=""):
+    """Bars, the stop line, the checklist, or the hook curve. Labels come after."""
+    from PIL import ImageDraw
+    plot = plot or _plot_box()
+    concept = spec.get("concept")
+    labels = spec.get("labels") or []
+    rupees = [item for item in labels if item["kind"] == "inr"]
+    percents = [item for item in labels if item["kind"] == "pct"]
+    draw = ImageDraw.Draw(img)
+    img.chart_bar_boxes = []
+    # Bar widths come from the whole beat. A scene that has only said the
+    # capital still opens on both bars, and the unreached amount is not labelled.
+    shape_rupees = [
+        item for item in (spec.get("_shape_labels") or labels) if item.get("kind") == "inr"
+    ]
+    if concept == "capital_slice" and len(shape_rupees) >= 2:
+        capital = max(shape_rupees, key=lambda item: item["value"])
+        limit = min(shape_rupees, key=lambda item: item["value"])
+        left, top, right, bottom = plot
+        # Horizontal rows across the box. Thickness stays under the capital width
+        # so the large-vs-small test compares widths, and the red bar stays a bar.
+        gap = 48
+        bracket = 84
+        bar_h = 132.0
+        span = right - left
+        ratio = float(limit["value"]) / float(capital["value"]) if capital["value"] else 0.02
+        # Wide enough to see on a phone, still under 1/8 of the capital bar.
+        small_w = max(108.0, span * ratio)
+        if span / max(small_w, 1.0) <= 8.0:
+            small_w = span / 8.6
+        group = bar_h + gap + bar_h + bracket
+        y_big = top + max(8.0, ((bottom - top) - group) / 2.0)
+        y_small = y_big + bar_h + gap
+        draw.rounded_rectangle([left, y_big, right, y_big + bar_h], 18, fill=GREEN)
+        draw.rounded_rectangle([left, y_small, right, y_small + bar_h], 18, fill=(22, 28, 42))
+        draw.rounded_rectangle([left, y_small, left + small_w, y_small + bar_h], 18, fill=RED)
+        # Zoom bracket under the red bar only. Not a bar, so the width ratio stays the values.
+        by = y_small + bar_h + 14
+        draw.line([(left, by), (left, by + 16)], fill=YELLOW, width=5)
+        draw.line([(left, by + 16), (left + small_w, by + 16)], fill=YELLOW, width=5)
+        draw.line([(left + small_w, by), (left + small_w, by + 16)], fill=YELLOW, width=5)
+        img.chart_bar_boxes = [
+            (float(left), float(y_big), float(right), float(y_big + bar_h), float(capital["value"])),
+            (float(left), float(y_small), float(left + small_w), float(y_small + bar_h), float(limit["value"])),
+        ]
+        return {
+            "plot": plot,
+            "capital": capital,
+            "limit": limit,
+            "percents": percents,
+            "bars": img.chart_bar_boxes,
+            "small_w": small_w,
+            "bracket_y": by + 22,
+        }
+    if concept == "compare" and len(labels) >= 2:
+        rows = percents if len(percents) >= 2 else rupees
+        if len(rows) < 2:
+            rows = labels
+        peak = max(float(item["value"]) for item in rows) or 1.0
+        left, top, right, bottom = plot
+        gap = 36
+        count = len(rows)
+        span = right - left
+        bw = (span - gap * (count + 1)) / count
+        base = bottom - 20
+        room = (bottom - top) * 0.62
+        boxes = []
+        for i, item in enumerate(rows):
+            h = max(24.0, room * (float(item["value"]) / peak))
+            x = left + gap + i * (bw + gap)
+            y0 = base - h
+            draw.rounded_rectangle([x, y0, x + bw, base], 14, fill=GREEN if i % 2 == 0 else YELLOW)
+            boxes.append((float(x), float(y0), float(x + bw), float(base), float(item["value"])))
+        img.chart_bar_boxes = boxes
+        return {"bars": boxes, "rows": rows, "plot": plot}
+    if concept == "pnl_stop":
+        loss = min((item["value"] for item in rupees), default=0) or 1
+        ys = [0, -0.35 * loss, -0.7 * loss, -loss, -loss, -loss]
+        ax = series_panel(
+            img, plot, [(ys, RED, 8)], lo=-loss * 1.25, hi=loss * 0.35, pad=(36, 24, 36, 24),
+        )
+        stop_y = ax.y(-loss)
+        draw.rectangle([plot[0] + 8, stop_y, plot[2] - 8, plot[3] - 8], fill=(70, 16, 22))
+        polyline(img, [(ax.x(i), ax.y(v)) for i, v in enumerate(ys)], RED, 8)
+        dashed(img, plot[0] + 16, plot[2] - 16, stop_y, RED)
+        ring(img, ax.x(len(ys) - 2), stop_y, 30, 30, YELLOW)
+        return {"stop_y": stop_y, "plot": plot, "zero_y": ax.y(0), "ax": ax}
+    if concept == "steps":
+        left, top, right, bottom = plot
+        reached = spec.get("_reached")
+        if reached is None:
+            reached = _steps_reached(card)
+        reached = int(reached)
+        badge = spec.get("_badge") or ""
+        reserve = 108 if badge else 0
+        gap = 22
+        count = 3
+        room = (bottom - reserve) - top
+        row_h = (room - gap * (count - 1)) / count
+        rows = []
+        for i in range(count):
+            y = top + i * (row_h + gap)
+            tone = (18, 78, 48) if i < reached else (18, 26, 40)
+            draw.rounded_rectangle([left, y, right, y + row_h], 18, fill=tone, outline=(90, 120, 160), width=4)
+            rows.append((left, y, right, y + row_h))
+        if badge:
+            draw.rounded_rectangle(
+                [left, bottom - 96, right, bottom - 8], 16, fill=(48, 36, 8), outline=YELLOW, width=4,
+            )
+        return {
+            "plot": plot,
+            "rows": rows,
+            "reached": reached,
+            "prev_reached": int(spec.get("_prev_reached") or 0),
+            "badge": badge,
+            "step_card": card,
+        }
+    if beat == "hook" and concept in ("plain", "level"):
+        return _equity_curve(img, plot)
+    if concept == "level" and labels:
+        left, top, right, bottom = plot
+        y = (top + bottom) / 2 + (index % 3) * 12
+        dashed(img, left, right, y, YELLOW)
+        ring(img, (left + right) / 2, y, 40, 40, YELLOW)
+        return {"level_y": y, "plot": plot}
+    if beat == "hook":
+        return _equity_curve(img, plot)
+    left, top, right, bottom = plot
+    mid = (top + bottom) / 2
+    polyline(img, [(left + 20, mid + 40), ((left + right) / 2, mid - 30), (right - 20, mid + 10)], GREEN, 8)
+    return {"plot": plot}
+
+
+def _place(img, x, y, text, fill, size, anchor="lt", role="chart"):
+    import scene_frames
+    return scene_frames._text(
+        img, x, y, text, fill, size, anchor=anchor, band=False, role=role,
+    )
+
+
+def _add_tick(img, cx, cy, arrive):
+    """A drawn check, not a font glyph. The newest one waits until the scene moves."""
+    from PIL import Image, ImageDraw
+    size = 58
+    sprite = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    pen = ImageDraw.Draw(sprite)
+    pen.ellipse([3, 3, size - 4, size - 4], fill=YELLOW)
+    pen.line([(14, 30), (24, 44), (44, 16)], fill=(20, 20, 20), width=6)
+    xy = (int(cx - size / 2), int(cy - size / 2))
+    img.text_layers.append({
+        "image": sprite,
+        "xy": xy,
+        "text": "",
+        "shaped": True,
+        "box": (xy[0], xy[1], xy[0] + size, xy[1] + size),
+        "size": 0,
+        "persist": False,
+        "faint": True,
+        "role": "glow",
+        "arrive": bool(arrive),
+    })
+
+
+def _draw_labels(img, spec, geom, beat="", card=""):
+    import scene_frames
+    gold = scene_frames.GOLD
+    labels = spec.get("labels") or []
+    concept = spec.get("concept")
+    plot = geom.get("plot") or _plot_box()
+    if concept == "capital_slice" and geom.get("capital"):
+        capital = geom["capital"]
+        limit = geom["limit"]
+        percents = geom.get("percents") or []
+        bars = geom.get("bars") or []
+        if len(bars) >= 2:
+            big, small = bars[0], bars[1]
+            cy_big = (big[1] + big[3]) / 2
+            cy_small = (small[1] + small[3]) / 2
+            # One spelling of each amount. The name sits beside it, not a second copy.
+            reached = {
+                item["value"]: item["text"]
+                for item in labels if item.get("kind") == "inr"
+            }
+            _place(img, big[0] + 28, cy_big, "Capital", (255, 255, 255), 42, anchor="lm", role="axis")
+            if capital["value"] in reached:
+                _place(img, big[0] + 220, cy_big, reached[capital["value"]], gold, _VALUE_SIZE, anchor="lm")
+            _place(img, small[2] + 28, cy_small, "Daily limit", (255, 255, 255), 40, anchor="lm", role="axis")
+            if limit["value"] in reached:
+                _place(img, small[2] + 280, cy_small, reached[limit["value"]], gold, _VALUE_SIZE, anchor="lm")
+            if percents:
+                _place(
+                    img, small[0] + 8, geom.get("bracket_y", small[3] + 28),
+                    "sirf " + percents[0]["text"], gold, 44, anchor="lt",
+                )
+        return
+    if concept == "compare" and geom.get("bars"):
+        rows = geom.get("rows") or labels
+        for item, box in zip(rows, geom["bars"]):
+            cx = (box[0] + box[2]) / 2
+            _place(img, cx, max(box[1] - 92, plot[1] + 8), item["text"], gold, 84, anchor="mt")
+        return
+    if concept == "pnl_stop":
+        stop = _stop_caption(spec)
+        stop_y = geom.get("stop_y", plot[3] - 80)
+        zero_y = geom.get("zero_y", plot[1] + 40)
+        _place(img, plot[0] + 280, stop_y - 64, stop, (255, 228, 160), _STOP_SIZE, anchor="lt", role="chart")
+        _place(img, plot[0] + 8, zero_y - 48, "₹0", (210, 214, 220), _AXIS_SIZE, anchor="lt", role="axis")
+        rupees = [item for item in labels if item["kind"] == "inr"]
+        if rupees:
+            loss = min(rupees, key=lambda item: item["value"])
+            _place(img, plot[0] + 8, stop_y + 12, _minus_amount(loss["text"]), (255, 180, 170), _AXIS_SIZE, anchor="lt", role="axis")
+        for item in labels:
+            if item["kind"] == "pct" and item["text"] not in stop:
+                _place(img, plot[0] + 12, plot[1] + 64, item["text"], gold, 48)
+        return
+    if concept == "steps" and geom.get("rows"):
+        names = ["Limit likho", "SL + entry", "Hit = terminal band"]
+        rupees = [item for item in labels if item["kind"] == "inr"]
+        percents = [item for item in labels if item["kind"] == "pct"]
+        if percents:
+            names[0] = "Limit likho  " + percents[0]["text"]
+        if rupees:
+            names[1] = "SL + entry, max " + min(rupees, key=lambda item: item["value"])["text"] + " loss"
+        reached = int(geom.get("reached") or 0)
+        prev = int(geom.get("prev_reached") or 0)
+        for i, box in enumerate(geom["rows"]):
+            cy = (box[1] + box[3]) / 2
+            if i < reached:
+                # A tick from an earlier scene stays on. Only the new one waits.
+                _add_tick(img, box[0] + 48, cy, arrive=(i == reached - 1 and i >= prev))
+            _place(img, box[0] + 96, cy - 28, names[i], (245, 245, 245) if i < reached else (170, 176, 186), 52)
+        badge = geom.get("badge") or ""
+        if badge:
+            _place(img, (plot[0] + plot[2]) / 2, plot[3] - 78, badge, gold, 44, anchor="mt", role="axis")
+        return
+    if geom.get("equity"):
+        # The hook headline already says CAPITAL ₹2 LAKH. A second chart amount
+        # would repeat that figure on the curve.
+        return
+    if labels:
+        y = geom.get("level_y", (plot[1] + plot[3]) / 2) - 70
+        for item in labels:
+            _place(img, plot[0] + 16, y, item["text"], gold, 84)
+            y += 96
+
+
+def _phrase_parts(text):
+    """Break on a sentence or a comma, never inside a number or a phrase."""
+    raw = " ".join(str(text or "").split())
+    if not raw:
+        return []
+    chunks = re.split(r"(?<=[।!?？])\s+|(?<!\d),\s+(?!\d)", raw)
+    parts = []
+    for chunk in chunks:
+        chunk = chunk.strip(" ,")
+        if not chunk:
+            continue
+        bits = re.split(r"\s+(?=(?:तो|ताकि|यानी)\b)", chunk)
+        for bit in bits:
+            bit = bit.strip()
+            if bit:
+                parts.append(bit)
+    return parts
+
+
+def _caption_lines(text, width=900, size=36, max_lines=2):
+    """At most two lines. A phrase stays whole; a long one shrinks instead of splitting."""
+    import scene_frames
+    parts = _phrase_parts(text)
+    if not parts:
+        return []
+    lines, cur = [], ""
+    for part in parts:
+        if len(lines) >= max_lines:
+            break
+        trial = (cur + " " + part).strip()
+        if cur and scene_frames._text_extent(trial, size)[0] > width:
+            lines.append(cur)
+            cur = ""
+            if len(lines) >= max_lines:
+                break
+            cur = part
+            continue
+        cur = trial
+    if cur and len(lines) < max_lines:
+        lines.append(cur)
+    return lines[:max_lines]
+
+
+def _draw_chrome(img, beat, card, index=0, spec=None):
+    """English line on top, yellow beat word under the plot, captions under the board."""
+    import safe_area
+    import scene_frames
+    x0, y0, _x1, y1 = BOARD
+    _place(
+        img, x0 + 36, y0 + 88, _headline(spec, beat), (248, 248, 248), _HEADLINE_SIZE,
+        anchor="lt", role="axis",
+    )
+    _place(
+        img, x0 + 36, y1 - 156, _BEAT_WORD.get(beat, str(beat).upper()), YELLOW, 34,
+        anchor="lt", role="axis",
+    )
+    _place(
+        img, x0 + 36, y1 - 100, _GLOSS.get(beat, ""), (236, 236, 236), 34,
+        anchor="lt", role="axis",
+    )
+    lines = _caption_lines(card)
+    # Six-beat example cards still name the worked example. The word sits in
+    # the chart, not on a full-screen text card.
+    import hook_check
+    if beat in hook_check.TEACHING_BEATS and "उदाहरण" not in card and not any("उदाहरण" in line for line in lines):
+        _place(img, _plot_box()[2] - 8, y1 - 156, "उदाहरण", YELLOW, 34, anchor="rt", role="caption")
+    y = safe_area.SUBTITLE_TOP + 18
+    for line in lines:
+        scene_frames._text(
+            img, 540, y, line, (250, 250, 250), 36, anchor="mt", band=False, role="caption",
+        )
+        y += 70
+    scene_frames._brand(img)
+    caps = [
+        layer["box"] for layer in (img.text_layers or [])
+        if layer.get("role") == "caption" and layer.get("box")
+    ]
+    if caps:
+        img.panel_box = (
+            min(box[0] for box in caps), min(box[1] for box in caps),
+            max(box[2] for box in caps), max(box[3] for box in caps),
+        )
+        img.panel_fill = scene_frames.panel_fill_fraction(img)
+    else:
+        img.panel_fill = 1.0
+
+def _bare_word(word):
+    import sync_gate
+    text = sync_gate._alias(str(word or ""))
+    return re.sub(r"[^\dA-Za-z\u0900-\u097F%]", "", text)
+
+
+def _pair_figure(word, nxt):
+    """A Hindi amount or percent that occupies this word and the next."""
+    import sync_gate
+    left, right = _bare_word(word), _bare_word(nxt)
+    if left in sync_gate._ONES and right in ("प्रतिशत", "percent"):
+        return "pct", _norm_num("pct", sync_gate._ONES[left]), 2
+    if left in sync_gate._FRACTION and right in ("प्रतिशत", "percent"):
+        return "pct", _norm_num("pct", sync_gate._FRACTION[left]), 2
+    if left in sync_gate._ONES and right in sync_gate._SCALE:
+        return "inr", _norm_num("inr", sync_gate._ONES[left] * sync_gate._SCALE[right]), 2
+    if left in sync_gate._FRACTION and right in sync_gate._SCALE:
+        return "inr", _norm_num("inr", sync_gate._FRACTION[left] * sync_gate._SCALE[right]), 2
+    return None, None, 1
+
+
+def _allowed_figure_keys(topic, beat, index):
+    """Figures this scene may draw. None when the scene has no installed list."""
+    preset = (topic or {}).get("_scene_figures")
+    if not isinstance(preset, dict) or beat not in preset:
+        return None
+    rows = preset.get(beat) or []
+    if index >= len(rows):
+        return None
+    allowed = set()
+    for label in rows[index] or []:
+        kind, value = _classify_label(label)
+        if kind:
+            allowed.add((kind, value))
+    return allowed
+
+
+def _drop_unsaid_figures(text, allowed):
+    """Remove ₹/% phrases this scene has not reached yet."""
+    words = str(text or "").split()
+    if not words:
+        return ""
+    drop = [False] * len(words)
+    i = 0
+    while i < len(words):
+        kind, value, width = _pair_figure(words[i], words[i + 1] if i + 1 < len(words) else "")
+        if kind:
+            if (kind, value) not in allowed:
+                for j in range(i, min(len(words), i + width)):
+                    drop[j] = True
+            i += width
+            continue
+        kind, value = _classify_label(words[i])
+        if kind and (kind, value) not in allowed:
+            drop[i] = True
+        i += 1
+    return " ".join(word for word, gone in zip(words, drop) if not gone)
+
+
+def _voice_for_scene(topic, beat, index, card):
+    """The card, without a figure whose words have not started."""
+    allowed = _allowed_figure_keys(topic, beat, index)
+    if allowed is None:
+        return card
+    voice = _drop_unsaid_figures(card, allowed)
+    have = {(kind, value) for _label, kind, value in labels_from_voice(voice)}
+    extra = []
+    rows = ((topic or {}).get("_scene_figures") or {}).get(beat) or []
+    for label in (rows[index] if index < len(rows) else []) or []:
+        kind, value = _classify_label(label)
+        if not kind or (kind, value) not in allowed or (kind, value) in have:
+            continue
+        extra.append(str(label))
+        have.add((kind, value))
+    if extra:
+        voice = (voice + " " + " ".join(extra)).strip()
+    return voice
+
+
+def _prefer_installed_labels(topic, beat, index, spec):
+    """Use the scene's own figure spelling when it names the same amount."""
+    preset = (topic or {}).get("_scene_figures")
+    if not isinstance(preset, dict) or beat not in preset:
+        return spec
+    rows = preset.get(beat) or []
+    if index >= len(rows):
+        return spec
+    for label in rows[index] or []:
+        kind, value = _classify_label(label)
+        if kind not in ("inr", "pct"):
+            continue
+        for item in spec.get("labels") or []:
+            if item["kind"] == kind and item["value"] == value:
+                item["text"] = str(label)
+    return spec
+
+
+def _said_through(topic, beat, index):
+    """Words of this beat up to and including this scene."""
+    cards = ((topic or {}).get("_scene_cards") or {}).get(beat)
+    if isinstance(cards, list) and cards:
+        return " ".join(str(part or "") for part in cards[: int(index) + 1])
+    return ""
+
+
+def _said_before(topic, beat, index):
+    cards = ((topic or {}).get("_scene_cards") or {}).get(beat)
+    if isinstance(cards, list) and cards and index:
+        return " ".join(str(part or "") for part in cards[: int(index)])
+    return ""
+
+
+def _forced_picture(beat_spec, scene_spec, concept):
+    """Same picture as the whole beat. Only figures this scene has already reached."""
+    scene_by = {
+        (item["kind"], item["value"]): item["text"]
+        for item in (scene_spec.get("labels") or [])
+    }
+    labels = []
+    for item in beat_spec.get("labels") or []:
+        key = (item["kind"], item["value"])
+        if key not in scene_by:
+            continue
+        labels.append({"text": scene_by[key], "kind": item["kind"], "value": item["value"]})
+    return {
+        "concept": concept,
+        "rupees": sorted(item["value"] for item in labels if item["kind"] == "inr"),
+        "percents": sorted(item["value"] for item in labels if item["kind"] == "pct"),
+        "labels": labels,
+    }
+
+
+def _daily_limit_badge(topic):
+    """The closing badge. Only when the narration already said 2%."""
+    blob = " ".join(str(v or "") for v in ((topic or {}).get("_spoken_beats") or {}).values())
+    if not blob.strip():
+        return ""
+    if any(abs(float(p) - 2.0) < 0.05 for p in chart_spec_for(blob).get("percents") or []):
+        return "Daily loss limit = 2%"
+    return ""
+
+
+def _picture_spec(topic, beat, index, scene_spec):
+    """Keep one picture for the whole beat. The gate still checks the scene line."""
+    full = " ".join(str(((topic or {}).get("_spoken_beats") or {}).get(beat) or "").split())
+    display = {
+        "concept": scene_spec.get("concept"),
+        "rupees": list(scene_spec.get("rupees") or []),
+        "percents": list(scene_spec.get("percents") or []),
+        "labels": [dict(item) for item in (scene_spec.get("labels") or [])],
+    }
+    if full:
+        beat_spec = chart_spec_for(full)
+        if beat == "matlab" and beat_spec["concept"] == "pnl_stop":
+            display = _forced_picture(beat_spec, scene_spec, "pnl_stop")
+        elif beat == "karein" and beat_spec["concept"] == "steps":
+            display = _forced_picture(beat_spec, scene_spec, "steps")
+        elif beat == "pehchan" and beat_spec["concept"] == "capital_slice":
+            display = _forced_picture(beat_spec, scene_spec, "capital_slice")
+            display["_shape_labels"] = [
+                {"text": item["text"], "kind": item["kind"], "value": item["value"]}
+                for item in (beat_spec.get("labels") or [])
+                if item.get("kind") == "inr"
+            ]
+    if display.get("concept") == "steps":
+        said = _said_through(topic, beat, index) or full
+        prev = _steps_reached(_said_before(topic, beat, index))
+        reached = _steps_reached(said)
+        cards = ((topic or {}).get("_scene_cards") or {}).get(beat) or []
+        is_last = (not cards) or index >= len(cards) - 1
+        if is_last and _steps_reached(full) >= 3:
+            reached = max(reached, 3)
+        display["_prev_reached"] = prev
+        display["_reached"] = reached
+        if reached >= 3:
+            display["_badge"] = _daily_limit_badge(topic)
+    return display
+
+
+def paint_chart_board(topic, beat, index=0, n=1):
+    """One Chart Board frame. The spec is this scene's line, or the render fails."""
+    import scene_frames
+    spoken = scene_frames._scene_card_text(topic, beat, index, n)
+    card = _voice_for_scene(topic, beat, index, spoken)
+    spec = _prefer_installed_labels(topic, beat, index, chart_spec_for(card))
+    enforce_chart_voice(spec, card)
+    display = _picture_spec(topic, beat, index, spec)
+    img = K.background()
+    panel(img)
+    img.label_boxes = []
+    img.text_layers = []
+    img.shapes = []
+    img.labelled_graphic_boxes = []
+    img.chart_region = tuple(float(v) for v in BOARD)
+    img.scene_kind = f"chart-{beat}"
+    img.chart_spec = spec
+    geom = _draw_geometry(img, display, index=index, beat=beat, card=card)
+    _draw_labels(img, display, geom or {}, beat=beat, card=card)
+    _draw_chrome(img, beat, spoken, index=index, spec=display)
+    return img
+
+
+def cover_hook(topic):
+    """Three or four Devanagari words. The first thumb line when it already is."""
+    parts = [str(part).strip() for part in (topic or {}).get("thumb") or [] if str(part).strip()]
+    if parts:
+        words = parts[0].replace("?", "").replace("।", "").split()
+        if 2 <= len(words) <= 4:
+            return " ".join(words)
+        if len(words) > 4:
+            return " ".join(words[:4])
+    words = " ".join(parts).replace("?", "").split()
+    return " ".join(words[:4]) or "दिन की हद"
+
+
+def cover_line(topic):
+    """The voice line the cover illustrates. A capital-slice line wins."""
+    import scene_frames
+    spoken = (topic or {}).get("_spoken_beats") or {}
+    lines = []
+    for beat in ("pehchan", "matlab", "hook", "karein"):
+        text = " ".join(str(spoken.get(beat) or "").split())
+        if text:
+            lines.append(text)
+    if not lines:
+        for beat in ("pehchan", "hook", "matlab", "karein"):
+            text = scene_frames._scene_card_text(topic, beat, 0, 1)
+            if text:
+                lines.append(text)
+    best_text, best_spec = "", chart_spec_for("")
+    for text in lines:
+        spec = chart_spec_for(text)
+        if spec["concept"] == "capital_slice":
+            return text, spec
+        if len(spec["labels"]) > len(best_spec["labels"]):
+            best_text, best_spec = text, spec
+    return best_text, best_spec
+
+
+def _bold_amount(spec):
+    import scene_frames
+    rupees = [int(v) for v in (spec.get("rupees") or [])]
+    if not rupees:
+        return ""
+    value = min(rupees) if spec.get("concept") == "capital_slice" else rupees[0]
+    return scene_frames._indian_rupee(value) + " MAX"
+
+
+def paint_cover(topic):
+    """1080x1920 Chart Board cover. Same gate as a beat: numbers match the line."""
+    import safe_area
+    import scene_frames
+    from PIL import ImageDraw
+    line, spec = cover_line(topic)
+    joined = " ".join(str(v) for v in ((topic or {}).get("_spoken_beats") or {}).values()) or line
+    faults = chart_voice_faults(spec, line)
+    if joined.strip():
+        full = chart_spec_for(joined)
+        for value in spec["rupees"]:
+            if value not in set(full["rupees"]):
+                faults.append(f"cover shows ₹{value} which the narration does not say")
+        for value in spec["percents"]:
+            if value not in set(full["percents"]):
+                faults.append(f"cover shows {value:g}% which the narration does not say")
+    if faults:
+        raise ChartVoiceError("; ".join(faults))
+    img = K.background()
+    # The IG grid keeps y 240–1680. The hook, the chart, and the amount sit there.
+    box = (48, 312, 1032, 1680)
+    draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle(box, 28, fill=K.PANEL, outline=(60, 80, 110), width=4)
+    img.label_boxes = []
+    img.text_layers = []
+    img.shapes = []
+    img.labelled_graphic_boxes = []
+    img.chart_bar_boxes = []
+    img.chart_region = tuple(float(v) for v in box)
+    img.chart_spec = spec
+    img.scene_kind = "chart-cover"
+    bold = _bold_amount(spec)
+    # The hook crash chart fills the frame. The badge sits on it. No bar chart.
+    plot = (box[0] + 20, box[1] + 16, box[2] - 20, box[3] - 20)
+    _equity_curve(img, plot)
+    if bold:
+        draw.rounded_rectangle([250, box[1] + 28, 830, box[1] + 168], 20, fill=(48, 36, 8), outline=scene_frames.GOLD, width=4)
+    scene_frames._text(
+        img, 540, 252, "EK BURA DIN = MAHINA KHATAM?", (255, 255, 255), 48,
+        anchor="mt", band=False, role="axis",
+    )
+    if bold:
+        scene_frames._text(
+            img, 540, box[1] + 48, bold, scene_frames.GOLD, 96, anchor="mt", band=False, role="chart",
+        )
+    del safe_area
+    return img

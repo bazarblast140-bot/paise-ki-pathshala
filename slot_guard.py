@@ -375,10 +375,36 @@ def _emit_next(now=None):
     print("taken=false")
 
 
+def emit_publish_at(slot, date_ist=""):
+    """GitHub output for one public publishAt. A missed slot is not rolled.
+
+    Prints slot=, date_ist=, and publish_at= on stdout. Exits 1 when the
+    instant is inside the 20-minute upload buffer.
+    """
+    slot = str(slot or "").strip()
+    date_ist = str(date_ist or "").strip() or datetime.now(IST).strftime("%Y-%m-%d")
+    when = scheduled_publish_at(slot, date_ist=date_ist)
+    if not when:
+        print(
+            f"[FAIL] {date_ist} {slot} IST is inside the {int(UPLOAD_BUFFER.total_seconds() // 60)}-minute "
+            "upload buffer. Pass a later date_ist. This does not move the video to the next day.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    print(f"slot={slot}")
+    print(f"date_ist={date_ist}")
+    print(f"publish_at={when}")
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "--next":
         _emit_next()
+        return
+    if argv and argv[0] == "--publish-at":
+        slot = argv[1] if len(argv) > 1 else ""
+        date_ist = argv[2] if len(argv) > 2 else ""
+        emit_publish_at(slot, date_ist)
         return
     slot = argv[0].strip() if argv else ""
     hit = taken(slot) if slot else None

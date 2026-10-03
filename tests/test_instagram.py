@@ -454,6 +454,33 @@ class WatchdogVerdictTests(unittest.TestCase):
             marker = reel.call_args.args[1]
             self.assertIn("pkp:option_bull_call_spread", marker)
 
+    def test_thumbnail_is_hosted_as_the_paise_cover(self):
+        with tempfile.TemporaryDirectory() as d:
+            run = Path(d)
+            (run / "final.mp4").write_bytes(b"x" * 2000)
+            (run / "script.txt").write_text(SCRIPT, encoding="utf-8")
+            (run / "topic.json").write_text(json.dumps(TOPIC), encoding="utf-8")
+            (run / "report.md").write_text("VERDICT: [READY TO PUBLISH]\n", encoding="utf-8")
+            (run / "verify_meta.json").write_text(json.dumps({
+                "ai_verdict_valid": True, "verdict": "READY", "public_ready": True,
+            }), encoding="utf-8")
+            (run / "self_review.json").write_text(json.dumps({"public_ok": True}), encoding="utf-8")
+            (run / "uploaded.txt").write_text("videoid1\n", encoding="utf-8")
+            (run / "thumbnail.jpg").write_bytes(b"\xff\xd8\xff" + b"cover-bytes")
+            env = {"IG_CROSSPOST": "1", "IG_CROSSPOST_FORCE": "1", "VIDEO_FORMAT": "short",
+                   "TOPIC_KEY": "risk_daily_loss_limit", "NARRATION_FROM_RUN": "37095205924",
+                   "APPROVED": "true", "PIPELINE_MODE": "", "BOARD_QA": "",
+                   "IG_USER_ID": "1789", "IG_ACCESS_TOKEN": "ig-token-test"}
+            with mock.patch.object(IG, "RUN", run), mock.patch.dict("os.environ", env), \
+                 mock.patch.object(IG, "video_format", return_value="short"), \
+                 mock.patch.object(IG, "fetch_recent_media", return_value=[]), \
+                 mock.patch.object(IG, "host_mp4", return_value="https://example.com/a.mp4"), \
+                 mock.patch.object(IG, "host_cover", return_value="https://example.com/paise-cover-1.jpg") as cover, \
+                 mock.patch.object(IG, "publish_reel", return_value="1789") as reel:
+                IG.main()
+        self.assertEqual(cover.call_args.args[0], run / "thumbnail.jpg")
+        self.assertIn("paise-cover", reel.call_args.args[2])
+
 
 READY_META = {"ai_verdict_valid": True, "verdict": "READY", "public_ready": True}
 ATR_TITLE = "SL बार-बार हिट? ATR से दूरी तय करो"

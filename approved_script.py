@@ -147,6 +147,20 @@ def load_payload(directory, topic_key):
     return None
 
 
+def _opening_hook(beats, topic):
+    """First hook sentence, when it already passes the hook-line check."""
+    import hook_check
+    text = str((beats or {}).get("hook") or "").strip()
+    sentence = __import__("re").split(r"(?<=[।?!])\s+", text, maxsplit=1)[0].strip()
+    if not sentence:
+        return ""
+    allowed = hook_check.allowed_numbers(topic or {})
+    limit = hook_check.hook_word_limit(topic)
+    if hook_check.check_hook_line(sentence, allowed, max_words=limit):
+        return ""
+    return sentence
+
+
 def narration_from_payload(payload, topic, run_id=""):
     """Exact beats. Title falls back to the topic line. Nothing is trimmed."""
     beats_in = (payload or {}).get("beats") or {}
@@ -162,6 +176,8 @@ def narration_from_payload(payload, topic, run_id=""):
     if not title:
         title = " ".join(str((topic or {}).get("topic") or (topic or {}).get("key") or "पाठ").split())
     hook_line = " ".join(str((payload or {}).get("hook_line") or "").split())
+    if not hook_line:
+        hook_line = _opening_hook(beats, topic)
     script = {
         "title": title,
         "hook_line": hook_line,
@@ -195,6 +211,54 @@ def load_for_topic(topic):
     if isinstance(topic, dict):
         topic["_approved_script"] = True
     return script
+
+
+def repo_beats_path(topic_key):
+    """Committed approved beats for one topic. Absent for every other topic."""
+    key = str(topic_key or "").strip()
+    if not key:
+        return None
+    path = pathlib.Path(__file__).parent / "approved" / f"{key}.json"
+    return path if path.is_file() else None
+
+
+def install_repo_beats(directory, topic_key):
+    """Write the committed approved script over a downloaded dry run.
+
+    Call this after the artifact download and before narration() locks the
+    sha256. The dry-run tts file stays on disk; narration.json wins, and the
+    lock is the committed beats, title, and hook line.
+    """
+    path = repo_beats_path(topic_key)
+    if path is None:
+        return None
+    extra = json.loads(path.read_text(encoding="utf-8"))
+    payload = load_payload(directory, topic_key) or {}
+    beats = dict((payload.get("beats") or {}))
+    incoming = extra.get("beats") if isinstance(extra.get("beats"), dict) else extra
+    for beat, text in (incoming or {}).items():
+        if beat not in ORDER:
+            continue
+        cleaned = " ".join(str(text or "").split())
+        if cleaned:
+            beats[beat] = cleaned
+    payload["beats"] = beats
+    title = " ".join(str(extra.get("title") or "").split())
+    hook_line = " ".join(str(extra.get("hook_line") or "").split())
+    if title:
+        payload["title"] = title
+    if hook_line:
+        payload["hook_line"] = hook_line
+    payload["source"] = "approved"
+    payload["approved_hashes"] = hashes_for(beats)
+    raw = json.dumps(payload, ensure_ascii=False, indent=2)
+    root = pathlib.Path(directory)
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "narration.json").write_text(raw, encoding="utf-8")
+    key = str(topic_key or "").strip()
+    if key:
+        (root / f"narration_{key}.json").write_text(raw, encoding="utf-8")
+    return payload
 
 
 def download_edge_artifact(run_id, dest):

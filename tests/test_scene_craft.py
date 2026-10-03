@@ -378,7 +378,8 @@ class MotionGateTests(unittest.TestCase):
                 missing = scene_frames.layer_missing(layer)
                 self.assertEqual(missing, [], f"{layer.get('text')!r} {missing}")
         brand = next(
-            layer for layer in frames[0].text_layers if layer.get("text") == "PKP" and layer.get("persist")
+            layer for layer in frames[0].text_layers
+            if layer.get("text") == "@ThePaiseKiPathshala" and layer.get("persist")
         )
         self.assertEqual(brand["font"], scene_frames._SANS)
 

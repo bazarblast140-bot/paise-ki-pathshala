@@ -53,6 +53,8 @@ STEP_CHIP = {"hook": "HOOK", "pehchan": "1  PEHCHAN", "matlab": "2  MATLAB", "ka
 # in the description, not in this spoken/on-screen line.
 CTA = engagement.engagement_question({})
 DISCLAIMER = "सिर्फ़ जानकारी, निवेश सलाह नहीं।"
+# 1.5× the previous 26px line. It stays in the brand band, under the captions.
+DISCLAIMER_SIZE = 39
 FORBIDDEN = ["दोस्तों", "like", "subscribe", "सब्सक्राइब", "लाइक", "टारगेट", "target price", "टिप",
              "ज़रूर ख़रीद", "जरूर खरीद", "ख़रीद लो", "खरीद लो", "बेच दो", "गारंटी से", "पक्का मुनाफ़ा"]
 
@@ -128,8 +130,21 @@ def beat_images(topic, beat):
 
 
 def thumbnail(topic, out_path, hook_img=None):
-    """Tagda hook thumbnail: red ground, huge 2-line Hindi hook, the topic's own
-    board picture, big host, sticker. Hindi via libass."""
+    """Chart Board cover: the lesson chart, a bold ₹ amount, a 3–4 word Hindi hook.
+
+    Live shorts use this instead of the red host card. YouTube reads thumbnail.jpg.
+    Instagram sends that same file as the Reel cover.
+    """
+    if topic.get("_live_short") or topic.get("_spoken_beats") or hook_img is None:
+        img = S.paint_cover(topic)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        img.convert("RGB").save(out_path, quality=92)
+        return out_path
+    return _legacy_thumbnail(topic, out_path, hook_img)
+
+
+def _legacy_thumbnail(topic, out_path, hook_img=None):
+    """Older red host card. Kept for a caller that already painted a board crop."""
     W, H = K.W, K.H
     data = topic.get("cat") == "REAL DATA"
     img = Image.new("RGB", (W, H))
@@ -865,6 +880,14 @@ new concept before the previous one is understood.
 TEACHING VOICE:
 - Adult trader talking to another adult. Calm, direct Hinglish. No cheerleading, no "दोस्तों",
   no baby-talk, no hype.
+
+LANGUAGE — simple everyday Hinglish, the way Indian traders talk on a desk:
+- Write spoken words, not shuddh Hindi. Do not use हद, पूँजी, क्षमता, तय करो, or बैठती है.
+- Use the words traders use: limit, capital, loss, stop loss, entry, trade, profit.
+- In the script say लिमिट, कैपिटल, लॉस, स्टॉप लॉस, एंट्री, ट्रेड, प्रॉफिट, डेली लॉस लिमिट.
+- Say फिक्स करो when the lesson is to write the limit down. That is not an order to buy or sell.
+- A 2% daily loss limit is the whole day's TOTAL loss, not the loss of one trade. Say that.
+- Bridges, when they help: "अब इसे पहचानो", "मतलब ये है", "अब आगे".
 - One lesson, in this order, mapped onto the four beats:
   hook = the problem (do not give the answer yet);
   pehchan = the rule, with the number that is on the chart;
@@ -899,7 +922,7 @@ or "अब आगे traders क्या check करते हैं". Speak t
 
 CONTINUITY RULES:
 - Each beat must answer the next question in the sequence. Never repeat the hook in later beats.
-- Use explicit bridge words where natural: "अब इसे पहचानें", "इसका मतलब", "अब आगे".
+- Use explicit bridge words where natural: "अब इसे पहचानो", "मतलब ये है", "अब आगे".
 - Narration must describe the exact visual shown in that beat. If the screen highlights
   three candles, explain those three candles; if it shows SL, explain SL. Never talk about
   a chart element that is not on screen.
@@ -2566,7 +2589,12 @@ def _edge_voice_rate(c):
     if eleven_voice.paid_voice_allowed():
         voice = c["voice"]
         return voice.get("edge_voice", "hi-IN-SwaraNeural"), voice.get("edge_rate", "+10%")
-    return eleven_voice.PREVIEW_EDGE_VOICE, eleven_voice.PREVIEW_EDGE_RATE
+    voice, rate = eleven_voice.PREVIEW_EDGE_VOICE, eleven_voice.PREVIEW_EDGE_RATE
+    # Unpaid sample only. The paid path above does not read this.
+    sample = os.environ.get("EDGE_SAMPLE_RATE", "").strip()
+    if sample:
+        rate = sample
+    return voice, rate
 
 
 def _paid_voice_this_beat():
@@ -3543,7 +3571,7 @@ def on_screen_boxes(topic, beat_times, spoken, hook_line, cta, t, audio_words=No
         break
     t0, t1 = beat_times["karein"]
     if t0 - 1e-6 <= t <= t1 + 1e-6:
-        boxes.append(_top_box(DISCLAIMER, 540, safe_area.SOURCE_Y, 26))
+        boxes.append(_top_box(DISCLAIMER, 540, safe_area.SOURCE_Y, DISCLAIMER_SIZE))
     return boxes
 
 
@@ -3592,8 +3620,15 @@ def frame_text_boxes(scenes, topic, beat_times, spoken, hook_line, cta, fps=30, 
             if start <= t:
                 index = k
         boxes = list(scene_boxes(index, t))
-        boxes.extend(on_screen_boxes(
-            topic, beat_times, spoken, hook_line, cta, t, audio_words=audio_words))
+        extra = on_screen_boxes(
+            topic, beat_times, spoken, hook_line, cta, t, audio_words=audio_words)
+        layers = getattr(frames[index], "text_layers", None) or []
+        if any(layer.get("role") == "caption" and layer.get("text") for layer in layers):
+            # The Chart Board already paints the cue under the chart. The
+            # unburned cue box would sit on those same pixels.
+            import safe_area
+            extra = [box for box in extra if float(box[1]) >= safe_area.BRAND_TOP - 0.5]
+        boxes.extend(extra)
         text_frames.append((t, boxes))
     return text_frames
 
@@ -3664,7 +3699,7 @@ def build_ass(topic, beat_times, spoken, hook_line, cta, audio_words=None):
     ev = []
     t0, t1 = beat_times["karein"]
     # Grey disclaimer sits in the brand band, under the fixed subtitle box.
-    ev.append(K.ass_text(t0, t1, 540, safe_area.SOURCE_Y, 26, "&H00B8A394&", DISCLAIMER, 8))
+    ev.append(K.ass_text(t0, t1, 540, safe_area.SOURCE_Y, DISCLAIMER_SIZE, "&H00B8A394&", DISCLAIMER, 8))
     return K.ASS_HEAD + "\n".join(ev) + "\n"
 
 
@@ -4683,6 +4718,8 @@ def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
     write_compat(topic, n, spoken, beat_times)
     (RUN / "narration.json").write_text(
         json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
+    topic["_spoken_beats"] = {**(topic.get("_spoken_beats") or {}), **spoken}
+    thumbnail(topic, RUN / "thumbnail.jpg")
     ok(f"wrote run/final.mp4 ({final_dur:.1f}s) + thumbnail.jpg")
     return {
         "final_dur": final_dur,

@@ -273,8 +273,15 @@ class CraftAndLeakTests(unittest.TestCase):
                 frac = scene_pace.empty_row_fraction(frame)
                 self.assertLessEqual(frac, 0.20, f"{beat} empty {frac:.2f}")
                 rows = np.asarray(frame.convert("RGB")).max(axis=2) > 80
-                bottom = rows[int(rows.shape[0] * 0.70):]
-                self.assertGreaterEqual(float(bottom.any(axis=1).mean()), 0.90, beat)
+                region = frame.chart_region
+                self.assertIsNotNone(region, beat)
+                frac = (region[3] - region[1]) / frame.size[1]
+                self.assertGreaterEqual(frac, 0.60, beat)
+                self.assertLessEqual(frac, 0.66, beat)
+                self.assertGreaterEqual((region[2] - region[0]) / frame.size[0], 0.90, beat)
+                self.assertLessEqual(region[3], safe_area.SUBTITLE_TOP + 1, beat)
+                chart_rows = rows[int(region[1]):int(region[3])]
+                self.assertGreaterEqual(float(chart_rows.any(axis=1).mean()), 0.90, beat)
                 self.assertGreater(float(np.asarray(frame).std()), 8.0)
                 ok, bad = safe_area.check_boxes(frame.label_boxes)
                 self.assertTrue(ok, bad)

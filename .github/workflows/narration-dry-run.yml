@@ -25,9 +25,18 @@ on:
         description: "Render final.mp4 with free Edge TTS. No ElevenLabs, no upload."
         type: boolean
         default: false
+      narration_from_run:
+        description: "Actions run id whose edge-dry-run script is spoken. No DeepSeek narration call."
+        type: string
+        default: ""
+      overrides:
+        description: "JSON object of beat replacements, applied before the voice hash lock."
+        type: string
+        default: ""
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: narration-dry-run
@@ -49,6 +58,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
       - name: Install deps
         run: pip install -r requirements.txt
+      - name: Download approved dry-run script
+        if: ${{ inputs.narration_from_run != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python approved_script.py --download "${{ inputs.narration_from_run }}" --dest run/approved_script
       - name: Live narration check
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
@@ -59,12 +74,15 @@ jobs:
           LIVE_BEATS: ${{ inputs.beats }}
         run: |
           ARGS=(--topics "${{ github.event.inputs.topics || 3 }}" --topic-keys "${{ github.event.inputs.topic_keys }}" --beats "${{ inputs.beats }}")
-          if [ "${{ inputs.full }}" = "true" ]; then
+          if [ "${{ inputs.full }}" = "true" ] || [ -n "${{ inputs.narration_from_run }}" ]; then
             ARGS+=(--full)
+          fi
+          if [ -n "${{ inputs.narration_from_run }}" ]; then
+            ARGS+=(--narration-from-run "${{ inputs.narration_from_run }}" --overrides "${{ inputs.overrides }}")
           fi
           python narration_dry_run.py "${ARGS[@]}"
       - name: Upload Edge dry-run video
-        if: ${{ always() && inputs.full }}
+        if: ${{ always() && (inputs.full || inputs.narration_from_run != '') }}
         uses: actions/upload-artifact@v4
         with:
           name: edge-dry-run

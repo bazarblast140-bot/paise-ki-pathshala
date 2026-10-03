@@ -191,7 +191,8 @@ class ChartProvenanceTests(unittest.TestCase):
         stamped = market_data.stamp(base, spec)
         self.assertNotEqual(stamped.getpixel((80, 1060)), base.getpixel((80, 1060)))
         frame = market_data.non_numeric_frame(_topic(), "hook", 0)
-        crop = frame.crop((25, 165, 1055, 1115))
+        import board_kit as kit
+        crop = frame.crop(kit.BOARD)
         gray = np.asarray(crop.convert("L"), dtype="float32")
         self.assertGreater(float((gray > 42).mean()), 0.01)
         self.assertGreater(float(gray.std()), 5.0)
@@ -410,6 +411,28 @@ class NoPublicFromRepairOrTestTests(unittest.TestCase):
             os.environ.pop("PIPELINE_MODE", None)
             vis, when = publish_guard.clamp_visibility("private", "2026-10-02T03:00:00Z")
         self.assertEqual((vis, when), ("private", "2026-10-02T03:00:00Z"))
+
+    def test_approved_narration_from_run_is_not_a_test(self):
+        approved = {
+            "TOPIC_KEY": "risk_daily_loss_limit",
+            "NARRATION_FROM_RUN": "37095205924",
+            "APPROVED": "true",
+            "PIPELINE_MODE": "",
+            "BOARD_QA": "",
+        }
+        with mock.patch.dict(os.environ, approved, clear=False):
+            self.assertIsNone(publish_guard.blocked_reason())
+            vis, when = publish_guard.clamp_visibility("public", "2026-10-03T10:30:00Z")
+        self.assertEqual((vis, when), ("public", "2026-10-03T10:30:00Z"))
+        still_test = dict(approved, APPROVED="false")
+        with mock.patch.dict(os.environ, still_test, clear=False):
+            self.assertIn("TOPIC_KEY", publish_guard.blocked_reason())
+        repair = dict(approved, PIPELINE_MODE="repair")
+        with mock.patch.dict(os.environ, repair, clear=False):
+            self.assertEqual(publish_guard.blocked_reason(), "mode=repair")
+        qa = dict(approved, BOARD_QA="1", PIPELINE_MODE="")
+        with mock.patch.dict(os.environ, qa, clear=False):
+            self.assertEqual(publish_guard.blocked_reason(), "qa render")
 
     def test_retry_and_repair_env_cannot_request_a_public_upload(self):
         import auto_agent

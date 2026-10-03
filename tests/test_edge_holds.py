@@ -250,10 +250,17 @@ class BoardVisualTests(unittest.TestCase):
         self.assertEqual(len(bars), 2)
         small = [bar for bar in bars if bar[4] == 4000.0][0]
         large = [bar for bar in bars if bar[4] == 200000.0][0]
-        self.assertGreater((large[3] - large[1]) / (small[3] - small[1]), 8)
-        card_bottom = frame.panel_box[3]
+        wide = (large[2] - large[0]) >= (large[3] - large[1])
+        if wide:
+            self.assertGreater((large[2] - large[0]) / max(1.0, (small[2] - small[0])), 8)
+        else:
+            self.assertGreater((large[3] - large[1]) / max(1.0, (small[3] - small[1])), 8)
+        region = frame.chart_region
         for bar in bars:
-            self.assertGreaterEqual(bar[1], card_bottom + 20)
+            self.assertGreaterEqual(bar[0], region[0] - 1)
+            self.assertGreaterEqual(bar[1], region[1] - 1)
+            self.assertLessEqual(bar[2], region[2] + 1)
+            self.assertLessEqual(bar[3], region[3] + 1)
         labels = [
             layer for layer in frame.text_layers
             if layer.get("text") in ("₹2,00,000", "₹4,000", "₹200,000")
@@ -329,6 +336,13 @@ class BoardVisualTests(unittest.TestCase):
         ass = board_short.build_ass(topic, times, spoken, "हद क्यों?", "पोल")
         self.assertNotIn("Dialogue: 2,", ass)
         self.assertIn(board_short.DISCLAIMER, ass)
+        self.assertIn("\\fs39", ass)
+        import safe_area
+        box = board_short._top_box(
+            board_short.DISCLAIMER, 540, safe_area.SOURCE_Y, board_short.DISCLAIMER_SIZE,
+        )
+        self.assertTrue(safe_area.inside(box), box)
+        self.assertLess(box[3], safe_area.BRAND_Y)
         cues = board_short.plan_cues(spoken, times, None)
         self.assertTrue(cues)
 
