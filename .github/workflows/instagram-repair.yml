@@ -22,7 +22,7 @@ concurrency:
 
 permissions:
   actions: read
-  contents: read
+  contents: write
 
 jobs:
   retry-instagram:
@@ -56,8 +56,9 @@ jobs:
           # unlisted test, or a video that failed QA / review):
           #  1. ig_reel.txt already present means this Short was posted;
           #  2. ig_status.txt must start with "skipped:" — written only after a
-          #     YouTube upload when the Reel was not confirmed. Unlisted tests
-          #     and blocked modes never write that file.
+          #     YouTube upload when the Reel was not confirmed. A "deferred:"
+          #     line waits for Slot watch; this build-time trigger does not
+          #     post it. Unlisted tests and blocked modes never write either.
           #  publish_instagram.py additionally refuses unless report.md,
           #  verify_meta.json, and self_review.json agree the verdict is READY.
           #  Those files are in the run's artifact. The gate is unchanged.
@@ -78,7 +79,9 @@ jobs:
           fi
 
       - name: Install dependencies
-        if: steps.artifact.outputs.ready == 'true'
+        # A skipped Reel retries from this run's artifact. A deferred Reel
+        # is posted from the ledger on Slot watch, which needs the same deps.
+        if: steps.artifact.outputs.ready == 'true' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.name == 'Slot watch'
         run: python -m pip install -r requirements.txt
 
       - name: Publish Reel only
@@ -95,6 +98,44 @@ jobs:
           MEDIA_REPO_TOKEN: ${{ secrets.MEDIA_REPO_TOKEN || secrets.GITHUB_TOKEN }}
           ACTIONS_TOKEN_FOR_COMPARE: ${{ secrets.GITHUB_TOKEN }}
         run: python publish_instagram.py
+
+      - name: Post deferred Reels once YouTube is public
+        # Slot watch finishes at 08:49, 16:49, and 21:49 IST, after the
+        # 08:30, 16:00, and 21:00 publishAt times. The build-time trigger
+        # from Paise Ki Pathshala is hours early and does not run this step.
+        if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.name == 'Slot watch'
+        env:
+          VIDEO_FORMAT: short
+          IG_CROSSPOST: "1"
+          IG_CROSSPOST_FORCE: "1"
+          IG_USER_ID: ${{ vars.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_SURFACE: ${{ vars.IG_SURFACE || 'facebook' }}
+          IG_API_VERSION: v23.0
+          MEDIA_REPO: ${{ vars.MEDIA_REPO || 'bazarblast140-bot/HEYGEN--INSTAGRAM-' }}
+          MEDIA_REPO_TOKEN: ${{ secrets.MEDIA_REPO_TOKEN || secrets.GITHUB_TOKEN }}
+          ACTIONS_TOKEN_FOR_COMPARE: ${{ secrets.GITHUB_TOKEN }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YT_FIN_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
+          EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
+          GH_TOKEN: ${{ github.token }}
+        run: python ig_defer.py --post-due
+
+      - name: Commit the deferred Reel on the ledger
+        if: ${{ !cancelled() }}
+        run: |
+          git add -N data/published.json
+          if git diff --quiet -- data/published.json; then
+            echo "Ledger unchanged"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add data/published.json
+            git commit -m "chore: ledger fill from deferred Reel [skip ci]"
+            git pull --rebase --autostash || true
+            git push
+          fi
 
       - name: Upload verified Instagram ID
         if: always() && steps.artifact.outputs.ready == 'true'

@@ -31,6 +31,12 @@ on:
         type: choice
         options: ["false", "true"]
         default: "false"
+      skip_ig:
+        description: "true = upload the YouTube Short only. Do not cross-post the Reel."
+        required: false
+        type: choice
+        options: ["false", "true"]
+        default: "false"
       youtube_video_id:
         description: "Existing YouTube video id. Required when ig_only=true. A Reel already logged for this id is refused."
         required: false
@@ -122,6 +128,7 @@ jobs:
           APPROVED: "true"
         run: python publish.py
       - name: Cross-post the Reel
+        if: inputs.skip_ig != 'true'
         env:
           VIDEO_FORMAT: short
           IG_CROSSPOST: "1"

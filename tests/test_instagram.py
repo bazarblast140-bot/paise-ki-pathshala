@@ -570,6 +570,94 @@ class ApprovedReelTests(unittest.TestCase):
         self.assertEqual(cm.exception.code, 1)
         self.assertIn("Reel already logged for jgS2HgMHYzc", err.getvalue())
 
+    def test_skip_ig_skips_only_the_reel_and_ig_only_hosts_the_override(self):
+        workflow = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "publish-artifact.yml"
+        text = workflow.read_text(encoding="utf-8")
+        self.assertIn("skip_ig:", text)
+        self.assertIn('options: ["false", "true"]', text)
+        self.assertIn('default: "false"', text)
+        youtube = text.split("name: Upload a new YouTube video", 1)[1].split("name: Cross-post the Reel", 1)[0]
+        self.assertIn("inputs.ig_only != 'true'", youtube)
+        self.assertNotIn("skip_ig", youtube)
+        self.assertIn("python publish.py", youtube)
+        self.assertIn("PUBLISH_AT_UTC:", youtube)
+        reel = text.split("name: Cross-post the Reel", 1)[1].split("name: Commit the ledger fill", 1)[0]
+        self.assertIn("inputs.skip_ig != 'true'", reel)
+        self.assertIn("python publish_instagram.py", reel)
+        self.assertIn("IG_ONLY: ${{ inputs.ig_only }}", reel)
+        self.assertNotIn("inputs.ig_only != 'true'", reel)
+        ledger = text.split("name: Commit the ledger fill", 1)[1]
+        self.assertNotIn("skip_ig", ledger)
+        self.assertIn("data/published.json", ledger)
+        replace = text.split("name: Replace final.mp4", 1)[1].split("name: Schedule publishAt", 1)[0]
+        self.assertIn("inputs.override_mp4_url != ''", replace)
+        self.assertNotIn("ig_only", replace)
+        self.assertLess(text.index("python override_mp4.py"), text.index("python publish_instagram.py"))
+
+        import override_mp4
+        import subprocess
+        url = "https://github.com/bazarblast140-bot/paise-ki-pathshala/releases/download/short-177/final.mp4"
+
+        def mp4(path, payload):
+            subprocess.run(
+                [
+                    "ffmpeg", "-v", "error", "-y",
+                    "-f", "lavfi", "-i", "color=c=black:s=1080x1920:r=10:d=1",
+                    "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+                    "-shortest", "-t", "1",
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                    "-metadata", f"comment={payload}",
+                    str(path),
+                ],
+                check=True,
+            )
+
+        with tempfile.TemporaryDirectory() as d:
+            run = Path(d)
+            artifact = run / "final.mp4"
+            remix = run / "remix.mp4"
+            mp4(artifact, "artifact")
+            mp4(remix, "remix")
+            original = artifact.read_bytes()
+            remix_bytes = remix.read_bytes()
+            self.assertNotEqual(original, remix_bytes)
+
+            class Body:
+                def read(self, n=-1):
+                    return remix_bytes if n is None or n < 0 else remix_bytes[:n]
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *_args):
+                    return False
+
+            with mock.patch.object(override_mp4.urllib.request, "urlopen", return_value=Body()):
+                override_mp4.apply(url, artifact)
+            self.assertEqual(artifact.read_bytes(), remix_bytes)
+            (run / "script.txt").write_text(SCRIPT, encoding="utf-8")
+            (run / "topic.json").write_text(json.dumps(TOPIC), encoding="utf-8")
+            (run / "report.md").write_text("VERDICT: [NEEDS FIX — sync hold]\n", encoding="utf-8")
+            (run / "thumbnail.jpg").write_bytes(b"\xff\xd8\xff" + b"cover")
+            hosted = {}
+
+            def host(path):
+                hosted["bytes"] = Path(path).read_bytes()
+                return "https://example.com/remix.mp4"
+
+            env = self._env(APPROVED="true", IG_ONLY="true", YOUTUBE_VIDEO_ID="jgS2HgMHYzc")
+            with mock.patch.object(IG, "RUN", run), mock.patch.dict("os.environ", env), \
+                 mock.patch.object(IG, "video_format", return_value="short"), \
+                 mock.patch.object(IG, "fetch_recent_media", return_value=[]), \
+                 mock.patch.object(IG, "host_mp4", side_effect=host), \
+                 mock.patch.object(IG, "host_cover", return_value="https://example.com/paise-cover.jpg"), \
+                 mock.patch.object(IG, "publish_reel", return_value="reel-override") as reel, \
+                 mock.patch("ledger.find_ig_media", return_value=""):
+                IG.main()
+            self.assertEqual(hosted["bytes"], remix_bytes)
+            self.assertNotEqual(hosted["bytes"], original)
+            self.assertEqual(reel.call_args.args[0], "https://example.com/remix.mp4")
+
 
 READY_META = {"ai_verdict_valid": True, "verdict": "READY", "public_ready": True}
 ATR_TITLE = "SL बार-बार हिट? ATR से दूरी तय करो"
