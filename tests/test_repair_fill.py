@@ -93,8 +93,9 @@ class NextActionTests(unittest.TestCase):
     def test_ready_buffer_goes_to_the_slot(self):
         self.assertEqual(repair_fill.next_action(1, 1, False, 0), "slot")
 
-    def test_failed_slot_builds_more_buffer_before_the_retry(self):
-        self.assertEqual(repair_fill.next_action(0, 3, False, 1), "buffer")
+    def test_failed_slot_is_retried_before_more_buffer(self):
+        self.assertEqual(repair_fill.next_action(0, 0, False, 1), "slot")
+        self.assertEqual(repair_fill.next_action(0, 3, False, 1), "slot")
 
     def test_exhausted_buffer_still_tries_the_slot_then_stops(self):
         self.assertEqual(repair_fill.next_action(0, repair_fill.MAX_BUFFER_BUILDS, False, 0), "slot")

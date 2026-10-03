@@ -30,7 +30,7 @@ SLOT_WORKFLOW = "Paise Ki Pathshala"
 SLOT_FILE = "paise-ki-pathshala.yml"
 MAX_BUFFER_BUILDS = 8
 TARGET_READY = 2
-SLOT_TRIES = 2
+SLOT_TRIES = 3
 # Start the public slot before another buffer build once the lead is this short.
 # The picker itself still requires MIN_LEAD (2h) and will not start a slot inside that lead.
 SLOT_BEFORE_BUFFER = timedelta(hours=3, minutes=30)
@@ -86,12 +86,8 @@ def next_action(ready, builds, lead_short, slot_tries):
     Edge builds stay ahead of that retry while nothing is ready.
     """
     need_buffer = ready < TARGET_READY and builds < MAX_BUFFER_BUILDS
-    # First try of an open slot is immediate. Passing None used to look like
-    # "no slot" and the restore stopped after the Edge budget without posting.
-    if slot_tries == 0:
-        return "slot"
-    if ready < 1 and need_buffer and not lead_short:
-        return "buffer"
+    # Open slots are tried before more Edge builds. A blocked narration
+    # spends no ElevenLabs, and the Edge path was not producing a ready Short.
     if slot_tries is not None and slot_tries < SLOT_TRIES:
         return "slot"
     if need_buffer:

@@ -199,7 +199,7 @@ def main():
         if rc != 0:
             print(f"[STOP] {label} failed (rc={rc}). Pipeline halted.")
             status = f"failed at: {label}"
-            if video_format() == "short" and (RUN / "narration_block.json").exists():
+            if video_format() == "short" and not (RUN / "uploaded.txt").exists():
                 _remember_narration_skip()
             break
 

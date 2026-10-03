@@ -1,5 +1,6 @@
 {
  "keys": [
-  "risk_journal"
+  "risk_journal",
+  "risk_daily_loss_limit"
  ]
 }
