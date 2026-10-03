@@ -158,6 +158,49 @@ def _youtube_video_id():
     return video_id
 
 
+def crosspost_or_defer(yt_uploaded, now=None):
+    """Post the Reel now, or leave it until the scheduled YouTube video is public.
+
+    Returns (ig_rc, ig_published, ig_required). privacy=now has no PUBLISH_AT_UTC,
+    so the Reel still posts in this run. A future publishAt writes
+    run/ig_status.txt and does not call Instagram.
+    """
+    import ig_defer
+    from publish_guard import blocked_reason
+    ig_on = (
+        video_format() == "short"
+        and os.environ.get("IG_CROSSPOST", "").strip().lower() in ("1", "true", "yes", "on")
+        and not blocked_reason()
+    )
+    publish_at = os.environ.get("PUBLISH_AT_UTC", "").strip()
+    if ig_on and yt_uploaded and ig_defer.publish_at_is_future(publish_at, now=now):
+        print("\n=== Instagram Reel (deferred until YouTube is public) ===")
+        ig_defer.write_deferred(
+            RUN, _youtube_video_id(), publish_at, os.environ.get("GITHUB_RUN_ID", ""),
+        )
+        return 0, False, False
+    if video_format() != "short":
+        return 0, False, False
+    # Same short → Instagram Reel (no re-render). Opt-in via IG_CROSSPOST=1.
+    # Instagram can publish from final.mp4 even when YouTube upload failed.
+    # Force is scoped to this pipeline call; direct standalone runs retain
+    # the safer uploaded.txt check.
+    print("\n=== Instagram Reel (cross-post) ===")
+    old_force = os.environ.get("IG_CROSSPOST_FORCE")
+    os.environ["IG_CROSSPOST_FORCE"] = "1"
+    try:
+        ig_rc = run("publish_instagram.py")
+    finally:
+        if old_force is None:
+            os.environ.pop("IG_CROSSPOST_FORCE", None)
+        else:
+            os.environ["IG_CROSSPOST_FORCE"] = old_force
+    ig_published = (RUN / "ig_reel.txt").exists()
+    if ig_rc != 0:
+        print(f"[WARN] Instagram publish failed (rc={ig_rc}).")
+    return ig_rc, ig_published, ig_on
+
+
 def finish_publish(yt_rc, yt_uploaded, ig_published, ig_required, verdict_ready, ig_rc=0):
     """Resolve the publish step and, when only the Reel missed, leave a retry marker.
 
@@ -230,38 +273,13 @@ def main():
             (RUN / "youtube_status.txt").write_text(note + "\n", encoding="utf-8")
 
         yt_uploaded = (RUN / "uploaded.txt").exists()
-        ig_published = False
-        ig_rc = 0
-
-        # Same short → Instagram Reel (no re-render). Opt-in via IG_CROSSPOST=1.
-        # Instagram can publish from final.mp4 even when YouTube upload failed.
-        # Force is scoped to this pipeline call; direct standalone runs retain
-        # the safer uploaded.txt check.
-        if video_format() == "short":
-            print("\n=== Instagram Reel (cross-post) ===")
-            old_force = os.environ.get("IG_CROSSPOST_FORCE")
-            os.environ["IG_CROSSPOST_FORCE"] = "1"
-            try:
-                ig_rc = run("publish_instagram.py")
-            finally:
-                if old_force is None:
-                    os.environ.pop("IG_CROSSPOST_FORCE", None)
-                else:
-                    os.environ["IG_CROSSPOST_FORCE"] = old_force
-            ig_published = (RUN / "ig_reel.txt").exists()
-            if ig_rc != 0:
-                print(f"[WARN] Instagram publish failed (rc={ig_rc}).")
+        ig_rc, ig_published, ig_required = crosspost_or_defer(yt_uploaded)
 
         # The YouTube upload fills the slot. A missed Reel is a warning plus
         # run/ig_status.txt, not a failed Short: the repair workflow posts it
-        # later. A YouTube failure still fails the job, even if a Reel went up.
-        from publish_guard import blocked_reason
+        # later. A future publishAt is not a miss: the Reel waits in
+        # ig_status.txt until Slot watch's watchdog sees the video is public.
         import review_gate
-        ig_required = (
-            video_format() == "short"
-            and os.environ.get("IG_CROSSPOST", "").strip().lower() in ("1", "true", "yes", "on")
-            and not blocked_reason()
-        )
         published = yt_uploaded or ig_published
         settle_topic(published)
 

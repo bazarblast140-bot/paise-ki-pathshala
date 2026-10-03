@@ -102,6 +102,34 @@ def find_ig_media(video_id=None, topic_key=None, content_hash=None, title_norm=N
     return ""
 
 
+def note_ig_deferred(video_id, status, run_id=None):
+    """Remember a Reel that waits for the YouTube video to become public.
+
+    The row is the one publish.py already wrote. source_run is the Actions
+    run whose artifact still has final.mp4 and the cover.
+    """
+    video_id = str(video_id or "").strip()
+    status = " ".join(str(status or "").split())[:300]
+    if not video_id or not status:
+        return False
+    entries = _entries()
+    idx = None
+    for i, entry in enumerate(entries):
+        if isinstance(entry, dict) and str(entry.get("video_id") or "") == video_id:
+            idx = i
+    if idx is None:
+        print(f"[warn] ledger has no row for {video_id}; ig_deferred not appended")
+        return False
+    entries[idx]["ig_deferred"] = status
+    run_id = str(run_id or "").strip()
+    if run_id:
+        entries[idx]["source_run"] = run_id
+    PATH.parent.mkdir(exist_ok=True)
+    PATH.write_text(json.dumps(entries[-300:], indent=1) + "\n", encoding="utf-8")
+    print(f"[ig] ledger deferred for {video_id}")
+    return True
+
+
 def note_ig_skipped(video_id, reason):
     """Note a missed Reel on the YouTube row for this video.
 

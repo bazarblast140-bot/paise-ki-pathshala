@@ -63,6 +63,10 @@ class ReplaceTests(unittest.TestCase):
         self.assertLess(workflow.index("python override_mp4.py"), workflow.index("python publish.py"))
         self.assertLess(workflow.index("python override_mp4.py"), workflow.index("python publish_instagram.py"))
         self.assertIn("inputs.ig_only != 'true'", workflow)
+        replace = workflow.split("name: Replace final.mp4", 1)[1].split("name: Schedule publishAt", 1)[0]
+        self.assertIn("inputs.override_mp4_url != ''", replace)
+        self.assertNotIn("ig_only", replace)
+        self.assertNotIn("skip_ig", replace)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             artifact = root / "final.mp4"
