@@ -1,6 +1,7 @@
 {
  "keys": [
   "risk_journal",
-  "risk_daily_loss_limit"
+  "risk_daily_loss_limit",
+  "risk_overtrading"
  ]
 }
