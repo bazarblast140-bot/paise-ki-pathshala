@@ -4029,8 +4029,23 @@ def _static_craft_samples(topic, narration, spec):
     return built, samples, layout_notes
 
 
+def _hard_visual_notes(outside, notes):
+    """Safe area and a truly empty frame stop the render. Other craft notes do not."""
+    hard = list(outside or [])
+    for note in notes or []:
+        if any(mark in note for mark in ("empty background", "safe area", "no picture", "no scenes")):
+            if note not in hard:
+                hard.append(note)
+    return hard
+
+
 def _refuse_craft_hold(topic, spec, narration):
-    """The same empty-background craft gate, before any ElevenLabs character."""
+    """Die only for a hard visual failure, before any ElevenLabs character.
+
+    A soft craft note (repeated text, panel fill, a still span) is logged as
+    REVIEW and the render continues. Live still will not auto-publish a REVIEW
+    without approved=true.
+    """
     scenes, samples, layout_notes = _static_craft_samples(topic, narration, spec)
     labels = []
     for scene in scenes:
@@ -4041,17 +4056,20 @@ def _refuse_craft_hold(topic, spec, narration):
     outside = scene_frames.frames_safe_area_notes(
         [scene.get("frame") for scene in scenes if scene.get("frame") is not None]
     )
-    craft, notes = self_review.score_craft(
+    _craft, notes = self_review.score_craft(
         narration, scenes=scenes, samples=samples, labels=labels, layout_notes=layout_notes)
-    if outside or craft == 0:
-        visual = [
-            note for note in (outside + notes)
-            if "empty background" in note or "visual change" in note or "safe area" in note
-        ]
-        detail = "; ".join((visual or outside or notes)[:4])
+    hard = _hard_visual_notes(outside, notes)
+    if hard:
         die(
             "craft would HOLD before TTS; refusing with 0 characters spent: "
-            + detail
+            + "; ".join(hard[:4])
+        )
+    soft = [note for note in notes if note not in hard]
+    if soft:
+        print(
+            "[REVIEW] soft craft — render continues; public upload needs approved=true: "
+            + "; ".join(soft[:4]),
+            flush=True,
         )
 
 
