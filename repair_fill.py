@@ -148,8 +148,17 @@ def watch(run):
 
 
 def _show(path):
-    _run(["git", "fetch", "origin", "main"])
-    return _out(["git", "show", f"origin/main:{path}"])
+    last = None
+    for attempt in range(5):
+        try:
+            _run(["git", "fetch", "origin", "main"])
+            return _out(["git", "show", f"origin/main:{path}"])
+        except subprocess.CalledProcessError as exc:
+            last = exc
+            wait = 3 * (attempt + 1)
+            print(f"[repair] git fetch failed ({exc.returncode}); retry in {wait}s", flush=True)
+            time.sleep(wait)
+    raise last
 
 
 def remote_entries():
@@ -158,6 +167,23 @@ def remote_entries():
 
 def remote_ready():
     return count_ready_manifest(json.loads(_show("data/buffer_manifest.json")))
+
+
+def active_runs(workflow_file):
+    rows = json.loads(_out([
+        "gh", "run", "list",
+        "--workflow", workflow_file,
+        "--limit", "8",
+        "--json", "databaseId,status,url,event,createdAt,headBranch",
+    ]))
+    active = []
+    for row in rows:
+        if row.get("headBranch") not in ("main", None, ""):
+            continue
+        if row.get("status") in ("queued", "in_progress", "waiting", "pending", "requested"):
+            active.append(row)
+    active.sort(key=lambda row: row.get("createdAt") or "")
+    return active
 
 
 def restore():
@@ -194,6 +220,11 @@ def restore():
             watch(run)
             continue
         if choice and key not in attempted:
+            active = active_runs(SLOT_FILE)
+            if active:
+                print(f"[repair] waiting for in-progress slot run {active[0].get('url')}", flush=True)
+                watch(active[0])
+                continue
             not_before = datetime.now(timezone.utc) - timedelta(seconds=20)
             run = dispatch_and_find(
                 SLOT_WORKFLOW, SLOT_FILE,

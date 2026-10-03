@@ -47,7 +47,10 @@ jobs:
           PIPELINE_MODE: preview
         run: python buffer_shorts.py --refill
       - name: Commit manifest and topic bank
-        if: success()
+        # A failed Edge build still records skipped_topics. Commit that so the
+        # next refill tries a different evergreen topic. The topic bank is
+        # marked used only when an item was stored.
+        if: always() && !cancelled()
         run: |
           FILES=""
           for f in data/buffer_manifest.json topic_bank.json; do
