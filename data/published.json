@@ -324,5 +324,17 @@
   "elevenlabs_characters_sent": 626,
   "elevenlabs_characters_remaining": 4949,
   "tts_engine": "elevenlabs"
+ },
+ {
+  "date_ist": "2026-10-03",
+  "slot": "16:00",
+  "video_id": "jgS2HgMHYzc",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 653,
+  "elevenlabs_characters_remaining": 4242,
+  "tts_engine": "elevenlabs"
  }
 ]
