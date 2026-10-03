@@ -4,6 +4,7 @@
   "risk_daily_loss_limit",
   "risk_overtrading",
   "market_rbi_policy_oct2026",
-  "fund_roce"
+  "fund_roce",
+  "market_fed_hike_india"
  ]
 }
