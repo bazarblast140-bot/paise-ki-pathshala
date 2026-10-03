@@ -11,6 +11,7 @@
     "option_straddle",
     "option_strangle",
     "multibagger_case_eicher",
-    "multibagger_case_bajajfinance"
+    "multibagger_case_bajajfinance",
+    "multibagger_case_trent"
   ]
 }
