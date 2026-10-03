@@ -336,5 +336,20 @@
   "elevenlabs_characters_sent": 653,
   "elevenlabs_characters_remaining": 4242,
   "tts_engine": "elevenlabs"
+ },
+ {
+  "date_ist": "2026-10-03",
+  "slot": "15:47",
+  "video_id": "KVmMkKG5gzk",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 653,
+  "elevenlabs_characters_remaining": 4242,
+  "tts_engine": "elevenlabs",
+  "ig_media_id": "18092234342420698",
+  "content_hash": "8b35b9c015e8268b",
+  "title_norm": "\u0921\u0947\u0932\u0940 \u0932\u0949\u0938 \u0932\u093f\u092e\u093f\u091f"
  }
 ]
