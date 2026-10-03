@@ -392,8 +392,9 @@ def answer_terms_for(title, lesson=None):
         return ["एटीआर", "एसएल", str(lesson.get("distance") or ""), "हलचल"]
     import board_short
     folded = board_short.fold_roman_words(title or "")
+    phrase = board_short.key_phrase_for(title or "")
     found = []
-    for tok in content_tokens(folded):
+    for tok in content_tokens(phrase):
         if tok not in found:
             found.append(tok)
     for num in numbers_in(folded):

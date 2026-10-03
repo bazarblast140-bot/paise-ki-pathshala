@@ -15,6 +15,7 @@ topic-card fallback blocks even at the high bar. The pass bar in
 self_review.py (part 60 / overall 75) does not change.
 """
 import json
+import os
 import re
 
 # Soft judgment may not block a Short that is already clean on the
@@ -279,6 +280,15 @@ def narration_is_gated_llm(self_review):
     return source in ("llm", "cache")
 
 
+def approved_soft_review(self_review):
+    """A REVIEW score may publish only when approved=true was passed in."""
+    if not isinstance(self_review, dict) or not self_review.get("review_flag"):
+        return False
+    if self_review.get("public_ok") or narration_is_fallback(self_review):
+        return False
+    return os.environ.get("APPROVED", "").strip().lower() in {"1", "true", "yes"}
+
+
 def sync_gate_passed(self_review):
     """True only when this run's transcript check passed. A missing report does not."""
     if not isinstance(self_review, dict):
@@ -380,7 +390,8 @@ def decide(ai_text, ai_ok, script, self_review, fmt="short"):
             "narration is a topic-card fallback, not an LLM script that passed the hook/teaching gate"
         )
     if fmt == "short":
-        if not isinstance(self_review, dict) or not self_review.get("public_ok"):
+        approved = approved_soft_review(self_review)
+        if not isinstance(self_review, dict) or not (self_review.get("public_ok") or approved):
             review_ok = False
             summary = (self_review or {}).get("summary") if isinstance(self_review, dict) else None
             reasons.append(summary or "self-review missing or below the bar")
@@ -475,6 +486,10 @@ def files_allow_public(run_dir, fmt):
         return False
     if fmt == "short":
         review = _load_json(run_dir / "self_review.json")
-        if not review or not review.get("public_ok") or narration_is_fallback(review):
+        if (
+            not review
+            or narration_is_fallback(review)
+            or not (review.get("public_ok") or approved_soft_review(review))
+        ):
             return False
     return True

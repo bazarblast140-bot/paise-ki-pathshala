@@ -519,10 +519,17 @@ def _judge_kimi(name, body, secrets, blocks, role):
             summary_hi="Kimi ne balance number nahi diya. Credits confirm nahi hue.",
         )
     if bal <= 0:
+        # A selected Kimi is the channel's LLM, so an empty balance still fails.
+        # A backup at zero is a warning: DeepSeek can still write the script.
+        if blocks:
+            return _check(
+                name, "fail", f"available_balance={bal:g} ({role})", secrets,
+                summary_hi="Kimi balance khali hai. Script is provider se nahi banegi.",
+                blocks=blocks,
+            )
         return _check(
-            name, "fail", f"available_balance={bal:g} ({role})", secrets,
-            summary_hi="Kimi balance khali hai. Backup LLM se script nahi banegi.",
-            blocks=blocks,
+            name, "warn", f"available_balance={bal:g} ({role})", secrets,
+            summary_hi="Kimi backup balance khali hai. Warning hai, health check fail nahi.",
         )
     if bal < BALANCE_WARN:
         return _check(

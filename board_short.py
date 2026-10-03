@@ -541,13 +541,16 @@ _BARE_NUMBER = re.compile(
     rf"(?:[+\-−]?\d[\d,]*(?:\.\d+)?%?"
     rf"|(?:{_HINDI_NUMBER})(?:\s+(?:{_HINDI_NUMBER}))?)"
 )
-# Two letters too: "SL" is Latin on the card, and Edge then reads it as "इसल".
+# Two letters too: leftover Latin such as "OK" is still a leak. Finance
+# abbreviations are folded to Devanagari before this scan.
 _LATIN_WORD = re.compile(r"(?<![A-Za-z])([A-Za-z]{2,})(?![A-Za-z])")
 _CHART_FILLER = re.compile(r"चार्ट\s*पर\s*दिख")
 _CHART_MENTION = re.compile(r"चार्ट|स्क्रीन")
 _TRADER_FILLER = re.compile(r"ट्रेडर्स\s+(?:\S+\s+){0,4}चेक\s+करते")
-# Phrases first, so "daily limit" becomes the lesson words and not "डेली लिमिट".
+# Phrases first, so "daily limit" becomes the lesson words and not "डेली लिमिट",
+# and "revenge trading" is one phrase rather than two leftover words.
 _ROMAN_PHRASES = (
+    ("revenge trading", "रिवेंज ट्रेडिंग"),
     ("daily loss limit", "दिन की नुकसान हद"),
     ("daily limit", "दिन की हद"),
 )
@@ -575,6 +578,10 @@ _ROMAN_FOLD = {
     "charges": "चार्जेस",
     "trader": "ट्रेडर",
     "traders": "ट्रेडर्स",
+    "trade": "ट्रेड",
+    "trading": "ट्रेडिंग",
+    "revenge": "रिवेंज",
+    "sl": "स्टॉप लॉस",
     "check": "चेक",
     "risk": "रिस्क",
     "buyer": "बायर",
@@ -631,14 +638,15 @@ def _number_dump(sentence):
 
 
 def latin_misread_words(text):
-    """Any Latin word still in the narration or on a card. Known words are folded first.
+    """Latin still left after finance English is written in Devanagari.
 
-    Two letters count. SL is not exempt, and neither is any longer leftover.
-    daily, limit, terminal, chart, edge and the rest are not exempt. A leftover
-    word fails the leak gate so the repair writes it again in Devanagari.
+    Known finance words are folded first and never block. Two letters still
+    count, so a leftover such as OK fails the leak gate. The repair writes
+    that leftover in Devanagari.
     """
+    folded = fold_roman_words(text or "")
     found = []
-    for match in _LATIN_WORD.finditer(text or ""):
+    for match in _LATIN_WORD.finditer(folded):
         word = match.group(1)
         if word not in found:
             found.append(word)
@@ -710,30 +718,96 @@ def narrator_leak_notes(beats, order):
     return notes
 
 
-def title_term_notes(narration):
-    """Hook and karein must say each title term in the Devanagari the sync gate checks.
+# Function words are not the title's promise. का/की/के may sit inside the phrase.
+_TITLE_FUNCTION = {"कैसे", "करें", "तय", "नियम", "घटे"}
+_TITLE_CONNECTORS = {"का", "की", "के"}
 
-    The failure names the missing term, so the repair writes that word and no other.
-    Numbers in the title are not terms: the sync gate already requires those figures.
+
+def key_phrase_for(title):
+    """The title's longest noun phrase. Function words and figures are not part of it.
+
+    "डेली लॉस लिमिट पर रुकें" is "डेली लॉस लिमिट". "नुकसान का गणित कैसे घटे"
+    is "नुकसान का गणित". A title that is only function words has no phrase.
     """
     import sync_gate
-    title = str((narration or {}).get("title") or "")
-    terms = []
-    for term in sync_gate.answer_terms_for(title):
-        if str(term)[:1].isdigit() or term in terms:
+    folded = fold_roman_words(title or "")
+    groups = []
+    current = []
+    pending = None
+    for tok in sync_gate.tokens(folded):
+        if str(tok)[:1].isdigit():
+            if current:
+                groups.append(current)
+                current = []
+            pending = None
             continue
-        terms.append(term)
-    if not terms:
+        if tok in _TITLE_FUNCTION:
+            if current:
+                groups.append(current)
+                current = []
+            pending = None
+            continue
+        if tok in sync_gate._STOP:
+            if tok in _TITLE_CONNECTORS and current:
+                pending = tok
+            else:
+                if current:
+                    groups.append(current)
+                    current = []
+                pending = None
+            continue
+        if len(tok) < 2:
+            continue
+        if pending and current:
+            current.append(pending)
+        pending = None
+        current.append(tok)
+    if current:
+        groups.append(current)
+    if not groups:
+        return ""
+    best = max(
+        groups,
+        key=lambda group: (
+            sum(1 for tok in group if tok not in _TITLE_CONNECTORS),
+            len(" ".join(group)),
+        ),
+    )
+    return " ".join(best)
+
+
+def phrase_in_text(text, phrase):
+    """True when the key phrase is spoken as one stretch, not scattered words."""
+    phrase = " ".join(str(phrase or "").split())
+    if not phrase:
+        return False
+    if phrase in " ".join(str(text or "").split()):
+        return True
+    import sync_gate
+    need = sync_gate.tokens(phrase)
+    got = sync_gate.tokens(fold_roman_words(text or ""))
+    width = len(need)
+    if not width:
+        return False
+    return any(got[i:i + width] == need for i in range(len(got) - width + 1))
+
+
+def title_term_notes(narration):
+    """The hook must say the title's key phrase. Karein does not have to repeat it.
+
+    Function words are not required. The failure names the phrase, so the
+    repair writes that phrase in the hook. The hook card is painted from that
+    spoken sentence. Numbers stay on the sync gate, not in this phrase.
+    """
+    title = str((narration or {}).get("title") or "")
+    phrase = key_phrase_for(title)
+    if not phrase:
         return []
     beats = (narration or {}).get("beats") or {}
-    notes = []
-    for beat in ("hook", "karein"):
-        blob = set(sync_gate.tokens(str(beats.get(beat) or "")))
-        for term in terms:
-            if sync_gate.term_covered(term, blob):
-                continue
-            notes.append(f"{beat} missing title term: {term}")
-    return notes
+    hook = str(beats.get("hook") or "")
+    if phrase_in_text(hook, phrase):
+        return []
+    return [f"hook missing title term: {phrase}"]
 
 
 NARR_SYSTEM = """You write the SPOKEN Hindi narration for a vertical finance Short for Indian traders
@@ -1235,13 +1309,7 @@ def fit_live_hook(text, lo, hi, hook_line="", title=""):
     question, _rest = _hook_question_and_rest(text, hook_line)
     if len(question.split()) > hi and len(_split_sentences(question)) <= 1:
         return text
-    import sync_gate
-    terms = []
-    if title:
-        terms = [
-            term for term in sync_gate.answer_terms_for(title)
-            if term and not str(term)[:1].isdigit()
-        ]
+    phrase = key_phrase_for(title) if title else ""
 
     def count(parts):
         return len(_join_sentences(parts).split())
@@ -1256,7 +1324,7 @@ def fit_live_hook(text, lo, hi, hook_line="", title=""):
             for index in range(len(kept) - 1, -1, -1):
                 if index == 0:
                     continue
-                if _sole_title_carrier(kept, index, terms):
+                if phrase and phrase_in_text(kept[index], phrase):
                     continue
                 filler = _is_filler_sentence(kept[index])
                 if fillers_only and not filler:
@@ -1299,8 +1367,13 @@ def _apply_hook_fit(narration, topic):
     return True
 
 
-def _sentence_protected(beat, sentence, index, example):
-    """The hook keeps its opening line. The code-written udaharan example is never cut."""
+def _sentence_protected(beat, sentence, index, example, phrase=""):
+    """The hook keeps its opening line. The code-written udaharan example is never cut.
+
+    A sentence that carries the title's key phrase is never cut for length.
+    """
+    if phrase and phrase_in_text(sentence, phrase):
+        return True
     if beat == "hook" and index == 0:
         return True
     if beat != "udaharan":
@@ -1316,11 +1389,11 @@ def _sentence_protected(beat, sentence, index, example):
     return core in sentence or (len(body) >= 12 and body in sentence)
 
 
-def _drop_index(sentences, beat, example, lo):
+def _drop_index(sentences, beat, example, lo, phrase=""):
     """Last sentence that can be removed without cutting a protected line or falling under lo."""
     total = len(_join_sentences(sentences).split())
     for index in range(len(sentences) - 1, -1, -1):
-        if _sentence_protected(beat, sentences[index], index, example):
+        if _sentence_protected(beat, sentences[index], index, example, phrase):
             continue
         trial = _join_sentences(sentences[:index] + sentences[index + 1:])
         if len(trial.split()) < lo:
@@ -1434,6 +1507,9 @@ def apply_live_draft(narration, topic, total_hi=None, locked=()):
             notes.append(f"{beat}: inserted उदाहरण at the start of the example sentence")
     ranges = {beat: beat_word_window(targets[beat], LIVE_BEAT_TOLERANCE) for beat in order}
     locked = {beat for beat in (locked or ()) if beat}
+    phrase = key_phrase_for(
+        narration.get("title") or (topic or {}).get("topic") or ""
+    )
 
     def counts():
         return {beat: len(str(beats.get(beat) or "").split()) for beat in order}
@@ -1443,7 +1519,7 @@ def apply_live_draft(narration, topic, total_hi=None, locked=()):
             return False
         lo, _hi = ranges[beat]
         sentences = _split_sentences(beats.get(beat) or "")
-        index = _drop_index(sentences, beat, example, lo)
+        index = _drop_index(sentences, beat, example, lo, phrase)
         if index is None:
             return False
         dropped = sentences.pop(index)
@@ -1686,16 +1762,13 @@ def repair_instructions(draft, rewrite, topic=None, failures=None):
                 "for example 100 − 40 = 60 or 100 में से 40. A bare complement is blocked."
             )
             lines.extend(_topic_fact_rules(topic))
-            import sync_gate
-            terms = [
-                term for term in sync_gate.answer_terms_for(str((draft or {}).get("title") or ""))
-                if not str(term)[:1].isdigit()
-            ]
-            if terms:
+            phrase = key_phrase_for(str((draft or {}).get("title") or ""))
+            if phrase:
                 lines.append(
-                    "The hook and the karein must each contain the title's key terms "
-                    "in this Devanagari form: " + ", ".join(terms) + ". "
-                    "For example डेली लॉस लिमिट and कैसे."
+                    "The hook must contain this key phrase in Devanagari, spoken and "
+                    "on the hook card: " + phrase + ". "
+                    "The karein does not have to repeat it. "
+                    "Do not require function words such as कैसे, करें, तय, नियम, or घटे."
                 )
             example = hook_check.worked_example_sentence(topic)
             if example and not _number_dump(example):
@@ -1708,14 +1781,14 @@ def repair_instructions(draft, rewrite, topic=None, failures=None):
     )
     missing_terms = []
     for message in gate_fails:
-        found = re.findall(r"missing title term:\s*(\S+)", message)
+        found = re.findall(r"missing title term:\s*(.+)", message)
         for term in found:
             if term not in missing_terms:
                 missing_terms.append(term)
     if missing_terms:
         lines.append(
             "Missing title term: " + ", ".join(missing_terms) + ". "
-            "Write each missing term in the hook and in the karein."
+            "Write that phrase in the hook."
         )
     for beat in order:
         target = targets[beat]
@@ -1913,9 +1986,11 @@ def four_live_system(topic):
         "A sum, difference, product, or ratio of two topic numbers is allowed "
         "only when the same sentence writes that arithmetic and the result matches. "
         "On a loss-recovery lesson, recovery must be L/(1−L). Any other pair is blocked.",
-        "The hook and the karein must each contain the title's key terms in the same "
-        "Devanagari form the gate checks, for example डेली लॉस लिमिट and कैसे. "
-        "A missing term is named in the repair, such as hook missing title term: डेली.",
+        "The hook must contain the title's main key phrase in Devanagari, spoken and "
+        "on the hook card, for example डेली लॉस लिमिट. "
+        "Do not require that phrase in karein. "
+        "Do not require function words such as कैसे, करें, तय, नियम, or घटे. "
+        "A missing phrase is named in the repair, such as hook missing title term: डेली लॉस लिमिट.",
         *_topic_fact_rules(topic),
         f"Pace coefficient: {wps:.2f} words/second. Target {target_lo}-{target_hi} words "
         f"(about 55-59 seconds on Rudra). The script may land in {lo}-{hi} words.",
@@ -2144,12 +2219,29 @@ def upload_block_reason(source, narration=None):
     return f"narration source {source} is not a single outline; upload blocked"
 
 
+def approved_publish():
+    """True only when a human passed approved=true. A REVIEW score does not self-approve."""
+    return os.environ.get("APPROVED", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _hold_hard(review):
+    """Duration, safe area, and fallback stay a hold. They are not a soft REVIEW."""
+    if isinstance(review, dict):
+        review["public_ok"] = False
+        review["passed"] = False
+        review["review_flag"] = False
+        review["verdict"] = "HOLD"
+    return review
+
+
 def apply_upload_block(review, source):
     reason = upload_block_reason(source)
     if not reason:
         return review
     review["public_ok"] = False
     review["passed"] = False
+    review["review_flag"] = False
+    review["verdict"] = "HOLD"
     review.setdefault("notes", []).append(reason)
     summary = review.get("summary") or ""
     review["summary"] = (summary + " — " + reason).strip(" —")
@@ -2452,6 +2544,7 @@ def synthesize_short_voices(spoken, c, beats=None):
         global ENGINES
         ENGINES = []
         for beat in beats:
+            spoken[beat] = fold_roman_words(spoken[beat])
             tts(spoken[beat], RUN / f"tts_{beat}.mp3", c)
 
     try:
@@ -4267,16 +4360,17 @@ def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
         [scene.get("frame") for scene in scenes if scene.get("frame") is not None]
     )
     if outside:
-        review["public_ok"] = False
-        review["passed"] = False
+        _hold_hard(review)
         review.setdefault("notes", []).extend(outside)
         review["summary"] = (str(review.get("summary") or "") + " — " + "; ".join(outside[:2])).strip(" —")
     (RUN / "self_review.json").write_text(
         json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
     if outside:
         die("text outside the frame safe area; refusing the render: " + "; ".join(outside[:4]))
-    if review["public_ok"]:
+    if review.get("public_ok"):
         ok("self-review passed: " + review["summary"])
+    elif review.get("review_flag"):
+        print("[REVIEW] soft self-review — mp4 kept, public upload needs approved=true. " + review["summary"])
     else:
         print("[HOLD] self-review below the bar — public upload blocked. " + review["summary"])
     assemble(paced, beat_audio, beat_times,
@@ -4290,8 +4384,14 @@ def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
         lo, hi = live_voice_bounds(topic)
         label = f"{lo:.0f}-{hi:.0f}"
         if final_dur < lo or final_dur > hi:
+            _hold_hard(review)
+            (RUN / "self_review.json").write_text(
+                json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
             die(f"final.mp4 duration outside {label}s; refusing post-render speed change: {final_dur:.1f}s")
     elif final_dur < 45.0 or final_dur > 62.0:
+        _hold_hard(review)
+        (RUN / "self_review.json").write_text(
+            json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
         die(f"final.mp4 duration outside 45-62s; refusing post-render speed change: {final_dur:.1f}s")
 
     write_compat(topic, n, spoken, beat_times)
@@ -4425,16 +4525,14 @@ def _pay_and_remux(topic, n, c, spec, source, proven):
     review = apply_upload_block(review, source)
     if final_dur < lo or final_dur > hi:
         note = f"final.mp4 duration outside {lo:.0f}-{hi:.0f}s: {final_dur:.1f}s"
-        review["public_ok"] = False
-        review["passed"] = False
+        _hold_hard(review)
         review.setdefault("notes", []).append(note)
         review["summary"] = (str(review.get("summary") or "") + " — " + note).strip(" —")
     outside = scene_frames.frames_safe_area_notes(
         [scene.get("frame") for scene in scenes if scene.get("frame") is not None]
     )
     if outside:
-        review["public_ok"] = False
-        review["passed"] = False
+        _hold_hard(review)
         review.setdefault("notes", []).extend(outside)
         review["summary"] = (str(review.get("summary") or "") + " — " + "; ".join(outside[:2])).strip(" —")
     review["narration_source"] = source
@@ -4452,7 +4550,13 @@ def _pay_and_remux(topic, n, c, spec, source, proven):
     review_path = RUN / "self_review.json"
     review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
     if not review.get("public_ok"):
-        _spent_hold("paid render HOLD; " + str(review.get("summary") or "self-review failed"))
+        if review.get("review_flag") and approved_publish():
+            print("[REVIEW] approved=true; " + str(review.get("summary") or ""), flush=True)
+        else:
+            kind = "REVIEW" if review.get("review_flag") else "HOLD"
+            _spent_hold(
+                f"paid render {kind}; " + str(review.get("summary") or "self-review failed")
+            )
     topic["_spoken_beats"] = {beat: spoken[beat] for beat in order}
     write_compat(topic, n, spoken, beat_times)
     (RUN / "narration.json").write_text(
@@ -4495,12 +4599,23 @@ def prove_full_render(topic, n, c, spec, source="llm", beat_pngs=None, free="edg
                 review = json.loads(review_path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 review = {}
-        if not review.get("public_ok"):
+        if review.get("public_ok"):
+            return proven
+        summary = str(review.get("summary") or "no passing self-review")
+        if review.get("review_flag"):
+            if os.environ.get("DRY_RUN", "").strip() == "1":
+                print("[REVIEW] " + summary, flush=True)
+                return proven
+            if approved_publish():
+                print("[REVIEW] approved=true; " + summary, flush=True)
+                return proven
             die(
-                "pre-render HOLD before paid TTS; 0 characters spent: "
-                + str(review.get("summary") or "no passing self-review")
+                "REVIEW; refusing paid publish without approved=true; 0 characters spent: "
+                + summary
             )
-        return proven
+        die(
+            "pre-render HOLD before paid TTS; 0 characters spent: " + summary
+        )
     finally:
         os.environ.pop("PROOF_FREE_AUDIO", None)
 

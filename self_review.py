@@ -195,10 +195,63 @@ def _pack(parts, notes):
         "overall": overall,
         "passed": passed,
         "public_ok": passed,
+        "review_flag": False,
+        "verdict": "PASS" if passed else "HOLD",
         "summary": summary,
         "notes": notes,
         "bar": {"part": PART_BAR, "overall": OVERALL_BAR},
     }
+
+
+# A soft miss (craft, visual, trend) whose overall still lands here is REVIEW.
+# Wrong numbers, a failed hook check, and a sync miss stay HOLD.
+_REVIEW_LO = 75
+_REVIEW_HI = 85
+_HARD_PARTS = ("hook", "accuracy", "sync")
+
+
+def _apply_review_flag(packed):
+    """Mark a soft 75–85 review. public_ok stays false, so it does not auto-publish."""
+    if not isinstance(packed, dict):
+        return packed
+    if packed.get("public_ok"):
+        packed["review_flag"] = False
+        packed["verdict"] = "PASS"
+        return packed
+    if packed.get("narration_fallback"):
+        packed["review_flag"] = False
+        packed["verdict"] = "HOLD"
+        return packed
+    parts = packed.get("parts") or {}
+    for name in _HARD_PARTS:
+        raw = parts.get(name)
+        if raw is None:
+            continue
+        try:
+            score = float(raw)
+        except (TypeError, ValueError):
+            packed["review_flag"] = False
+            packed["verdict"] = "HOLD"
+            return packed
+        if score < PART_BAR:
+            packed["review_flag"] = False
+            packed["verdict"] = "HOLD"
+            return packed
+    try:
+        overall = float(packed.get("overall"))
+    except (TypeError, ValueError):
+        packed["review_flag"] = False
+        packed["verdict"] = "HOLD"
+        return packed
+    if _REVIEW_LO <= overall <= _REVIEW_HI:
+        packed["review_flag"] = True
+        packed["verdict"] = "REVIEW"
+        packed["public_ok"] = False
+        packed["passed"] = False
+        return packed
+    packed["review_flag"] = False
+    packed["verdict"] = "HOLD"
+    return packed
 
 
 def _reject_fallback(narration, packed):
@@ -345,4 +398,4 @@ def full_review(topic, narration, spec, overlays, trends=None, scenes=None, labe
         "source": (spec or {}).get("source"),
         "as_of": (spec or {}).get("as_of"),
     }
-    return _reject_fallback(narration, packed)
+    return _apply_review_flag(_reject_fallback(narration, packed))
