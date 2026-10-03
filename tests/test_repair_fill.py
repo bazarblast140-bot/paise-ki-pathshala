@@ -98,8 +98,19 @@ class WorkflowGuardTests(unittest.TestCase):
         self.assertIn("Paise Ki Pathshala", script)
         self.assertIn("Slot watch", script)
         self.assertIn("Buffer refill", script)
+        self.assertIn("names_needing_enable", script)
         self.assertIn("repair-fill-2026-10-03.yml", text)
         self.assertNotIn("ELEVENLABS", text)
+
+    def test_active_workflows_are_not_enabled_again(self):
+        states = {
+            "Paise Ki Pathshala": "active",
+            "Slot watch": "active",
+            "Buffer refill": "disabled_manually",
+            "Trader Quiz Shorts": "disabled_manually",
+        }
+        self.assertEqual(repair_fill.names_needing_enable(states), ["Buffer refill"])
+        self.assertEqual(repair_fill.names_needing_enable({name: "active" for name in repair_fill.ENABLE}), [])
 
 
 if __name__ == "__main__":
