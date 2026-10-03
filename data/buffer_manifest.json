@@ -9,6 +9,7 @@
     "option_covered_call",
     "option_protective_put",
     "option_straddle",
-    "option_strangle"
+    "option_strangle",
+    "multibagger_case_eicher"
   ]
 }
