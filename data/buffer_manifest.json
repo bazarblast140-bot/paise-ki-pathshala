@@ -14,6 +14,7 @@
     "multibagger_case_bajajfinance",
     "multibagger_case_trent",
     "opt_protective_put",
-    "opt_theta_decay"
+    "opt_theta_decay",
+    "intraday_trend_range"
   ]
 }
