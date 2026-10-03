@@ -15,6 +15,7 @@
     "multibagger_case_trent",
     "opt_protective_put",
     "opt_theta_decay",
-    "intraday_trend_range"
+    "intraday_trend_range",
+    "risk_leverage"
   ]
 }
