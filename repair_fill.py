@@ -9,7 +9,8 @@ actions=write). The repair workflow runs this with the job token:
 
 The slot dispatch is private + publishAt (privacy=public). An instant-public
 upload is not requested. A withdrawn video is not republished. Trader Quiz
-Shorts stays disabled. After 2026-10-03 IST the command no-ops.
+Shorts stays disabled. Leftover finance Latin is folded before the leak gate.
+After 2026-10-03 IST the command no-ops.
 """
 from __future__ import annotations
 
