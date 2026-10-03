@@ -123,10 +123,10 @@ class Axes:
 
 
 # ---------------------------------------------------------------- primitives
-def candles(img, box, ohlc, lo=None, hi=None, grid=True, width_frac=0.56, pad=None):
+def candles(img, box, ohlc, lo=None, hi=None, grid=True, width_frac=0.56, pad=None, ypad=0.12):
     lo = min(c[2] for c in ohlc) if lo is None else lo
     hi = max(c[1] for c in ohlc) if hi is None else hi
-    ax = Axes(box, len(ohlc), lo, hi, pad=pad or (40, 40, 40, 40))
+    ax = Axes(box, len(ohlc), lo, hi, pad=pad or (40, 40, 40, 40), ypad=ypad)
     if grid:
         ax.grid(img)
     d = ImageDraw.Draw(img)

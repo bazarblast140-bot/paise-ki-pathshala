@@ -178,38 +178,46 @@ def candle_levels(topic=None, key=None):
     }
 
 
-def _level_view(img, box, levels, beat, progress):
-    """Candles from topic levels. `progress` 0→1 draws the midpoint, the close, the badge."""
+def _level_view(img, box, levels, beat, progress, fill_bottom=False):
+    """Candles from topic levels. `progress` 0→1 draws the midpoint, then the badge.
+
+    The right of the plot is a label column, past the candles. A cover can
+    stretch the price scale down so the panel is not empty under the low.
+    """
     pat = levels["pat"]
-    red, green = pat
     lo = min(c[2] for c in pat)
     hi = max(c[1] for c in pat)
     if beat == "karein" and levels["sl"] is not None:
         lo = min(lo, levels["sl"] - 0.6)
     p = max(0.0, min(1.0, float(progress)))
-    plot = (box[0] + 130, box[1] + 80, box[2] - 36, box[3] - 80)
-    ax = candles(img, plot, pat, lo - 0.4, hi + 0.4, grid=False, width_frac=0.55, pad=(24, 36, 24, 28))
+    bottom = 36 if fill_bottom else 80
+    plot = (box[0] + 130, box[1] + 72, box[2] - 16, box[3] - bottom)
+    # Right pad keeps the '95 (50%)' column clear of both bodies.
+    pad = (24, 28, 200, 16 if fill_bottom else 28)
+    ypad = 0.02 if fill_bottom else 0.12
+    ax = candles(
+        img, plot, pat, lo - 0.4, hi + 0.4, grid=False, width_frac=0.55,
+        pad=pad, ypad=ypad,
+    )
     draw = __import__("PIL").ImageDraw.Draw(img)
-    x_left, x_right = plot[0], plot[2]
+    x_left = plot[0]
+    candle_right = ax.x(len(pat) - 1) + ax.bw / 2
     if p > 0.02:
         y = ax.y(levels["mid"])
-        reach = x_left + (x_right - x_left) * min(1.0, p / 0.42)
+        reach = x_left + (candle_right - x_left) * min(1.0, p / 0.42)
         band = 16 + 22 * min(1.0, p / 0.42)
         draw.rectangle([x_left, y - band / 2, reach, y + band / 2], fill=(120, 90, 16))
         dashed(img, x_left, reach, y, YELLOW, None)
-    if p > 0.32:
-        scale = min(1.0, (p - 0.32) / 0.28)
-        tick(img, ax.x(1), ax.y(green[3]), r=16 + 36 * scale, col=GREEN, w=8 + int(6 * scale))
     if beat == "karein" and levels["sl"] is not None:
-        dashed(img, x_left, x_right, ax.y(levels["sl"]), SL_RED, None)
+        dashed(img, x_left, plot[2], ax.y(levels["sl"]), SL_RED, None)
+    img._level_badge = None
     if p > 0.58 and levels["badge"]:
         scale = 0.45 + 0.55 * min(1.0, (p - 0.58) / 0.42)
         bw, bh = 640 * scale, 118 * scale
-        cx, cy = (plot[0] + plot[2]) / 2, plot[1] + 36 + bh / 2
-        draw.rounded_rectangle(
-            [cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2],
-            18, fill=(48, 36, 8), outline=YELLOW, width=4,
-        )
+        cx, cy = (plot[0] + plot[2]) / 2, plot[1] + 28 + bh / 2
+        rect = (cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2)
+        draw.rounded_rectangle(rect, 18, fill=(48, 36, 8), outline=YELLOW, width=4)
+        img._level_badge = rect
     img._level_axes = ax
     img._level_plot = plot
     return ax
@@ -231,8 +239,9 @@ def _level_labels(img, levels, beat, progress, spoken):
             anchor="rm", band=False, role="axis",
         )
     if p > 0.22 and levels["mid_label"]:
+        # Right margin, level with the midpoint, past the green body.
         scene_frames._text(
-            img, plot[2] - 8, ax.y(levels["mid"]) - 28, levels["mid_label"], YELLOW, 34,
+            img, plot[2] - 8, ax.y(levels["mid"]), levels["mid_label"], YELLOW, 32,
             anchor="rm", band=False, role="axis",
         )
     if beat == "karein" and levels["sl"] is not None:
@@ -249,10 +258,11 @@ def _level_labels(img, levels, beat, progress, spoken):
             img, ax.x(1), ax.y(levels["pat"][1][3]) - 96, "70%", (250, 250, 250), 40,
             anchor="mb", band=False, role="axis",
         )
-    if p > 0.62 and levels["badge"]:
+    badge = getattr(img, "_level_badge", None)
+    if badge and p > 0.62 and levels["badge"]:
         scene_frames._text(
-            img, (plot[0] + plot[2]) / 2, plot[1] + 36, levels["badge"], YELLOW, 42,
-            anchor="mt", band=False, role="axis",
+            img, (badge[0] + badge[2]) / 2, (badge[1] + badge[3]) / 2, levels["badge"], YELLOW, 42,
+            anchor="mm", band=False, role="axis",
         )
 
 
@@ -2865,13 +2875,14 @@ def _paint_topic_cover(topic):
     from PIL import Image, ImageDraw
     key = str((topic or {}).get("key") or "").strip()
     img = K.background()
-    box = (48, 320, 1032, 1620)
+    # Down to the 6% margin. The price scale fills this box, including the lower band.
+    box = (48, 320, 1032, 1800)
     draw = ImageDraw.Draw(img)
     draw.rounded_rectangle(box, 28, fill=K.PANEL, outline=(60, 80, 110), width=4)
     levels = candle_levels(topic, key)
     if levels:
         inner = (box[0] + 16, box[1] + 24, box[2] - 16, box[3] - 24)
-        _level_view(img, inner, levels, "hook", 1.0)
+        _level_view(img, inner, levels, "hook", 1.0, fill_bottom=True)
         _level_labels(img, levels, "hook", 1.0, "70")
     else:
         scene = K.background()

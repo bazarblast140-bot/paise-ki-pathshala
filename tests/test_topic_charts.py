@@ -154,7 +154,7 @@ class PiercingLevelTests(unittest.TestCase):
         levels = board_scenes.candle_levels(topic)
         red, green = levels["pat"]
         self.assertEqual(red, (100.0, 100.0, 89.0, 90.0))
-        self.assertEqual(green, (88.0, 97.0, 88.0, 97.0))
+        self.assertEqual(green, (88.0, 98.0, 87.5, 97.0))
         self.assertEqual(levels["mid"], 95.0)
         self.assertEqual(levels["sl"], 87.0)
         body = abs(red[0] - red[3])
@@ -187,6 +187,37 @@ class PiercingLevelTests(unittest.TestCase):
         hook_text = " ".join(layer.get("text") or "" for layer in hook.text_layers)
         self.assertIn("70%", hook_text)
         self.assertNotIn("SL 87", hook_text)
+        shown = {beat: board_scenes.paint_chart_board(topic, beat, 0, 1).motion_at(1.0)
+                 for beat in PIERCING_SCRIPT["beats"]}
+        shown["cover"] = board_scenes.paint_cover(topic)
+        for name, frame in shown.items():
+            self._assert_badge_is_centred(frame, name)
+            self._assert_mid_label_clears_the_candles(frame, name)
+
+    def _assert_badge_is_centred(self, frame, name):
+        badge = getattr(frame, "_level_badge", None)
+        self.assertIsNotNone(badge, name)
+        layer = next(item for item in frame.text_layers if item.get("text") == "50% SE UPAR")
+        box = layer["box"]
+        cx = (box[0] + box[2]) / 2
+        cy = (box[1] + box[3]) / 2
+        self.assertAlmostEqual(cx, (badge[0] + badge[2]) / 2, delta=6, msg=name)
+        self.assertAlmostEqual(cy, (badge[1] + badge[3]) / 2, delta=6, msg=name)
+        self.assertGreater(box[1], badge[1] + 8, name)
+        self.assertLess(box[3], badge[3] - 8, name)
+        self.assertGreater(box[0], badge[0] + 8, name)
+        self.assertLess(box[2], badge[2] - 8, name)
+
+    def _assert_mid_label_clears_the_candles(self, frame, name):
+        import safe_area
+        ax = frame._level_axes
+        levels = board_scenes.candle_levels(key="piercing")
+        layer = next(item for item in frame.text_layers if item.get("text") == "95 (50%)")
+        for i, (o, _h, _l, c) in enumerate(levels["pat"]):
+            cx = ax.x(i)
+            top, bot = ax.y(max(o, c)), ax.y(min(o, c))
+            body = (cx - ax.bw / 2, min(top, bot), cx + ax.bw / 2, max(top, bot))
+            self.assertFalse(safe_area.intersects(layer["box"], body), name)
 
     def test_the_hook_percent_stays_whole_on_a_wipe(self):
         """70% sits on the dark panel, so a wipe can still see the whole glyph."""
