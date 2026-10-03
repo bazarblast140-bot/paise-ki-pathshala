@@ -842,6 +842,14 @@ new concept before the previous one is understood.
 TEACHING VOICE:
 - Adult trader talking to another adult. Calm, direct Hinglish. No cheerleading, no "दोस्तों",
   no baby-talk, no hype.
+
+LANGUAGE — simple everyday Hinglish, the way Indian traders talk on a desk:
+- Write spoken words, not shuddh Hindi. Do not use हद, पूँजी, क्षमता, तय करो, or बैठती है.
+- Use the words traders use: limit, capital, loss, stop loss, entry, trade, profit.
+- In the script say लिमिट, कैपिटल, लॉस, स्टॉप लॉस, एंट्री, ट्रेड, प्रॉफिट, डेली लॉस लिमिट.
+- Say फिक्स करो when the lesson is to write the limit down. That is not an order to buy or sell.
+- A 2% daily loss limit is the whole day's TOTAL loss, not the loss of one trade. Say that.
+- Bridges, when they help: "अब इसे पहचानो", "मतलब ये है", "अब आगे".
 - One lesson, in this order, mapped onto the four beats:
   hook = the problem (do not give the answer yet);
   pehchan = the rule, with the number that is on the chart;
@@ -876,7 +884,7 @@ or "अब आगे traders क्या check करते हैं". Speak t
 
 CONTINUITY RULES:
 - Each beat must answer the next question in the sequence. Never repeat the hook in later beats.
-- Use explicit bridge words where natural: "अब इसे पहचानें", "इसका मतलब", "अब आगे".
+- Use explicit bridge words where natural: "अब इसे पहचानो", "मतलब ये है", "अब आगे".
 - Narration must describe the exact visual shown in that beat. If the screen highlights
   three candles, explain those three candles; if it shows SL, explain SL. Never talk about
   a chart element that is not on screen.

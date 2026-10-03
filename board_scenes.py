@@ -1749,11 +1749,18 @@ class ChartVoiceError(RuntimeError):
 
 
 _STOP_MARKS = ("रुक", "रोक", "बंद", "हिट", "स्टॉप", "टर्मिनल", "ज्यादा न")
-_PILLS = {
+_STEP_MARKS = ("लिखो", "एंट्री", "एन्ट्री")
+_BEAT_WORD = {
     "hook": "HOOK",
-    "pehchan": "1 PEHCHAN",
-    "matlab": "2 MATLAB",
-    "karein": "3 KYA KAREIN",
+    "pehchan": "PEHCHAN",
+    "matlab": "MATLAB",
+    "karein": "KYA KAREIN",
+}
+_GLOSS = {
+    "hook": "month, then one red day",
+    "pehchan": "daily total, not one trade",
+    "matlab": "loss flattens at the stop",
+    "karein": "write, then stop, then exit",
 }
 
 
@@ -1820,12 +1827,15 @@ def labels_from_voice(text):
 
 
 def concept_for(text, labels=None):
-    """The picture this line is teaching. Stop wins over the capital identity."""
+    """The picture this line is teaching. A checklist beats a stop line."""
     import sync_gate
     labels = labels_from_voice(text) if labels is None else labels
     rupees = [value for _label, kind, value in labels if kind == "inr"]
     percents = [value for _label, kind, value in labels if kind == "pct"]
     raw = sync_gate._alias(text or "")
+    # लिखो / एंट्री is the checklist. Matlab says ज्यादा न and has neither.
+    if any(mark in raw for mark in _STEP_MARKS):
+        return "steps"
     if any(mark in raw for mark in _STOP_MARKS) and (rupees or percents):
         return "pnl_stop"
     if len(rupees) >= 2 and percents:
@@ -1880,13 +1890,109 @@ def enforce_chart_voice(spec, narration):
     return spec
 
 
-def _plot_box():
-    x0, y0, x1, y1 = BOARD
-    return (x0 + 48, y0 + 150, x1 - 48, y1 - 28)
+def _plot_box(box=None):
+    """Room above the plot for the English line, and below it for the beat word."""
+    x0, y0, x1, y1 = box or BOARD
+    return (x0 + 40, y0 + 188, x1 - 40, y1 - 200)
 
 
-def _draw_geometry(img, spec, index=0, plot=None):
-    """Bars, the stop line, or a plain trace. Labels are drawn afterwards."""
+def _minus_amount(text):
+    raw = str(text or "")
+    if raw.startswith("−") or raw.startswith("-"):
+        return "−" + raw.lstrip("−-")
+    if raw.startswith("₹"):
+        return "−" + raw
+    return "−₹" + raw
+
+
+def _stop_caption(spec):
+    """One stop label. The percent is included only when this line says it."""
+    labels = (spec or {}).get("labels") or []
+    rupees = [item for item in labels if item["kind"] == "inr"]
+    percents = [item for item in labels if item["kind"] == "pct"]
+    if rupees:
+        loss = min(rupees, key=lambda item: item["value"])
+        text = "STOP " + _minus_amount(loss["text"])
+        if percents:
+            text += " (" + percents[0]["text"] + ")"
+        return text
+    if percents:
+        return "STOP " + percents[0]["text"]
+    return "STOP"
+
+
+def _headline(spec, beat):
+    """ALL CAPS English. A ₹ or % appears only when this scene's spec has it."""
+    spec = spec or {}
+    labels = spec.get("labels") or []
+    rupees = [item for item in labels if item["kind"] == "inr"]
+    percents = [item for item in labels if item["kind"] == "pct"]
+    concept = spec.get("concept")
+    if concept == "capital_slice" and len(rupees) >= 2 and percents:
+        capital = max(rupees, key=lambda item: item["value"])
+        limit = min(rupees, key=lambda item: item["value"])
+        return f"{percents[0]['text']} OF {capital['text']} = {limit['text']} MAX LOSS"
+    if concept == "pnl_stop":
+        return _stop_caption(spec)
+    if concept == "steps":
+        if rupees:
+            return "FIX " + min(rupees, key=lambda item: item["value"])["text"]
+        return "THREE STEPS"
+    if concept == "compare" and len(labels) >= 2:
+        return f"{labels[0]['text']} VS {labels[1]['text']}"
+    if beat == "hook" and concept in ("plain", "level"):
+        if labels:
+            return "CAPITAL " + labels[0]["text"]
+        return "ONE BAD DAY"
+    if len(labels) == 1:
+        return labels[0]["text"]
+    if labels:
+        return "  ".join(item["text"] for item in labels[:3])
+    return {
+        "hook": "ONE BAD DAY",
+        "pehchan": "THE LIMIT",
+        "matlab": "WHAT IT MEANS",
+        "karein": "WHAT TO DO",
+    }.get(beat, "THE RULE")
+
+
+def _steps_reached(text):
+    import sync_gate
+    raw = sync_gate._alias(text or "")
+    reached = 0
+    if "लिखो" in raw:
+        reached = max(reached, 1)
+    if "एंट्री" in raw or "एन्ट्री" in raw or "स्टॉप" in raw:
+        reached = max(reached, 2)
+    if "टर्मिनल" in raw or "हिट" in raw:
+        reached = max(reached, 3)
+    return reached
+
+
+def _equity_curve(img, plot):
+    """A month that rises, then one red day. The crash is the yellow ring."""
+    from PIL import ImageDraw
+    left, top, right, bottom = plot
+    n = 22
+    span = right - left - 64
+    room = bottom - top - 70
+    pts = []
+    for i in range(n - 1):
+        x = left + 32 + span * i / (n - 1)
+        y = bottom - 36 - room * (0.18 + 0.72 * i / (n - 2))
+        pts.append((x, y))
+    crash = (left + 32 + span, bottom - 28)
+    draw = ImageDraw.Draw(img)
+    poly = pts + [crash, (crash[0], bottom - 16), (pts[0][0], bottom - 16)]
+    draw.polygon(poly, fill=(14, 110, 62))
+    polyline(img, pts, GREEN, 8)
+    polyline(img, [pts[-1], crash], RED, 8)
+    ring(img, crash[0], crash[1], 34, 34, YELLOW)
+    return {"plot": plot, "equity": True}
+
+
+def _draw_geometry(img, spec, index=0, plot=None, beat="", card=""):
+    """Bars, the stop line, the checklist, or the hook curve. Labels come after."""
     from PIL import ImageDraw
     plot = plot or _plot_box()
     concept = spec.get("concept")
@@ -1899,19 +2005,34 @@ def _draw_geometry(img, spec, index=0, plot=None):
         capital = max(rupees, key=lambda item: item["value"])
         limit = min(rupees, key=lambda item: item["value"])
         left, top, right, bottom = plot
-        height = min(280, (bottom - top) * 0.42)
-        bar_y0 = top + (bottom - top - height) * 0.55
-        bar_y1 = bar_y0 + height
-        width = right - left
-        slice_w = max(8.0, width * (float(limit["value"]) / float(capital["value"])))
-        draw.rounded_rectangle([left, bar_y0, right, bar_y1], 18, fill=GREEN)
-        draw.rounded_rectangle([left, bar_y0, left + slice_w, bar_y1], 12, fill=YELLOW)
+        ratio = float(limit["value"]) / float(capital["value"]) if capital["value"] else 0.02
+        room = (bottom - top) - 24
+        large_h = room
+        small_h = max(4.0, room * ratio)
+        bw = 78
+        base = bottom - 12
+        x_big = left + 210
+        x_small = x_big + bw + 70
+        # The callout sits beside the bars. It is not a bar, so the ratio stays the values.
+        draw.rounded_rectangle(
+            [left + (right - left) * 0.52, top + 24, right - 8, bottom - 12],
+            22, fill=(36, 32, 12), outline=YELLOW, width=4,
+        )
+        draw.rounded_rectangle([x_big, base - large_h, x_big + bw, base], 16, fill=GREEN)
+        draw.rounded_rectangle([x_small, base - small_h, x_small + bw, base], 10, fill=YELLOW)
         img.chart_bar_boxes = [
-            (float(left), float(bar_y0), float(right), float(bar_y1), float(capital["value"])),
-            (float(left), float(bar_y0), float(left + slice_w), float(bar_y1), float(limit["value"])),
+            (float(x_big), float(base - large_h), float(x_big + bw), float(base), float(capital["value"])),
+            (float(x_small), float(base - small_h), float(x_small + bw), float(base), float(limit["value"])),
         ]
-        ring(img, left + slice_w, (bar_y0 + bar_y1) / 2, 28, 46, YELLOW)
-        return {"bar": (left, bar_y0, right, bar_y1), "slice": slice_w}
+        ring(img, x_small + bw / 2, base - small_h, 26, 18, YELLOW)
+        arrow(img, (x_small + bw + 8, base - small_h), (left + (right - left) * 0.56, top + 80), YELLOW, w=8, head=26)
+        return {
+            "plot": plot,
+            "capital": capital,
+            "limit": limit,
+            "percents": percents,
+            "bars": img.chart_bar_boxes,
+        }
     if concept == "compare" and len(labels) >= 2:
         rows = percents if len(percents) >= 2 else rupees
         if len(rows) < 2:
@@ -1932,22 +2053,43 @@ def _draw_geometry(img, spec, index=0, plot=None):
             draw.rounded_rectangle([x, y0, x + bw, base], 14, fill=GREEN if i % 2 == 0 else YELLOW)
             boxes.append((float(x), float(y0), float(x + bw), float(base), float(item["value"])))
         img.chart_bar_boxes = boxes
-        return {"bars": boxes, "rows": rows}
+        return {"bars": boxes, "rows": rows, "plot": plot}
     if concept == "pnl_stop":
         loss = min((item["value"] for item in rupees), default=0) or 1
-        ys = [0, -0.2 * loss, -0.45 * loss, -0.75 * loss, -loss]
+        ys = [0, -0.35 * loss, -0.7 * loss, -loss, -loss, -loss]
         ax = series_panel(
             img, plot, [(ys, RED, 8)], lo=-loss * 1.25, hi=loss * 0.35, pad=(36, 24, 36, 24),
         )
-        dashed(img, plot[0] + 16, plot[2] - 16, ax.y(-loss), RED)
-        ring(img, ax.x(len(ys) - 1), ax.y(-loss), 34, 34, YELLOW)
-        return {"stop_y": ax.y(-loss), "plot": plot}
+        stop_y = ax.y(-loss)
+        draw.rectangle([plot[0] + 8, stop_y, plot[2] - 8, plot[3] - 8], fill=(70, 16, 22))
+        polyline(img, [(ax.x(i), ax.y(v)) for i, v in enumerate(ys)], RED, 8)
+        dashed(img, plot[0] + 16, plot[2] - 16, stop_y, RED)
+        ring(img, ax.x(len(ys) - 2), stop_y, 30, 30, YELLOW)
+        return {"stop_y": stop_y, "plot": plot, "zero_y": ax.y(0), "ax": ax}
+    if concept == "steps":
+        left, top, right, bottom = plot
+        reached = _steps_reached(card)
+        gap = 22
+        count = 3
+        room = bottom - top
+        row_h = (room - gap * (count - 1)) / count
+        rows = []
+        for i in range(count):
+            y = top + i * (row_h + gap)
+            tone = (18, 78, 48) if i < reached else (18, 26, 40)
+            draw.rounded_rectangle([left, y, right, y + row_h], 18, fill=tone, outline=(90, 120, 160), width=4)
+            rows.append((left, y, right, y + row_h))
+        return {"plot": plot, "rows": rows, "reached": reached, "step_card": card}
+    if beat == "hook" and concept in ("plain", "level"):
+        return _equity_curve(img, plot)
     if concept == "level" and labels:
         left, top, right, bottom = plot
         y = (top + bottom) / 2 + (index % 3) * 12
         dashed(img, left, right, y, YELLOW)
         ring(img, (left + right) / 2, y, 40, 40, YELLOW)
         return {"level_y": y, "plot": plot}
+    if beat == "hook":
+        return _equity_curve(img, plot)
     left, top, right, bottom = plot
     mid = (top + bottom) / 2
     polyline(img, [(left + 20, mid + 40), ((left + right) / 2, mid - 30), (right - 20, mid + 10)], GREEN, 8)
@@ -1957,78 +2099,168 @@ def _draw_geometry(img, spec, index=0, plot=None):
 def _place(img, x, y, text, fill, size, anchor="lt", role="chart"):
     import scene_frames
     return scene_frames._text(
-        img, x, y, text, fill, size, anchor=anchor, band=True, role=role,
+        img, x, y, text, fill, size, anchor=anchor, band=False, role=role,
     )
 
 
-def _draw_labels(img, spec, geom):
+def _add_tick(img, cx, cy, arrive):
+    """A drawn check, not a font glyph. The newest one waits until the scene moves."""
+    from PIL import Image, ImageDraw
+    size = 58
+    sprite = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    pen = ImageDraw.Draw(sprite)
+    pen.ellipse([3, 3, size - 4, size - 4], fill=YELLOW)
+    pen.line([(14, 30), (24, 44), (44, 16)], fill=(20, 20, 20), width=6)
+    xy = (int(cx - size / 2), int(cy - size / 2))
+    img.text_layers.append({
+        "image": sprite,
+        "xy": xy,
+        "text": "",
+        "shaped": True,
+        "box": (xy[0], xy[1], xy[0] + size, xy[1] + size),
+        "size": 0,
+        "persist": False,
+        "faint": True,
+        "role": "glow",
+        "arrive": bool(arrive),
+    })
+
+
+def _draw_labels(img, spec, geom, beat="", card=""):
     import scene_frames
     gold = scene_frames.GOLD
     labels = spec.get("labels") or []
     concept = spec.get("concept")
-    if concept == "capital_slice" and geom.get("bar"):
-        left, bar_y0, right, _bar_y1 = geom["bar"]
-        rupees = [item for item in labels if item["kind"] == "inr"]
-        capital = max(rupees, key=lambda item: item["value"])
-        limit = min(rupees, key=lambda item: item["value"])
-        percents = [item for item in labels if item["kind"] == "pct"]
-        _place(img, left + 12, bar_y0 - 148, limit["text"], gold, 64, anchor="lt")
+    plot = geom.get("plot") or _plot_box()
+    if concept == "capital_slice" and geom.get("capital"):
+        capital = geom["capital"]
+        limit = geom["limit"]
+        percents = geom.get("percents") or []
+        left, top, right, _bottom = plot
+        col = left + (right - left) * 0.56 + 24
+        _place(img, col, top + 28, "Capital", (236, 236, 236), 28, role="axis")
+        _place(img, col, top + 68, capital["text"], gold, 52)
+        _place(img, col, top + 150, "Daily limit", (236, 236, 236), 28, role="axis")
+        _place(img, col, top + 190, limit["text"], gold, 52)
         if percents:
-            _place(img, left + 12, bar_y0 - 78, percents[0]["text"], gold, 48, anchor="lt")
-        _place(img, right - 280, bar_y0 - 78, capital["text"], gold, 64, anchor="lt")
+            _place(img, col, top + 268, percents[0]["text"], gold, 40)
+        call = "sirf " + (percents[0]["text"] if percents else "") + " = " + limit["text"]
+        _place(img, col, top + 330, call.strip(), gold, 34)
         return
     if concept == "compare" and geom.get("bars"):
         rows = geom.get("rows") or labels
         for item, box in zip(rows, geom["bars"]):
             cx = (box[0] + box[2]) / 2
-            _place(img, cx, max(box[1] - 78, 180), item["text"], gold, 64, anchor="mt")
+            _place(img, cx, max(box[1] - 78, plot[1] + 8), item["text"], gold, 64, anchor="mt")
         return
     if concept == "pnl_stop":
-        plot = geom.get("plot") or _plot_box()
-        _place(img, plot[0] + 16, geom.get("stop_y", plot[3]) - 48, "STOP", RED, 36, anchor="lt", role="axis")
-        y = plot[1] + 12
+        stop = _stop_caption(spec)
+        stop_y = geom.get("stop_y", plot[3] - 80)
+        zero_y = geom.get("zero_y", plot[1] + 40)
+        _place(img, plot[0] + 300, stop_y - 44, stop, (255, 228, 160), 32, anchor="lt", role="chart")
+        _place(img, plot[0] + 8, zero_y - 34, "₹0", (210, 214, 220), 26, anchor="lt", role="axis")
+        rupees = [item for item in labels if item["kind"] == "inr"]
+        if rupees:
+            loss = min(rupees, key=lambda item: item["value"])
+            _place(img, plot[0] + 8, stop_y + 10, _minus_amount(loss["text"]), (255, 180, 170), 26, anchor="lt", role="axis")
+            capital = max(rupees, key=lambda item: item["value"])
+            if capital["value"] != loss["value"]:
+                _place(img, plot[0] + 300, plot[1] + 8, capital["text"], gold, 36, anchor="lt")
         for item in labels:
-            _place(img, plot[0] + 16, y, item["text"], gold, 56, anchor="lt")
-            y += 70
+            if item["kind"] == "pct" and item["text"] not in stop:
+                _place(img, plot[0] + 12, plot[1] + 48, item["text"], gold, 36)
+        return
+    if concept == "steps" and geom.get("rows"):
+        names = ["Limit likho", "SL + entry", "Hit = terminal band"]
+        rupees = [item for item in labels if item["kind"] == "inr"]
+        percents = [item for item in labels if item["kind"] == "pct"]
+        if percents:
+            names[0] = "Limit likho  " + percents[0]["text"]
+        if rupees:
+            names[1] = "SL + entry  " + min(rupees, key=lambda item: item["value"])["text"]
+        reached = int(geom.get("reached") or 0)
+        for i, box in enumerate(geom["rows"]):
+            cy = (box[1] + box[3]) / 2
+            if i < reached:
+                _add_tick(img, box[0] + 48, cy, arrive=(i == reached - 1))
+            _place(img, box[0] + 96, cy - 22, names[i], (245, 245, 245) if i < reached else (170, 176, 186), 36)
         return
     if labels:
-        plot = geom.get("plot") or _plot_box()
-        _place(img, (plot[0] + plot[2]) / 2, geom.get("level_y", (plot[1] + plot[3]) / 2) - 80,
-               labels[0]["text"], gold, 72, anchor="mb")
+        y = geom.get("level_y", (plot[1] + plot[3]) / 2) - 70
+        if geom.get("equity"):
+            y = plot[1] + 8
+        for item in labels:
+            _place(img, plot[0] + 16, y, item["text"], gold, 56)
+            y += 68
 
 
-def _caption_lines(text, width=920, size=40, max_lines=2):
-    import scene_frames
-    words = str(text or "").split()
-    lines, cur = [], ""
-    for word in words:
-        trial = (cur + " " + word).strip()
-        if scene_frames._text_extent(trial, size)[0] <= width:
-            cur = trial
+def _phrase_parts(text):
+    """Break on a sentence or a comma, never inside a number or a phrase."""
+    raw = " ".join(str(text or "").split())
+    if not raw:
+        return []
+    chunks = re.split(r"(?<=[।!?？])\s+|(?<!\d),\s+(?!\d)", raw)
+    parts = []
+    for chunk in chunks:
+        chunk = chunk.strip(" ,")
+        if not chunk:
             continue
-        if cur:
-            lines.append(cur)
-        cur = word
+        bits = re.split(r"\s+(?=(?:तो|ताकि|यानी)\b)", chunk)
+        for bit in bits:
+            bit = bit.strip()
+            if bit:
+                parts.append(bit)
+    return parts
+
+
+def _caption_lines(text, width=900, size=36, max_lines=2):
+    """At most two lines. A phrase stays whole; a long one shrinks instead of splitting."""
+    import scene_frames
+    parts = _phrase_parts(text)
+    if not parts:
+        return []
+    lines, cur = [], ""
+    for part in parts:
         if len(lines) >= max_lines:
             break
+        trial = (cur + " " + part).strip()
+        if cur and scene_frames._text_extent(trial, size)[0] > width:
+            lines.append(cur)
+            cur = ""
+            if len(lines) >= max_lines:
+                break
+            cur = part
+            continue
+        cur = trial
     if cur and len(lines) < max_lines:
         lines.append(cur)
     return lines[:max_lines]
 
 
-def _draw_chrome(img, beat, card, index=0):
-    """Badge inside the chart box, and the 1–2 line caption under it."""
+def _draw_chrome(img, beat, card, index=0, spec=None):
+    """English line on top, yellow beat word under the plot, captions under the board."""
     import safe_area
     import scene_frames
-    x0, y0, _x1, _y1 = BOARD
-    _place(img, x0 + 36, y0 + 28, _PILLS.get(beat, beat.upper()), YELLOW, 28, anchor="lt", role="axis")
+    x0, y0, _x1, y1 = BOARD
+    _place(
+        img, x0 + 28, y0 + 96, _headline(spec, beat), (248, 248, 248), 32,
+        anchor="lt", role="axis",
+    )
+    _place(
+        img, x0 + 28, y1 - 156, _BEAT_WORD.get(beat, str(beat).upper()), YELLOW, 30,
+        anchor="lt", role="axis",
+    )
+    _place(
+        img, x0 + 28, y1 - 102, _GLOSS.get(beat, ""), (236, 236, 236), 28,
+        anchor="lt", role="axis",
+    )
     lines = _caption_lines(card)
-    y = safe_area.SUBTITLE_TOP + 16
+    y = safe_area.SUBTITLE_TOP + 18
     for line in lines:
         scene_frames._text(
-            img, 540, y, line, (250, 250, 250), 40, anchor="mt", band=False, role="caption",
+            img, 540, y, line, (250, 250, 250), 36, anchor="mt", band=False, role="caption",
         )
-        y += 62
+        y += 70
     scene_frames._brand(img)
     caps = [
         layer["box"] for layer in (img.text_layers or [])
@@ -2042,7 +2274,6 @@ def _draw_chrome(img, beat, card, index=0):
         img.panel_fill = scene_frames.panel_fill_fraction(img)
     else:
         img.panel_fill = 1.0
-
 
 def _bare_word(word):
     import sync_gate
@@ -2157,9 +2388,9 @@ def paint_chart_board(topic, beat, index=0, n=1):
     img.chart_region = tuple(float(v) for v in BOARD)
     img.scene_kind = f"chart-{beat}"
     img.chart_spec = spec
-    geom = _draw_geometry(img, spec, index=index)
-    _draw_labels(img, spec, geom or {})
-    _draw_chrome(img, beat, spoken, index=index)
+    geom = _draw_geometry(img, spec, index=index, beat=beat, card=card)
+    _draw_labels(img, spec, geom or {}, beat=beat, card=card)
+    _draw_chrome(img, beat, spoken, index=index, spec=spec)
     return img
 
 
@@ -2228,9 +2459,10 @@ def paint_cover(topic):
     if faults:
         raise ChartVoiceError("; ".join(faults))
     img = K.background()
-    # The IG grid keeps y 240–1680. The chart, the hook, and the amount sit there.
-    box = (72, 400, 1008, 1120)
-    ImageDraw.Draw(img).rounded_rectangle(box, 28, fill=K.PANEL, outline=(60, 80, 110), width=4)
+    # The IG grid keeps y 240–1680. The hook, the chart, and the amount sit there.
+    box = (72, 330, 1008, 1600)
+    draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle(box, 28, fill=K.PANEL, outline=(60, 80, 110), width=4)
     img.label_boxes = []
     img.text_layers = []
     img.shapes = []
@@ -2239,17 +2471,19 @@ def paint_cover(topic):
     img.chart_region = tuple(float(v) for v in box)
     img.chart_spec = spec
     img.scene_kind = "chart-cover"
-    geom = _draw_geometry(img, spec, index=0, plot=(box[0] + 36, box[1] + 36, box[2] - 36, box[3] - 28))
-    _draw_labels(img, spec, geom or {})
-    hook = cover_hook(topic)
-    scene_frames._text(
-        img, 540, 280, hook, (255, 255, 255), 72, anchor="mt", band=False, role="caption",
-    )
     bold = _bold_amount(spec)
     if bold:
+        draw.rounded_rectangle([250, 360, 830, 500], 20, fill=(48, 36, 8), outline=scene_frames.GOLD, width=4)
+    plot = (box[0] + 28, 520 if bold else box[1] + 28, box[2] - 28, box[3] - 24)
+    geom = _draw_geometry(img, spec, index=0, plot=plot, beat="cover", card=line)
+    _draw_labels(img, spec, geom or {}, beat="cover", card=line)
+    scene_frames._text(
+        img, 540, 286, "EK BURA DIN = MAHINA KHATAM?", (255, 255, 255), 40,
+        anchor="mt", band=False, role="axis",
+    )
+    if bold:
         scene_frames._text(
-            img, 540, 1280, bold, scene_frames.GOLD, 92, anchor="mt", band=False, role="chart",
+            img, 540, 400, bold, scene_frames.GOLD, 64, anchor="mt", band=False, role="chart",
         )
-    # Safe-area check is the caller's. Keep every sprite inside 6%.
     del safe_area
     return img

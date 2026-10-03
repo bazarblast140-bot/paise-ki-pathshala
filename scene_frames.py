@@ -427,7 +427,7 @@ def _glow_line(img, x0, y, x1, color):
 def _brand(img):
     """Channel mark in the brand band, under the subtitles and above the progress bar."""
     _text(
-        img, 88, safe_area.BRAND_Y, "PKP", GOLD, 26, anchor="lt", persist=True, band=False,
+        img, 88, safe_area.BRAND_Y, "@ThePaiseKiPathshala", GOLD, 26, anchor="lt", persist=True, band=False,
         role="brand",
     )
 
@@ -1915,19 +1915,25 @@ def _attach_live_motion(image):
         top = max(0, (scaled_h - height) // 2)
         frame = scaled.crop((left, top, left + width, top + height))
         frame.plate = frame.copy()
+        layers = []
         for layer in getattr(base, "text_layers", None) or []:
+            # A new checklist tick stays off until this scene has played a bit.
+            if layer.get("arrive") and u < 0.35:
+                continue
+            layers.append(layer)
             sprite = layer.get("image")
             xy = layer.get("xy")
             if sprite is None or xy is None:
                 continue
             frame.paste(sprite, xy, sprite)
         for name in (
-            "text_layers", "label_boxes", "scene_kind", "panel_box", "panel_fill",
+            "label_boxes", "scene_kind", "panel_box", "panel_fill",
             "chart_bar_boxes", "labelled_graphic_boxes", "shapes", "chart_region",
             "chart_spec",
         ):
             if hasattr(base, name):
                 setattr(frame, name, getattr(base, name))
+        frame.text_layers = layers
         return frame
 
     image.animate = animate
