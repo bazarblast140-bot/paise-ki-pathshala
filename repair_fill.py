@@ -86,6 +86,10 @@ def next_action(ready, builds, lead_short, slot_tries):
     Edge builds stay ahead of that retry while nothing is ready.
     """
     need_buffer = ready < TARGET_READY and builds < MAX_BUFFER_BUILDS
+    # First try of an open slot is immediate. Passing None used to look like
+    # "no slot" and the restore stopped after the Edge budget without posting.
+    if slot_tries == 0:
+        return "slot"
     if ready < 1 and need_buffer and not lead_short:
         return "buffer"
     if slot_tries is not None and slot_tries < SLOT_TRIES:
@@ -240,7 +244,7 @@ def restore():
         choice = next_public_slot(now, entries)
         key = (choice["date_ist"], choice["slot"]) if choice else None
         short = lead_is_short(now, choice)
-        tries = attempted.get(key) if key else None
+        tries = None if key is None else attempted.get(key, 0)
         action = next_action(ready, builds, short, tries)
         print(
             f"[repair] ready={ready} builds={builds} next={key} "

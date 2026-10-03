@@ -86,9 +86,9 @@ class PlanTests(unittest.TestCase):
 
 
 class NextActionTests(unittest.TestCase):
-    def test_empty_buffer_is_built_before_a_comfortable_slot(self):
-        self.assertEqual(repair_fill.next_action(0, 0, False, 0), "buffer")
-        self.assertEqual(repair_fill.next_action(0, 3, False, 0), "buffer")
+    def test_first_slot_try_is_not_skipped_after_the_edge_budget(self):
+        self.assertEqual(repair_fill.next_action(0, 0, False, 0), "slot")
+        self.assertEqual(repair_fill.next_action(0, repair_fill.MAX_BUFFER_BUILDS, False, 0), "slot")
 
     def test_ready_buffer_goes_to_the_slot(self):
         self.assertEqual(repair_fill.next_action(1, 1, False, 0), "slot")
