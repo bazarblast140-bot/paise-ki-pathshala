@@ -92,15 +92,29 @@ def _out(args):
     return result.stdout
 
 
+def names_needing_enable(states):
+    """Workflows that are not already active.
+
+    `gh workflow enable` only searches disabled workflows. Calling it again
+    after a successful enable exits with "could not find any workflows named …"
+    and used to abort the restore before any slot was dispatched.
+    """
+    return [name for name in ENABLE if states.get(name) != "active"]
+
+
 def enable_required():
-    for name in ENABLE:
+    listing = json.loads(_out(["gh", "workflow", "list", "--all", "--json", "name,state"]))
+    states = {row.get("name"): row.get("state") for row in listing}
+    for name in names_needing_enable(states):
         _run(["gh", "workflow", "enable", name])
     listing = json.loads(_out(["gh", "workflow", "list", "--all", "--json", "name,state"]))
     states = {row.get("name"): row.get("state") for row in listing}
-    bad = [name for name in ENABLE if states.get(name) != "active"]
+    bad = names_needing_enable(states)
     if bad:
         print(f"[repair] still not active: {bad} states={ {n: states.get(n) for n in ENABLE} }", flush=True)
         return False
+    for name in ENABLE:
+        print(f"[repair] workflow active: {name}", flush=True)
     # Leave these alone. Print their states so the log shows we did not enable them.
     for name in ("Trader Quiz Shorts", "Render sample (no upload)", "Autonomous Repair Watchdog"):
         print(f"[repair] left {name}: {states.get(name)}", flush=True)
