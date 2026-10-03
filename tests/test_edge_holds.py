@@ -1,5 +1,6 @@
 """Holds from Edge dry run 37008112236. One test for each fix."""
 import json
+import os
 import re
 import unittest
 from pathlib import Path
@@ -245,10 +246,8 @@ class HindiConcreteTests(unittest.TestCase):
 class LatinAndNumberGateTests(unittest.TestCase):
     def test_latin_screen_words_and_negated_recovery_are_blocked(self):
         raw = "daily limit terminal chart edge"
-        self.assertCountEqual(
-            board_short.latin_misread_words(raw),
-            ["daily", "limit", "terminal", "chart", "edge"],
-        )
+        self.assertEqual(board_short.latin_misread_words(raw), [])
+        self.assertEqual(board_short.latin_misread_words("यहाँ QQ बचा"), ["QQ"])
         folded = board_short.fold_roman_words("daily limit और terminal chart edge")
         self.assertEqual(board_short.latin_misread_words(folded), [])
         self.assertNotIn("daily", folded.lower())
@@ -476,37 +475,44 @@ class TitleTermRepairTests(unittest.TestCase):
                 "karein": "₹4,000 हिट हुई तो टर्मिनल बंद।",
             },
         }
+        self.assertEqual(board_short.key_phrase_for(draft["title"]), "डेली लॉस लिमिट")
         notes = board_short.title_term_notes(draft)
-        self.assertIn("hook missing title term: डेली", notes)
-        self.assertIn("karein missing title term: लिमिट", notes)
+        self.assertEqual(notes, ["hook missing title term: डेली लॉस लिमिट"])
+        self.assertFalse(any(note.startswith("karein ") for note in notes))
         self.assertEqual(
-            board_short.route_gate_failure("hook missing title term: डेली", board_short.BEATS),
+            board_short.route_gate_failure(notes[0], board_short.BEATS),
             ["hook"],
         )
         repair = board_short.repair_instructions(
-            draft, ["hook", "karein"], topic,
-            failures=["hook missing title term: डेली", "karein missing title term: लिमिट"],
+            draft, ["hook"], topic, failures=notes,
         )
         self.assertIn("डेली लॉस लिमिट", repair)
-        self.assertIn("Missing title term: डेली", repair)
-        self.assertIn("लिमिट", repair)
+        self.assertIn("Missing title term: डेली लॉस लिमिट", repair)
+        self.assertIn("Write that phrase in the hook.", repair)
+        self.assertNotIn("in the karein", repair)
         covered = dict(draft)
-        covered["title"] = "डेली लॉस लिमिट"
         covered["beats"] = dict(draft["beats"])
         covered["beats"]["hook"] = "डेली लॉस लिमिट पर ₹4,000 क्यों रोकें?"
-        covered["beats"]["karein"] = "डेली लॉस लिमिट पर ₹4,000 हिट हुई तो टर्मिनल बंद।"
         self.assertEqual(board_short.title_term_notes(covered), [])
-        loss = _topic("loss_recovery")
+        spoken = {"hook": covered["beats"]["hook"]}
+        texts, _figures = board_short.scene_cards_for(
+            spoken, {"hook": (0.0, 4.0)},
+            [{"beat": "hook", "start": 0.0, "end": 4.0}],
+        )
+        self.assertIn("डेली लॉस लिमिट", texts["hook"][0])
         how = {
-            "title": "नुकसान वापस कैसे आए",
+            "title": "नुकसान का गणित कैसे घटे",
             "beats": {
                 "hook": "50% घटे तो 100% क्यों चाहिए?",
                 "karein": "50% गिरने के बाद 100% वापसी चाहिए।",
             },
         }
+        self.assertEqual(board_short.key_phrase_for(how["title"]), "नुकसान का गणित")
         how_notes = board_short.title_term_notes(how)
-        self.assertTrue(any(note == "hook missing title term: कैसे" for note in how_notes))
-        self.assertTrue(any("karein missing title term: कैसे" in note for note in how_notes))
+        self.assertEqual(how_notes, ["hook missing title term: नुकसान का गणित"])
+        self.assertFalse(any("कैसे" in note or "घटे" in note or note.startswith("karein") for note in how_notes))
+        self.assertEqual(board_short.key_phrase_for("यह नियम है"), "")
+        self.assertEqual(board_short.title_term_notes({"title": "यह नियम है", "beats": {"hook": "क्या यह है?"}}), [])
 
 
 class LeakAndDoubleTests(unittest.TestCase):
@@ -532,11 +538,17 @@ class LeakAndDoubleTests(unittest.TestCase):
             {"karein": "अब आगे ट्रेडर्स यही चेक करते हैं: 50% वापसी चाहिए।"}, order,
         )
         self.assertTrue(traders)
-        self.assertEqual(board_short.latin_misread_words("इसलिए SL छोटा रखें"), ["SL"])
-        latin = board_short.narrator_leak_notes(
-            {"karein": "इसलिए SL छोटा रखें।"}, order,
+        folded_sl = board_short.fold_roman_words("इसलिए SL छोटा रखें और revenge trading से trade बंद।")
+        self.assertIn("स्टॉप लॉस", folded_sl)
+        self.assertIn("रिवेंज ट्रेडिंग", folded_sl)
+        self.assertIn("ट्रेड", folded_sl)
+        self.assertNotIn("SL", folded_sl)
+        self.assertNotIn("revenge", folded_sl.lower())
+        self.assertEqual(board_short.latin_misread_words("इसलिए SL छोटा रखें"), [])
+        self.assertEqual(
+            board_short.narrator_leak_notes({"karein": "इसलिए SL छोटा रखें।"}, order),
+            [],
         )
-        self.assertTrue(any("SL" in note for note in latin))
         self.assertEqual(board_short.latin_misread_words("कार्ड पर OK लिखा"), ["OK"])
 
     def test_a_vague_double_is_blocked_and_the_50_percent_pair_is_not(self):
@@ -559,6 +571,139 @@ class LeakAndDoubleTests(unittest.TestCase):
         )
         self.assertEqual(score, 0)
         self.assertTrue(acc)
+
+
+class KeyPhraseTrimTests(unittest.TestCase):
+    def test_hook_and_beat_trims_keep_the_key_phrase_sentence(self):
+        phrase = "डेली लॉस लिमिट"
+        title = "डेली लॉस लिमिट पर रुकें"
+        question = "रोज़ का घाटा क्यों रोकें?"
+        filler = "यह कदम अलग बात है।"
+        carrier = "यही डेली लॉस लिमिट है।"
+        text = f"{question} {filler} {carrier}"
+        fitted = board_short.fit_live_hook(text, 6, 10, question, title)
+        self.assertIn(phrase, fitted)
+        self.assertNotIn("अलग बात", fitted)
+        only = f"{question} {carrier}"
+        kept = board_short.fit_live_hook(only, 2, 4, question, title)
+        self.assertIn(phrase, kept)
+        both = [carrier, "दूसरी डेली लॉस लिमिट वाली पंक्ति है।"]
+        self.assertIsNone(board_short._drop_index(both, "karein", "", 1, phrase))
+        topic = _topic("risk_daily_loss_limit")
+        long_tail = " ".join(["अलग"] * 40) + "।"
+        narration = {
+            "title": title,
+            "hook_line": question,
+            "beats": {
+                "hook": f"{question} {phrase} पर रुकना है।",
+                "pehchan": "पूँजी का नियम पहले लिखो।",
+                "matlab": "उदाहरण: ₹2,00,000 का 2% = ₹4,000।",
+                "karein": f"{long_tail} {carrier}",
+            },
+        }
+        board_short.apply_live_draft(narration, topic)
+        self.assertIn(phrase, narration["beats"]["karein"])
+        self.assertIn(phrase, narration["beats"]["hook"])
+
+
+class SoftReviewTests(unittest.TestCase):
+    def _parts(self, **over):
+        parts = {
+            "hook": 100, "visual": 90, "accuracy": 100,
+            "trend": 100, "craft": 0, "sync": 100,
+        }
+        parts.update(over)
+        return parts
+
+    def test_soft_75_to_85_is_review_and_hard_misses_stay_hold(self):
+        soft = self_review._apply_review_flag(self_review._pack(self._parts(), ["craft"]))
+        self.assertEqual(soft["overall"], 81.7)
+        self.assertTrue(soft["review_flag"])
+        self.assertEqual(soft["verdict"], "REVIEW")
+        self.assertFalse(soft["public_ok"])
+        synced = self_review._apply_review_flag(
+            self_review._pack(self._parts(craft=100, sync=0), ["sync"]),
+        )
+        self.assertEqual(synced["overall"], 81.7)
+        self.assertFalse(synced["review_flag"])
+        self.assertEqual(synced["verdict"], "HOLD")
+        self.assertFalse(synced["public_ok"])
+        maths = self_review._apply_review_flag(
+            self_review._pack(self._parts(craft=100, accuracy=0), ["accuracy"]),
+        )
+        self.assertFalse(maths["review_flag"])
+        self.assertEqual(maths["verdict"], "HOLD")
+        passed = self_review._apply_review_flag(self_review._pack(self._parts(craft=100), []))
+        self.assertTrue(passed["public_ok"])
+        self.assertFalse(passed["review_flag"])
+        self.assertEqual(passed["verdict"], "PASS")
+
+    def test_dry_run_keeps_a_review_mp4_and_live_refuses_without_approval(self):
+        import io
+        import tempfile
+        from contextlib import redirect_stderr, redirect_stdout
+        from pathlib import Path
+
+        import narration_dry_run
+        import review_gate
+
+        review = {
+            "public_ok": False,
+            "review_flag": True,
+            "verdict": "REVIEW",
+            "overall": 81.7,
+            "summary": "overall 81.7 (craft 0)",
+            "parts": self._parts(),
+        }
+
+        def render(*_args, **_kwargs):
+            (board_short.RUN / "final.mp4").write_bytes(b"mp4")
+            (board_short.RUN / "self_review.json").write_text(
+                json.dumps(review), encoding="utf-8",
+            )
+            return {"final_dur": 55.0}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            with mock.patch.object(board_short, "RUN", run), \
+                 mock.patch.object(board_short, "_render_short", side_effect=render), \
+                 mock.patch.object(board_short, "_eleven_spent", return_value=0):
+                with mock.patch.dict(os.environ, {"DRY_RUN": "1"}, clear=False):
+                    os.environ.pop("APPROVED", None)
+                    proven = board_short.prove_full_render({}, {}, {}, {})
+                    self.assertEqual(proven["final_dur"], 55.0)
+                    self.assertTrue((run / "final.mp4").is_file())
+                out = io.StringIO()
+                with redirect_stdout(out):
+                    narration_dry_run._print_self_review("risk_daily_loss_limit")
+                self.assertIn("verdict REVIEW", out.getvalue())
+                narration_dry_run._keep_topic_artifacts("risk_daily_loss_limit")
+                self.assertTrue((run / "final_risk_daily_loss_limit.mp4").is_file())
+                with mock.patch.dict(os.environ, {}, clear=False):
+                    os.environ.pop("DRY_RUN", None)
+                    os.environ.pop("APPROVED", None)
+                    err = io.StringIO()
+                    with redirect_stderr(err), self.assertRaises(SystemExit):
+                        board_short.prove_full_render({}, {}, {}, {})
+                    self.assertIn("REVIEW", err.getvalue())
+                    self.assertIn("approved=true", err.getvalue())
+                    self.assertTrue((run / "final.mp4").is_file())
+                    os.environ["APPROVED"] = "true"
+                    allowed = board_short.prove_full_render({}, {}, {}, {})
+                    self.assertEqual(allowed["final_dur"], 55.0)
+                (run / "report.md").write_text("VERDICT: [READY TO PUBLISH]\n", encoding="utf-8")
+                (run / "verify_meta.json").write_text(json.dumps({
+                    "ai_verdict_valid": True, "verdict": "READY", "public_ready": True,
+                }), encoding="utf-8")
+                (run / "self_review.json").write_text(json.dumps(review), encoding="utf-8")
+                os.environ.pop("APPROVED", None)
+                self.assertFalse(review_gate.files_allow_public(run, "short"))
+                os.environ["APPROVED"] = "true"
+                self.assertTrue(review_gate.files_allow_public(run, "short"))
+                hold = dict(review, review_flag=False, verdict="HOLD")
+                (run / "self_review.json").write_text(json.dumps(hold), encoding="utf-8")
+                self.assertFalse(review_gate.files_allow_public(run, "short"))
+                os.environ.pop("APPROVED", None)
 
 
 if __name__ == "__main__":

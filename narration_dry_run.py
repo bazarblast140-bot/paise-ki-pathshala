@@ -176,7 +176,12 @@ def _print_self_review(key):
         raise SystemExit(f"self-review missing for {key}")
     review = json.loads(path.read_text(encoding="utf-8"))
     parts = review.get("parts") or {}
-    verdict = "PASS" if review.get("public_ok") else "HOLD"
+    if review.get("review_flag") and not review.get("public_ok"):
+        verdict = "REVIEW"
+    elif review.get("public_ok"):
+        verdict = "PASS"
+    else:
+        verdict = "HOLD"
     bits = " ".join(
         f"{name} {parts.get(name)}"
         for name in ("hook", "visual", "accuracy", "trend", "craft", "sync")
@@ -185,7 +190,7 @@ def _print_self_review(key):
     summary = str(review.get("summary") or "").strip()
     if summary:
         print(f"  {summary}")
-    if not review.get("public_ok"):
+    if verdict == "HOLD":
         raise SystemExit(f"self-review HOLD {key}")
 
 

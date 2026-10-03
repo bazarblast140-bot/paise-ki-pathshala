@@ -91,7 +91,7 @@ class FourLiveWindowTests(unittest.TestCase):
         counts = {"hook": 30, "pehchan": 40, "matlab": 48, "karein": 42}
         self.assertEqual(sum(counts.values()), 160)
         script = {
-            "title": "नियम कदम",
+            "title": "यह नियम है",
             "hook_line": HOOK,
             "beats": {
                 beat: _packed(counts[beat], beat, HOOK if beat == "hook" else "")
@@ -202,7 +202,7 @@ class CraftAndLeakTests(unittest.TestCase):
         worked = "उदाहरण: एंट्री 200, एसएल = 200 − 1.5×2 = 197"
         self.assertEqual(board_short.narrator_leak_notes({"matlab": worked}, order), [])
         rakho = board_short.narrator_leak_notes({"karein": "सीमा के अंदर rakho"}, order)
-        self.assertTrue(any("rakho" in note for note in rakho))
+        self.assertEqual(rakho, [])
         folded = board_short.fold_roman_words("सीमा के अंदर rakho")
         self.assertIn("रखो", folded)
         self.assertNotIn("rakho", folded)

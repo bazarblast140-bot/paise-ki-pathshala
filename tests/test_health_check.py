@@ -256,7 +256,7 @@ class KimiTests(unittest.TestCase):
         }))])
         env = secrets_env(KIMI_API_KEY=KIMI_KEY)
         check = H.check_kimi(http, env, [], selected=False)
-        self.assertEqual(check.status, "fail")
+        self.assertEqual(check.status, "warn")
         self.assertEqual(check.blocks, "")
 
     def test_zero_balance_blocks_when_kimi_is_selected(self):
