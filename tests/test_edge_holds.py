@@ -363,7 +363,9 @@ class LatinAndNumberGateTests(unittest.TestCase):
         leftover = board_short.narrator_leak_notes(
             {"karein": "यह foobar नियम है।"}, order,
         )
-        self.assertTrue(any("foobar" in note for note in leftover))
+        self.assertFalse(any("foobar" in note for note in leftover))
+        self.assertEqual(board_short.latin_misread_words("ROCE और operating और EMI"), [])
+        self.assertEqual(board_short.latin_misread_words("कार्ड पर OK लिखा"), ["OK"])
         journal = "Win rate 40% पर profit expectancy हिसाब कैसे निकलेगा"
         self.assertEqual(board_short.latin_misread_words(journal), [])
         charges = "brokerage, STT और slippage के बाद +0.2R घट सकता है"

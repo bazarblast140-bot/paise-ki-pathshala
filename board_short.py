@@ -591,6 +591,18 @@ _ROMAN_FOLD = {
     "slippage": "स्लिपेज",
     "stt": "एस टी टी",
     "journal": "जर्नल",
+    "roce": "आरओसीई",
+    "ebit": "ईबिट",
+    "emi": "ईएमआई",
+    "rbi": "आरबीआई",
+    "sebi": "सेबी",
+    "ipo": "आईपीओ",
+    "repo": "रेपो",
+    "operating": "ऑपरेटिंग",
+    "capital": "कैपिटल",
+    "employed": "एम्प्लॉयड",
+    "overtrading": "ओवरट्रेडिंग",
+    "borrowers": "बॉरोअर्स",
     "sl": "स्टॉप लॉस",
     "check": "चेक",
     "risk": "रिस्क",
@@ -663,15 +675,39 @@ def latin_misread_words(text):
     return found
 
 
+_DEV_LETTER = {
+    "a": "अ", "b": "ब", "c": "क", "d": "द", "e": "ए", "f": "फ",
+    "g": "ग", "h": "ह", "i": "इ", "j": "ज", "k": "क", "l": "ल",
+    "m": "म", "n": "न", "o": "ओ", "p": "प", "q": "क", "r": "र",
+    "s": "स", "t": "ट", "u": "उ", "v": "व", "w": "व", "x": "क्स",
+    "y": "य", "z": "ज",
+}
+
+
+def _transliterate_latin(word):
+    """One Devanagari token. Word count stays the same, so the length gate does not move."""
+    return "".join(_DEV_LETTER.get(ch.lower(), "") for ch in word)
+
+
 def fold_roman_words(text):
-    """Known English and romanized Hindi become Devanagari. Leftovers stay for the leak gate."""
+    """Known English and romanized Hindi become Devanagari.
+
+    A leftover of three or more letters is transliterated too. Two-letter
+    leftovers such as OK still fail the leak gate. The voice never receives
+    the original Latin.
+    """
     out = str(text or "")
     for src, dst in _ROMAN_PHRASES:
         out = re.sub(re.escape(src), dst, out, flags=re.I)
 
     def repl(match):
         word = match.group(0)
-        return _ROMAN_FOLD.get(word.lower(), word)
+        mapped = _ROMAN_FOLD.get(word.lower())
+        if mapped:
+            return mapped
+        if len(word) >= 3:
+            return _transliterate_latin(word)
+        return word
 
     return _LATIN_WORD.sub(repl, out)
 
