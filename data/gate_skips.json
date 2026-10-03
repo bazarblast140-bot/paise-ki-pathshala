@@ -3,6 +3,7 @@
   "risk_journal",
   "risk_daily_loss_limit",
   "risk_overtrading",
-  "market_rbi_policy_oct2026"
+  "market_rbi_policy_oct2026",
+  "fund_roce"
  ]
 }
