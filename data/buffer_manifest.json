@@ -8,6 +8,7 @@
     "intraday_volume_price",
     "option_covered_call",
     "option_protective_put",
-    "option_straddle"
+    "option_straddle",
+    "option_strangle"
   ]
 }
