@@ -553,6 +553,8 @@ _ROMAN_PHRASES = (
     ("revenge trading", "रिवेंज ट्रेडिंग"),
     ("daily loss limit", "दिन की नुकसान हद"),
     ("daily limit", "दिन की हद"),
+    ("profit expectancy", "प्रॉफिट एक्सपेक्टेंसी"),
+    ("win rate", "विन रेट"),
 )
 _ROMAN_FOLD = {
     "rakho": "रखो",
@@ -581,6 +583,14 @@ _ROMAN_FOLD = {
     "trade": "ट्रेड",
     "trading": "ट्रेडिंग",
     "revenge": "रिवेंज",
+    "win": "विन",
+    "rate": "रेट",
+    "profit": "प्रॉफिट",
+    "expectancy": "एक्सपेक्टेंसी",
+    "brokerage": "ब्रोकरेज",
+    "slippage": "स्लिपेज",
+    "stt": "एस टी टी",
+    "journal": "जर्नल",
     "sl": "स्टॉप लॉस",
     "check": "चेक",
     "risk": "रिस्क",
