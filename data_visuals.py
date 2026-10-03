@@ -472,6 +472,26 @@ def _draw_callout(image, boxes, topic, beat, index, progress):
     ImageDraw.Draw(image).ellipse([left, top, right, bottom], outline=AMBER, width=6)
 
 
+def _stamp_figures(image, figures):
+    """Every figure this scene is allowed to show is on the chart.
+
+    A caption number has to match an on-screen figure. The five-word line
+    under the plot cannot carry all of them.
+    """
+    frames = _scene_frames()
+    have = {str(layer.get("text") or "") for layer in image.text_layers}
+    pending = []
+    for fig in list(figures or [])[:3]:
+        label = _words(fig, 4)
+        if label and label not in have:
+            pending.append(label)
+    xs = (PLOT[0] + 20, 400, PLOT[2] - 20)
+    anchors = ("lt", "mt", "rt")
+    y = PLOT[1] + 12
+    for label, x, anchor in zip(pending, xs, anchors):
+        _label(image, x, y, label, frames.GOLD, 40, role="chart", anchor=anchor, limit=4)
+
+
 def _chrome(image, topic, beat, card, figures):
     """Pills and headline inside the chart region. Beat word under the plot."""
     key = str((topic or {}).get("key") or "")
@@ -531,6 +551,7 @@ def render(topic, beat, index, n, progress):
         image.scene_kind = "chart-flow"
         image.chart_layer["type"] = "flow"
     _draw_callout(image, boxes, topic, beat, index, progress)
+    _stamp_figures(image, figures)
     _chrome(image, topic, beat, card, figures)
     _finish_meta(image)
     return image
