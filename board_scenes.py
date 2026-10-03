@@ -136,6 +136,136 @@ def _zoom_labels(img, labels):
         fit_label(img, x, y, t, X1 - x - 30, INK, 38)
 
 
+def candle_levels(topic=None, key=None):
+    """OHLC and labels stored on the topic. None when this topic has no levels.
+
+    The painter reads these fields. It does not invent 100, 95, or 87.
+    Another candle topic can carry the same shape with its own prices.
+    """
+    raw = (topic or {}).get("levels") if isinstance(topic, dict) else None
+    if not isinstance(raw, dict) and key:
+        try:
+            bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))
+            found = next((item for item in bank.get("topics", []) if item.get("key") == key), None)
+            raw = (found or {}).get("levels")
+        except (OSError, ValueError):
+            raw = None
+    if not isinstance(raw, dict):
+        return None
+    try:
+        red, green = raw["red"], raw["green"]
+        pat = (
+            (float(red["open"]), float(red["high"]), float(red["low"]), float(red["close"])),
+            (float(green["open"]), float(green["high"]), float(green["low"]), float(green["close"])),
+        )
+        ticks = [float(v) for v in (raw.get("ticks") or [])]
+        mid = float(raw["mid"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    sl = raw.get("sl")
+    try:
+        sl = None if sl is None else float(sl)
+    except (TypeError, ValueError):
+        sl = None
+    return {
+        "pat": pat,
+        "mid": mid,
+        "mid_label": str(raw.get("mid_label") or "").strip(),
+        "ticks": ticks,
+        "sl": sl,
+        "badge": str(raw.get("badge") or (topic or {}).get("badge") or "").strip(),
+        "close_pct": raw.get("close_pct"),
+    }
+
+
+def _level_view(img, box, levels, beat, progress):
+    """Candles from topic levels. `progress` 0→1 draws the midpoint, the close, the badge."""
+    pat = levels["pat"]
+    red, green = pat
+    lo = min(c[2] for c in pat)
+    hi = max(c[1] for c in pat)
+    if beat == "karein" and levels["sl"] is not None:
+        lo = min(lo, levels["sl"] - 0.6)
+    p = max(0.0, min(1.0, float(progress)))
+    plot = (box[0] + 130, box[1] + 80, box[2] - 36, box[3] - 80)
+    ax = candles(img, plot, pat, lo - 0.4, hi + 0.4, grid=False, width_frac=0.55, pad=(24, 36, 24, 28))
+    draw = __import__("PIL").ImageDraw.Draw(img)
+    x_left, x_right = plot[0], plot[2]
+    if p > 0.02:
+        y = ax.y(levels["mid"])
+        reach = x_left + (x_right - x_left) * min(1.0, p / 0.42)
+        band = 16 + 22 * min(1.0, p / 0.42)
+        draw.rectangle([x_left, y - band / 2, reach, y + band / 2], fill=(120, 90, 16))
+        dashed(img, x_left, reach, y, YELLOW, None)
+    if p > 0.32:
+        scale = min(1.0, (p - 0.32) / 0.28)
+        tick(img, ax.x(1), ax.y(green[3]), r=16 + 36 * scale, col=GREEN, w=8 + int(6 * scale))
+    if beat == "karein" and levels["sl"] is not None:
+        dashed(img, x_left, x_right, ax.y(levels["sl"]), SL_RED, None)
+    if p > 0.58 and levels["badge"]:
+        scale = 0.45 + 0.55 * min(1.0, (p - 0.58) / 0.42)
+        bw, bh = 640 * scale, 118 * scale
+        cx, cy = (plot[0] + plot[2]) / 2, plot[1] + 36 + bh / 2
+        draw.rounded_rectangle(
+            [cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2],
+            18, fill=(48, 36, 8), outline=YELLOW, width=4,
+        )
+    img._level_axes = ax
+    img._level_plot = plot
+    return ax
+
+
+def _level_labels(img, levels, beat, progress, spoken):
+    """Price ticks and the beat's own figures. Axis role, so sync does not treat them as the cue."""
+    import scene_frames
+    ax = getattr(img, "_level_axes", None)
+    plot = getattr(img, "_level_plot", None)
+    if ax is None or plot is None:
+        return
+    p = max(0.0, min(1.0, float(progress)))
+    x = plot[0] - 18
+    for value in levels["ticks"]:
+        shown = str(int(value)) if float(value).is_integer() else str(value)
+        scene_frames._text(
+            img, x, ax.y(value), shown, (226, 232, 240), 32,
+            anchor="rm", band=False, role="axis",
+        )
+    if p > 0.22 and levels["mid_label"]:
+        scene_frames._text(
+            img, plot[2] - 8, ax.y(levels["mid"]) - 28, levels["mid_label"], YELLOW, 34,
+            anchor="rm", band=False, role="axis",
+        )
+    if beat == "karein" and levels["sl"] is not None:
+        sl = levels["sl"]
+        shown = str(int(sl)) if float(sl).is_integer() else str(sl)
+        scene_frames._text(
+            img, plot[0] + 8, ax.y(sl) - 8, f"SL {shown}", SL_RED, 36,
+            anchor="lt", band=False, role="axis",
+        )
+    if beat == "hook" and "70" in str(spoken or ""):
+        scene_frames._text(
+            img, ax.x(1) + 28, ax.y(levels["pat"][1][3]), "70%", GREEN, 40,
+            anchor="lm", band=False, role="axis",
+        )
+    if p > 0.62 and levels["badge"]:
+        scene_frames._text(
+            img, (plot[0] + plot[2]) / 2, plot[1] + 36, levels["badge"], YELLOW, 42,
+            anchor="mt", band=False, role="axis",
+        )
+
+
+def leveled_candle_pair(levels, beat):
+    """Plain picture, then the same candles with the line, the tick, and the badge."""
+    plain = K.background()
+    panel(plain)
+    _level_view(plain, BOARD, levels, beat, 0.08)
+    full = K.background()
+    panel(full)
+    _level_view(full, BOARD, levels, beat, 1.0)
+    _level_labels(full, levels, beat, 1.0, "70" if beat == "hook" else "")
+    return plain, full
+
+
 def candle_scene(key):
     """Dedicated four-beat teaching flow for candle patterns.
 
@@ -150,6 +280,7 @@ def candle_scene(key):
     unrelated to what is being explained.
     """
     before, pat, conf, direction, anatomy = _pattern(key)
+    levels = candle_levels(key=key)
 
     def _pattern_only(img):
         panel(img)
@@ -186,6 +317,8 @@ def candle_scene(key):
         return [(p, p + 2.0, p - 2.0, p + 0.1)]
 
     def beat(b, img):
+        if levels:
+            return leveled_candle_pair(levels, b)
         if b == "hook":
             # Question/recognition: show only the pattern, not the whole trend.
             ax = _pattern_only(img)
@@ -2594,12 +2727,77 @@ def _scene_pair(rendered, img):
     return img, img
 
 
+def _compose_level_frame(topic, beat, progress, spoken):
+    """One piercing-style frame. Numbers on the spec are the numbers in this line."""
+    import safe_area
+    import scene_frames
+    key = str((topic or {}).get("key") or "").strip()
+    levels = candle_levels(topic, key)
+    img = K.background()
+    panel(img)
+    _level_view(img, BOARD, levels, beat, progress)
+    _level_labels(img, levels, beat, progress, spoken)
+    lines = _caption_lines(spoken)
+    y = safe_area.SUBTITLE_TOP + 18
+    for line in lines:
+        scene_frames._text(
+            img=img, x=540, y=y, text=line, fill=(250, 250, 250), size=36,
+            anchor="mt", band=False, role="caption",
+        )
+        y += 70
+    scene_frames._brand(img)
+    voice = chart_spec_for(spoken)
+    check = dict(voice)
+    faults = chart_voice_faults(check, spoken)
+    if faults:
+        raise ChartVoiceError("; ".join(faults))
+    img.chart_spec = {
+        "concept": "topic_scene",
+        "rupees": list(voice["rupees"]),
+        "percents": list(voice["percents"]),
+        "labels": list(voice["labels"]),
+        "scene": key,
+    }
+    img.chart_region = tuple(float(v) for v in BOARD)
+    img.scene_kind = f"chart-{beat}"
+    caps = [
+        layer["box"] for layer in (img.text_layers or [])
+        if layer.get("role") == "caption" and layer.get("box")
+    ]
+    if caps:
+        img.panel_box = (
+            min(box[0] for box in caps), min(box[1] for box in caps),
+            max(box[2] for box in caps), max(box[3] for box in caps),
+        )
+        img.panel_fill = scene_frames.panel_fill_fraction(img)
+    else:
+        img.panel_fill = 1.0
+    img.label_boxes = list(getattr(img, "label_boxes", None) or [])
+    return img
+
+
+def _paint_level_scene(topic, beat, index, n, spoken):
+    """The level chart, redrawn as the slice plays so a 4s hold does not sit still."""
+    n = max(int(n), 1)
+    index = max(int(index), 0)
+
+    def motion_at(u, _index=index, _n=n, _topic=topic, _beat=beat, _spoken=spoken):
+        progress = (_index + max(0.0, min(1.0, float(u)))) / float(_n)
+        return _compose_level_frame(_topic, _beat, progress, _spoken)
+
+    image = motion_at(0.0)
+    image.motion_at = motion_at
+    return image
+
+
 def _paint_topic_scene(topic, beat, index=0, n=1):
     """The topic's own scene in the top board, and this beat's words underneath."""
     import safe_area
     import scene_frames
     key = str((topic or {}).get("key") or "").strip()
     spoken = scene_frames._scene_card_text(topic, beat, index, n)
+    if candle_levels(topic, key):
+        return _paint_level_scene(topic, beat, index, n, spoken)
     img = K.background()
     plain, annotated = _scene_pair(render_beat(key, beat, img), img)
     picture = plain if int(index) <= 0 else annotated
@@ -2644,29 +2842,58 @@ def _paint_topic_scene(topic, beat, index=0, n=1):
     return picture
 
 
+def _cover_lines(topic):
+    custom = (topic or {}).get("cover_lines")
+    if isinstance(custom, list):
+        lines = [str(part).strip() for part in custom if str(part).strip()]
+        if lines:
+            return lines[:2]
+    hook = cover_hook(topic)
+    if " / " in hook:
+        return [part.strip() for part in hook.split(" / ") if part.strip()][:2]
+    return [hook] if hook else []
+
+
 def _paint_topic_cover(topic):
-    """Hook scene for this topic, with cover_hook under the board."""
-    import safe_area
+    """Full-frame cover: big hook, the topic chart filling the box, optional badge.
+
+    The chart box runs down to the brand band, so the lower third is not empty.
+    """
     import scene_frames
+    from PIL import Image, ImageDraw
     key = str((topic or {}).get("key") or "").strip()
     img = K.background()
-    _plain, annotated = _scene_pair(render_beat(key, "hook", img), img)
-    picture = (annotated if annotated is not None else img).copy()
-    picture.label_boxes = []
-    picture.text_layers = []
-    picture.shapes = []
-    picture.labelled_graphic_boxes = []
-    picture.chart_bar_boxes = []
-    scene_frames._text(
-        picture, 540, safe_area.SUBTITLE_TOP + 18, cover_hook(topic),
-        (255, 255, 255), 48, anchor="mt", band=False, role="caption",
-    )
-    picture.chart_region = tuple(float(v) for v in BOARD)
-    picture.scene_kind = "chart-cover"
-    picture.chart_spec = {
+    box = (48, 320, 1032, 1620)
+    draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle(box, 28, fill=K.PANEL, outline=(60, 80, 110), width=4)
+    levels = candle_levels(topic, key)
+    if levels:
+        inner = (box[0] + 16, box[1] + 24, box[2] - 16, box[3] - 24)
+        _level_view(img, inner, levels, "hook", 1.0)
+        _level_labels(img, levels, "hook", 1.0, "70")
+    else:
+        scene = K.background()
+        _plain, annotated = _scene_pair(render_beat(key, "hook", scene), scene)
+        shot = (annotated if annotated is not None else scene).crop(BOARD)
+        fitted = shot.resize((box[2] - box[0] - 24, box[3] - box[1] - 24), Image.Resampling.LANCZOS)
+        img.paste(fitted, (box[0] + 12, box[1] + 12))
+    y = 128
+    for line in _cover_lines(topic):
+        scene_frames._text(
+            img, 540, y, line, (255, 255, 255), 68, anchor="mt", band=False, role="caption",
+        )
+        y += 84
+    badge = str((topic or {}).get("badge") or (levels or {}).get("badge") or "").strip()
+    if badge and not levels:
+        scene_frames._text(
+            img, 540, box[1] + 36, badge, YELLOW, 42, anchor="mt", band=False, role="axis",
+        )
+    img.chart_region = tuple(float(v) for v in box)
+    img.scene_kind = "chart-cover"
+    img.chart_spec = {
         "concept": "topic_scene", "rupees": [], "percents": [], "labels": [], "scene": key,
     }
-    return picture
+    return img
 
 
 def paint_chart_board(topic, beat, index=0, n=1):
@@ -2700,7 +2927,12 @@ def paint_chart_board(topic, beat, index=0, n=1):
 
 
 def cover_hook(topic):
-    """Three or four Devanagari words. The first thumb line when it already is."""
+    """Two cover lines when the topic sets them. Otherwise the first thumb line."""
+    custom = (topic or {}).get("cover_lines")
+    if isinstance(custom, list):
+        lines = [str(part).strip() for part in custom if str(part).strip()]
+        if lines:
+            return " / ".join(lines[:2])
     parts = [str(part).strip() for part in (topic or {}).get("thumb") or [] if str(part).strip()]
     if parts:
         words = parts[0].replace("?", "").replace("।", "").split()

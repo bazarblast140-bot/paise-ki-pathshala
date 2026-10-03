@@ -87,9 +87,15 @@ class TopicSceneTests(unittest.TestCase):
         red, green = _candle_counts(cover)
         self.assertGreater(red + green, 80)
         cover_text = " ".join(layer.get("text") or "" for layer in cover.text_layers)
-        self.assertIn("लाल को चीरती", cover_text)
+        self.assertIn("PIERCING LINE", cover_text)
+        self.assertIn("REVERSAL", cover_text)
+        self.assertIn("50% SE UPAR", cover_text)
+        self.assertNotIn("लाल को चीरती", cover_text)
         self.assertNotIn("EK BURA DIN", cover_text)
         self.assertNotIn("MAHINA KHATAM", cover_text)
+        height = cover.size[1]
+        region = cover.chart_region
+        self.assertGreater((region[3] - region[1]) / height, 0.65)
 
     def test_a_topic_without_a_scene_fails_before_tts(self):
         bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))
@@ -113,6 +119,104 @@ class TopicSceneTests(unittest.TestCase):
         with self.assertRaises(board_scenes.ChartVoiceError) as painted:
             board_scenes.paint_chart_board(topic, "hook", 0, 1)
         self.assertIn("crash curve", str(painted.exception))
+
+
+PIERCING_SCRIPT = {
+    "title": "Piercing Line — गिरावट में रिवर्सल?",
+    "hook_line": "हरी कैंडल ने लाल का 70% काटा, क्या रिवर्सल आएगा?",
+    "beats": {
+        "hook": "हरी कैंडल ने लाल का 70% काटा, क्या रिवर्सल आएगा? इसे पियर्सिंग लाइन कहते हैं।",
+        "pehchan": (
+            "पहचान आसान है। पहले दिन बड़ी लाल कैंडल, 100 से 90। दूसरे दिन हरी कैंडल 88 पर नीचे खुलती है "
+            "और 97 पर बंद होती है। लाल बॉडी का बीच 95 है, हरी कैंडल उसके ऊपर बंद हुई। ये सिर्फ़ गिरावट में मायने रखता है।"
+        ),
+        "matlab": (
+            "मतलब, सेलर्स ने ओपन पर भाव 88 तक गिराया, पर बायर्स ने ख़रीदारी करके भाव 97 तक पहुँचा दिया। "
+            "यानी नीचे के भाव पर बायर्स लौट रहे हैं, और गिरावट कमज़ोर हो रही है।"
+        ),
+        "karein": (
+            "क्या करें? अकेले इस पैटर्न पर एंट्री मत लो। अगली हरी कैंडल ऊपर बंद हो, वही कन्फर्मेशन कैंडल है। "
+            "तब एंट्री लो, और स्टॉप लॉस 87 पर रखो, पैटर्न के लो के नीचे। सिर्फ़ जानकारी, निवेश सलाह नहीं।"
+        ),
+    },
+}
+
+
+class PiercingLevelTests(unittest.TestCase):
+    def _topic(self):
+        topic = _bank_topic("piercing")
+        topic["_spoken_beats"] = dict(PIERCING_SCRIPT["beats"])
+        topic["_scene_cards"] = {beat: [PIERCING_SCRIPT["beats"][beat]] for beat in PIERCING_SCRIPT["beats"]}
+        return topic
+
+    def test_levels_come_from_the_topic_and_match_the_script(self):
+        topic = self._topic()
+        levels = board_scenes.candle_levels(topic)
+        red, green = levels["pat"]
+        self.assertEqual(red, (100.0, 100.0, 89.0, 90.0))
+        self.assertEqual(green, (88.0, 97.0, 88.0, 97.0))
+        self.assertEqual(levels["mid"], 95.0)
+        self.assertEqual(levels["sl"], 87.0)
+        body = abs(red[0] - red[3])
+        frac = (green[3] - min(red[0], red[3])) / body
+        self.assertAlmostEqual(frac, 0.70, places=2)
+        self.assertGreater(green[3], levels["mid"])
+        self.assertLess(green[0], red[2])
+        self.assertLess(levels["sl"], min(c[2] for c in levels["pat"]))
+        banned = ("पलटवार", "चीरती", "हद", "पूँजी", "क्षमता", "तय करो")
+        blob = " ".join(PIERCING_SCRIPT["beats"].values()) + " " + topic["topic"]
+        for word in banned:
+            self.assertNotIn(word, blob)
+        for beat, spoken in PIERCING_SCRIPT["beats"].items():
+            frame = board_scenes.paint_chart_board(topic, beat, 0, 1)
+            done = frame.motion_at(1.0)
+            text = " ".join(layer.get("text") or "" for layer in done.text_layers)
+            self.assertIn("95 (50%)", text, beat)
+            self.assertIn("100", text, beat)
+            self.assertIn("97", text, beat)
+            voice = board_scenes.chart_spec_for(spoken)
+            spec = dict(frame.chart_spec)
+            spec["concept"] = voice["concept"]
+            self.assertEqual(board_scenes.chart_voice_faults(spec, spoken), [], beat)
+            self.assertEqual(set(frame.chart_spec["percents"]), set(voice["percents"]))
+            self.assertEqual(set(frame.chart_spec["rupees"]), set(voice["rupees"]))
+        karein = board_scenes.paint_chart_board(topic, "karein", 0, 1)
+        karein_text = " ".join(layer.get("text") or "" for layer in karein.text_layers)
+        self.assertIn("SL 87", karein_text)
+        hook = board_scenes.paint_chart_board(topic, "hook", 0, 1)
+        hook_text = " ".join(layer.get("text") or "" for layer in hook.text_layers)
+        self.assertIn("70%", hook_text)
+        self.assertNotIn("SL 87", hook_text)
+
+    def test_a_four_second_hold_changes_the_picture(self):
+        import scene_pace
+        topic = self._topic()
+        import scene_frames
+        frames, _flags = scene_frames.frames_for(topic, "pehchan", 3, {"mode": "schematic"})
+        self.assertEqual(len(frames), 3)
+        samples = []
+        for index, frame in enumerate(frames):
+            for step in range(4):
+                t = index * 4 + step
+                samples.append((float(t), __import__("numpy").asarray(frame.animate(step / 4.0).convert("RGB"))))
+        self.assertEqual(scene_pace.unchanged_spans(samples), [])
+
+    def test_approved_hook_line_passes_and_is_stored(self):
+        import hook_check
+        import json
+        from pathlib import Path
+        stored = json.loads((Path(__file__).resolve().parents[1] / "approved" / "piercing.json").read_text())
+        self.assertEqual(stored["hook_line"], PIERCING_SCRIPT["hook_line"])
+        self.assertLessEqual(len(stored["hook_line"].split()), 12)
+        topic = self._topic()
+        self.assertEqual(
+            hook_check.check_hook_line(
+                stored["hook_line"], hook_check.allowed_numbers(topic), max_words=12,
+            ),
+            [],
+        )
+        import scene_pace
+        self.assertEqual(scene_pace.vague_beats(stored["beats"]), [])
 
 
 class TitleAndHookTests(unittest.TestCase):

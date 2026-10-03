@@ -1908,6 +1908,9 @@ def _attach_live_motion(image):
 
     def animate(u, base=image):
         u = max(0.0, min(1.0, float(u)))
+        motion = getattr(base, "motion_at", None)
+        if callable(motion):
+            base = motion(u)
         zoom = 1.0 + 0.03 * u
         width, height = base.size
         # Zoom the chart plate only. The shaped lines stay whole sprites, so a
