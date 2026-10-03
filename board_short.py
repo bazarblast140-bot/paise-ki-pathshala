@@ -2799,7 +2799,7 @@ def _find_token_span(stream, pos, want):
 
 
 def _align_starts(script_words, audio_words, t0, t1):
-    """Whisper start for each script word. Unmatched words take the next matched start."""
+    """Whisper start for each script word. Unmatched words share the gap by length."""
     import sync_gate
     window = [
         w for w in audio_words
@@ -2821,15 +2821,47 @@ def _align_starts(script_words, audio_words, t0, t1):
         if found is None:
             continue
         starts[i], pos = found
-    nxt = None
-    for i in range(len(starts) - 1, -1, -1):
-        if starts[i] is None:
-            starts[i] = nxt
-        else:
-            nxt = starts[i]
     if starts and all(item is None for item in starts) and window:
         floor = min(float(word.get("start") or 0) for word in window)
-        starts = [floor] * len(starts)
+        return [floor] * len(starts)
+    # Unmatched words take a share of the gap, sized like the spoken text.
+    # Copying the next match's start, then slicing that pile into equal cues,
+    # is what put the wrong sentence in a 3.4s window.
+    return _spread_unmatched(starts, script_words, t0, t1)
+
+
+def _char_weight(word):
+    return max(1, len(str(word or "").strip()))
+
+
+def _spread_unmatched(starts, words, t0, t1):
+    """Place words whisper did not match by text length between the anchors."""
+    known = [i for i, item in enumerate(starts) if item is not None]
+    if not known:
+        return starts
+    t0, t1 = float(t0), float(t1)
+
+    def place(left_i, right_i, left_t, right_t):
+        gap = list(range(left_i + 1, right_i))
+        if not gap:
+            return
+        weights = [_char_weight(words[i]) for i in gap]
+        total = sum(weights) or 1
+        width = max(0.0, float(right_t) - float(left_t))
+        if left_i >= 0:
+            lead = _char_weight(words[left_i])
+            total += lead
+            acc = lead
+        else:
+            acc = 0.0
+        for i, weight in zip(gap, weights):
+            starts[i] = float(left_t) + width * acc / total
+            acc += weight
+
+    place(-1, known[0], t0, starts[known[0]])
+    for left, right in zip(known, known[1:]):
+        place(left, right, starts[left], starts[right])
+    place(known[-1], len(words), starts[known[-1]], t1)
     return starts
 
 
@@ -2893,10 +2925,14 @@ def _place_cues(parts, starts, t0, t1):
                 if ws is not None and float(ws) > cues[i]["t0"] + 1e-3:
                     end_anchor = float(ws)
                     break
-            width = max(0.05, (end_anchor - float(cues[i]["t0"])) / (j - i + 1))
+            weights = [max(1, len(cues[k]["text"])) for k in range(i, j + 1)]
+            total = sum(weights) or 1
+            width = max(0.05 * len(weights), end_anchor - float(cues[i]["t0"]))
             base = float(cues[i]["t0"])
-            for k in range(i, j + 1):
-                cues[k]["t0"] = base + (k - i) * width
+            acc = 0
+            for k, weight in zip(range(i, j + 1), weights):
+                cues[k]["t0"] = base + width * acc / total
+                acc += weight
                 ws = cues[k]["word_start"]
                 if ws is not None and cues[k]["t0"] < float(ws):
                     cues[k]["t0"] = float(ws)
