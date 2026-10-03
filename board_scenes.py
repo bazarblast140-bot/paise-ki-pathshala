@@ -243,9 +243,11 @@ def _level_labels(img, levels, beat, progress, spoken):
             anchor="lt", band=False, role="axis",
         )
     if beat == "hook" and "70" in str(spoken or ""):
+        # Above the green close, on the dark panel. Green type on the green
+        # body matches the plate, so a transition reads the glyph as sliced.
         scene_frames._text(
-            img, ax.x(1) + 28, ax.y(levels["pat"][1][3]), "70%", GREEN, 40,
-            anchor="lm", band=False, role="axis",
+            img, ax.x(1), ax.y(levels["pat"][1][3]) - 96, "70%", (250, 250, 250), 40,
+            anchor="mb", band=False, role="axis",
         )
     if p > 0.62 and levels["badge"]:
         scene_frames._text(

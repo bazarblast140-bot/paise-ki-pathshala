@@ -188,6 +188,33 @@ class PiercingLevelTests(unittest.TestCase):
         self.assertIn("70%", hook_text)
         self.assertNotIn("SL 87", hook_text)
 
+    def test_the_hook_percent_stays_whole_on_a_wipe(self):
+        """70% sits on the dark panel, so a wipe can still see the whole glyph."""
+        import scene_frames
+        import scene_transition
+        topic = self._topic()
+        topic["_scene_cards"] = {
+            "hook": [
+                "हरी कैंडल ने लाल का 70% काटा, क्या रिवर्सल आएगा?",
+                "70% काटा, क्या रिवर्सल आएगा? इसे पियर्सिंग लाइन कहते हैं।",
+            ],
+            "pehchan": ["पहचान आसान है। पहले दिन बड़ी लाल कैंडल, 100 से 90।"],
+        }
+        hook, _flags = scene_frames.frames_for(topic, "hook", 2, {"mode": "schematic"})
+        nxt, _flags = scene_frames.frames_for(topic, "pehchan", 1, {"mode": "schematic"})
+        end = hook[1].animate(1.0)
+        layer = next(item for item in end.text_layers if item.get("text") == "70%")
+        plate = end.plate
+        shown = plate.copy()
+        shown.paste(layer["image"], layer["xy"], layer["image"])
+        self.assertGreaterEqual(
+            scene_transition.ink_column_coverage(layer, plate, shown), 0.85,
+        )
+        faults = scene_transition.transition_faults(
+            [hook[0], hook[1], nxt[0]], board_short.SCENE_TRANSITIONS,
+        )
+        self.assertEqual(faults, [])
+
     def test_a_four_second_hold_changes_the_picture(self):
         import scene_pace
         topic = self._topic()
