@@ -1959,11 +1959,42 @@ def _paint_live_card(topic, beat, index, n, body_size=None):
                 )
         if seated.panel_fill + 1e-9 >= 0.35:
             break
-    return seated
+    return _attach_live_motion(seated)
+
+
+def _attach_live_motion(image):
+    """A slow 3% zoom. A card held for 4s must not be the same pixels twice.
+
+    The lesson layers stay on the original boxes, so a number check still
+    reads the card. The crop is about 1.5% per side, inside the 6% margin.
+    """
+    if image is None:
+        return image
+
+    def animate(u, base=image):
+        u = max(0.0, min(1.0, float(u)))
+        zoom = 1.0 + 0.03 * u
+        width, height = base.size
+        scaled_w = max(width + 1, int(round(width * zoom)))
+        scaled_h = max(height + 1, int(round(height * zoom)))
+        scaled = base.resize((scaled_w, scaled_h), Image.Resampling.BILINEAR)
+        left = max(0, (scaled_w - width) // 2)
+        top = max(0, (scaled_h - height) // 2)
+        frame = scaled.crop((left, top, left + width, top + height))
+        for name in (
+            "text_layers", "label_boxes", "scene_kind", "panel_box", "panel_fill",
+            "chart_bar_boxes", "labelled_graphic_boxes", "shapes",
+        ):
+            if hasattr(base, name):
+                setattr(frame, name, getattr(base, name))
+        return frame
+
+    image.animate = animate
+    return image
 
 
 def _live_fact_frame(topic, beat, index, n=1):
-    """One card of the words this scene says. No zoom and no second title.
+    """One card of the words this scene says. A slow zoom, and no second title.
 
     The headline is at least 64px on a 1080-wide frame. Short phrases are drawn
     whole. A chart is two or more bars scaled to the figures, or it is absent.

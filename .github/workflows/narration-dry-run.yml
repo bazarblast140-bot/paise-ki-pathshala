@@ -71,4 +71,5 @@ jobs:
           path: |
             run/final_*.mp4
             run/tts_*.txt
+            run/narration_*.json
           if-no-files-found: warn
