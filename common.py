@@ -211,6 +211,21 @@ def deepseek_message_text(message):
     return _message_text(reasoning)
 
 
+def narration_llm_blocked(system):
+    """True when this prompt would rewrite spoken beats on a narration_from_run build.
+
+    The verify report (title and metadata) does not carry these markers, so
+    that one DeepSeek call still runs. A narration or beat-repair prompt does not.
+    """
+    if not os.environ.get("NARRATION_FROM_RUN", "").strip():
+        return False
+    text = system or ""
+    return (
+        "You write the SPOKEN Hindi narration" in text
+        or "LIVE SHORT OVERRIDE" in text
+    )
+
+
 def claude(system, user, model=None, max_tokens=16000, retries=3, raise_on_truncate=False, attempts=None):
     """One LLM call. Retries transient errors.
 
@@ -218,6 +233,11 @@ def claude(system, user, model=None, max_tokens=16000, retries=3, raise_on_trunc
     is not returned. The review call uses this so a cut-off report cannot
     become a NEEDS FIX verdict.
     """
+    if narration_llm_blocked(system):
+        die(
+            "narration_from_run: a DeepSeek call must not rewrite narration "
+            "(metadata and title only); refusing with 0 characters spent"
+        )
     c = cfg()
     provider = c["models"].get("llm_provider", "anthropic")
     model = model or c["models"]["script_model"]

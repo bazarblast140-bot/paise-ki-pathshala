@@ -13,10 +13,14 @@ import numpy as np
 
 import approved_script
 import board_short
+import common
+import credit_log
 import narration_dry_run
+import run_verify
 import scene_frames
 import scene_pace
 import self_review
+import speak
 
 ROOT = Path(__file__).resolve().parent.parent
 ORDER = ("hook", "pehchan", "matlab", "karein")
@@ -51,6 +55,9 @@ def _hold(**parts):
 
 
 class ApprovedScriptTests(unittest.TestCase):
+    def tearDown(self):
+        approved_script._LOCKED = {}
+
     def test_tts_lines_rebuild_beats_without_json_or_a_new_script(self):
         text = _lines()
         beats = approved_script.beats_from_tts_text(text)
@@ -373,6 +380,184 @@ class ApprovedScriptTests(unittest.TestCase):
             approved_script.download_edge_artifact("37095205924", tmp)
             payload = approved_script.load_payload(tmp, "risk_daily_loss_limit")
         self.assertEqual(payload["beats"]["matlab"], "matlab की तय लाइन 3।")
+
+
+OWNER_PEHCHAN = (
+    "अब इसे पहचानें। पूँजी दो लाख रुपये है, तो दिन की हद दो प्रतिशत यानी "
+    "चार हज़ार रुपये बैठती है। यह चार हज़ार रुपये दिन का कुल नुकसान है, "
+    "हर ट्रेड का नहीं। यह हद लिखी हुई रहती है।"
+)
+DRY_PEHCHAN = (
+    "अब इसे पहचानें: दो लाख रुपये की पूँजी पर दो प्रतिशत की हद। "
+    "उदाहरण: पूँजी दो लाख रुपये, दिन की हद दो प्रतिशत बराबर चार हज़ार रुपये। "
+    "यानी चार हज़ार रुपये का नुकसान या चार हज़ार रुपये लाभ, दोनों। यही हद है।"
+)
+
+
+class ApprovedHashLockTests(unittest.TestCase):
+    def tearDown(self):
+        approved_script._LOCKED = {}
+
+    def test_voiced_text_matches_the_approved_beat_byte_for_byte(self):
+        line = "₹4,000 की हद।"
+        self.assertNotEqual(speak.speakable(line), line)
+        beats = {beat: f"{beat} की तय लाइन।" for beat in ORDER}
+        beats["pehchan"] = line
+        script = {"beats": beats, "source": "approved"}
+        approved_script.remember(script)
+        self.assertEqual(script["approved_hashes"]["pehchan"], approved_script.beat_digest(line))
+        sent = {}
+
+        class Resp:
+            status_code = 200
+            content = b"x" * 3000
+            headers = {}
+
+        def post(url, headers=None, json=None, timeout=None):
+            sent["url"] = url
+            sent["text"] = json["text"]
+            sent["speed"] = json["voice_settings"]["speed"]
+            return Resp()
+
+        env = {
+            "NARRATION_FROM_RUN": "37095205924",
+            "PAID_TTS_ENABLED": "true",
+            "ELEVENLABS_API_KEY": "test-key",
+            "PUBLISH_VISIBILITY": "public",
+        }
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch("requests.post", side_effect=post):
+            board_short.tts(
+                line,
+                Path(tmp) / "tts_pehchan.mp3",
+                {"voice": {"voice_id": "ypnkIsDASPgHZuanrF0q", "speed": 0.90}},
+            )
+            logged = (Path(tmp) / "tts_text.txt").read_text(encoding="utf-8")
+            self.assertGreater(credit_log.snapshot()["elevenlabs_characters_sent"], 0)
+        self.assertEqual(sent["text"], line)
+        self.assertEqual(logged, f"tts_pehchan: {line}\n")
+        self.assertIn("ypnkIsDASPgHZuanrF0q", sent["url"])
+        self.assertEqual(sent["speed"], 0.90)
+
+    def test_a_hash_mismatch_spends_zero_characters(self):
+        beats = {beat: f"{beat} की तय लाइन।" for beat in ORDER}
+        approved_script.remember({"beats": beats, "source": "approved"})
+        env = {
+            "NARRATION_FROM_RUN": "37095205924",
+            "PAID_TTS_ENABLED": "true",
+            "ELEVENLABS_API_KEY": "test-key",
+            "PUBLISH_VISIBILITY": "public",
+        }
+        err = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch("requests.post", side_effect=AssertionError("paid call")), \
+             redirect_stderr(err), self.assertRaises(SystemExit):
+            board_short.tts(
+                beats["pehchan"] + " बदल गया।",
+                Path(tmp) / "tts_pehchan.mp3",
+                {"voice": {"voice_id": "ypnkIsDASPgHZuanrF0q", "speed": 0.90}},
+            )
+            self.assertEqual(credit_log.snapshot()["elevenlabs_characters_sent"], 0)
+        self.assertIn("0 characters spent", err.getvalue())
+
+    def test_fold_and_a_narration_deepseek_call_do_not_touch_approved_beats(self):
+        spoken = {beat: f"{beat} की तय लाइन।" for beat in ORDER}
+        spoken["hook"] = "daily limit की लाइन।"
+        approved_script.remember({"beats": spoken, "source": "approved"})
+        seen = []
+
+        def fake_tts(text, path, c):
+            seen.append(text)
+
+        env = {"NARRATION_FROM_RUN": "37095205924"}
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch.object(board_short, "tts", side_effect=fake_tts):
+            board_short.synthesize_short_voices(spoken, {"voice": {"engine": "elevenlabs"}}, beats=("hook",))
+        self.assertEqual(seen, ["daily limit की लाइन।"])
+        err = io.StringIO()
+        with mock.patch.dict(os.environ, env, clear=False), \
+             redirect_stderr(err), self.assertRaises(SystemExit):
+            common.claude(board_short.four_live_system(_topic()), "rewrite the beats", retries=1, attempts=1)
+        self.assertIn("must not rewrite narration", err.getvalue())
+        self.assertIn("0 characters spent", err.getvalue())
+        self.assertFalse(common.narration_llm_blocked(run_verify.FINAL_SYSTEM))
+
+    def test_hindi_amounts_draw_a_rupee_chart_without_the_example_label(self):
+        spoken = {
+            "hook": "हुक।",
+            "pehchan": DRY_PEHCHAN,
+            "matlab": "मतलब।",
+            "karein": "करें।",
+        }
+        times = {
+            "hook": (0.0, 4.0),
+            "pehchan": (4.0, 20.0),
+            "matlab": (20.0, 28.0),
+            "karein": (28.0, 36.0),
+        }
+        scenes = [
+            {"beat": "hook", "start": 0.0, "end": 4.0, "index": 0},
+            {"beat": "pehchan", "start": 4.0, "end": 12.0, "index": 0},
+            {"beat": "pehchan", "start": 12.0, "end": 20.0, "index": 1},
+            {"beat": "matlab", "start": 20.0, "end": 28.0, "index": 0},
+            {"beat": "karein", "start": 28.0, "end": 36.0, "index": 0},
+        ]
+        words = spoken["pehchan"].split()
+        # "चार हज़ार" first appears after the 12s cut.
+        cut = 12.0
+        audio = []
+        for index, word in enumerate(words):
+            start = 4.2 + index * ((20.0 - 4.2) / len(words))
+            audio.append({"word": word, "start": start, "end": start + 0.2})
+        first_hazar = next(
+            item["start"] for item in audio
+            if "हज़ार" in item["word"] or "हजार" in item["word"]
+        )
+        self.assertGreater(first_hazar, cut)
+        board_short._CUE_CACHE.clear()
+        texts, figures = board_short.scene_cards_for(spoken, times, scenes, audio)
+        early = " ".join(texts["pehchan"][0]) + " " + " ".join(figures["pehchan"][0])
+        late = " ".join(texts["pehchan"][1]) + " " + " ".join(figures["pehchan"][1])
+        self.assertNotIn("उदाहरण:", early)
+        self.assertNotIn("उदाहरण:", late)
+        self.assertIn("ये उदाहरण है", scene_frames.strip_example_label("ये उदाहरण है"))
+        self.assertIn("2,00,000", early)
+        self.assertNotIn("4,000", early)
+        self.assertIn("4,000", late)
+        self.assertIn("2,00,000", late)
+        topic = _topic()
+        topic["_scene_cards"] = {"pehchan": texts["pehchan"]}
+        topic["_scene_figures"] = {"pehchan": figures["pehchan"]}
+        topic["_spoken_beats"] = spoken
+        frames, _flags = scene_frames.frames_for(topic, "pehchan", 2, {"mode": "schematic"})
+        card = scene_frames.frame_card_text(frames[1])
+        self.assertNotIn("उदाहरण:", card)
+        bars = getattr(frames[1], "chart_bar_boxes", None) or []
+        self.assertGreaterEqual(len(bars), 2)
+        heights = sorted(bar[3] - bar[1] for bar in bars)
+        self.assertGreater(heights[-1] / heights[0], 8)
+        labels = " ".join(sync_gate_lines(frames[1]))
+        self.assertIn("₹2,00,000", labels)
+        self.assertIn("₹4,000", labels)
+        owner_figs = scene_frames._spoken_figures(
+            OWNER_PEHCHAN, scene_frames._digit_tokens(OWNER_PEHCHAN),
+        )
+        self.assertIn("₹2,00,000", owner_figs)
+        self.assertIn("₹4,000", owner_figs)
+        self.assertNotIn("उदाहरण:", OWNER_PEHCHAN)
+
+
+def sync_gate_lines(frame):
+    import sync_gate
+    return sync_gate.lesson_lines(frame)
 
 
 if __name__ == "__main__":

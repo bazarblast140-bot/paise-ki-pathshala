@@ -1224,11 +1224,22 @@ _FIGURE_RE = re.compile(
 _BEAT_SHIFT = {"hook": 0, "pehchan": 1, "matlab": 2, "karein": 3}
 
 
+_EXAMPLE_LABEL = re.compile(
+    r"(?:^|(?<=[।!?？]\s)|(?<=\.\s))(?:उदाहरण|example)\s*[:：]\s*",
+    re.IGNORECASE,
+)
+
+
+def strip_example_label(text):
+    """Drop a leading उदाहरण: label. The word inside a sentence stays."""
+    return " ".join(_EXAMPLE_LABEL.sub("", str(text or "")).split())
+
+
 def _fold_card_text(text):
     out = " ".join(str(text or "").split())
     for src, dst in _CARD_FOLDS:
         out = re.sub(re.escape(src), dst, out, flags=re.I)
-    return out
+    return strip_example_label(out)
 
 
 def topic_display_lines(topic):
@@ -1374,11 +1385,11 @@ def _scene_card_text(topic, beat, index, n):
     """Words this scene says. A caption window wins over an even word split."""
     cards = (topic or {}).get("_scene_cards")
     if isinstance(cards, dict) and beat in cards and index < len(cards[beat]):
-        return str(cards[beat][index])
+        return strip_example_label(cards[beat][index])
     spoken = _fold_card_text(((topic or {}).get("_spoken_beats") or {}).get(beat) or "")
     if spoken:
-        return " ".join(_slice_words(spoken.split(), index, n))
-    return _outline_card_text(topic, beat)
+        return strip_example_label(" ".join(_slice_words(spoken.split(), index, n)))
+    return strip_example_label(_outline_card_text(topic, beat))
 
 
 def _scene_figure_list(topic, beat, index, card, spoken):
@@ -1478,6 +1489,8 @@ def comparable_chart_figures(figures):
         if unit not in groups:
             order.append(unit)
             groups[unit] = []
+        if fig in groups[unit]:
+            continue
         groups[unit].append(fig)
     best = []
     for unit in order:
@@ -1905,10 +1918,24 @@ def _paint_live_card(topic, beat, index, n, body_size=None):
         full_sizes = (168, 152, 136, 120, 104, 88, 72, 64)
         fit = None
         if charting:
+            zone_bottom = content_top + span * 0.42
+            sizes = full_sizes + (56, 48, 40)
             fit = _fit_phrase(
-                phrase, head, head_size, content_top, content_top + span * 0.42,
-                full_sizes + (56, 48, 40), max_width=attempt["width"],
+                phrase, head, head_size, content_top, zone_bottom,
+                sizes, max_width=attempt["width"],
             )
+            # A long sentence must not drop the ₹ chart. Keep the opening
+            # lines that fit and draw the bars under them.
+            if fit is None:
+                sentences = _card_sentences(phrase)
+                for keep in range(len(sentences) - 1, 0, -1):
+                    shorter = " ".join(sentences[:keep])
+                    fit = _fit_phrase(
+                        shorter, head, head_size, content_top, zone_bottom,
+                        sizes, max_width=attempt["width"],
+                    )
+                    if fit is not None:
+                        break
             if fit is None:
                 charting = False
         if not charting:

@@ -1,0 +1,87 @@
+name: Respin one beat
+
+# Re-voice a single beat with Rudra and repaint the Short. The other beats are
+# cut from the source final.mp4. Nothing is uploaded to YouTube or Instagram.
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Actions run id whose final.mp4 and spoken text to respin"
+        required: true
+        type: string
+      beat:
+        description: "Beat to re-voice: hook, pehchan, matlab, or karein"
+        required: true
+        type: string
+        default: pehchan
+      text:
+        description: "Exact text for that beat. Sent to ElevenLabs unchanged."
+        required: true
+        type: string
+
+concurrency:
+  group: paise-ki-pathshala-publish
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  respin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install FFmpeg & fonts
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Download source artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run_id }}
+        run: |
+          rm -rf run
+          mkdir -p run
+          gh run download "$SOURCE_RUN" -D run
+          if [ ! -s run/final.mp4 ]; then
+            MP4="$(find run -type f -name final.mp4 -print -quit)"
+            if [ -n "$MP4" ]; then
+              SRC="$(dirname "$MP4")"
+              cp -f "$SRC"/* run/ 2>/dev/null || true
+            fi
+          fi
+          test -s run/final.mp4
+          test -s run/tts_text.txt -o -s run/spoken.txt
+      - name: Re-voice one beat and repaint
+        env:
+          VIDEO_FORMAT: short
+          RESPIN_BEAT: ${{ inputs.beat }}
+          RESPIN_TEXT: ${{ inputs.text }}
+          PAID_TTS_ENABLED: ${{ vars.PAID_TTS_ENABLED }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ypnkIsDASPgHZuanrF0q
+          ELEVENLABS_MODEL: ${{ vars.ELEVENLABS_MODEL }}
+        run: python respin_beat.py --source run --beat "$RESPIN_BEAT"
+      - name: Upload respun mp4
+        uses: actions/upload-artifact@v4
+        with:
+          name: respin-${{ inputs.beat }}-${{ github.run_id }}
+          path: |
+            run/final.mp4
+            run/script.txt
+            run/spoken.txt
+            run/tts_text.txt
+            run/thumbnail.jpg
+            run/report.md
+            run/verify_meta.json
+            run/self_review.json
+            run/topic.json
+          if-no-files-found: error
+          retention-days: 14

@@ -2406,8 +2406,7 @@ def preflight_eleven_credits(texts):
         return
     ELEVEN_REMAINING = remaining
     credit_log.set_eleven_remaining(remaining)
-    import speak
-    need = sum(len(speak.speakable(text or "")) for text in texts)
+    need = sum(len(_voice_text(text or "")) for text in texts)
     floor = eleven_voice.LIVE_CREDIT_FLOOR
     if remaining < floor:
         _credits_stop(
@@ -2420,10 +2419,27 @@ def preflight_eleven_credits(texts):
         )
 
 
+def _voice_text(text):
+    """The string that will be spoken.
+
+    An approved dry-run beat is already the speakable line stored in the
+    artifact. A second speak.speakable() or fold_roman_words call is what
+    can make the paid voice differ from that script, so neither runs.
+    """
+    import approved_script
+    if approved_script.active():
+        return str(text or "")
+    import speak
+    return speak.speakable(text or "")
+
+
 def _eleven(text, path, c):
     """Call ElevenLabs. Quota raises QuotaFallback. Auth and permission die."""
     import time
     import requests
+
+    import approved_script
+    approved_script.refuse_paid_mismatch(text)
 
     key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
     voice = eleven_voice.configured_voice_id(c)
@@ -2563,19 +2579,24 @@ def tts(text, path, c):
         reuse = cached_engine
     elif fresh and cached_engine == "edge" and (not eleven_key or ELEVEN_EXHAUSTED):
         reuse = cached_engine
+    import approved_script
+    voice_text = _voice_text(text)
+    if approved_script.active():
+        # Before cache reuse and before the HTTP call. A mismatch spends nothing.
+        approved_script.refuse_paid_mismatch(voice_text)
     if reuse:
         ok(f"voice cache reused: {path.name} ({reuse})")
         ENGINES.append(reuse)
         return
-    import speak
-    text = speak.speakable(text)
-    left = speak.leftovers(text)
-    if left:
-        print(f"[warn] voice text me ab bhi: {sorted(set(left))} — speak.py me jodo")
+    if not approved_script.active():
+        import speak
+        left = speak.leftovers(voice_text)
+        if left:
+            print(f"[warn] voice text me ab bhi: {sorted(set(left))} — speak.py me jodo")
     with open(RUN / "tts_text.txt", "a", encoding="utf-8") as handle:
-        handle.write(f"{path.stem}: {text}\n")
+        handle.write(f"{path.stem}: {voice_text}\n")
     if allow_paid:
-        if not _eleven(text, path, c):
+        if not _eleven(voice_text, path, c):
             die(f"ElevenLabs TTS did not produce paid audio: {path.name}; not a credit error, so Edge was not used")
         ENGINES.append("elevenlabs")
         engine_file.write_text("elevenlabs", encoding="utf-8")
@@ -2586,7 +2607,7 @@ def tts(text, path, c):
     for attempt in range(3):
         try:
             asyncio.run(_edge(
-                text,
+                voice_text,
                 edge_voice,
                 edge_rate,
                 path,
@@ -2621,8 +2642,10 @@ def synthesize_short_voices(spoken, c, beats=None):
     def once():
         global ENGINES
         ENGINES = []
+        import approved_script
         for beat in beats:
-            spoken[beat] = fold_roman_words(spoken[beat])
+            if not approved_script.active():
+                spoken[beat] = fold_roman_words(spoken[beat])
             tts(spoken[beat], RUN / f"tts_{beat}.mp3", c)
 
     try:
@@ -3251,6 +3274,16 @@ def _scene_clause(sent, t1):
     return _trim_card_clause(text)
 
 
+def _said_figure_blob(beat, scene_end, rows, pad=0.0):
+    """Script words of this beat whose whisper start is not still ahead."""
+    limit = float(scene_end) + float(pad)
+    words = [
+        word for beat_name, word, start in rows or []
+        if beat_name == beat and float(start) <= limit
+    ]
+    return " ".join(words)
+
+
 def _without_unsaid_figures(text, beat, scene_end, rows):
     """Drop a digit whose whisper start is still after this scene.
 
@@ -3321,11 +3354,24 @@ def scene_cards_for(spoken, beat_times, scenes, audio_words=None):
                     parts.append(text)
         if not parts and latest:
             parts.append(latest)
-        blob = _trim_card_clause(" ".join(parts))
+        blob = scene_frames.strip_example_label(_trim_card_clause(" ".join(parts)))
         if audio_words:
-            blob = _without_unsaid_figures(blob, beat, t1, rows)
+            blob = scene_frames.strip_example_label(
+                _without_unsaid_figures(blob, beat, t1, rows)
+            )
         texts.setdefault(beat, []).append(blob)
-        raw = scene_frames._figure_tokens([blob])
+        # Digits stay on the card's own gate. Hindi amounts (दो लाख, चार हज़ार)
+        # become ₹ figures only when those words have started, and only when
+        # the beat does not also write that amount as digits.
+        said = _said_figure_blob(beat, t1, rows) if audio_words else blob
+        beat_digits = set(sync_gate.numbers_in((spoken or {}).get(beat) or ""))
+        raw = list(scene_frames._figure_tokens([blob]))
+        for label in scene_frames._spoken_figures(said, scene_frames._digit_tokens(said)):
+            nums = set(sync_gate.numbers_in(label))
+            if beat_digits and nums and nums <= beat_digits:
+                continue
+            if label not in raw:
+                raw.append(label)
         kept = []
         shown = set()
         for label in raw:
@@ -4117,8 +4163,7 @@ def fit_estimated_duration(narration, topic, c, spec):
 
 def _rerender_beats(spoken, c, beats):
     """Speak only the beats whose words changed. Leave the others on disk."""
-    import speak
-    need = sum(len(speak.speakable(str(spoken.get(beat) or ""))) for beat in beats)
+    need = sum(len(_voice_text(str(spoken.get(beat) or ""))) for beat in beats)
     floor = eleven_voice.LIVE_CREDIT_FLOOR
     if ELEVEN_REMAINING is not None and ELEVEN_REMAINING - need < floor:
         _credits_stop(
