@@ -63,8 +63,18 @@ def _kind_for(ch):
     raise ValueError(f"no glyph for {ch!r}")
 
 
+def drawable_text(text):
+    """Punctuation the Noto files do not cover, written with a glyph they do.
+
+    An arrow in a formula was aborting the frame before TTS. The spoken
+    lesson is unchanged; only the drawn mark is a hyphen.
+    """
+    return str(text or "").replace("→", " - ").replace("←", " - ").replace("⇒", " - ")
+
+
 def _runs(text):
     """One HarfBuzz run per script. Shared punctuation stays with the neighbor that covers it."""
+    text = drawable_text(text)
     if not text:
         return []
     chars = list(text)
