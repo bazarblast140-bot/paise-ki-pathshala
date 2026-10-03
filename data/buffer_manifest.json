@@ -4,6 +4,7 @@
   "skipped_topics": [
     "dark_cloud",
     "piercing",
-    "confirmation"
+    "confirmation",
+    "intraday_volume_price"
   ]
 }
