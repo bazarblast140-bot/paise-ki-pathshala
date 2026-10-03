@@ -12,6 +12,7 @@
     "option_strangle",
     "multibagger_case_eicher",
     "multibagger_case_bajajfinance",
-    "multibagger_case_trent"
+    "multibagger_case_trent",
+    "opt_protective_put"
   ]
 }
