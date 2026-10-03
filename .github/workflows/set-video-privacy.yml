@@ -1,0 +1,50 @@
+name: Set video privacy (hold a scheduled Short)
+# Repair tool: make an already-uploaded video private and clear its publishAt
+# schedule, so a video that failed review does not go public.
+on:
+  workflow_dispatch:
+    inputs:
+      video_id:
+        description: "YouTube video id to hold (private, no schedule)"
+        required: true
+jobs:
+  hold:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Make private and clear schedule
+        env:
+          CID: ${{ secrets.YT_FIN_CLIENT_ID }}
+          CSEC: ${{ secrets.YT_FIN_CLIENT_SECRET }}
+          RTOK: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
+          VID: ${{ inputs.video_id }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.parse, urllib.request
+          tok = json.load(urllib.request.urlopen(urllib.request.Request(
+              "https://oauth2.googleapis.com/token",
+              data=urllib.parse.urlencode({"client_id": os.environ["CID"], "client_secret": os.environ["CSEC"],
+                    "refresh_token": os.environ["RTOK"], "grant_type": "refresh_token"}).encode())))["access_token"]
+          H = {"Authorization": "Bearer " + tok, "Content-Type": "application/json"}
+          vid = os.environ["VID"]
+          def get():
+              r = urllib.request.urlopen(urllib.request.Request(
+                  "https://www.googleapis.com/youtube/v3/videos?part=status,snippet&id=" + vid, headers=H))
+              items = json.load(r)["items"]
+              assert items, "video not found on this channel"
+              s = items[0]["status"]
+              print("title:", items[0]["snippet"]["title"])
+              print("status:", json.dumps({k: s.get(k) for k in ("privacyStatus", "publishAt", "uploadStatus")}))
+              return s
+          s = get()
+          body = {"id": vid, "status": {"privacyStatus": "private",
+                  "selfDeclaredMadeForKids": False,
+                  "embeddable": s.get("embeddable", True),
+                  "publicStatsViewable": s.get("publicStatsViewable", True),
+                  "license": s.get("license", "youtube")}}
+          urllib.request.urlopen(urllib.request.Request(
+              "https://www.googleapis.com/youtube/v3/videos?part=status",
+              data=json.dumps(body).encode(), headers=H, method="PUT"))
+          after = get()
+          assert after["privacyStatus"] == "private" and not after.get("publishAt"), "hold failed"
+          print("HELD: private, no schedule")
+          PY
