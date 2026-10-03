@@ -8,6 +8,7 @@
   "market_fed_hike_india",
   "pf_inflation",
   "peg_ratio",
-  "cashflow_profit"
+  "cashflow_profit",
+  "operating_margin"
  ]
 }
