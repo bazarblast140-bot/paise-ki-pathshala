@@ -542,8 +542,13 @@ class ApprovedHashLockTests(unittest.TestCase):
         self.assertNotIn("उदाहरण:", card)
         bars = getattr(frames[1], "chart_bar_boxes", None) or []
         self.assertGreaterEqual(len(bars), 2)
-        heights = sorted(bar[3] - bar[1] for bar in bars)
-        self.assertGreater(heights[-1] / heights[0], 8)
+        small = min(bars, key=lambda bar: bar[4])
+        large = max(bars, key=lambda bar: bar[4])
+        wide = (large[2] - large[0]) >= (large[3] - large[1])
+        if wide:
+            self.assertGreater((large[2] - large[0]) / max(1.0, small[2] - small[0]), 8)
+        else:
+            self.assertGreater((large[3] - large[1]) / max(1.0, small[3] - small[1]), 8)
         labels = " ".join(sync_gate_lines(frames[1]))
         self.assertIn("₹2,00,000", labels)
         self.assertIn("₹4,000", labels)
