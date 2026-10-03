@@ -1,8 +1,8 @@
-"""Original sound bed and spot effects. No downloaded samples.
+"""Spot effects under the narration. No downloaded samples.
 
-bed.wav is a synthesized pad, measured near -22 LUFS before it is ducked.
-whoosh.wav and click.wav are the same numpy synthesis as sfx.py, written here
-so the files can be committed (assets/sfx/ is gitignored). See assets/bed/LICENSE.
+The pad in bed.wav is not mixed. whoosh.wav and click.wav are the same numpy
+synthesis as sfx.py, written here so the files can be committed (assets/sfx/
+is gitignored). See assets/bed/LICENSE.
 """
 import wave
 from pathlib import Path
@@ -85,8 +85,37 @@ def _place(track, clip, start_s, sr):
         track[i:i + n, :] += clip[:n, None]
 
 
-def sfx_track(scenes, n_samples, sr=SR):
-    """Whoosh on every scene change after t=0, soft click on callouts."""
+# The old whoosh sat at 0.85, about as loud as the voice. 0.085 of that is a
+# little past -18 dB. The callout click takes the same cut from its old 0.7.
+# A quieter voice pulls both further down so the SFX peak stays at least 18 dB
+# under that voice's RMS. The pad in bed.wav is not mixed.
+OLD_WHOOSH_GAIN = 0.85
+OLD_CLICK_GAIN = 0.7
+SFX_OF_OLD = 0.085
+SFX_UNDER_DB = 18.0
+
+
+def _rms(mono):
+    if mono.size == 0:
+        return 0.0
+    return float(np.sqrt(np.mean(np.square(mono.astype(np.float64)))))
+
+
+def _placed_gain(nominal, file_peak, voice_rms):
+    """Nominal gain, or lower so the placed peak is 18 dB under the voice RMS.
+
+    The cap is one PCM step under the line. A 16-bit write cannot round back over it.
+    """
+    nominal = float(nominal)
+    file_peak = float(file_peak) or 1.0
+    cap = float(voice_rms) * (10 ** (-SFX_UNDER_DB / 20.0))
+    steps = max(0, int(np.floor(cap * 32767.0)) - 1)
+    pcm_cap = steps / 32767.0
+    return float(min(nominal, pcm_cap / file_peak))
+
+
+def sfx_track(scenes, n_samples, sr=SR, voice_rms=0.0):
+    """Whoosh on every scene change after t=0, click on callouts. No bed."""
     whoosh, wsr = _read(BED_DIR / "whoosh.wav")
     click, csr = _read(BED_DIR / "click.wav")
     if wsr != sr or csr != sr:
@@ -95,54 +124,33 @@ def sfx_track(scenes, n_samples, sr=SR):
         whoosh = whoosh[:, 0]
     if click.ndim > 1:
         click = click[:, 0]
+    whoosh_gain = _placed_gain(OLD_WHOOSH_GAIN * SFX_OF_OLD, float(np.max(np.abs(whoosh)) or 1.0), voice_rms)
+    click_gain = _placed_gain(OLD_CLICK_GAIN * SFX_OF_OLD, float(np.max(np.abs(click)) or 1.0), voice_rms)
     track = np.zeros(n_samples, dtype=np.float32)
     for scene in scenes or []:
         start = float(scene.get("start") or 0)
         if start > 0.05:
-            _place(track, whoosh * np.float32(0.85), start, sr)
+            _place(track, whoosh * np.float32(whoosh_gain), start, sr)
         if scene.get("callout"):
-            _place(track, click * np.float32(0.7), start + 0.08, sr)
+            _place(track, click * np.float32(click_gain), start + 0.08, sr)
     return track
 
 
-def _duck_envelope(voice_mono, sr):
-    """Causal peak follower. Loud voice pulls the bed down; the voice is not shifted."""
-    alpha = np.exp(-1.0 / (sr * 0.12))
-    follow = np.empty(voice_mono.shape[0], dtype=np.float32)
-    acc = np.float32(0.0)
-    for i, sample in enumerate(voice_mono):
-        level = np.float32(abs(float(sample)))
-        acc = level if level > acc else np.float32(alpha) * acc
-        follow[i] = acc
-    # Speech peaks near full scale; quiet gaps stay near 0.
-    duck = np.clip(1.0 - follow * 6.0, 0.18, 1.0).astype(np.float32)
-    return duck
-
-
 def mix_into(voice_path, scenes, out_path):
-    """Ducked bed + whoosh/click under the narration. Sample count stays the same."""
+    """Whoosh and callout click under the narration. The bed is not mixed.
+
+    Sample count stays the same. voice_path is only read.
+    """
     voice, sr = _read(voice_path)
     if sr != SR:
         raise RuntimeError(f"voice must be {SR} Hz")
     stereo = voice.ndim == 2
     mono = voice.mean(axis=1) if stereo else voice
-    bed, bsr = _read(BED_DIR / "bed.wav")
-    if bsr != SR:
-        raise RuntimeError("bed must be 44100 Hz")
-    if bed.ndim > 1:
-        bed = bed[:, 0]
-    n = mono.shape[0]
-    if bed.shape[0] < n:
-        reps = int(np.ceil(n / bed.shape[0]))
-        bed = np.tile(bed, reps)
-    bed = bed[:n]
-    duck = _duck_envelope(mono, sr)
-    spots = sfx_track(scenes, n, sr)
-    added = bed * duck + spots
+    spots = sfx_track(scenes, mono.shape[0], sr, voice_rms=_rms(mono))
     if stereo:
-        mixed = voice + added[:, None]
+        mixed = voice + spots[:, None]
     else:
-        mixed = voice + added
+        mixed = voice + spots
     peak = float(np.max(np.abs(mixed))) if mixed.size else 0.0
     if peak > 0.98:
         mixed = mixed * np.float32(0.98 / peak)

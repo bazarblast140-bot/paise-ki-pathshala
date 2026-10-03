@@ -25,6 +25,22 @@ on:
         required: false
         type: string
         default: ""
+      ig_only:
+        description: "true = post only the Instagram Reel for youtube_video_id. Do not upload to YouTube again."
+        required: false
+        type: choice
+        options: ["false", "true"]
+        default: "false"
+      youtube_video_id:
+        description: "Existing YouTube video id. Required when ig_only=true. A Reel already logged for this id is refused."
+        required: false
+        type: string
+        default: ""
+      override_mp4_url:
+        description: "Optional. Replace run/final.mp4 before YouTube and Instagram. Only https://github.com/bazarblast140-bot/paise-ki-pathshala/releases/download/<tag>/<file>.mp4"
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: paise-ki-pathshala-publish
@@ -46,7 +62,9 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install deps
-        run: pip install -r requirements.txt
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          pip install -r requirements.txt
       - name: Download source artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -65,8 +83,14 @@ jobs:
           test -s run/final.mp4
           test -s run/script.txt
           test -s run/thumbnail.jpg
+      - name: Replace final.mp4 from a release asset
+        if: inputs.override_mp4_url != ''
+        env:
+          OVERRIDE_MP4_URL: ${{ inputs.override_mp4_url }}
+        run: python override_mp4.py
       - name: Schedule publishAt
         id: when
+        if: inputs.ig_only != 'true'
         env:
           PRIVACY: ${{ inputs.privacy }}
           SLOT: ${{ inputs.slot }}
@@ -80,6 +104,7 @@ jobs:
           fi
           python slot_guard.py --publish-at "$SLOT" ${DATE_IST:+"$DATE_IST"} >> "$GITHUB_OUTPUT"
       - name: Upload a new YouTube video
+        if: inputs.ig_only != 'true'
         env:
           VIDEO_FORMAT: short
           PUBLISH_VISIBILITY: ${{ inputs.privacy == 'now' && 'public' || inputs.privacy }}
@@ -97,6 +122,8 @@ jobs:
           VIDEO_FORMAT: short
           IG_CROSSPOST: "1"
           APPROVED: "true"
+          IG_ONLY: ${{ inputs.ig_only }}
+          YOUTUBE_VIDEO_ID: ${{ inputs.youtube_video_id }}
           IG_USER_ID: ${{ vars.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_SURFACE: ${{ vars.IG_SURFACE || 'facebook' }}

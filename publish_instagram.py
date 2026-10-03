@@ -900,19 +900,34 @@ def main() -> None:
     if not mp4.exists():
         die("run/final.mp4 missing")
 
-    # Same quality bar as YouTube: IG_CROSSPOST_FORCE only bypasses "YouTube
-    # upload missing" (e.g. dead token), never a NOT-READY verify verdict.
-    # run_verify.py exits 0 even on "NEEDS FIX", and publish.py --only-if-ready
-    # then refuses YouTube, so without this check a failed-review video was
-    # still posted as a public Reel.
+    # Same quality bar as YouTube. IG_CROSSPOST_FORCE only bypasses "YouTube
+    # upload missing" (e.g. a dead token). A NOT-READY verdict still skips,
+    # unless this run already uploaded to YouTube with APPROVED=true. publish.py
+    # honors that approval; the Reel must follow the same upload.
+    # ig_only posts that Reel for an existing video id and does not upload again.
+    ig_only = env("IG_ONLY") in ("1", "true", "yes", "on")
+    if ig_only:
+        video_id = env("YOUTUBE_VIDEO_ID")
+        if not video_id:
+            die("ig_only needs youtube_video_id")
+        (RUN / "uploaded.txt").write_text(video_id + "\n", encoding="utf-8")
+        import ledger
+        prior = ledger.find_ig_media(video_id=video_id)
+        if prior:
+            die(f"Reel already logged for {video_id}: {prior}")
+
     reason = publish_guard.blocked_reason()
     if reason:
         skip(f"public Reel blocked ({reason}) — repair/test/retry never posts publicly")
 
+    approved = env("APPROVED") in ("1", "true", "yes")
+    uploaded_path = RUN / "uploaded.txt"
+    uploaded = uploaded_path.exists() and bool(uploaded_path.read_text(encoding="utf-8").strip())
     if not review_gate.files_allow_public(RUN, "short"):
-        skip("verify verdict is not READY TO PUBLISH — Reel not posted")
+        if not (approved and uploaded):
+            skip("verify verdict is not READY TO PUBLISH — Reel not posted")
 
-    if not (RUN / "uploaded.txt").exists() and env("IG_CROSSPOST_FORCE") not in ("1", "true"):
+    if not uploaded_path.exists() and env("IG_CROSSPOST_FORCE") not in ("1", "true"):
         skip("YouTube upload not recorded (uploaded.txt missing) — set IG_CROSSPOST_FORCE=1 to post anyway")
 
     ident = video_identity(mp4)

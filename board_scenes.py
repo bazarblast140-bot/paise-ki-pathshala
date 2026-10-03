@@ -2008,6 +2008,27 @@ def _equity_curve(img, plot):
     return {"plot": plot, "equity": True}
 
 
+def _reveal_points(values, progress):
+    """Points of the stop line drawn so far. 1.0 is the whole line.
+
+    The last samples sit on the floor. Revealing them still walks the marker
+    to the right, so the end of the beat does not freeze.
+    """
+    values = [float(v) for v in values]
+    if len(values) < 2:
+        return [(0.0, values[0] if values else 0.0)]
+    progress = max(0.12, min(1.0, float(progress if progress is not None else 1.0)))
+    span = (len(values) - 1) * progress
+    last = int(math.floor(span + 1e-9))
+    frac = span - last
+    points = [(float(i), values[i]) for i in range(last + 1)]
+    if last < len(values) - 1:
+        step = max(frac, 0.2)
+        a, b = values[last], values[last + 1]
+        points.append((last + step, a + (b - a) * step))
+    return points
+
+
 def _draw_geometry(img, spec, index=0, plot=None, beat="", card=""):
     """Bars, the stop line, the checklist, or the hook curve. Labels come after."""
     from PIL import ImageDraw
@@ -2086,14 +2107,26 @@ def _draw_geometry(img, spec, index=0, plot=None, beat="", card=""):
     if concept == "pnl_stop":
         loss = min((item["value"] for item in rupees), default=0) or 1
         ys = [0, -0.35 * loss, -0.7 * loss, -loss, -loss, -loss]
+        # The axis stays full-width. `_progress` reveals the drop across the
+        # matlab beat so a later slice is not the same still as the one before it.
         ax = series_panel(
-            img, plot, [(ys, RED, 8)], lo=-loss * 1.25, hi=loss * 0.35, pad=(36, 24, 36, 24),
+            img, plot, [([None] * len(ys), RED, 8)],
+            lo=-loss * 1.25, hi=loss * 0.35, pad=(36, 24, 36, 24),
         )
+        revealed = _reveal_points(ys, spec.get("_progress", 1.0))
         stop_y = ax.y(-loss)
-        draw.rectangle([plot[0] + 8, stop_y, plot[2] - 8, plot[3] - 8], fill=(70, 16, 22))
-        polyline(img, [(ax.x(i), ax.y(v)) for i, v in enumerate(ys)], RED, 8)
+        tip_i, tip_v = revealed[-1]
+        tip_x, tip_y = ax.x(tip_i), ax.y(tip_v)
+        # The loss wash and the playhead both advance with the line, so a
+        # four-second slice is not the same picture as the slice before it.
+        draw.rectangle(
+            [plot[0] + 8, min(tip_y, stop_y), max(plot[0] + 36, tip_x), plot[3] - 8],
+            fill=(70, 16, 22),
+        )
+        polyline(img, [(ax.x(i), ax.y(v)) for i, v in revealed], RED, 14)
         dashed(img, plot[0] + 16, plot[2] - 16, stop_y, RED)
-        ring(img, ax.x(len(ys) - 2), stop_y, 30, 30, YELLOW)
+        draw.rectangle([tip_x - 16, plot[1] + 20, tip_x + 16, plot[3] - 16], fill=(255, 196, 48))
+        ring(img, tip_x, tip_y, 34, 34, YELLOW)
         return {"stop_y": stop_y, "plot": plot, "zero_y": ax.y(0), "ax": ax}
     if concept == "steps":
         left, top, right, bottom = plot
@@ -2193,7 +2226,11 @@ def _draw_labels(img, spec, geom, beat="", card=""):
             }
             _place(img, big[0] + 28, cy_big, "Capital", (255, 255, 255), 42, anchor="lm", role="axis")
             if capital["value"] in reached:
-                _place(img, big[0] + 220, cy_big, reached[capital["value"]], gold, _VALUE_SIZE, anchor="lm")
+                # White on the green Capital bar. Gold on green is too dim. Bold stays the font.
+                _place(
+                    img, big[0] + 220, cy_big, reached[capital["value"]],
+                    (255, 255, 255), _VALUE_SIZE, anchor="lm",
+                )
             _place(img, small[2] + 28, cy_small, "Daily limit", (255, 255, 255), 40, anchor="lm", role="axis")
             if limit["value"] in reached:
                 _place(img, small[2] + 280, cy_small, reached[limit["value"]], gold, _VALUE_SIZE, anchor="lm")
@@ -2527,6 +2564,8 @@ def paint_chart_board(topic, beat, index=0, n=1):
     spec = _prefer_installed_labels(topic, beat, index, chart_spec_for(card))
     enforce_chart_voice(spec, card)
     display = _picture_spec(topic, beat, index, spec)
+    if beat == "matlab" and display.get("concept") == "pnl_stop":
+        display["_progress"] = (int(index) + 1) / float(max(int(n), 1))
     img = K.background()
     panel(img)
     img.label_boxes = []

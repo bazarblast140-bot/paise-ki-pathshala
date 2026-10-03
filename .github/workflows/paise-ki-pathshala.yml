@@ -364,4 +364,5 @@ jobs:
             run/auto_agent_last.log
             run/credits.json
             run/narration_block.json
+            run/voice.wav
           retention-days: 14
