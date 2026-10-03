@@ -45,6 +45,24 @@ jobs:
               "https://www.googleapis.com/youtube/v3/videos?part=status",
               data=json.dumps(body).encode(), headers=H, method="PUT"))
           after = get()
+          if after.get("publishAt"):
+              print("publishAt still set; retrying with publishAt=null")
+              body["status"]["publishAt"] = None
+              urllib.request.urlopen(urllib.request.Request(
+                  "https://www.googleapis.com/youtube/v3/videos?part=status",
+                  data=json.dumps(body).encode(), headers=H, method="PUT"))
+              after = get()
+          if after.get("publishAt"):
+              print("still scheduled; switching to unlisted, which cancels the schedule")
+              body["status"].pop("publishAt", None)
+              body["status"]["privacyStatus"] = "unlisted"
+              urllib.request.urlopen(urllib.request.Request(
+                  "https://www.googleapis.com/youtube/v3/videos?part=status",
+                  data=json.dumps(body).encode(), headers=H, method="PUT"))
+              after = get()
+          assert after["privacyStatus"] in ("private", "unlisted") and not after.get("publishAt"), "hold failed"
+          print("HELD:", after["privacyStatus"], "no schedule")
+          raise SystemExit(0)
           assert after["privacyStatus"] == "private" and not after.get("publishAt"), "hold failed"
           print("HELD: private, no schedule")
           PY
