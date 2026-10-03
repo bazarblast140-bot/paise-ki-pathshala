@@ -56,6 +56,10 @@ on:
         description: "Publish a soft REVIEW. Hard gates still block."
         type: boolean
         default: false
+      narration_from_run:
+        description: "Dry-run Actions id. Voice that edge-dry-run script. No new DeepSeek narration."
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       format:
@@ -82,6 +86,10 @@ on:
         type: choice
         options: ["false", "true"]
         default: "false"
+      narration_from_run:
+        description: "Dry-run Actions id (for example 37095205924). Voice that script with Rudra. No new DeepSeek narration."
+        type: string
+        default: ""
 concurrency:
   # One group for every trigger. The next run waits; it does not cancel the
   # run already building a slot. That run re-reads the ledger after checkout
@@ -91,6 +99,7 @@ concurrency:
 permissions:
   contents: write
   issues: write
+  actions: read
 jobs:
   build-video:
     runs-on: ubuntu-latest
@@ -180,6 +189,12 @@ jobs:
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
           EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
         run: python competitor_research.py --max-age-hours 20
+      - name: Download approved dry-run script
+        if: steps.guard.outputs.taken != 'true' && inputs.narration_from_run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python approved_script.py --download "${{ inputs.narration_from_run }}" --dest run/approved_script
       - name: Run Pipeline (+ publish if READY)
         id: pipeline
         # A failed build must still reach the buffer step. auto_agent fills
@@ -234,6 +249,8 @@ jobs:
           # vars.AUTO_APPROVE_REVIEW (empty means false). A manual or called
           # run uses the approved input, default false. Hard gates ignore it.
           APPROVED: ${{ github.event_name == 'schedule' && vars.AUTO_APPROVE_REVIEW || inputs.approved }}
+          NARRATION_FROM_RUN: ${{ inputs.narration_from_run }}
+          APPROVED_SCRIPT_DIR: run/approved_script
         run: python auto_agent.py --format ${{ steps.fmt.outputs.format }} --publish
       - name: Buffer fill if this slot is still empty
         id: buffer

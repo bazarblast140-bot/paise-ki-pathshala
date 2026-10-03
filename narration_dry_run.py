@@ -156,8 +156,8 @@ def clear_topic_voice():
     (run / "tts_text.txt").unlink(missing_ok=True)
 
 
-def _keep_topic_artifacts(key):
-    """Copy this topic's video and spoken text aside before the next topic overwrites them."""
+def _keep_topic_artifacts(key, narration=None):
+    """Copy this topic's video, spoken text, and narration aside before the next topic."""
     run = board_short.RUN
     video = run / "final.mp4"
     named = run / f"final_{key}.mp4"
@@ -166,6 +166,18 @@ def _keep_topic_artifacts(key):
     spoken = run / "tts_text.txt"
     if spoken.exists():
         (run / f"tts_{key}.txt").write_text(spoken.read_text(encoding="utf-8"), encoding="utf-8")
+    payload = narration if isinstance(narration, dict) else None
+    if payload is None:
+        path = run / "narration.json"
+        if path.is_file():
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                payload = None
+    if isinstance(payload, dict) and isinstance(payload.get("beats"), dict):
+        (run / f"narration_{key}.json").write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8",
+        )
 
 
 def _print_self_review(key):
@@ -211,11 +223,11 @@ def render_topic(topic, narration, c, beats=None):
             free="edge",
         )
     except (Exception, SystemExit):
-        _keep_topic_artifacts(key)
+        _keep_topic_artifacts(key, narration)
         if (board_short.RUN / "self_review.json").is_file():
             _print_self_review(key)
         raise
-    _keep_topic_artifacts(key)
+    _keep_topic_artifacts(key, narration)
     _print_self_review(key)
 
 

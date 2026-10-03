@@ -1171,7 +1171,7 @@ def block_fallback(n, reason):
 def require_llm_narration(n, source):
     """TTS runs only for a gated script. A topic-card fallback never spends voice."""
     if (
-        source in ("llm", "cache", "outline")
+        source in ("llm", "cache", "outline", "approved")
         and isinstance(n, dict)
         and not n.get("narration_fallback")
         and str(n.get("source") or source).strip().lower() != "fallback"
@@ -2033,6 +2033,14 @@ def narration(topic, c, spec=None):
         topic["_voice"] = dict((c or {}).get("voice") or {})
     if topic.get("_live_short") and not topic.get("_atr") and not topic.get("_live_beats"):
         topic["_live_beats"] = resolve_live_beats(topic)
+    approved = _approved_script(topic)
+    if approved is not None:
+        if topic.get("_live_short") and not topic.get("_atr"):
+            approved["live_beats"] = resolve_live_beats(topic)
+        (RUN / "narration.json").write_text(
+            json.dumps(approved, ensure_ascii=False, indent=2), encoding="utf-8")
+        ok("narration: approved dry-run script, no DeepSeek and no trim")
+        return approved, "approved"
     if topic.get("_atr"):
         # The calm-rate script is fixed to the chart numbers. A 160-word draft
         # would run long, and speeding the voice up is not allowed.
@@ -2212,7 +2220,7 @@ def resolve_narration(llm_result, template):
 
 def upload_block_reason(source, narration=None):
     """A fallback or a mixed draft does not publish. Skipping the slot is the safe outcome."""
-    if source in ("outline", "llm", "cache"):
+    if source in ("outline", "llm", "cache", "approved"):
         return ""
     if source == "fallback":
         return "LLM narration fell back to the topic card; upload blocked"
@@ -2222,6 +2230,76 @@ def upload_block_reason(source, narration=None):
 def approved_publish():
     """True only when a human passed approved=true. A REVIEW score does not self-approve."""
     return os.environ.get("APPROVED", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _approved_script(topic=None):
+    """The dry-run script when NARRATION_FROM_RUN is set. None on a normal build."""
+    import approved_script
+    if isinstance(topic, dict) and topic.get("_approved_script") and not approved_script.active():
+        return None
+    return approved_script.load_for_topic(topic or {})
+
+
+def _approved_narration(narration, topic=None):
+    if isinstance(narration, dict) and narration.get("source") == "approved":
+        return True
+    if isinstance(topic, dict) and topic.get("_approved_script"):
+        return True
+    return bool(os.environ.get("NARRATION_FROM_RUN", "").strip())
+
+
+def _force_hold(review):
+    review["public_ok"] = False
+    review["passed"] = False
+    review["review_flag"] = False
+    review["verdict"] = "HOLD"
+    return review
+
+
+def soften_approved_holds(review, sync_report=None):
+    """On a narration_from_run build, only a few misses stay HOLD.
+
+    Hard: wrong number or maths, beat-level recall under the bar (wrong voice
+    or topic), a failed transcription, and text cut off or outside the safe
+    area. Window sync, chart timing, a static frame, trend, and craft become
+    REVIEW. approved=true can publish that REVIEW. A normal build is unchanged.
+    """
+    if not isinstance(review, dict) or not _approved_narration(None):
+        return review
+    if review.get("public_ok") or review.get("narration_fallback"):
+        return review
+    parts = review.get("parts") or {}
+    try:
+        accuracy = float(parts.get("accuracy"))
+    except (TypeError, ValueError):
+        return _force_hold(review)
+    if accuracy < self_review.PART_BAR:
+        return _force_hold(review)
+    blob = " ".join(str(note) for note in (review.get("notes") or []))
+    blob = blob + " " + str(review.get("summary") or "")
+    if "safe area" in blob or "cut off" in blob:
+        return _force_hold(review)
+    report = sync_report if isinstance(sync_report, dict) else {}
+    reason = str(report.get("reason") or "")
+    if "transcription failed" in reason or "title promise not answered" in reason:
+        return _force_hold(review)
+    import sync_gate
+    beats = report.get("beats") or []
+    if beats:
+        for row in beats:
+            try:
+                recall = float(row.get("recall"))
+            except (TypeError, ValueError):
+                return _force_hold(review)
+            if recall + 1e-9 < sync_gate.MIN_RECALL:
+                return _force_hold(review)
+    elif report and not report.get("ok"):
+        return _force_hold(review)
+    review["review_flag"] = True
+    review["verdict"] = "REVIEW"
+    review["public_ok"] = False
+    review["passed"] = False
+    return review
 
 
 def _hold_hard(review):
@@ -3173,6 +3251,38 @@ def _scene_clause(sent, t1):
     return _trim_card_clause(text)
 
 
+def _without_unsaid_figures(text, beat, scene_end, rows):
+    """Drop a digit whose whisper start is still after this scene.
+
+    A cue can start on an earlier word and still carry a later number. The
+    chart is built from this card, so that number stays off until it is said.
+    """
+    import sync_gate
+    limit = float(scene_end) + sync_gate.SAID_PAD
+    late = set()
+    said = set()
+    for beat_name, word, start in rows or []:
+        if beat_name != beat:
+            continue
+        nums = set(sync_gate.numbers_in(word))
+        if not nums:
+            continue
+        if float(start) <= limit:
+            said |= nums
+        else:
+            late |= nums
+    late -= said
+    if not late:
+        return text
+    kept = []
+    for word in str(text or "").split():
+        nums = set(sync_gate.numbers_in(word))
+        if nums and nums <= late:
+            continue
+        kept.append(word)
+    return _trim_card_clause(" ".join(kept))
+
+
 def scene_cards_for(spoken, beat_times, scenes, audio_words=None):
     """One card per scene, from the caption cues on screen during that scene.
 
@@ -3183,6 +3293,7 @@ def scene_cards_for(spoken, beat_times, scenes, audio_words=None):
     """
     import sync_gate
     cues = plan_cues(spoken, beat_times, audio_words)
+    rows = _script_word_times(spoken, beat_times, audio_words) if audio_words else []
     texts = {}
     figures = {}
     for scene in scenes or []:
@@ -3211,6 +3322,8 @@ def scene_cards_for(spoken, beat_times, scenes, audio_words=None):
         if not parts and latest:
             parts.append(latest)
         blob = _trim_card_clause(" ".join(parts))
+        if audio_words:
+            blob = _without_unsaid_figures(blob, beat, t1, rows)
         texts.setdefault(beat, []).append(blob)
         raw = scene_frames._figure_tokens([blob])
         kept = []
@@ -3500,12 +3613,20 @@ def beat_clip(pngs, dur, out, fps=30, switch=0.58):
 
 
 def still_clip(png, dur, out, fps=30):
-    """One picture, one cut. Duration is the scene slice, not the whole beat."""
+    """One card, one cut, with a slow 3% zoom so a held frame is not frozen."""
     dur = max(0.4, float(dur))
-    subprocess.run(["ffmpeg", "-v", "error", "-y",
-                    "-loop", "1", "-t", f"{dur:.3f}", "-i", str(png),
-                    "-vf", f"fps={fps},format=yuv420p",
-                    "-t", f"{dur:.3f}", "-r", str(fps), *X264, str(out)], check=True)
+    frames = max(2, int(round(dur * fps)))
+    zoom = f"min(1+0.03*on/{frames - 1},1.03)"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y",
+         "-loop", "1", "-framerate", str(fps), "-i", str(png),
+         "-vf",
+         f"scale={K.W}:{K.H}:force_original_aspect_ratio=increase,crop={K.W}:{K.H},"
+         f"zoompan=z='{zoom}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+         f"d=1:s={K.W}x{K.H}:fps={fps},format=yuv420p",
+         "-frames:v", str(frames), "-r", str(fps), *X264, str(out)],
+        check=True,
+    )
 
 
 def _join_hard(clips, out):
@@ -4155,7 +4276,8 @@ def _proof_silence_spoken(spoken, narration, topic, c, spec):
     order = _lesson(topic)[0] if topic.get("_live_short") else tuple(b for b in BEATS if b in spoken)
     if topic.get("_live_short"):
         require_scene_frames(topic, spec, narration)
-        narration = fit_estimated_duration(narration, topic, c, spec)
+        if not _approved_narration(narration, topic):
+            narration = fit_estimated_duration(narration, topic, c, spec)
         spoken = {beat: narration["beats"][beat] for beat in order}
     wps = _proof_wps(topic, c)
     raw = {}
@@ -4187,7 +4309,9 @@ def prepare_spoken(spoken, narration, topic, c, spec):
         # Adding a library voice is a write. It runs only on the paid pass,
         # after PAID_TTS_ENABLED is checked, not on a path that skips the proof.
         topic["_voice"] = dict((c or {}).get("voice") or {})
-        narration = fit_estimated_duration(narration, topic, c, spec)
+        # An approved dry-run script is voiced as stored. No sentence trim.
+        if not _approved_narration(narration, topic):
+            narration = fit_estimated_duration(narration, topic, c, spec)
         spoken = {beat: narration["beats"][beat] for beat in order}
     (RUN / "tts_text.txt").unlink(missing_ok=True)
     before = dict(spoken)
@@ -4204,6 +4328,10 @@ def prepare_spoken(spoken, narration, topic, c, spec):
         return spoken, narration, audio, raw, beat_times, total
     lo, hi = live_voice_bounds(topic)
     label = f"{lo:.0f}-{hi:.0f}"
+    if _approved_narration(narration, topic) and not (lo <= total <= hi):
+        die(
+            f"approved script voice duration outside {label}s; refusing a trim: {total:.1f}s"
+        )
     if lo <= total <= hi:
         topic["_spoken_beats"] = {beat: spoken[beat] for beat in order}
         audio = {beat: RUN / f"voice_clean_{beat}.wav" for beat in order}
@@ -4415,6 +4543,7 @@ def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
         "scenes": sync_report.get("scenes") or [],
         "beats": sync_report.get("beats") or [],
     }
+    review = soften_approved_holds(review, sync_report)
     review["attempts"] = n.get("review_attempts") or self_review.MAX_ATTEMPTS
     review["scenes"] = [
         {"beat": s["beat"], "kind": s.get("kind") or "",
@@ -4509,8 +4638,31 @@ def _spent_hold(message):
     die(f"{message}; {_eleven_spent()} characters spent; no upload")
 
 
+def _repaint_scene_frames(topic, spec, scenes, order):
+    """Chart Board again from the cards just timed to this voice."""
+    groups = {beat: [] for beat in order}
+    paced = {}
+    for scene in scenes:
+        groups.setdefault(scene.get("beat"), []).append(scene)
+    for beat, group in groups.items():
+        if not group:
+            continue
+        frames, flags = scene_frames.frames_for(topic, beat, len(group), spec or {})
+        paths = []
+        for index, (scene, frame, flag) in enumerate(zip(group, frames, flags)):
+            scene["frame"] = frame
+            path = RUN / f"sc_{beat}_{index}.png"
+            frame.save(path)
+            scene["png"] = str(path)
+            scene["kind"] = getattr(frame, "scene_kind", "") or scene.get("kind") or ""
+            scene["callout"] = bool(scene.get("callout") or flag)
+            paths.append(path)
+        paced[beat] = tuple(paths)
+    return paced
+
+
 def _reuse_proven_frames(old_scenes, beat_times, order):
-    """New beat lengths, same pictures. Chart Board is not drawn again."""
+    """New beat lengths. The Edge proof must already have drawn Chart Board."""
     fresh = scene_pace.plan_scenes(beat_times, beats=order)
     pools = {}
     for scene in old_scenes or []:
@@ -4559,6 +4711,7 @@ def _pay_and_remux(topic, n, c, spec, source, proven):
     except Exception as exc:  # noqa: BLE001 — the review still runs on the beat clock
         print(f"[cards] paid word timings unavailable ({exc}); using the beat clock")
     _install_scene_cards(topic, spoken, beat_times, scenes, audio_words)
+    paced = _repaint_scene_frames(topic, spec, scenes, order)
     assemble(
         paced, beat_audio, beat_times,
         build_ass(topic, beat_times, spoken, hook_line, cta, audio_words=audio_words),
@@ -4589,6 +4742,7 @@ def _pay_and_remux(topic, n, c, spec, source, proven):
         sync=sync_report, layout_notes=layout_notes,
     )
     review = apply_upload_block(review, source)
+    review = soften_approved_holds(review, sync_report)
     if final_dur < lo or final_dur > hi:
         note = f"final.mp4 duration outside {lo:.0f}-{hi:.0f}s: {final_dur:.1f}s"
         _hold_hard(review)
