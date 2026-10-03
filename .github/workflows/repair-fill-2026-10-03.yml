@@ -1,0 +1,41 @@
+name: Repair fill 2026-10-03
+
+# One-shot ops restore. The cloud-agent token cannot call the Actions enable
+# or dispatch API (403, needs actions=write). This job's GITHUB_TOKEN can.
+# It enables Paise Ki Pathshala, Slot watch, and Buffer refill, seeds Edge
+# buffer Shorts, and dispatches privacy=public for an open 3 Oct slot.
+# It does not request an instant-public upload. The quiz workflow is left disabled.
+# After 2026-10-03 IST, repair_fill.py no-ops.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/repair-fill-2026-10-03.yml
+      - repair_fill.py
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: repair-fill-2026-10-03
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Enable workflows and fill open 3 Oct slots
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python repair_fill.py --restore
