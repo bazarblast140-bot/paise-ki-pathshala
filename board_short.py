@@ -53,6 +53,8 @@ STEP_CHIP = {"hook": "HOOK", "pehchan": "1  PEHCHAN", "matlab": "2  MATLAB", "ka
 # in the description, not in this spoken/on-screen line.
 CTA = engagement.engagement_question({})
 DISCLAIMER = "सिर्फ़ जानकारी, निवेश सलाह नहीं।"
+# 1.5× the previous 26px line. It stays in the brand band, under the captions.
+DISCLAIMER_SIZE = 39
 FORBIDDEN = ["दोस्तों", "like", "subscribe", "सब्सक्राइब", "लाइक", "टारगेट", "target price", "टिप",
              "ज़रूर ख़रीद", "जरूर खरीद", "ख़रीद लो", "खरीद लो", "बेच दो", "गारंटी से", "पक्का मुनाफ़ा"]
 
@@ -3533,7 +3535,7 @@ def on_screen_boxes(topic, beat_times, spoken, hook_line, cta, t, audio_words=No
         break
     t0, t1 = beat_times["karein"]
     if t0 - 1e-6 <= t <= t1 + 1e-6:
-        boxes.append(_top_box(DISCLAIMER, 540, safe_area.SOURCE_Y, 26))
+        boxes.append(_top_box(DISCLAIMER, 540, safe_area.SOURCE_Y, DISCLAIMER_SIZE))
     return boxes
 
 
@@ -3661,7 +3663,7 @@ def build_ass(topic, beat_times, spoken, hook_line, cta, audio_words=None):
     ev = []
     t0, t1 = beat_times["karein"]
     # Grey disclaimer sits in the brand band, under the fixed subtitle box.
-    ev.append(K.ass_text(t0, t1, 540, safe_area.SOURCE_Y, 26, "&H00B8A394&", DISCLAIMER, 8))
+    ev.append(K.ass_text(t0, t1, 540, safe_area.SOURCE_Y, DISCLAIMER_SIZE, "&H00B8A394&", DISCLAIMER, 8))
     return K.ASS_HEAD + "\n".join(ev) + "\n"
 
 

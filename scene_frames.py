@@ -2006,37 +2006,15 @@ def fill_live_frame(src, beat, index=0):
 
 
 def _generic_frames(topic, beat, n, spec):
-    if _wants_filled_plate(topic):
-        frames = [_live_fact_frame(topic, beat, i, n) for i in range(n)]
-        return frames, [False] * n
-    mode = (spec or {}).get("mode")
-    if mode == "non_numeric":
-        bases = [market_data.non_numeric_frame(topic, beat, i % 2) for i in range(min(n, 2))]
-    else:
-        img = K.background()
-        pair = S.render_beat(topic["key"], beat, img)
-        bases = [pair[-1]]
-    labels = ("KEY AREA", "RULE", "LOOK HERE", "NEXT STEP")
-    frames = []
-    flags = []
-    for i in range(n):
-        src = bases[min(i, len(bases) - 1)].copy()
-        if i == 0:
-            frame = src
-            flag = False
-        elif i % 2 == 1:
-            frame = zoom_at(src, 560, 640, 0.70 + (i % 3) * 0.03, shift_x=(i % 5 - 2) * 36)
-            frame = screen_callout(frame, labels[i % len(labels)])
-            flag = True
-        else:
-            frame = zoom_at(src, 460 + (i * 24), 720, 0.62, shift_x=-50)
-            flag = False
-        if mode == "series":
-            frame = market_data.stamp(frame, spec)
-        _stamp_teaching_card(frame, topic, beat, spec)
-        frames.append(frame)
-        flags.append(flag)
-    return frames, flags
+    """Chart Board is the only Short picture. The text-card path is disabled.
+
+    Live, buffer, slot-watch, and sample shorts all come through here.
+    An ATR lesson still uses `_atr_frames` before this function is called.
+    `spec` is unused: non_numeric and scene-card modes no longer paint a card.
+    """
+    del spec
+    frames = [_live_fact_frame(topic, beat, i, n) for i in range(n)]
+    return frames, [False] * n
 
 
 def frames_for(topic, beat, n, spec):

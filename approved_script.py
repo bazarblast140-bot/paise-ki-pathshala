@@ -213,6 +213,54 @@ def load_for_topic(topic):
     return script
 
 
+def repo_beats_path(topic_key):
+    """Committed approved beats for one topic. Absent for every other topic."""
+    key = str(topic_key or "").strip()
+    if not key:
+        return None
+    path = pathlib.Path(__file__).parent / "approved" / f"{key}.json"
+    return path if path.is_file() else None
+
+
+def install_repo_beats(directory, topic_key):
+    """Write the committed approved script over a downloaded dry run.
+
+    Call this after the artifact download and before narration() locks the
+    sha256. The dry-run tts file stays on disk; narration.json wins, and the
+    lock is the committed beats, title, and hook line.
+    """
+    path = repo_beats_path(topic_key)
+    if path is None:
+        return None
+    extra = json.loads(path.read_text(encoding="utf-8"))
+    payload = load_payload(directory, topic_key) or {}
+    beats = dict((payload.get("beats") or {}))
+    incoming = extra.get("beats") if isinstance(extra.get("beats"), dict) else extra
+    for beat, text in (incoming or {}).items():
+        if beat not in ORDER:
+            continue
+        cleaned = " ".join(str(text or "").split())
+        if cleaned:
+            beats[beat] = cleaned
+    payload["beats"] = beats
+    title = " ".join(str(extra.get("title") or "").split())
+    hook_line = " ".join(str(extra.get("hook_line") or "").split())
+    if title:
+        payload["title"] = title
+    if hook_line:
+        payload["hook_line"] = hook_line
+    payload["source"] = "approved"
+    payload["approved_hashes"] = hashes_for(beats)
+    raw = json.dumps(payload, ensure_ascii=False, indent=2)
+    root = pathlib.Path(directory)
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "narration.json").write_text(raw, encoding="utf-8")
+    key = str(topic_key or "").strip()
+    if key:
+        (root / f"narration_{key}.json").write_text(raw, encoding="utf-8")
+    return payload
+
+
 def download_edge_artifact(run_id, dest):
     """Download the `edge-dry-run` zip for one Actions run. Needs actions:read."""
     token = os.environ.get("GITHUB_TOKEN", "").strip()

@@ -1945,6 +1945,9 @@ def _headline(spec, beat):
     if concept == "compare" and len(labels) >= 2:
         return f"{labels[0]['text']} VS {labels[1]['text']}"
     if beat == "hook" and concept in ("plain", "level"):
+        for item in labels:
+            if item.get("kind") == "inr" and int(item.get("value") or 0) == 200000:
+                return "CAPITAL ₹2 LAKH"
         if labels:
             return "CAPITAL " + labels[0]["text"]
         return "ONE BAD DAY"
@@ -2015,9 +2018,14 @@ def _draw_geometry(img, spec, index=0, plot=None, beat="", card=""):
     percents = [item for item in labels if item["kind"] == "pct"]
     draw = ImageDraw.Draw(img)
     img.chart_bar_boxes = []
-    if concept == "capital_slice" and len(rupees) >= 2:
-        capital = max(rupees, key=lambda item: item["value"])
-        limit = min(rupees, key=lambda item: item["value"])
+    # Bar widths come from the whole beat. A scene that has only said the
+    # capital still opens on both bars, and the unreached amount is not labelled.
+    shape_rupees = [
+        item for item in (spec.get("_shape_labels") or labels) if item.get("kind") == "inr"
+    ]
+    if concept == "capital_slice" and len(shape_rupees) >= 2:
+        capital = max(shape_rupees, key=lambda item: item["value"])
+        limit = min(shape_rupees, key=lambda item: item["value"])
         left, top, right, bottom = plot
         # Horizontal rows across the box. Thickness stays under the capital width
         # so the large-vs-small test compares widths, and the red bar stays a bar.
@@ -2179,10 +2187,16 @@ def _draw_labels(img, spec, geom, beat="", card=""):
             cy_big = (big[1] + big[3]) / 2
             cy_small = (small[1] + small[3]) / 2
             # One spelling of each amount. The name sits beside it, not a second copy.
+            reached = {
+                item["value"]: item["text"]
+                for item in labels if item.get("kind") == "inr"
+            }
             _place(img, big[0] + 28, cy_big, "Capital", (255, 255, 255), 42, anchor="lm", role="axis")
-            _place(img, big[0] + 220, cy_big, capital["text"], gold, _VALUE_SIZE, anchor="lm")
+            if capital["value"] in reached:
+                _place(img, big[0] + 220, cy_big, reached[capital["value"]], gold, _VALUE_SIZE, anchor="lm")
             _place(img, small[2] + 28, cy_small, "Daily limit", (255, 255, 255), 40, anchor="lm", role="axis")
-            _place(img, small[2] + 280, cy_small, limit["text"], gold, _VALUE_SIZE, anchor="lm")
+            if limit["value"] in reached:
+                _place(img, small[2] + 280, cy_small, reached[limit["value"]], gold, _VALUE_SIZE, anchor="lm")
             if percents:
                 _place(
                     img, small[0] + 8, geom.get("bracket_y", small[3] + 28),
@@ -2205,9 +2219,6 @@ def _draw_labels(img, spec, geom, beat="", card=""):
         if rupees:
             loss = min(rupees, key=lambda item: item["value"])
             _place(img, plot[0] + 8, stop_y + 12, _minus_amount(loss["text"]), (255, 180, 170), _AXIS_SIZE, anchor="lt", role="axis")
-            capital = max(rupees, key=lambda item: item["value"])
-            if capital["value"] != loss["value"]:
-                _place(img, plot[0] + 280, plot[1] + 8, capital["text"], gold, 54, anchor="lt")
         for item in labels:
             if item["kind"] == "pct" and item["text"] not in stop:
                 _place(img, plot[0] + 12, plot[1] + 64, item["text"], gold, 48)
@@ -2219,7 +2230,7 @@ def _draw_labels(img, spec, geom, beat="", card=""):
         if percents:
             names[0] = "Limit likho  " + percents[0]["text"]
         if rupees:
-            names[1] = "SL + entry  " + min(rupees, key=lambda item: item["value"])["text"]
+            names[1] = "SL + entry, max " + min(rupees, key=lambda item: item["value"])["text"] + " loss"
         reached = int(geom.get("reached") or 0)
         prev = int(geom.get("prev_reached") or 0)
         for i, box in enumerate(geom["rows"]):
@@ -2232,10 +2243,12 @@ def _draw_labels(img, spec, geom, beat="", card=""):
         if badge:
             _place(img, (plot[0] + plot[2]) / 2, plot[3] - 78, badge, gold, 44, anchor="mt", role="axis")
         return
+    if geom.get("equity"):
+        # The hook headline already says CAPITAL ₹2 LAKH. A second chart amount
+        # would repeat that figure on the curve.
+        return
     if labels:
         y = geom.get("level_y", (plot[1] + plot[3]) / 2) - 70
-        if geom.get("equity"):
-            y = plot[1] + 8
         for item in labels:
             _place(img, plot[0] + 16, y, item["text"], gold, 84)
             y += 96
@@ -2302,6 +2315,11 @@ def _draw_chrome(img, beat, card, index=0, spec=None):
         anchor="lt", role="axis",
     )
     lines = _caption_lines(card)
+    # Six-beat example cards still name the worked example. The word sits in
+    # the chart, not on a full-screen text card.
+    import hook_check
+    if beat in hook_check.TEACHING_BEATS and "उदाहरण" not in card and not any("उदाहरण" in line for line in lines):
+        _place(img, _plot_box()[2] - 8, y1 - 156, "उदाहरण", YELLOW, 34, anchor="rt", role="caption")
     y = safe_area.SUBTITLE_TOP + 18
     for line in lines:
         scene_frames._text(
@@ -2479,6 +2497,13 @@ def _picture_spec(topic, beat, index, scene_spec):
             display = _forced_picture(beat_spec, scene_spec, "pnl_stop")
         elif beat == "karein" and beat_spec["concept"] == "steps":
             display = _forced_picture(beat_spec, scene_spec, "steps")
+        elif beat == "pehchan" and beat_spec["concept"] == "capital_slice":
+            display = _forced_picture(beat_spec, scene_spec, "capital_slice")
+            display["_shape_labels"] = [
+                {"text": item["text"], "kind": item["kind"], "value": item["value"]}
+                for item in (beat_spec.get("labels") or [])
+                if item.get("kind") == "inr"
+            ]
     if display.get("concept") == "steps":
         said = _said_through(topic, beat, index) or full
         prev = _steps_reached(_said_before(topic, beat, index))

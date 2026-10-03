@@ -98,5 +98,110 @@ class ChartVoiceTests(unittest.TestCase):
         self.assertTrue(board_scenes.chart_voice_faults(stray, PEHCHAN))
 
 
+HOOK = "डेली लॉस लिमिट क्यों ज़रूरी है? दो लाख रुपये के कैपिटल पर एक बुरा दिन पूरा महीना बिगाड़ देता है।"
+PEHCHAN_EARLY = "अब इसे पहचानो। कैपिटल दो लाख रुपये है, तो डेली"
+PEHCHAN_FULL = (
+    "अब इसे पहचानो। कैपिटल दो लाख रुपये है, तो डेली लॉस लिमिट दो परसेंट, यानी चार हज़ार रुपये। "
+    "ये चार हज़ार पूरे दिन का टोटल लॉस है, हर ट्रेड का नहीं। इस लिमिट को पहले से लिखकर फिक्स करो।"
+)
+MATLAB_BOTH = (
+    "मतलब ये है। दो परसेंट की डेली लॉस लिमिट बुरे दिन को छोटा रखती है, ताकि लॉस चार हज़ार रुपये से "
+    "ज़्यादा न जाए। दो लाख रुपये का दो परसेंट बराबर चार हज़ार रुपये, यानी कैपिटल का सिर्फ दो परसेंट।"
+)
+KAREIN = (
+    "अब आगे। लिमिट पहले लिखो, हिट होते ही टर्मिनल बंद। स्टॉप लॉस और एंट्री से पहले चार हज़ार रुपये "
+    "फिक्स करो, फिर उसी पर टिके रहो।"
+)
+
+
+class ChartBoardPolishTests(unittest.TestCase):
+    def _frame(self, beat, spoken, cards=None):
+        import scene_frames
+        topic = _topic()
+        topic["_spoken_beats"] = {beat: spoken}
+        if cards is not None:
+            topic["_scene_cards"] = {beat: cards}
+        return scene_frames.frames_for(topic, beat, len(cards) if cards else 1, {"mode": "schematic"})[0]
+
+    def test_pehchan_opens_on_both_bars_without_the_later_amount(self):
+        import sync_gate
+        frames = self._frame("pehchan", PEHCHAN_FULL, [PEHCHAN_EARLY, PEHCHAN_FULL])
+        bars = frames[0].chart_bar_boxes
+        self.assertGreaterEqual(len(bars), 2)
+        shown = " ".join(sync_gate.lesson_lines(frames[0]))
+        self.assertNotIn("4,000", shown)
+        self.assertNotIn("4000", shown.replace(",", ""))
+        late = " ".join(sync_gate.lesson_lines(frames[1]))
+        self.assertIn("4,000", late)
+
+    def test_matlab_stop_chart_does_not_paint_the_capital(self):
+        frames = self._frame("matlab", MATLAB_BOTH)
+        chart = " ".join(
+            layer.get("text") or ""
+            for layer in frames[0].text_layers
+            if layer.get("role") == "chart"
+        )
+        self.assertIn("STOP", chart)
+        self.assertIn("4,000", chart)
+        self.assertNotIn("2,00,000", chart)
+        self.assertNotIn("2 लाख", chart)
+
+    def test_hook_headline_is_capital_2_lakh_without_a_second_amount(self):
+        frames = self._frame("hook", HOOK)
+        texts = [layer.get("text") or "" for layer in frames[0].text_layers]
+        self.assertIn("CAPITAL ₹2 LAKH", texts)
+        chart = [
+            layer.get("text") or ""
+            for layer in frames[0].text_layers
+            if layer.get("role") == "chart"
+        ]
+        self.assertFalse(any("2,00,000" in text or "₹2" in text for text in chart), chart)
+
+    def test_step_label_states_the_max_loss(self):
+        frames = self._frame("karein", KAREIN)
+        blob = " ".join(layer.get("text") or "" for layer in frames[0].text_layers)
+        self.assertIn("SL + entry, max", blob)
+        self.assertIn("loss", blob)
+        self.assertNotIn("SL + entry  ", blob)
+        for layer in frames[0].text_layers:
+            if layer.get("box"):
+                self.assertTrue(safe_area.inside(layer["box"]), layer.get("text"))
+
+
+class ChartBoardOnlyPathTests(unittest.TestCase):
+    def test_every_non_atr_short_frame_has_a_chart_and_no_text_card(self):
+        import scene_frames
+        bank = json.loads((ROOT / "topic_bank.json").read_text(encoding="utf-8"))["topics"]
+        loss = json.loads(json.dumps(next(t for t in bank if t["key"] == "risk_daily_loss_limit")))
+        journal = json.loads(json.dumps(next(t for t in bank if t["key"] == "risk_journal")))
+        live = json.loads(json.dumps(loss))
+        live["_live_short"] = True
+        live["_live_beats"] = "four"
+        six = json.loads(json.dumps(loss))
+        six["_live_short"] = True
+        six["_live_beats"] = "six"
+        banned = {"KEY AREA", "RULE", "LOOK HERE", "NEXT STEP"}
+        cases = (
+            (live, {"mode": "schematic"}),
+            (six, {"mode": "schematic"}),
+            (loss, {"mode": "schematic"}),
+            (loss, {"mode": "non_numeric"}),
+            (journal, {"mode": "series"}),
+        )
+        for topic, spec in cases:
+            for beat in ("hook", "pehchan", "matlab", "karein"):
+                frames, flags = scene_frames.frames_for(topic, beat, 2, spec)
+                self.assertEqual(flags, [False, False], beat)
+                for frame in frames:
+                    region = getattr(frame, "chart_region", None)
+                    self.assertIsNotNone(region, beat)
+                    height = (region[3] - region[1]) / frame.size[1]
+                    self.assertGreater(height, 0.50, beat)
+                    self.assertLess(height, 0.85, beat)
+                    self.assertGreater(region[1], 40, beat)
+                    texts = {layer.get("text") for layer in frame.text_layers or []}
+                    self.assertFalse(texts & banned, texts & banned)
+
+
 if __name__ == "__main__":
     unittest.main()

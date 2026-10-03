@@ -336,6 +336,13 @@ class BoardVisualTests(unittest.TestCase):
         ass = board_short.build_ass(topic, times, spoken, "हद क्यों?", "पोल")
         self.assertNotIn("Dialogue: 2,", ass)
         self.assertIn(board_short.DISCLAIMER, ass)
+        self.assertIn("\\fs39", ass)
+        import safe_area
+        box = board_short._top_box(
+            board_short.DISCLAIMER, 540, safe_area.SOURCE_Y, board_short.DISCLAIMER_SIZE,
+        )
+        self.assertTrue(safe_area.inside(box), box)
+        self.assertLess(box[3], safe_area.BRAND_Y)
         cues = board_short.plan_cues(spoken, times, None)
         self.assertTrue(cues)
 

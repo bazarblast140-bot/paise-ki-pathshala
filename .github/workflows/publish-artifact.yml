@@ -10,11 +10,21 @@ on:
         required: true
         type: string
       privacy:
-        description: "public or now uploads a new public video. unlisted stays unlisted."
+        description: "public schedules publishAt. now is immediate public. unlisted stays unlisted."
         required: true
         type: choice
         options: [public, unlisted, now]
         default: public
+      slot:
+        description: "IST clock for privacy=public. 16:00 is the afternoon Short."
+        required: false
+        type: string
+        default: "16:00"
+      date_ist:
+        description: "IST date YYYY-MM-DD for privacy=public. Blank uses today and refuses a missed slot."
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: paise-ki-pathshala-publish
@@ -54,10 +64,28 @@ jobs:
           fi
           test -s run/final.mp4
           test -s run/script.txt
+          test -s run/thumbnail.jpg
+      - name: Schedule publishAt
+        id: when
+        env:
+          PRIVACY: ${{ inputs.privacy }}
+          SLOT: ${{ inputs.slot }}
+          DATE_IST: ${{ inputs.date_ist }}
+        run: |
+          if [ "$PRIVACY" != "public" ]; then
+            echo "slot=" >> "$GITHUB_OUTPUT"
+            echo "date_ist=" >> "$GITHUB_OUTPUT"
+            echo "publish_at=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python slot_guard.py --publish-at "$SLOT" ${DATE_IST:+"$DATE_IST"} >> "$GITHUB_OUTPUT"
       - name: Upload a new YouTube video
         env:
           VIDEO_FORMAT: short
           PUBLISH_VISIBILITY: ${{ inputs.privacy == 'now' && 'public' || inputs.privacy }}
+          PUBLISH_SLOT_IST: ${{ steps.when.outputs.slot }}
+          PUBLISH_DATE_IST: ${{ steps.when.outputs.date_ist }}
+          PUBLISH_AT_UTC: ${{ steps.when.outputs.publish_at }}
           YOUTUBE_CLIENT_ID: ${{ secrets.YT_FIN_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
