@@ -250,10 +250,17 @@ class BoardVisualTests(unittest.TestCase):
         self.assertEqual(len(bars), 2)
         small = [bar for bar in bars if bar[4] == 4000.0][0]
         large = [bar for bar in bars if bar[4] == 200000.0][0]
-        self.assertGreater((large[3] - large[1]) / (small[3] - small[1]), 8)
-        card_bottom = frame.panel_box[3]
+        wide = (large[2] - large[0]) >= (large[3] - large[1])
+        if wide:
+            self.assertGreater((large[2] - large[0]) / max(1.0, (small[2] - small[0])), 8)
+        else:
+            self.assertGreater((large[3] - large[1]) / max(1.0, (small[3] - small[1])), 8)
+        region = frame.chart_region
         for bar in bars:
-            self.assertGreaterEqual(bar[1], card_bottom + 20)
+            self.assertGreaterEqual(bar[0], region[0] - 1)
+            self.assertGreaterEqual(bar[1], region[1] - 1)
+            self.assertLessEqual(bar[2], region[2] + 1)
+            self.assertLessEqual(bar[3], region[3] + 1)
         labels = [
             layer for layer in frame.text_layers
             if layer.get("text") in ("₹2,00,000", "₹4,000", "₹200,000")

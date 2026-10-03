@@ -7,11 +7,10 @@ ffmpeg, because Pillow only shapes Devanagari when libraqm is present and the
 local Windows build does not have it; libass shapes it everywhere.
 
 Layout (Shorts UI kept clear):
-  y   0-170   YouTube top bar            -> background only
-  y 165-1115  BOARD  x 25..1055          -> the picture; use the full safe width
-  y 1140-1270 headline + sub (Hindi, ASS)
-  y 1285-1405 captions (Hindi, ASS)
-  y 1470+     CTA / disclaimer            -> below the educational card
+  y   0-79    top margin                 -> background only
+  y  80-1328  BOARD  x 28..1052          -> the chart, about 65% of the frame
+  y 1388-1568 captions (Hindi)           -> under the chart
+  y 1604+     disclaimer / handle        -> below the captions
 """
 import math
 import pathlib
@@ -20,7 +19,8 @@ import subprocess
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 W, H = 1080, 1920
-BOARD = (25, 165, 1055, 1115)
+# 1248px is 65% of 1920. Side margins are 28px. Captions start at y=1388.
+BOARD = (28, 80, 1052, 1328)
 BG_TOP, BG_BOT = (8, 13, 26), (10, 32, 30)
 GREEN, RED, GRID = (34, 197, 94), (239, 68, 68), (40, 52, 72)
 # Semantic trade markers: keep SL softly red and target/entry softly green.

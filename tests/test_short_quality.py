@@ -191,7 +191,8 @@ class ChartProvenanceTests(unittest.TestCase):
         stamped = market_data.stamp(base, spec)
         self.assertNotEqual(stamped.getpixel((80, 1060)), base.getpixel((80, 1060)))
         frame = market_data.non_numeric_frame(_topic(), "hook", 0)
-        crop = frame.crop((25, 165, 1055, 1115))
+        import board_kit as kit
+        crop = frame.crop(kit.BOARD)
         gray = np.asarray(crop.convert("L"), dtype="float32")
         self.assertGreater(float((gray > 42).mean()), 0.01)
         self.assertGreater(float(gray.std()), 5.0)

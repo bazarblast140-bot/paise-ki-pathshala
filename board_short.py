@@ -128,8 +128,21 @@ def beat_images(topic, beat):
 
 
 def thumbnail(topic, out_path, hook_img=None):
-    """Tagda hook thumbnail: red ground, huge 2-line Hindi hook, the topic's own
-    board picture, big host, sticker. Hindi via libass."""
+    """Chart Board cover: the lesson chart, a bold ₹ amount, a 3–4 word Hindi hook.
+
+    Live shorts use this instead of the red host card. YouTube reads thumbnail.jpg.
+    Instagram sends that same file as the Reel cover.
+    """
+    if topic.get("_live_short") or topic.get("_spoken_beats") or hook_img is None:
+        img = S.paint_cover(topic)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        img.convert("RGB").save(out_path, quality=92)
+        return out_path
+    return _legacy_thumbnail(topic, out_path, hook_img)
+
+
+def _legacy_thumbnail(topic, out_path, hook_img=None):
+    """Older red host card. Kept for a caller that already painted a board crop."""
     W, H = K.W, K.H
     data = topic.get("cat") == "REAL DATA"
     img = Image.new("RGB", (W, H))
@@ -2530,7 +2543,12 @@ def _edge_voice_rate(c):
     if eleven_voice.paid_voice_allowed():
         voice = c["voice"]
         return voice.get("edge_voice", "hi-IN-SwaraNeural"), voice.get("edge_rate", "+10%")
-    return eleven_voice.PREVIEW_EDGE_VOICE, eleven_voice.PREVIEW_EDGE_RATE
+    voice, rate = eleven_voice.PREVIEW_EDGE_VOICE, eleven_voice.PREVIEW_EDGE_RATE
+    # Unpaid sample only. The paid path above does not read this.
+    sample = os.environ.get("EDGE_SAMPLE_RATE", "").strip()
+    if sample:
+        rate = sample
+    return voice, rate
 
 
 def _paid_voice_this_beat():
@@ -4647,6 +4665,8 @@ def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
     write_compat(topic, n, spoken, beat_times)
     (RUN / "narration.json").write_text(
         json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
+    topic["_spoken_beats"] = {**(topic.get("_spoken_beats") or {}), **spoken}
+    thumbnail(topic, RUN / "thumbnail.jpg")
     ok(f"wrote run/final.mp4 ({final_dur:.1f}s) + thumbnail.jpg")
     return {
         "final_dur": final_dur,
