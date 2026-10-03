@@ -9,6 +9,7 @@
   "pf_inflation",
   "peg_ratio",
   "cashflow_profit",
-  "operating_margin"
+  "operating_margin",
+  "eps_growth"
  ]
 }
