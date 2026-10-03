@@ -17,6 +17,10 @@ def short_duration_bounds():
     try:
         import json
         data = json.loads((RUN / "narration.json").read_text(encoding="utf-8"))
+        if str(data.get("source") or "") == "approved":
+            import board_short
+            lo, hi = board_short.APPROVED_VOICE_SECONDS
+            return lo, hi, f"{lo:.0f}-{hi:.0f}s"
         if str(data.get("live_beats") or "") == "four":
             return 45.0, 65.0, "45-65s"
         beats = data.get("beats") or {}
