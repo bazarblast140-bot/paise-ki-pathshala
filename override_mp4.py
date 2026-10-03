@@ -8,12 +8,14 @@ import json
 import os
 import subprocess
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
 RUN = Path(__file__).resolve().parent / "run"
 PREFIX = "/bazarblast140-bot/paise-ki-pathshala/releases/download/"
+API_REPO = "https://api.github.com/repos/bazarblast140-bot/paise-ki-pathshala"
 MAX_BYTES = 80 * 1024 * 1024
 
 
@@ -63,10 +65,92 @@ def probe(path):
     }
 
 
-def _download(url, dest):
+def _token():
+    return (os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or "").strip()
+
+
+def _keeps_auth(host):
+    """The API host may see the token. A storage redirect must not."""
+    return (host or "").lower().rstrip(".") in ("github.com", "api.github.com")
+
+
+class _DropAuthOffGitHub(urllib.request.HTTPRedirectHandler):
+    """Follow the asset redirect, and do not send the token to another host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is None:
+            return None
+        host = urllib.parse.urlparse(newurl).hostname
+        if _keeps_auth(host):
+            return new
+        for bag in (new.headers, getattr(new, "unredirected_hdrs", {})):
+            for key in [k for k in bag if k.lower() == "authorization"]:
+                del bag[key]
+        return new
+
+
+def _open(req):
+    opener = urllib.request.build_opener(_DropAuthOffGitHub)
+    return opener.open(req, timeout=120)
+
+
+def _read(url, headers):
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with _open(req) as resp:
+            return resp.read(MAX_BYTES + 1)
+    except urllib.error.HTTPError as exc:
+        die(f"HTTP {exc.code} for {url}")
+
+
+def _release_name(url):
+    parsed = urllib.parse.urlparse(url)
+    tag, name = parsed.path[len(PREFIX):].split("/")
+    return urllib.parse.unquote(tag), urllib.parse.unquote(name)
+
+
+def _download_public(url):
     req = urllib.request.Request(url, headers={"User-Agent": "paise-ki-pathshala"})
     with urllib.request.urlopen(req, timeout=120) as resp:
-        blob = resp.read(MAX_BYTES + 1)
+        return resp.read(MAX_BYTES + 1)
+
+
+def _download_private(url, token):
+    """Resolve the release asset with the API, then download that asset id."""
+    tag, name = _release_name(url)
+    meta_url = f"{API_REPO}/releases/tags/{urllib.parse.quote(tag, safe='')}"
+    auth = {
+        "Authorization": f"Bearer {token}",
+        "User-Agent": "paise-ki-pathshala",
+        "Accept": "application/vnd.github+json",
+    }
+    raw = _read(meta_url, auth)
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        die(f"release {tag} did not return JSON")
+    asset_id = None
+    for asset in payload.get("assets") or []:
+        if not isinstance(asset, dict) or asset.get("name") != name:
+            continue
+        raw_id = asset.get("id")
+        if isinstance(raw_id, int) and not isinstance(raw_id, bool):
+            asset_id = raw_id
+            break
+    if not asset_id:
+        die(f"release {tag} has no asset named {name}")
+    asset_url = f"{API_REPO}/releases/assets/{asset_id}"
+    return _read(asset_url, {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/octet-stream",
+        "User-Agent": "paise-ki-pathshala",
+    })
+
+
+def _download(url, dest):
+    token = _token()
+    blob = _download_private(url, token) if token else _download_public(url)
     if len(blob) > MAX_BYTES:
         die("override mp4 is larger than 80 MB")
     if len(blob) < 1000:

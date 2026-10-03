@@ -52,6 +52,9 @@ permissions:
 
 jobs:
   publish:
+    permissions:
+      actions: read
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -87,6 +90,7 @@ jobs:
         if: inputs.override_mp4_url != ''
         env:
           OVERRIDE_MP4_URL: ${{ inputs.override_mp4_url }}
+          GH_TOKEN: ${{ github.token }}
         run: python override_mp4.py
       - name: Schedule publishAt
         id: when
