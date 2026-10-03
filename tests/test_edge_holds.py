@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -137,6 +138,8 @@ class WhisperRetryTests(unittest.TestCase):
         self.assertIn(0.2, kwargs["temperature"])
         self.assertIn(0.4, kwargs["temperature"])
         self.assertTrue(kwargs["vad_filter"])
+        self.assertEqual(kwargs["beam_size"], 1)
+        self.assertEqual(kwargs["language"], "hi")
 
         decoded = []
 
@@ -152,6 +155,61 @@ class WhisperRetryTests(unittest.TestCase):
                 beats=("hook", "pehchan"),
             )
         self.assertEqual(decoded, [1, 1])
+
+    def test_a_weak_scene_is_rescored_with_beam_5_and_a_worse_pass_still_fails(self):
+        import sync_gate
+        script = "अब आगे लिमिट पहले लिखो हिट होते ही टर्मिनल बंद"
+        scenes = [{"start": 42.0, "end": 46.0, "beat": "karein", "kind": "chart-karein", "show": []}]
+        beats = {"karein": script}
+        times = {"karein": (42.0, 59.0)}
+        bad = [
+            {"word": "parlé", "start": 42.2, "end": 42.6},
+            {"word": "fasting", "start": 43.0, "end": 43.4},
+        ]
+        # Beat-file times. upgrade_weak_scenes adds the beat start itself.
+        good = [
+            {"word": word, "start": 0.1 + i * 0.4, "end": 0.3 + i * 0.4}
+            for i, word in enumerate(script.split())
+        ]
+        self.assertEqual(sync_gate.MIN_RECALL, 0.5)
+        self.assertEqual(sync_gate._RETRY_BEAM, 5)
+
+        def fake_pcm(_audio, beam_size=1):
+            calls.append(beam_size)
+            return list(good)
+
+        calls = []
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "karein.wav"
+            path.write_bytes(b"wav")
+            with mock.patch.object(sync_gate, "pcm", return_value=np.zeros(1600, dtype=np.float32)), \
+                 mock.patch.object(sync_gate, "transcribe_pcm", side_effect=fake_pcm):
+                report = sync_gate.upgrade_weak_scenes(
+                    bad, scenes, beats, times, [], {"karein": path},
+                )
+        self.assertEqual(calls, [5])
+        self.assertGreaterEqual(report["scenes"][0]["recall"], sync_gate.MIN_RECALL)
+        self.assertTrue(report["ok"])
+
+        def still_bad(_audio, beam_size=1):
+            calls.append(beam_size)
+            return [
+                {"word": "parlé", "start": 0.2, "end": 0.6},
+                {"word": "fasting", "start": 1.0, "end": 1.4},
+            ]
+
+        calls = []
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "karein.wav"
+            path.write_bytes(b"wav")
+            with mock.patch.object(sync_gate, "pcm", return_value=np.zeros(1600, dtype=np.float32)), \
+                 mock.patch.object(sync_gate, "transcribe_pcm", side_effect=still_bad):
+                held = sync_gate.upgrade_weak_scenes(
+                    bad, scenes, beats, times, [], {"karein": path},
+                )
+        self.assertEqual(calls, [5])
+        self.assertLess(held["scenes"][0]["recall"], sync_gate.MIN_RECALL)
+        self.assertFalse(held["ok"])
 
 
 class SpacedMinusTests(unittest.TestCase):

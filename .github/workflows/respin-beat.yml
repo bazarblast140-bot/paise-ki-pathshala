@@ -83,5 +83,6 @@ jobs:
             run/verify_meta.json
             run/self_review.json
             run/topic.json
+            run/voice.wav
           if-no-files-found: error
           retention-days: 14

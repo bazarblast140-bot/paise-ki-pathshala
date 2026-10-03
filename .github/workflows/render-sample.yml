@@ -39,5 +39,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sample-short
-          path: run/final.mp4
+          path: |
+            run/final.mp4
+            run/voice.wav
           if-no-files-found: error

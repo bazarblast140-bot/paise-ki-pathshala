@@ -6,6 +6,7 @@ from pathlib import Path
 import board_kit
 import board_scenes
 import safe_area
+import scene_frames
 
 ROOT = Path(__file__).resolve().parents[1]
 PEHCHAN = (
@@ -201,6 +202,51 @@ class ChartBoardOnlyPathTests(unittest.TestCase):
                     self.assertGreater(region[1], 40, beat)
                     texts = {layer.get("text") for layer in frame.text_layers or []}
                     self.assertFalse(texts & banned, texts & banned)
+
+
+class ChartPolishTests(unittest.TestCase):
+    def test_capital_amount_on_the_green_bar_is_white_and_bold(self):
+        import numpy as np
+        topic = _topic()
+        line = (
+            "अब इसे पहचानो। कैपिटल ₹2,00,000 है, तो डेली लॉस लिमिट दो परसेंट, "
+            "यानी ₹4,000। ये चार हज़ार पूरे दिन का टोटल लॉस है।"
+        )
+        topic["_spoken_beats"] = {"pehchan": line}
+        topic["_scene_cards"] = {"pehchan": [line]}
+        frame = scene_frames.frames_for(topic, "pehchan", 1, {"mode": "schematic"})[0][0]
+        layer = next(
+            item for item in frame.text_layers
+            if "2,00,000" in str(item.get("text") or "")
+        )
+        self.assertIn("Bold", str(layer.get("font") or ""))
+        sprite = np.asarray(layer["image"])
+        ink = sprite[sprite[..., 3] > 128][:, :3].astype(int)
+        mean = ink.mean(axis=0)
+        self.assertGreater(mean[0], 240)
+        self.assertGreater(mean[1], 240)
+        self.assertGreater(mean[2], 200)
+        gold = np.array(scene_frames.GOLD)
+        self.assertGreater(float(np.abs(mean - gold).mean()), 40)
+
+    def test_matlab_stop_line_keeps_moving_across_the_beat(self):
+        import numpy as np
+        import scene_pace
+        topic = _topic()
+        matlab = (
+            "मतलब ये है। दो परसेंट की डेली लॉस लिमिट बुरे दिन को छोटा रखती है, "
+            "ताकि लॉस चार हज़ार रुपये से ज़्यादा न जाए। दो लाख रुपये का दो परसेंट "
+            "बराबर चार हज़ार रुपये, यानी कैपिटल का सिर्फ दो परसेंट।"
+        )
+        topic["_spoken_beats"] = {"matlab": matlab}
+        topic["_scene_cards"] = {"matlab": [matlab] * 4}
+        frames, _flags = scene_frames.frames_for(topic, "matlab", 4, {"mode": "schematic"})
+        self.assertEqual(frames[0].chart_spec["concept"], "pnl_stop")
+        posed = [np.asarray(frame.animate(0).convert("RGB"), dtype=np.int16) for frame in frames]
+        samples = [(index * 4.0, image) for index, image in enumerate(posed)]
+        self.assertEqual(scene_pace.unchanged_spans(samples), [])
+        for earlier, later in zip(posed, posed[1:]):
+            self.assertGreaterEqual(float(np.abs(earlier - later).mean()), 1.0)
 
 
 if __name__ == "__main__":

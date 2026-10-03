@@ -669,9 +669,15 @@ def transcribe_beats(beat_audio, beat_times, beats=("hook", "pehchan", "matlab",
 _WHISPER_TEMPERATURES = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
 
 
-def _decode(audio, vad_filter):
-    # beam_size stays 1: a wider beam on this CPU build is not stable.
-    # condition_on_previous_text stays off so a repeated token is not fed back.
+# The first pass stays on beam 1. A weak scene is decoded again at this beam
+# before the hard recall bar fails it. The bar itself does not move.
+_RETRY_BEAM = 5
+
+
+def _decode(audio, vad_filter, beam_size=1):
+    # beam_size stays 1 on the first pass: a wider beam on a whole file is slow
+    # and was unstable. condition_on_previous_text stays off so a repeated
+    # token is not fed back.
     # VAD is on when the caller asks. A quiet Hindi beat that VAD drops is
     # retried without it.
     # Log-prob stays off. A normal Hindi line often sits under the default
@@ -680,7 +686,7 @@ def _decode(audio, vad_filter):
     # the repeated-token loop.
     segments, _info = model().transcribe(
         audio, language="hi", word_timestamps=True, vad_filter=vad_filter,
-        beam_size=1, temperature=_WHISPER_TEMPERATURES,
+        beam_size=int(beam_size), temperature=_WHISPER_TEMPERATURES,
         compression_ratio_threshold=2.4, log_prob_threshold=None,
         condition_on_previous_text=False,
     )
@@ -702,13 +708,85 @@ def _repetitive(words):
     return max(counts.values()) / len(words) > 0.45
 
 
-def transcribe_pcm(audio):
+def transcribe_pcm(audio, beam_size=1):
     """One beat. VAD first when it returns a real line; temperature fallback is inside the decode."""
     if audio.size == 0:
         raise RuntimeError("empty audio")
-    words = _decode(audio, True)
+    words = _decode(audio, True, beam_size=beam_size)
     if not words or _repetitive(words):
-        alt = _decode(audio, False)
+        alt = _decode(audio, False, beam_size=beam_size)
         if alt and (not words or not _repetitive(alt)):
             return alt
     return words
+
+
+def _worst_recall(report, beat):
+    rows = [row for row in (report.get("scenes") or []) if row.get("beat") == beat]
+    if not rows:
+        return 1.0
+    return min(float(row.get("recall") or 0) for row in rows)
+
+
+def _words_on_timeline(path, t0, beam_size):
+    """Word times for one beat file, shifted onto the finished timeline."""
+    fresh = transcribe_pcm(pcm(path), beam_size=beam_size)
+    shifted = []
+    for word in fresh:
+        text = str(word.get("word") or "").strip()
+        if not text:
+            continue
+        shifted.append({
+            "word": text,
+            "start": float(word.get("start") or 0) + float(t0),
+            "end": float(word.get("end") or 0) + float(t0),
+        })
+    return shifted
+
+
+def upgrade_weak_scenes(words, scenes, beats_text, beat_times, answer_terms, beat_audio):
+    """Re-decode a weak scene's beat with beam 5 and keep the clearer transcript.
+
+    MIN_RECALL does not change. A second pass that scores worse is discarded,
+    and the scene still fails.
+    """
+    report = check(words, scenes, beats_text, beat_times, answer_terms)
+    report["words"] = list(words or [])
+    if report.get("ok"):
+        return report
+    weak = []
+    for row in report.get("scenes") or []:
+        beat = row.get("beat") or ""
+        if beat in weak or beat not in (beat_audio or {}) or beat not in (beat_times or {}):
+            continue
+        if float(row.get("recall") or 0) + 1e-9 < MIN_RECALL:
+            path = pathlib.Path(beat_audio[beat])
+            if path.is_file():
+                weak.append(beat)
+    upgraded = list(words or [])
+    for beat in weak:
+        span = beat_times[beat]
+        t0, t1 = float(span[0]), float(span[1])
+        try:
+            fresh = _words_on_timeline(beat_audio[beat], t0, _RETRY_BEAM)
+        except Exception as exc:  # noqa: BLE001 — the first transcript still stands
+            print(f"[sync] stronger whisper skipped for {beat}: {exc}")
+            continue
+        if not fresh:
+            continue
+        trial = [
+            word for word in upgraded
+            if not (
+                float(word.get("end") or 0) >= t0 - WINDOW_PAD
+                and float(word.get("start") or 0) <= t1 + WINDOW_PAD
+            )
+        ]
+        trial.extend(fresh)
+        trial.sort(key=lambda word: float(word.get("start") or 0))
+        trial_report = check(trial, scenes, beats_text, beat_times, answer_terms)
+        if _worst_recall(trial_report, beat) > _worst_recall(report, beat) + 1e-9:
+            upgraded = trial
+            report = trial_report
+            report["words"] = upgraded
+            print(f"[sync] stronger whisper kept for {beat} (beam {_RETRY_BEAM})")
+    report["words"] = upgraded
+    return report

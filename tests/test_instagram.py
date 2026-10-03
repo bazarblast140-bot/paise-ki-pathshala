@@ -482,6 +482,95 @@ class WatchdogVerdictTests(unittest.TestCase):
         self.assertIn("paise-cover", reel.call_args.args[2])
 
 
+class ApprovedReelTests(unittest.TestCase):
+    """APPROVED plus a YouTube upload posts the Reel even when verify is not READY."""
+
+    def _tree(self, d, *, uploaded="jgS2HgMHYzc"):
+        run = Path(d)
+        (run / "final.mp4").write_bytes(b"x" * 2000)
+        (run / "script.txt").write_text(SCRIPT, encoding="utf-8")
+        (run / "topic.json").write_text(json.dumps(TOPIC), encoding="utf-8")
+        (run / "report.md").write_text("VERDICT: [NEEDS FIX — sync hold]\n", encoding="utf-8")
+        (run / "thumbnail.jpg").write_bytes(b"\xff\xd8\xff" + b"cover")
+        if uploaded:
+            (run / "uploaded.txt").write_text(uploaded + "\n", encoding="utf-8")
+        return run
+
+    def _env(self, **extra):
+        env = {
+            "IG_CROSSPOST": "1", "VIDEO_FORMAT": "short", "PIPELINE_MODE": "",
+            "BOARD_QA": "", "TOPIC_KEY": "", "IG_ONLY": "",
+            "IG_USER_ID": "1789", "IG_ACCESS_TOKEN": "ig-token-test",
+        }
+        env.update(extra)
+        return env
+
+    def test_approved_upload_posts_when_the_verdict_is_not_ready(self):
+        with tempfile.TemporaryDirectory() as d:
+            run = self._tree(d)
+            env = self._env(APPROVED="true")
+            with mock.patch.object(IG, "RUN", run), mock.patch.dict("os.environ", env), \
+                 mock.patch.object(IG, "video_format", return_value="short"), \
+                 mock.patch.object(IG, "fetch_recent_media", return_value=[]), \
+                 mock.patch.object(IG, "host_mp4", return_value="https://example.com/a.mp4"), \
+                 mock.patch.object(IG, "host_cover", return_value="https://example.com/paise-cover.jpg") as cover, \
+                 mock.patch.object(IG, "publish_reel", return_value="reel-1") as reel:
+                IG.main()
+            self.assertEqual((run / "ig_reel.txt").read_text(encoding="utf-8"), "reel-1")
+        self.assertEqual(cover.call_args.args[0], run / "thumbnail.jpg")
+        self.assertIn("paise-cover", reel.call_args.args[2])
+        self.assertIn("jgS2HgMHYzc", reel.call_args.args[1])
+
+    def test_a_hold_without_approval_still_skips_the_reel(self):
+        with tempfile.TemporaryDirectory() as d:
+            run = self._tree(d)
+            env = self._env(APPROVED="false")
+            with mock.patch.object(IG, "RUN", run), mock.patch.dict("os.environ", env), \
+                 mock.patch.object(IG, "video_format", return_value="short"), \
+                 mock.patch.object(IG, "publish_reel", side_effect=AssertionError("must not publish")):
+                with self.assertRaises(SystemExit) as cm:
+                    IG.main()
+        self.assertEqual(cm.exception.code, 0)
+
+    def test_ig_only_posts_the_cover_and_refuses_a_logged_reel(self):
+        workflow = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "publish-artifact.yml"
+        text = workflow.read_text(encoding="utf-8")
+        self.assertIn("ig_only:", text)
+        self.assertIn("youtube_video_id:", text)
+        self.assertIn("inputs.ig_only != 'true'", text)
+        schedule = text.split("name: Schedule publishAt", 1)[1].split("name: Upload a new YouTube video", 1)[0]
+        self.assertIn("inputs.ig_only != 'true'", schedule)
+        self.assertIn("IG_ONLY:", text)
+        self.assertIn("YOUTUBE_VIDEO_ID:", text)
+        with tempfile.TemporaryDirectory() as d:
+            run = self._tree(d, uploaded="")
+            env = self._env(APPROVED="true", IG_ONLY="true", YOUTUBE_VIDEO_ID="jgS2HgMHYzc")
+            with mock.patch.object(IG, "RUN", run), mock.patch.dict("os.environ", env), \
+                 mock.patch.object(IG, "video_format", return_value="short"), \
+                 mock.patch.object(IG, "fetch_recent_media", return_value=[]), \
+                 mock.patch.object(IG, "host_mp4", return_value="https://example.com/a.mp4"), \
+                 mock.patch.object(IG, "host_cover", return_value="https://example.com/paise-cover.jpg"), \
+                 mock.patch.object(IG, "publish_reel", return_value="reel-2") as reel, \
+                 mock.patch("ledger.find_ig_media", return_value=""):
+                IG.main()
+            self.assertEqual((run / "uploaded.txt").read_text(encoding="utf-8").strip(), "jgS2HgMHYzc")
+            self.assertTrue(reel.called)
+            self.assertIn("jgS2HgMHYzc", reel.call_args.args[1])
+        with tempfile.TemporaryDirectory() as d:
+            run = self._tree(d, uploaded="")
+            env = self._env(APPROVED="true", IG_ONLY="true", YOUTUBE_VIDEO_ID="jgS2HgMHYzc")
+            err = __import__("io").StringIO()
+            with mock.patch.object(IG, "RUN", run), mock.patch.dict("os.environ", env), \
+                 mock.patch.object(IG, "video_format", return_value="short"), \
+                 mock.patch.object(IG, "publish_reel", side_effect=AssertionError("must not post twice")), \
+                 mock.patch("ledger.find_ig_media", return_value="already-reel"), \
+                 mock.patch("sys.stderr", err):
+                with self.assertRaises(SystemExit) as cm:
+                    IG.main()
+        self.assertEqual(cm.exception.code, 1)
+        self.assertIn("Reel already logged for jgS2HgMHYzc", err.getvalue())
+
+
 READY_META = {"ai_verdict_valid": True, "verdict": "READY", "public_ready": True}
 ATR_TITLE = "SL बार-बार हिट? ATR से दूरी तय करो"
 

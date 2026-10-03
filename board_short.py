@@ -3856,26 +3856,15 @@ def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, h
     (RUN / "voice_list.txt").write_text("\n".join(f"file '{p}'" for p in parts), encoding="utf-8")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", "voice_list.txt",
                     "-c", "copy", "voice.wav"], cwd=RUN, check=True)
-    # Clicks sit under the voice. The wav length does not change, so narration
-    # is not delayed, and the music mix below still starts from this same file.
+    # voice.wav stays the clean narration so a later remix needs no new TTS.
+    # Whoosh and the callout click go on mixed.wav. There is no bed and no air.
+    mixed = RUN / "mixed.wav"
+    bed_audio.mix_into(RUN / "voice.wav", scenes, mixed)
     if str(hook_line or "").strip():
-        hook_sfx.mix_file(RUN / "voice.wav", hook_motion.click_times(hook_line))
-    bed = ROOT / "assets" / "bed" / "bed.wav"
-    if bed.exists():
-        mixed = RUN / "mixed.wav"
-        bed_audio.mix_into(RUN / "voice.wav", scenes, mixed)
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(mixed), "-c:a", "aac", "-b:a", "192k",
-                        "audio.m4a"], cwd=RUN, check=True)
-    else:
-        music = ROOT / "assets" / "music.mp3"
-        if music.exists():
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "voice.wav", "-stream_loop", "-1", "-i", str(music),
-                            "-filter_complex", "[0:a]volume=1.0[v];[1:a]volume=0.10[m];"
-                            "[v][m]amix=inputs=2:duration=first:dropout_transition=2[a]",
-                            "-map", "[a]", "-c:a", "aac", "-b:a", "192k", "audio.m4a"], cwd=RUN, check=True)
-        else:
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "voice.wav", "-c:a", "aac", "-b:a", "192k",
-                            "audio.m4a"], cwd=RUN, check=True)
+        hook_sfx.mix_file(mixed, hook_motion.click_times(hook_line))
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(mixed),
+                    "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+                    "-c:a", "aac", "-b:a", "192k", "audio.m4a"], cwd=RUN, check=True)
     (RUN / "subs.ass").write_text(ass_text, encoding="utf-8")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "silent.mp4", "-i", "audio.m4a",
                     "-vf", f"fps={fps},ass=subs.ass", *X264, "-c:a", "copy", "-shortest", "final.mp4"],
@@ -3974,9 +3963,10 @@ def _sync_report(topic, narration, scenes, beat_audio, beat_times, spec, words=N
             })
         lesson = (spec or {}).get("atr") or topic.get("_atr")
         terms = sync_gate.answer_terms_for(narration.get("title") or "", lesson)
-        report = sync_gate.check(
-            words, rows, narration.get("beats") or {}, beat_times, terms,
+        report = sync_gate.upgrade_weak_scenes(
+            words, rows, narration.get("beats") or {}, beat_times, terms, beat_audio,
         )
+        words = report.get("words") or words
         report["words"] = [
             {"word": w.get("word") or "", "start": float(w.get("start") or 0),
              "end": float(w.get("end") or 0)}

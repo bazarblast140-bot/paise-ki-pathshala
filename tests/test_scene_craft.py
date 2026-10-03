@@ -745,3 +745,57 @@ class BedTests(unittest.TestCase):
         lufs = float(line.split()[1])
         self.assertGreaterEqual(lufs, -24.0)
         self.assertLessEqual(lufs, -20.0)
+
+
+class MixLevelTests(unittest.TestCase):
+    def test_no_bed_is_mixed_and_sfx_peak_is_18db_under_the_voice(self):
+        import inspect
+        import tempfile
+        from unittest import mock
+
+        import numpy as np
+
+        import bed_audio
+        self.assertEqual(bed_audio.OLD_WHOOSH_GAIN, 0.85)
+        self.assertEqual(bed_audio.SFX_OF_OLD, 0.085)
+        self.assertEqual(bed_audio.SFX_UNDER_DB, 18.0)
+        src = inspect.getsource(board_short.assemble)
+        self.assertIn("loudnorm=I=-14:TP=-1.5:LRA=11", src)
+        self.assertNotIn("bed.wav", src)
+        self.assertNotIn("music.mp3", src)
+        self.assertNotIn('mix_file(RUN / "voice.wav"', src)
+        live = (ROOT / ".github" / "workflows" / "paise-ki-pathshala.yml").read_text(encoding="utf-8")
+        self.assertIn("run/voice.wav", live)
+
+        sr = bed_audio.SR
+        t = np.arange(sr, dtype=np.float64) / sr
+        mono = (0.2 * np.sin(2 * np.pi * 180.0 * t)).astype(np.float32)
+        stereo = np.column_stack([mono, mono])
+        scenes = [{"start": 0.0, "callout": False}, {"start": 0.40, "callout": True}]
+        opened = []
+        real_read = bed_audio._read
+
+        def spy(path):
+            opened.append(Path(path).name)
+            return real_read(path)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            voice = Path(tmp) / "voice.wav"
+            mixed = Path(tmp) / "mixed.wav"
+            bed_audio._write(voice, stereo, sr)
+            before = voice.read_bytes()
+            with mock.patch.object(bed_audio, "_read", side_effect=spy):
+                bed_audio.mix_into(voice, scenes, mixed)
+            self.assertEqual(voice.read_bytes(), before)
+            got, got_sr = bed_audio._read(mixed)
+        self.assertEqual(got_sr, sr)
+        self.assertNotIn("bed.wav", opened)
+        self.assertIn("whoosh.wav", opened)
+        self.assertIn("click.wav", opened)
+        added = got[:, 0] - mono
+        quiet = added[: int(0.35 * sr)]
+        self.assertLess(float(np.max(np.abs(quiet))), 1e-4)
+        voice_rms = float(np.sqrt(np.mean(np.square(mono.astype(np.float64)))))
+        peak = float(np.max(np.abs(added)))
+        self.assertGreater(peak, 0.0)
+        self.assertLessEqual(peak, voice_rms * (10 ** (-18.0 / 20.0)) + 1e-5)

@@ -150,6 +150,7 @@ jobs:
             run/ig_reel.txt
             run/ig_status.txt
             run/thumbnail.jpg
+            run/voice.wav
 
   # Khali slot ka alert alag hai. Fill sirf tab jab next unfilled slot
   # 26h lookahead me ho (aur kam se kam 2h door). privacy=public -> private + publishAt. Instant
