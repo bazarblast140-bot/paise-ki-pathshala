@@ -166,7 +166,11 @@ def crosspost_or_defer(yt_uploaded, now=None):
     run/ig_status.txt and does not call Instagram.
     """
     import ig_defer
+    import qa_hold
     from publish_guard import blocked_reason
+    if qa_hold.hold_active() or qa_hold.run_is_held(RUN):
+        print("[qa] Instagram and Facebook cross-post held until Approve QA")
+        return 0, False, False
     ig_on = (
         video_format() == "short"
         and os.environ.get("IG_CROSSPOST", "").strip().lower() in ("1", "true", "yes", "on")

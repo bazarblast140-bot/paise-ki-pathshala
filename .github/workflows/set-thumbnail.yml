@@ -1,0 +1,42 @@
+name: Set thumbnail
+
+# Put a release jpeg on a video that is already on the channel.
+# Does not change privacy, publishAt, or the Reel.
+on:
+  workflow_dispatch:
+    inputs:
+      youtube_video_id:
+        description: "YouTube video id whose thumbnail to replace"
+        required: true
+        type: string
+      thumb_url:
+        description: "Only https://github.com/bazarblast140-bot/paise-ki-pathshala/releases/download/<tag>/<file>.jpg"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  thumbnail:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Download the release jpeg and set the thumbnail
+        env:
+          YOUTUBE_VIDEO_ID: ${{ inputs.youtube_video_id }}
+          THUMB_URL: ${{ inputs.thumb_url }}
+          GH_TOKEN: ${{ github.token }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YT_FIN_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
+          EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
+        run: python set_thumbnail.py

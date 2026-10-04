@@ -292,8 +292,22 @@ def build_tags(title, c):
     return kept or ["stock market hindi", "trading hindi", "paise ki pathshala"]
 
 
-def set_thumbnail(yt, video_id):
-    thumb = RUN / "thumbnail.jpg"
+def require_channel(yt):
+    """Refuse the upload unless the token is the finance channel."""
+    expected = os.environ.get("EXPECTED_CHANNEL_ID", "").strip()
+    if not expected:
+        die("EXPECTED_CHANNEL_ID set nahi hai — pata nahi kis channel par upload karna hai. Upload roka.")
+    me = yt.channels().list(part="snippet", mine=True).execute().get("items") or []
+    got = me[0]["id"] if me else None
+    if got != expected:
+        who = me[0]["snippet"]["title"] if me else "koi channel nahi"
+        die(f"Token '{who}' ({got}) ka hai, par upload {expected} par hona tha. Upload roka.")
+    ok(f"channel check OK: {me[0]['snippet']['title']}")
+    return me[0]
+
+
+def set_thumbnail(yt, video_id, path=None):
+    thumb = Path(path) if path else (RUN / "thumbnail.jpg")
     if not thumb.exists():
         print("[skip] no run/thumbnail.jpg — set one manually in YouTube Studio")
         return
@@ -359,6 +373,11 @@ def main():
     fresh = market_data.public_freshness_reason(RUN, visibility, publish_at)
     if fresh:
         die(fresh + ". Refusing a public upload.")
+    import qa_hold
+    visibility, publish_at, held = qa_hold.apply_hold(visibility, publish_at)
+    if held:
+        qa_hold.mark_run(RUN)
+        print("[qa] automatic upload held: private, no publishAt, no Instagram or Facebook")
 
     print(f"\n  Title      : {title}")
     print(f"  Tags       : {', '.join(tags) or '(none)'}")
@@ -369,16 +388,7 @@ def main():
     # invalid_grant message (exit 3) instead of a raw traceback.
     from yt_credentials import youtube_client_or_exit
     yt = youtube_client_or_exit()
-
-    expected = os.environ.get("EXPECTED_CHANNEL_ID", "").strip()
-    if not expected:
-        die("EXPECTED_CHANNEL_ID set nahi hai — pata nahi kis channel par upload karna hai. Upload roka.")
-    me = yt.channels().list(part="snippet", mine=True).execute().get("items") or []
-    got = me[0]["id"] if me else None
-    if got != expected:
-        who = me[0]["snippet"]["title"] if me else "koi channel nahi"
-        die(f"Token '{who}' ({got}) ka hai, par upload {expected} par hona tha. Upload roka.")
-    ok(f"channel check OK: {me[0]['snippet']['title']}")
+    require_channel(yt)
 
     from googleapiclient.http import MediaFileUpload
     body = {
@@ -417,7 +427,13 @@ def main():
 
     video_id = resp["id"]
     (RUN / "uploaded.txt").write_text(video_id, encoding="utf-8")
-    record_publish(video_id, publish_at, slot, **ledger_voice_kwargs(RUN), credits=credit_log.ledger_fields())
+    record_publish(
+        video_id, publish_at, slot,
+        pending_qa=held,
+        source_run=(os.environ.get("GITHUB_RUN_ID") or "").strip() or None if held else None,
+        **ledger_voice_kwargs(RUN),
+        credits=credit_log.ledger_fields(),
+    )
     ok(f"Uploaded as {visibility}: https://youtu.be/{video_id}")
     set_thumbnail(yt, video_id)
     print(f"\nEdit before going public: https://studio.youtube.com/video/{video_id}/edit")
