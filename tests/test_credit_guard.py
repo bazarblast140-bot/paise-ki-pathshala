@@ -520,10 +520,11 @@ class PreviewVoiceTests(unittest.TestCase):
                 self.assertEqual(credits["elevenlabs_characters_sent"], 0)
                 self.assertEqual(credits["tts_engine"], "edge")
 
-    def test_live_slot_stops_below_1000_and_on_api_error(self):
-        """Below 1,000 characters, or a subscription API error, the live slot stops.
+    def test_live_slot_uses_edge_below_1000_and_stops_on_api_error(self):
+        """Below 1,000 characters the live slot speaks Edge and does not POST.
 
-        It does not speak Edge. The buffer fill path is what covers the slot.
+        A subscription API error still stops. It does not speak Edge.
+        At the floor, with enough characters for the Short, Rudra is used.
         """
         self.assertEqual(eleven_voice.LIVE_CREDIT_FLOOR, 1000)
         src = (ROOT / "board_short.py").read_text(encoding="utf-8")
@@ -540,11 +541,19 @@ class PreviewVoiceTests(unittest.TestCase):
         def post(*_args, **_kwargs):
             raise AssertionError("ElevenLabs TTS must not run below the floor")
 
-        with self.assertRaises(SystemExit):
-            self._speak_with(
-                {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
-                get=low, post=post,
-            )
+        engine, meta, credits, posts, calls = self._speak_with(
+            {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
+            get=low, post=post,
+        )
+        self.assertEqual(engine, "edge")
+        self.assertEqual(posts, [])
+        self.assertGreaterEqual(len(calls), 1)
+        self.assertEqual(calls[0], ("hi-IN-SwaraNeural", "+0%"))
+        self.assertEqual(meta["engine"], "edge")
+        self.assertTrue(meta["elevenlabs_attempted"])
+        self.assertIn("1000", meta["fallback_reason"])
+        self.assertEqual(credits["tts_engine"], "edge")
+        self.assertEqual(credits["elevenlabs_characters_sent"], 0)
 
         def at_floor(_url, **_kwargs):
             return _Resp(200, {

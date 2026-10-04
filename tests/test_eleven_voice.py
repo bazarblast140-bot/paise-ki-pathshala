@@ -163,7 +163,7 @@ class ShortFallbackTests(unittest.TestCase):
         self.assertEqual(merged["voice"]["edge_voice"], "hi-IN-MadhurNeural")
         self.assertEqual(merged["voice"]["edge_rate"], "+0%")
 
-    def test_quota_on_a_later_beat_stops_the_live_slot(self):
+    def test_quota_on_a_later_beat_revoices_the_slot_on_edge(self):
         posts = {"n": 0, "urls": []}
 
         def post(url, **_kwargs):
@@ -184,18 +184,18 @@ class ShortFallbackTests(unittest.TestCase):
 
         edge.calls = []
         buf = io.StringIO()
-        with tempfile.TemporaryDirectory() as tmp, \
-             mock.patch.object(self.board, "RUN", Path(tmp)), \
-             mock.patch.dict(os.environ, self._env()), \
-             mock.patch("requests.get", get), \
-             mock.patch("requests.post", post), \
-             mock.patch.object(self.board, "_edge", edge), \
-             redirect_stdout(buf):
-            with self.assertRaises(SystemExit):
-                self.board.synthesize_short_voices(self._spoken(), VOICE)
+        with tempfile.TemporaryDirectory() as tmp:
             run = Path(tmp)
+            with mock.patch.object(self.board, "RUN", run), \
+                 mock.patch.dict(os.environ, {**self._env(), "GITHUB_STEP_SUMMARY": str(run / "summary.txt")}), \
+                 mock.patch("requests.get", get), \
+                 mock.patch("requests.post", post), \
+                 mock.patch.object(self.board, "_edge", edge), \
+                 redirect_stdout(buf):
+                engine = self.board.synthesize_short_voices(self._spoken(), VOICE)
             meta = json.loads((run / "voice_meta.json").read_text(encoding="utf-8"))
             text = buf.getvalue()
+            summary = (run / "summary.txt").read_text(encoding="utf-8")
             published = run / "published.json"
             published.write_text("[]\n", encoding="utf-8")
             with mock.patch.object(ledger, "PATH", published), \
@@ -206,16 +206,19 @@ class ShortFallbackTests(unittest.TestCase):
                 )
             entry = json.loads(published.read_text(encoding="utf-8"))[-1]
 
+        self.assertEqual(engine, "edge")
         self.assertEqual(posts["n"], 2)
         self.assertTrue(all("7qBNUtXRGP0jPi0H4r8k" in url for url in posts["urls"]))
-        self.assertEqual(edge.calls, [])
-        self.assertEqual(meta["engine"], "elevenlabs")
+        self.assertEqual(len(edge.calls), len(self.board.BEATS))
+        self.assertTrue(all(call == ("hi-IN-SwaraNeural", "+0%") for call in edge.calls))
+        self.assertEqual(meta["engine"], "edge")
         self.assertTrue(meta["elevenlabs_attempted"])
         self.assertIn("insufficient_credits", meta["fallback_reason"])
-        self.assertIn("[credits] STOP", text)
-        self.assertIn("[STOP]", text)
-        self.assertNotIn("Edge TTS", text)
-        self.assertEqual(entry["voice_engine"], "elevenlabs")
+        self.assertNotIn("[credits] STOP", text)
+        self.assertNotIn("[STOP]", text)
+        self.assertIn("Edge TTS", text)
+        self.assertIn("voice_engine=edge", summary)
+        self.assertEqual(entry["voice_engine"], "edge")
         self.assertIn("insufficient_credits", entry["voice_fallback"])
         self.assertEqual(entry["video_id"], "abc123")
         self.assertEqual(entry["slot"], "08:30")
@@ -229,10 +232,13 @@ class ShortFallbackTests(unittest.TestCase):
                 "character_count": 9990, "character_limit": 10000, "status": "active",
             })
 
-        async def edge(_text, voice, _rate, path):
+        async def edge(_text, voice, rate, path):
             self.assertEqual(voice, "hi-IN-SwaraNeural")
+            self.assertEqual(rate, "+0%")
             path.write_bytes(b"e" * 2000)
+            edge.calls.append(voice)
 
+        edge.calls = []
         text = "yeh ek short hai " * 20
         buf = io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, \
@@ -242,14 +248,48 @@ class ShortFallbackTests(unittest.TestCase):
              mock.patch("requests.post", post), \
              mock.patch.object(self.board, "_edge", edge), \
              redirect_stdout(buf):
-            with self.assertRaises(SystemExit):
-                self.board.synthesize_short_voices(self._spoken(text), VOICE)
+            engine = self.board.synthesize_short_voices(self._spoken(text), VOICE)
             meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
-        self.assertEqual(edge.calls if hasattr(edge, "calls") else [], [])
+        self.assertEqual(engine, "edge")
+        self.assertEqual(len(edge.calls), len(self.board.BEATS))
+        self.assertEqual(meta["engine"], "edge")
         self.assertIn("pre-check remaining=10", meta["fallback_reason"])
-        self.assertIn("[credits] STOP", buf.getvalue())
-        self.assertIn("1000", buf.getvalue())
+        self.assertIn("1000", meta["fallback_reason"])
+        self.assertNotIn("[credits] STOP", buf.getvalue())
+        self.assertIn("Edge TTS", buf.getvalue())
         self.assertTrue(meta["elevenlabs_attempted"])
+
+    def test_precheck_above_the_floor_but_short_of_this_slot_uses_edge(self):
+        """1,500 characters is above the floor and still cannot speak this Short."""
+        def post(*_args, **_kwargs):
+            raise AssertionError("a Short that does not fit must not POST")
+
+        def get(_url, **_kwargs):
+            return FakeResp(200, {
+                "character_count": 10000 - 1500,
+                "character_limit": 10000,
+                "status": "active",
+            })
+
+        async def edge(_text, voice, rate, path):
+            edge.calls.append((voice, rate))
+            path.write_bytes(b"e" * 2000)
+
+        edge.calls = []
+        text = "yeh ek short hai " * 40
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(self.board, "RUN", Path(tmp)), \
+             mock.patch.dict(os.environ, self._env()), \
+             mock.patch("requests.get", get), \
+             mock.patch("requests.post", post), \
+             mock.patch.object(self.board, "_edge", edge), \
+             redirect_stdout(io.StringIO()):
+            engine = self.board.synthesize_short_voices(self._spoken(text), VOICE)
+            meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
+        self.assertEqual(engine, "edge")
+        self.assertGreater(len(edge.calls), 0)
+        self.assertIn("needs", meta["fallback_reason"])
+        self.assertIn("1500", meta["fallback_reason"])
 
     def test_subscription_auth_error_does_not_skip_tts(self):
         """A scoped key may 401 on /user/subscription. TTS is the auth check."""
@@ -284,9 +324,11 @@ class ShortFallbackTests(unittest.TestCase):
         def post(*_args, **_kwargs):
             raise AssertionError("quota-shaped subscription response should skip TTS")
 
-        async def edge(_text, _voice, _rate, path):
+        async def edge(_text, voice, rate, path):
+            edge.calls.append((voice, rate))
             path.write_bytes(b"e" * 2000)
 
+        edge.calls = []
         buf = io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, \
              mock.patch.object(self.board, "RUN", Path(tmp)), \
@@ -295,10 +337,13 @@ class ShortFallbackTests(unittest.TestCase):
              mock.patch("requests.post", post), \
              mock.patch.object(self.board, "_edge", edge), \
              redirect_stdout(buf):
-            with self.assertRaises(SystemExit):
-                self.board.synthesize_short_voices(self._spoken(), VOICE)
-        self.assertIn("[credits] STOP", buf.getvalue())
-        self.assertNotIn("Edge TTS", buf.getvalue())
+            engine = self.board.synthesize_short_voices(self._spoken(), VOICE)
+            meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
+        self.assertEqual(engine, "edge")
+        self.assertEqual(meta["engine"], "edge")
+        self.assertGreaterEqual(len(edge.calls), 1)
+        self.assertNotIn("[credits] STOP", buf.getvalue())
+        self.assertIn("Edge TTS", buf.getvalue())
 
     def test_invalid_key_is_a_hard_error(self):
         def post(_url, **_kwargs):
