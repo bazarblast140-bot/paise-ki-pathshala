@@ -227,16 +227,17 @@ LIVE_TOTAL_WORDS = (130, 185)
 LIVE_ESTIMATE_MARGIN_S = 90.0
 LIVE_MARGIN_WORDS = 170
 # Proven four-beat live Short. This is the default.
-# Word target 105-112 (~55-59s on Rudra at 1.9 w/s), text gate 88-122,
-# audio gate 45-65s. The aim is the middle of that target, not the 45s floor.
+# Word target 98-108 (~52-57s on Rudra at 1.9 w/s). The trim aims at 59s.
+# The text gate stays 88-122 and the audio gate stays 45-65s, so a take
+# over 59s is not blocked. The aim is the middle of the target, not the floor.
 FOUR_LIVE_SHARE = {"hook": 18, "pehchan": 26, "matlab": 32, "karein": 29}
-FOUR_LIVE_WORD_TARGET = (105, 112)
+FOUR_LIVE_WORD_TARGET = (98, 108)
 FOUR_LIVE_TOTAL_WORDS = (88, 122)
 FOUR_LIVE_VOICE_SECONDS = (45.0, 65.0)
 # The locked daily-loss script is 138 words. Rudra at 0.90 was measured at
 # 1.9 words/s, about 73s, past the 65s four-beat cap. It is not trimmed.
 APPROVED_VOICE_SECONDS = (45.0, 85.0)
-FOUR_LIVE_MARGIN_S = 60.0
+FOUR_LIVE_MARGIN_S = 59.0
 VISUAL_ALIAS = {"udaharan": "matlab", "galti": "karein"}
 CARD_LINES = {
     "udaharan": ("उदाहरण", "एक ठोस केस"),
@@ -333,7 +334,7 @@ def four_live_bounds(wps):
 
 
 def four_live_targets(wps):
-    """Per-beat targets whose sum is the middle of 105-112 at 1.9 w/s."""
+    """Per-beat targets whose sum is the middle of 98-108 at 1.9 w/s."""
     wps = float(wps)
     scale = wps / LIVE_BASE_WPS
     targets = {beat: max(8, int(round(FOUR_LIVE_SHARE[beat] * scale))) for beat in BEATS}
@@ -354,7 +355,7 @@ def four_live_targets(wps):
 
 
 def four_margin_words(wps):
-    """Word budget for a 60s estimate, inside the 88-122 text gate at 1.9 w/s."""
+    """Word budget for a 59s estimate, inside the 88-122 text gate at 1.9 w/s."""
     return max(1, int(round(FOUR_LIVE_MARGIN_S * float(wps))))
 
 
@@ -2125,7 +2126,8 @@ def four_live_system(topic):
         "A missing phrase is named in the repair, such as hook missing title term: डेली लॉस लिमिट.",
         *_topic_fact_rules(topic),
         f"Pace coefficient: {wps:.2f} words/second. Target {target_lo}-{target_hi} words "
-        f"(about 55-59 seconds on Rudra). The script may land in {lo}-{hi} words.",
+        f"(about 52-57 seconds on Rudra, aiming at 59 seconds or less). "
+        f"The script may land in {lo}-{hi} words.",
         f"Spoken audio must land in {sec_lo:.0f}-{sec_hi:.0f} seconds.",
         "Keep sentence punctuation (। . ?) so the voice can pause.",
     ]
@@ -4161,7 +4163,7 @@ def _margin_budget(topic):
 def tighten_duration_margin(narration, topic):
     """Before TTS, a long live estimate is trimmed. Six-beat: over 90s toward 170.
 
-    Four-beat: over 60s toward about 114 words at 1.9 w/s. No model call and no
+    Four-beat: over 59s toward about 112 words at 1.9 w/s. No model call and no
     voice request. The hook's first question and the udaharan core stay.
     After the trim the beat windows are checked again. A beat that fell under
     its minimum is locked and a different beat is trimmed instead.

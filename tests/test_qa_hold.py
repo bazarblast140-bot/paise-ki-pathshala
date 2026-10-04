@@ -46,10 +46,12 @@ class HoldRuleTests(unittest.TestCase):
         off = {"AUTOMATIC_UPLOAD": "1", "REQUIRE_QA_APPROVAL": "false"}
         with mock.patch.dict(os.environ, off, clear=False):
             self.assertFalse(qa_hold.hold_active())
+            self.assertTrue(qa_hold.auto_gate_active())
 
         explicit = {"AUTOMATIC_UPLOAD": "1", "REQUIRE_QA_APPROVAL": "true", "EXPLICIT_PRIVACY": "1"}
         with mock.patch.dict(os.environ, explicit, clear=False):
             self.assertFalse(qa_hold.hold_active())
+            self.assertFalse(qa_hold.auto_gate_active())
             vis, when, held = qa_hold.apply_hold("public", "2026-10-05T10:30:00Z")
             self.assertEqual((vis, when, held), ("public", "2026-10-05T10:30:00Z", False))
 

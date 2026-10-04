@@ -30,6 +30,19 @@ def hold_active():
     return approval_required()
 
 
+def auto_gate_active():
+    """Automatic upload that publishes only after every automated gate passes.
+
+    REQUIRE_QA_APPROVAL must be explicitly false. Unset still means the human
+    hold. A manual Publish an artifact run sets EXPLICIT_PRIVACY and skips both.
+    """
+    if _flag("EXPLICIT_PRIVACY"):
+        return False
+    if not _flag("AUTOMATIC_UPLOAD"):
+        return False
+    return not approval_required()
+
+
 def apply_hold(visibility, publish_at):
     """Return (visibility, publish_at, held).
 

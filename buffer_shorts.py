@@ -431,6 +431,7 @@ def perform_fill(
     alert,
     bank_topics=None,
     record=None,
+    status_update=None,
 ):
     """Fill one open slot from the oldest ready item.
 
@@ -487,7 +488,8 @@ def perform_fill(
             raise BufferError(f"sha256 mismatch for {item_id}")
         import qa_hold
         held = qa_hold.hold_active()
-        upload_at = None if held else decision["publish_at"]
+        auto = qa_hold.auto_gate_active()
+        upload_at = None if held or auto else decision["publish_at"]
         video_id = uploader(
             payload,
             item.get("title") or "",
@@ -511,9 +513,26 @@ def perform_fill(
     if record is None:
         import ledger
         record = ledger.record_publish
+    publish_at = None if held else decision["publish_at"]
+    slot_skipped = None
+    source_run = (os.environ.get("GITHUB_RUN_ID") or "").strip() or None if held else None
+    if auto:
+        import publish_gates
+        if status_update is None:
+            status_update = _youtube_status_update
+        outcome = publish_gates.finish_item(
+            item, video_id, RUN,
+            slot=slot, date_ist=date_ist, now=now, update_status=status_update,
+        )
+        publish_at = outcome.get("publish_at")
+        slot_skipped = outcome.get("slot_skipped")
+        source_run = outcome.get("source_run")
+        defer_at = outcome.get("defer_at")
+    else:
+        defer_at = None
     record(
         video_id,
-        None if held else decision["publish_at"],
+        publish_at,
         slot,
         platform="youtube",
         date_ist=date_ist,
@@ -521,12 +540,18 @@ def perform_fill(
         source="buffer",
         buffer_id=item_id,
         pending_qa=held,
-        source_run=(os.environ.get("GITHUB_RUN_ID") or "").strip() or None if held else None,
+        source_run=source_run,
+        slot_skipped=slot_skipped,
     )
+    if defer_at:
+        import ig_defer
+        ig_defer.write_deferred(RUN, video_id, defer_at, source_run or "")
     ig = {"posted": False, "media_id": ""}
     if held:
         qa_hold.mark_run(RUN)
         print("[qa] buffer upload held: private, no publishAt, no Instagram or Facebook", flush=True)
+    elif auto:
+        print("[auto] buffer Reel is not posted from this fill", flush=True)
     elif crosspost is not None:
         try:
             ig = crosspost(item, video_id, payload) or ig
@@ -545,7 +570,7 @@ def perform_fill(
         "filled": True,
         "item": _find_item(load_manifest(manifest_path), item_id),
         "video_id": video_id,
-        "publish_at": None if held else decision["publish_at"],
+        "publish_at": publish_at,
         "late": decision.get("late", False),
         "ig": ig,
     }
@@ -667,6 +692,19 @@ def _github_store():
     if not repo or not token:
         raise BufferError("GITHUB_REPOSITORY and GITHUB_TOKEN are required to fetch buffer assets")
     return GitHubReleaseStore(repo, token)
+
+
+def _youtube_status_update(video_id, privacy, publish_at):
+    """Set privacy on a video that was uploaded private. Used after the gates pass."""
+    import approve_qa
+    import publish
+    from yt_credentials import youtube_client_or_exit
+
+    yt = youtube_client_or_exit()
+    publish.require_channel(yt)
+    yt.videos().update(
+        part="status", body=approve_qa.status_body(video_id, privacy, publish_at),
+    ).execute()
 
 
 def private_upload_status(publish_at):
@@ -963,6 +1001,18 @@ def admit_run(run_dir, topic, store, manifest, *, mp4, title, description, tags,
             "self_review": review,
         },
     }
+    narration = _load_json(run_dir / "narration.json")
+    if narration:
+        item["files"]["narration"] = narration
+    shots = _load_json(run_dir / "shots.json")
+    if shots:
+        item["files"]["shots"] = shots
+    mix = _load_json(run_dir / "audio_mix.json")
+    if mix:
+        item["files"]["audio_mix"] = mix
+    captions = run_dir / "subs.ass"
+    if captions.exists():
+        item["files"]["captions"] = captions.read_text(encoding="utf-8")
     meta_bytes = json.dumps(
         {
             "id": item_id,
@@ -1048,6 +1098,17 @@ def refill(*, runner=None, store=None, now=None, manifest_path=None):
             save_manifest(manifest, manifest_path)
             print(f"[buffer] gates failed ({', '.join(failed)}); not stored; skip {topic.get('key')}", flush=True)
             return 1
+        import qa_hold
+        if qa_hold.auto_gate_active():
+            import publish_gates
+            verdict = publish_gates.evaluate(RUN)
+            if not verdict["passed"]:
+                reason = "; ".join(verdict["reasons"])
+                remember_skip(manifest, topic.get("key"))
+                save_manifest(manifest, manifest_path)
+                publish_gates.note_job_summary(f"gate: skipped — {reason}")
+                print(f"[buffer] auto gates failed; not stored; skip {topic.get('key')}", flush=True)
+                return 1
         if _voice_engine(RUN) != "edge":
             remember_skip(manifest, topic.get("key"))
             save_manifest(manifest, manifest_path)

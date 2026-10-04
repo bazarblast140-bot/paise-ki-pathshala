@@ -171,6 +171,12 @@ def crosspost_or_defer(yt_uploaded, now=None):
     if qa_hold.hold_active() or qa_hold.run_is_held(RUN):
         print("[qa] Instagram and Facebook cross-post held until Approve QA")
         return 0, False, False
+    if qa_hold.auto_gate_active() or (RUN / "auto_gate_fail.txt").is_file() or (RUN / "auto_gate_pass.txt").is_file():
+        if (RUN / "auto_gate_fail.txt").is_file():
+            print("[auto] gates failed; Reel not posted")
+        else:
+            print("[auto] Reel waits for the watchdog once the video is public")
+        return 0, False, False
     ig_on = (
         video_format() == "short"
         and os.environ.get("IG_CROSSPOST", "").strip().lower() in ("1", "true", "yes", "on")
