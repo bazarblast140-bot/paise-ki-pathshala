@@ -21,7 +21,7 @@ _CREDIT_KEYS = (
 )
 
 
-def record_publish(video_id, publish_at=None, slot=None, platform="youtube", date_ist=None, topic_key=None, note=None, voice_engine=None, voice_fallback=None, credits=None, source=None, buffer_id=None):
+def record_publish(video_id, publish_at=None, slot=None, platform="youtube", date_ist=None, topic_key=None, note=None, voice_engine=None, voice_fallback=None, credits=None, source=None, buffer_id=None, pending_qa=False, source_run=None):
     """publishAt (UTC) se IST din nikalta hai — raat ka run agle din ke slot me ginta hai.
     platform="instagram" + video_id=None = sirf IG Reel gaya (YouTube token dead etc.);
     slot phir bhi bhara maana jaata hai taaki Slot watch duplicate fill na chalaye."""
@@ -59,10 +59,16 @@ def record_publish(video_id, publish_at=None, slot=None, platform="youtube", dat
         entry["source"] = str(source)
     if buffer_id:
         entry["buffer_id"] = str(buffer_id)
+    if pending_qa:
+        entry["pending_qa"] = True
+    if source_run:
+        entry["source_run"] = str(source_run)
     entries.append(entry)
     PATH.parent.mkdir(exist_ok=True)
     PATH.write_text(json.dumps(entries[-300:], indent=1) + "\n", encoding="utf-8")
     print(f"[OK] ledger: {entry['date_ist']} {slot} -> {video_id or platform}")
+    if pending_qa and video_id:
+        print(f"[qa] pending_qa {video_id}")
 
 
 def _entries():
@@ -71,6 +77,48 @@ def _entries():
     except (OSError, ValueError):
         return []
     return data if isinstance(data, list) else []
+
+
+def pending_qa():
+    """Video ids waiting for Approve QA, in ledger order.
+
+    The row stays a normal YouTube row (date, slot, video id). pending_qa marks
+    it. Slot watch treats that video id as filling the slot.
+    """
+    found = []
+    for entry in _entries():
+        if not isinstance(entry, dict) or not entry.get("pending_qa"):
+            continue
+        if str(entry.get("status") or "").strip().lower() == "withdrawn":
+            continue
+        video_id = str(entry.get("video_id") or "").strip()
+        if video_id:
+            found.append(video_id)
+    return found
+
+
+def release_qa(video_id, slot=None, date_ist=None):
+    """Clear pending_qa. A clock slot also moves the row onto that date and slot."""
+    video_id = str(video_id or "").strip()
+    if not video_id:
+        return False
+    entries = _entries()
+    idx = None
+    for i, entry in enumerate(entries):
+        if isinstance(entry, dict) and str(entry.get("video_id") or "") == video_id:
+            idx = i
+    if idx is None:
+        print(f"[warn] ledger has no row for {video_id}; pending_qa not cleared")
+        return False
+    entries[idx]["pending_qa"] = False
+    if slot:
+        entries[idx]["slot"] = slot
+    if date_ist:
+        entries[idx]["date_ist"] = date_ist
+    PATH.parent.mkdir(exist_ok=True)
+    PATH.write_text(json.dumps(entries[-300:], indent=1) + "\n", encoding="utf-8")
+    print(f"[qa] approved {video_id}")
+    return True
 
 
 def find_ig_media(video_id=None, topic_key=None, content_hash=None, title_norm=None) -> str:

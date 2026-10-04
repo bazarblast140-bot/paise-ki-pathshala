@@ -890,6 +890,10 @@ def mark_ig_skipped(run_dir, video_id, reason) -> str:
 
 
 def main() -> None:
+    import qa_hold
+    if qa_hold.hold_active() or qa_hold.run_is_held(RUN):
+        skip("QA hold: no Instagram or Facebook cross-post until Approve QA")
+
     if env("IG_CROSSPOST") not in ("1", "true", "yes", "on"):
         skip("IG_CROSSPOST not enabled (set IG_CROSSPOST=1 to post short as Reel)")
 

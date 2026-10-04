@@ -485,12 +485,15 @@ def perform_fill(
         digest = sha256_bytes(payload)
         if digest != item.get("sha256"):
             raise BufferError(f"sha256 mismatch for {item_id}")
+        import qa_hold
+        held = qa_hold.hold_active()
+        upload_at = None if held else decision["publish_at"]
         video_id = uploader(
             payload,
             item.get("title") or "",
             item.get("description") or "",
             list(item.get("tags") or []),
-            decision["publish_at"],
+            upload_at,
         )
         if not str(video_id or "").strip():
             raise BufferError("upload returned no video id")
@@ -510,16 +513,21 @@ def perform_fill(
         record = ledger.record_publish
     record(
         video_id,
-        decision["publish_at"],
+        None if held else decision["publish_at"],
         slot,
         platform="youtube",
         date_ist=date_ist,
         topic_key=item.get("topic_key"),
         source="buffer",
         buffer_id=item_id,
+        pending_qa=held,
+        source_run=(os.environ.get("GITHUB_RUN_ID") or "").strip() or None if held else None,
     )
     ig = {"posted": False, "media_id": ""}
-    if crosspost is not None:
+    if held:
+        qa_hold.mark_run(RUN)
+        print("[qa] buffer upload held: private, no publishAt, no Instagram or Facebook", flush=True)
+    elif crosspost is not None:
         try:
             ig = crosspost(item, video_id, payload) or ig
         except SystemExit as exc:
@@ -537,7 +545,7 @@ def perform_fill(
         "filled": True,
         "item": _find_item(load_manifest(manifest_path), item_id),
         "video_id": video_id,
-        "publish_at": decision["publish_at"],
+        "publish_at": None if held else decision["publish_at"],
         "late": decision.get("late", False),
         "ig": ig,
     }
@@ -661,8 +669,19 @@ def _github_store():
     return GitHubReleaseStore(repo, token)
 
 
+def private_upload_status(publish_at):
+    """Private status. publishAt is omitted when QA hold has no schedule."""
+    status = {
+        "privacyStatus": "private",
+        "selfDeclaredMadeForKids": False,
+    }
+    if publish_at:
+        status["publishAt"] = publish_at
+    return status
+
+
 def _youtube_uploader(payload, title, description, tags, publish_at):
-    """Private upload with publishAt. Refuses the wrong channel. Does not go public now."""
+    """Private upload. A schedule sets publishAt. A QA hold leaves it off."""
     import tempfile
     from yt_credentials import youtube_client_or_exit
     expected = (os.environ.get("EXPECTED_CHANNEL_ID") or "").strip()
@@ -684,11 +703,7 @@ def _youtube_uploader(payload, title, description, tags, publish_at):
             "tags": tags,
             "categoryId": "27",
         },
-        "status": {
-            "privacyStatus": "private",
-            "publishAt": publish_at,
-            "selfDeclaredMadeForKids": False,
-        },
+        "status": private_upload_status(publish_at),
     }
     try:
         media = MediaFileUpload(path, chunksize=8 * 1024 * 1024, resumable=True)
@@ -753,11 +768,17 @@ def _ig_exit_code(exc):
 def crosspost_buffer(item, video_id, payload, run_dir=None):
     """IG Reel via the existing idempotency guard. A live or ledger hit does not post again.
 
+    A QA hold does not post to Instagram or Facebook. Approve QA defers the Reel.
+
     A failed Reel after this YouTube id exists is a soft miss: ig_status.txt
     says skipped, and this function returns instead of exiting the process.
     """
     import publish_instagram as ig
+    import qa_hold
     run_dir = Path(run_dir) if run_dir else RUN
+    if qa_hold.hold_active() or qa_hold.run_is_held(run_dir):
+        print("[qa] Instagram and Facebook cross-post held until Approve QA", flush=True)
+        return {"posted": False, "media_id": "", "qa_hold": True}
     stage_run(item, video_id, payload, run_dir)
     # Freshness stays in force for a real as-of stamp staged with the item.
     import market_data
