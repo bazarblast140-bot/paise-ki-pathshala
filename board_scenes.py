@@ -154,10 +154,7 @@ def candle_levels(topic=None, key=None):
         return None
     try:
         red, green = raw["red"], raw["green"]
-        pat = (
-            (float(red["open"]), float(red["high"]), float(red["low"]), float(red["close"])),
-            (float(green["open"]), float(green["high"]), float(green["low"]), float(green["close"])),
-        )
+        pat = (_ohlc_tuple(red), _ohlc_tuple(green))
         ticks = [float(v) for v in (raw.get("ticks") or [])]
         mid = float(raw["mid"])
     except (KeyError, TypeError, ValueError):
@@ -167,6 +164,15 @@ def candle_levels(topic=None, key=None):
         sl = None if sl is None else float(sl)
     except (TypeError, ValueError):
         sl = None
+    confirm = None
+    confirm_label = "CONFIRMATION"
+    raw_confirm = raw.get("confirm")
+    if isinstance(raw_confirm, dict):
+        try:
+            confirm = _ohlc_tuple(raw_confirm)
+        except (KeyError, TypeError, ValueError):
+            confirm = None
+        confirm_label = str(raw_confirm.get("label") or confirm_label).strip() or confirm_label
     return {
         "pat": pat,
         "mid": mid,
@@ -175,52 +181,310 @@ def candle_levels(topic=None, key=None):
         "sl": sl,
         "badge": str(raw.get("badge") or (topic or {}).get("badge") or "").strip(),
         "close_pct": raw.get("close_pct"),
+        "confirm": confirm,
+        "confirm_label": confirm_label,
     }
 
 
-def _level_view(img, box, levels, beat, progress, fill_bottom=False):
+def _ohlc_tuple(raw):
+    return (float(raw["open"]), float(raw["high"]), float(raw["low"]), float(raw["close"]))
+
+
+def _fold_hi(text):
+    """Drop matras so Whisper's अगली and अगलि share one key."""
+    raw = re.sub(r"[।!?.,:;\"'“”\-–—]", "", str(text or ""))
+    out = []
+    for ch in raw:
+        o = ord(ch)
+        if o in (0x0901, 0x0902, 0x0903) or 0x093A <= o <= 0x094D or 0x0951 <= o <= 0x0957:
+            continue
+        out.append(ch.lower() if ch.isascii() else ch)
+    return "".join(out)
+
+
+def _karein_word_rows(words, t0, t1):
+    rows = []
+    for word in words or []:
+        if not isinstance(word, dict):
+            continue
+        start = float(word.get("start") or 0)
+        end = float(word.get("end") or (start + 0.2))
+        if end < float(t0) - 0.35 or start > float(t1) + 0.45:
+            continue
+        token = _fold_hi(word.get("word") or "")
+        if token:
+            rows.append((token, start, max(end, start), str(word.get("word") or "")))
+    rows.sort(key=lambda row: (row[1], row[2]))
+    return rows
+
+
+def _is_agli(token):
+    return token == "अगल" or token.startswith("अगल")
+
+
+def _is_confirm(token):
+    return "कनफर" in token or "कफरम" in token or "फरमश" in token or "confirm" in token
+
+
+def _is_candle(token):
+    return "कडल" in token or "candle" in token
+
+
+def _is_hai(token):
+    return token in ("ह", "है")
+
+
+def _confirm_word_span(words, t0, t1):
+    """Absolute (start, end) of the confirmation sentence. None when that word is missing.
+
+    Start is अगली / अगलि. If Whisper dropped it, the हरी of हरी कैंडल after मत लो.
+    End is the end of कन्फर्मेशन कैंडल है.
+    """
+    rows = _karein_word_rows(words, t0, t1)
+    start_at = None
+    start_i = None
+    for i, (token, start, _end, _raw) in enumerate(rows):
+        if _is_agli(token):
+            start_at, start_i = start, i
+            break
+    if start_at is None:
+        after_stop = None
+        for i, (token, _start, _end, _raw) in enumerate(rows):
+            if token in ("मत", "लो") or token.startswith("मत"):
+                after_stop = i
+        if after_stop is not None:
+            for i in range(after_stop + 1, len(rows)):
+                token, start, _end, _raw = rows[i]
+                if token == "हर" or (token.startswith("हर") and not _is_hai(token)):
+                    if any(_is_candle(tok) for tok, *_rest in rows[i:i + 3]):
+                        start_at, start_i = start, i
+                        break
+    end_at = None
+    scan = 0 if start_i is None else start_i
+    for i in range(scan, len(rows)):
+        token, _start, end, _raw = rows[i]
+        if not _is_confirm(token):
+            continue
+        end_at = end
+        for tok, _st, en, _raw in rows[i:i + 5]:
+            if _is_confirm(tok) or _is_candle(tok) or _is_hai(tok):
+                end_at = en
+            if _is_hai(tok) and tok != token:
+                end_at = en
+                break
+        break
+    return start_at, end_at
+
+
+def _confirm_scene_bounds(topic, t0, t1):
+    """Start and end of the karein scene that says the confirmation line."""
+    plan = [row for row in ((topic or {}).get("_scene_plan") or []) if row.get("beat") == "karein"]
+    cards = ((topic or {}).get("_scene_cards") or {}).get("karein") or []
+    for scene, card in zip(plan, cards):
+        text = str(card or "")
+        if "अगली" in text or "अगलि" in text or "कन्फर्मेशन" in text or "हरी कैंडल" in text:
+            return float(scene["start"]), float(scene["end"])
+    if plan:
+        return float(plan[0]["start"]), float(plan[0]["end"])
+    return float(t0), float(t1)
+
+
+def _confirm_window(topic):
+    """Where in karein the confirmation candle grows, as a 0–1 progress span.
+
+    Word timestamps win: grow from अगली and finish at the end of
+    कन्फर्मेशन कैंडल है. A missing word uses that scene's own start.
+    With no timestamps at all, the span follows the script text.
+    """
+    beat = ((topic or {}).get("_beat_times") or {}).get("karein") if isinstance(topic, dict) else None
+    words = (topic or {}).get("_audio_words") if isinstance(topic, dict) else None
+    if beat and words:
+        t0, t1 = float(beat[0]), float(beat[1])
+        dur = max(1e-6, t1 - t0)
+        start_t, end_t = _confirm_word_span(words, t0, t1)
+        scene_s, scene_e = _confirm_scene_bounds(topic, t0, t1)
+        if start_t is None:
+            start_t = scene_s
+        if end_t is None or end_t <= start_t + 0.05:
+            end_t = scene_e if scene_e > start_t + 0.05 else min(t1, start_t + max(0.8, 0.22 * dur))
+        start_p = max(0.0, min(0.98, (float(start_t) - t0) / dur))
+        end_p = max(start_p + 0.02, min(1.0, (float(end_t) - t0) / dur))
+        return start_p, end_p
+    full = ""
+    if isinstance(topic, dict):
+        full = str(((topic.get("_spoken_beats") or {}).get("karein")) or "")
+        if not full:
+            pair = (topic.get("beats") or {}).get("karein")
+            if isinstance(pair, (list, tuple)):
+                full = " ".join(str(part) for part in pair)
+            elif isinstance(pair, str):
+                full = pair
+    mark = full.find("कन्फर्मेशन")
+    if mark < 0:
+        return 0.34, 0.62
+    start = max(0.08, mark / max(len(full), 1) - 0.05)
+    end = min(0.90, start + 0.28)
+    return start, end
+
+
+def _confirm_u(progress, topic, beat, levels):
+    """0 before the confirmation line, then a draw-in, then the candle stays."""
+    if beat != "karein" or not levels.get("confirm"):
+        return 0.0
+    start, end = _confirm_window(topic)
+    p = max(0.0, min(1.0, float(progress)))
+    if p <= start:
+        return 0.0
+    if p >= end:
+        return 1.0
+    return (p - start) / (end - start)
+
+
+def _grow_candle(ohlc, phase):
+    """Open stays put. The body and wicks grow out of it."""
+    open_, high, low, close = ohlc
+    phase = max(0.0, min(1.0, float(phase)))
+    return (
+        open_,
+        open_ + (high - open_) * phase,
+        open_ + (low - open_) * phase,
+        open_ + (close - open_) * phase,
+    )
+
+
+def _level_view(img, box, levels, beat, progress, fill_bottom=False, topic=None):
     """Candles from topic levels. `progress` 0→1 draws the midpoint, then the badge.
 
-    The right of the plot is a label column, past the candles. A cover can
-    stretch the price scale down so the panel is not empty under the low.
+    The candles are centred in the box and wide. Karein keeps a third slot so
+    the confirmation candle can grow in without shoving the pattern sideways.
+    A cover stretches the price scale down so the panel is not empty under the low.
     """
-    pat = levels["pat"]
-    lo = min(c[2] for c in pat)
-    hi = max(c[1] for c in pat)
+    pat = list(levels["pat"])
+    confirm = levels.get("confirm")
+    confirm_u = _confirm_u(progress, topic, beat, levels)
+    slots = list(pat)
+    draw_n = len(pat)
+    # The scale always includes the full confirmation candle, so the pattern
+    # does not jump while that candle grows in.
+    ranged = list(pat)
+    if beat == "karein" and confirm:
+        ranged.append(confirm)
+        if confirm_u > 0:
+            slots.append(_grow_candle(confirm, confirm_u))
+            draw_n = len(slots)
+        else:
+            slots.append(confirm)
+            draw_n = len(pat)
+    lo = min(c[2] for c in ranged)
+    hi = max(c[1] for c in ranged)
     if beat == "karein" and levels["sl"] is not None:
         lo = min(lo, levels["sl"] - 0.6)
     p = max(0.0, min(1.0, float(progress)))
     bottom = 36 if fill_bottom else 80
-    plot = (box[0] + 130, box[1] + 72, box[2] - 16, box[3] - bottom)
-    # Right pad keeps the '95 (50%)' column clear of both bodies.
-    pad = (24, 28, 200, 16 if fill_bottom else 28)
+    # Equal side gutters put the candle group on the centre of the frame.
+    gutter = 124
+    plot = (box[0] + gutter, box[1] + 72, box[2] - gutter, box[3] - bottom)
+    pad = (22, 28, 22, 16 if fill_bottom else 28)
     ypad = 0.02 if fill_bottom else 0.12
     ax = candles(
-        img, plot, pat, lo - 0.4, hi + 0.4, grid=False, width_frac=0.55,
-        pad=pad, ypad=ypad,
+        img, plot, slots, lo - 0.4, hi + 0.4, grid=False, width_frac=0.64,
+        pad=pad, ypad=ypad, draw_count=draw_n,
     )
     draw = __import__("PIL").ImageDraw.Draw(img)
     x_left = plot[0]
-    candle_right = ax.x(len(pat) - 1) + ax.bw / 2
+    pattern_right = ax.x(min(1, draw_n - 1)) + ax.bw / 2
     if p > 0.02:
         y = ax.y(levels["mid"])
-        reach = x_left + (candle_right - x_left) * min(1.0, p / 0.42)
+        reach = x_left + (pattern_right - x_left) * min(1.0, p / 0.42)
         band = 16 + 22 * min(1.0, p / 0.42)
         draw.rectangle([x_left, y - band / 2, reach, y + band / 2], fill=(120, 90, 16))
         dashed(img, x_left, reach, y, YELLOW, None)
     if beat == "karein" and levels["sl"] is not None:
         dashed(img, x_left, plot[2], ax.y(levels["sl"]), SL_RED, None)
     img._level_badge = None
+    img._level_badge_scale = 1.0
     if p > 0.58 and levels["badge"]:
         scale = 0.45 + 0.55 * min(1.0, (p - 0.58) / 0.42)
-        bw, bh = 640 * scale, 118 * scale
+        bw, bh = min(520, plot[2] - plot[0] - 48) * scale, 118 * scale
         cx, cy = (plot[0] + plot[2]) / 2, plot[1] + 28 + bh / 2
         rect = (cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2)
-        draw.rounded_rectangle(rect, 18, fill=(48, 36, 8), outline=YELLOW, width=4)
+        # The box is not painted here. It shares a sprite with its label so a
+        # zoom of the plate cannot leave the words outside the box.
         img._level_badge = rect
+        img._level_badge_scale = scale
     img._level_axes = ax
     img._level_plot = plot
+    img._level_draw_n = draw_n
+    img._level_lo = lo
+    img._level_hi = hi
+    img._confirm_u = confirm_u
     return ax
+
+
+def _paint_badge_sprite(img, rect, text, scale):
+    """Box and label are one sprite, scaled from the same centre.
+
+    The plate zoom moves baked pixels and leaves sprites where they were.
+    A label drawn apart from its box sits outside the box for those frames.
+    """
+    import scene_frames
+    from PIL import Image, ImageDraw
+    x0, y0, x1, y1 = (float(v) for v in rect)
+    scale = max(0.2, min(1.0, float(scale)))
+    w = max(8, int(round(x1 - x0)))
+    h = max(8, int(round(y1 - y0)))
+    sprite = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(sprite)
+    stroke = max(2, int(round(4 * scale)))
+    radius = max(6, int(round(18 * scale)))
+    draw.rounded_rectangle(
+        [1, 1, w - 2, h - 2], radius, fill=(48, 36, 8, 255), outline=YELLOW + (255,), width=stroke,
+    )
+    margin = max(4.0, 8.0 * scale)
+    size = max(12, int(round(42 * scale)))
+    cx, cy = w / 2.0, h / 2.0
+    runs = scene_frames._runs(text)
+    while size >= 12:
+        _parts, union = scene_frames._layout_runs(text, size)
+        tw, th = union[2] - union[0], union[3] - union[1]
+        if tw <= w - 2 * margin and th <= h - 2 * margin:
+            break
+        size -= 1
+    if len(runs) == 1:
+        font = scene_frames._font(size, runs[0][0])
+        draw.text((cx, cy), text, font=font, fill=YELLOW + (255,), anchor="mm")
+        glyph = draw.textbbox((cx, cy), text, font=font, anchor="mm")
+    else:
+        parts, union = scene_frames._layout_runs(text, size)
+        dx = cx - (union[0] + union[2]) / 2.0
+        dy = cy - (union[1] + union[3]) / 2.0
+        for _path, piece, font, part_box in parts:
+            draw.text((dx + part_box[0], dy + part_box[1]), piece, font=font, fill=YELLOW + (255,))
+        glyph = (dx + union[0], dy + union[1], dx + union[2], dy + union[3])
+    scene_frames._seal(img)
+    ix, iy = int(round(x0)), int(round(y0))
+    img.paste(sprite, (ix, iy), sprite)
+    frame_box = (x0 + glyph[0], y0 + glyph[1], x0 + glyph[2], y0 + glyph[3])
+    if getattr(img, "label_boxes", None) is None:
+        img.label_boxes = []
+    if getattr(img, "text_layers", None) is None:
+        img.text_layers = []
+    img.label_boxes.append((frame_box[0] - 4, frame_box[1] - 4, frame_box[2] + 4, frame_box[3] + 4))
+    img.text_layers.append({
+        "image": sprite,
+        "xy": (ix, iy),
+        "text": text,
+        "shaped": True,
+        "box": tuple(float(v) for v in frame_box),
+        "badge_box": tuple(float(v) for v in rect),
+        "size": int(size),
+        "persist": False,
+        "faint": False,
+        "role": "axis",
+        "quantity": None,
+        "font": runs[0][0] if runs else None,
+        "runs": list(runs),
+    })
 
 
 def _level_labels(img, levels, beat, progress, spoken):
@@ -231,18 +495,39 @@ def _level_labels(img, levels, beat, progress, spoken):
     if ax is None or plot is None:
         return
     p = max(0.0, min(1.0, float(progress)))
-    x = plot[0] - 18
+    draw_n = int(getattr(img, "_level_draw_n", None) or len(levels["pat"]))
+    x = plot[0] - 16
+    placed = []
+    lo = getattr(img, "_level_lo", None)
+    hi = getattr(img, "_level_hi", None)
     for value in levels["ticks"]:
+        if lo is not None and float(value) < float(lo) - 0.05:
+            continue
+        if hi is not None and float(value) > float(hi) + 0.05:
+            continue
+        y = ax.y(value)
+        if y < plot[1] + 8 or y > plot[3] - 8:
+            continue
+        if any(abs(y - prev) < 36 for prev in placed):
+            continue
+        placed.append(y)
         shown = str(int(value)) if float(value).is_integer() else str(value)
         scene_frames._text(
-            img, x, ax.y(value), shown, (226, 232, 240), 32,
+            img, x, y, shown, (226, 232, 240), 32,
             anchor="rm", band=False, role="axis",
         )
     if p > 0.22 and levels["mid_label"]:
-        # Right margin, level with the midpoint, past the green body.
+        # Past the last slot, so a confirmation candle cannot cover the label.
+        last = max(0, int(getattr(ax, "n", draw_n)) - 1)
         scene_frames._text(
-            img, plot[2] - 8, ax.y(levels["mid"]), levels["mid_label"], YELLOW, 32,
-            anchor="rm", band=False, role="axis",
+            img, ax.x(last) + ax.bw / 2 + 14, ax.y(levels["mid"]), levels["mid_label"], YELLOW, 28,
+            anchor="lm", band=False, role="axis",
+        )
+    confirm_u = float(getattr(img, "_confirm_u", 0.0) or 0.0)
+    if confirm_u > 0.35 and levels.get("confirm") and draw_n >= 3:
+        scene_frames._text(
+            img, ax.x(2), ax.y(levels["confirm"][1]) - 18, levels.get("confirm_label") or "CONFIRMATION",
+            (250, 250, 250), 28, anchor="mb", band=False, role="axis",
         )
     if beat == "karein" and levels["sl"] is not None:
         sl = levels["sl"]
@@ -260,9 +545,8 @@ def _level_labels(img, levels, beat, progress, spoken):
         )
     badge = getattr(img, "_level_badge", None)
     if badge and p > 0.62 and levels["badge"]:
-        scene_frames._text(
-            img, (badge[0] + badge[2]) / 2, (badge[1] + badge[3]) / 2, levels["badge"], YELLOW, 42,
-            anchor="mm", band=False, role="axis",
+        _paint_badge_sprite(
+            img, badge, levels["badge"], float(getattr(img, "_level_badge_scale", 1.0) or 1.0),
         )
 
 
@@ -2747,7 +3031,7 @@ def _compose_level_frame(topic, beat, progress, spoken):
     levels = candle_levels(topic, key)
     img = K.background()
     panel(img)
-    _level_view(img, BOARD, levels, beat, progress)
+    _level_view(img, BOARD, levels, beat, progress, topic=topic)
     _level_labels(img, levels, beat, progress, spoken)
     lines = _caption_lines(spoken)
     y = safe_area.SUBTITLE_TOP + 18
@@ -2882,7 +3166,7 @@ def _paint_topic_cover(topic):
     levels = candle_levels(topic, key)
     if levels:
         inner = (box[0] + 16, box[1] + 24, box[2] - 16, box[3] - 24)
-        _level_view(img, inner, levels, "hook", 1.0, fill_bottom=True)
+        _level_view(img, inner, levels, "hook", 1.0, fill_bottom=True, topic=topic)
         _level_labels(img, levels, "hook", 1.0, "70")
     else:
         scene = K.background()

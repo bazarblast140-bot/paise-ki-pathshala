@@ -2281,9 +2281,10 @@
    "levels": {
     "red": {"open": 100, "high": 100, "low": 89, "close": 90},
     "green": {"open": 88, "high": 98, "low": 87.5, "close": 97},
+    "confirm": {"open": 97, "high": 102, "low": 96.5, "close": 101, "label": "CONFIRMATION"},
     "mid": 95,
     "mid_label": "95 (50%)",
-    "ticks": [100, 95, 90, 88, 97],
+    "ticks": [102, 101, 100, 95, 90, 88, 97],
     "sl": 87,
     "badge": "50% SE UPAR",
     "close_pct": 70

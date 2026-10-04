@@ -163,6 +163,8 @@ class PiercingLevelTests(unittest.TestCase):
         self.assertGreater(green[3], levels["mid"])
         self.assertLess(green[0], red[2])
         self.assertLess(levels["sl"], min(c[2] for c in levels["pat"]))
+        self.assertEqual(levels["confirm"], (97.0, 102.0, 96.5, 101.0))
+        self.assertGreater(levels["confirm"][3], levels["pat"][1][1])
         banned = ("पलटवार", "चीरती", "हद", "पूँजी", "क्षमता", "तय करो")
         blob = " ".join(PIERCING_SCRIPT["beats"].values()) + " " + topic["topic"]
         for word in banned:
@@ -213,11 +215,18 @@ class PiercingLevelTests(unittest.TestCase):
         ax = frame._level_axes
         levels = board_scenes.candle_levels(key="piercing")
         layer = next(item for item in frame.text_layers if item.get("text") == "95 (50%)")
-        for i, (o, _h, _l, c) in enumerate(levels["pat"]):
+        candles = list(levels["pat"])
+        if int(getattr(frame, "_level_draw_n", 0) or 0) >= 3 and levels.get("confirm"):
+            candles.append(levels["confirm"])
+        for i, (o, _h, _l, c) in enumerate(candles):
             cx = ax.x(i)
             top, bot = ax.y(max(o, c)), ax.y(min(o, c))
             body = (cx - ax.bw / 2, min(top, bot), cx + ax.bw / 2, max(top, bot))
             self.assertFalse(safe_area.intersects(layer["box"], body), name)
+        centres = [ax.x(i) for i in range(ax.n)]
+        self.assertAlmostEqual(sum(centres) / len(centres), 540, delta=24, msg=name)
+        self.assertGreater(ax.bw, 140, name)
+        self.assertGreater(centres[-1] + ax.bw / 2, 760, name)
 
     def test_the_hook_percent_stays_whole_on_a_wipe(self):
         """70% sits on the dark panel, so a wipe can still see the whole glyph."""
@@ -275,6 +284,148 @@ class PiercingLevelTests(unittest.TestCase):
         )
         import scene_pace
         self.assertEqual(scene_pace.vague_beats(stored["beats"]), [])
+
+    def test_karein_draws_the_confirmation_candle_when_that_line_is_said(self):
+        topic = self._topic()
+        frame = board_scenes.paint_chart_board(topic, "karein", 0, 1)
+        early = frame.motion_at(0.0)
+        done = frame.motion_at(1.0)
+        self.assertNotIn("CONFIRMATION", self._labels(early))
+        self.assertEqual(len(self._green_clusters(early)), 1)
+        self.assertIn("CONFIRMATION", self._labels(done))
+        self.assertIn("SL 87", self._labels(done))
+        self.assertIn("95 (50%)", self._labels(done))
+        self.assertEqual(len(self._green_clusters(done)), 2)
+        import safe_area
+        boxes = [layer["box"] for layer in done.text_layers if layer.get("box")]
+        left, top, right, bottom = safe_area.limits()
+        for box in boxes:
+            self.assertGreaterEqual(box[0], left - 2)
+            self.assertGreaterEqual(box[1], top - 2)
+            self.assertLessEqual(box[2], right + 2)
+            self.assertLessEqual(box[3], bottom + 2)
+        for i, left in enumerate(boxes):
+            for right in boxes[i + 1:]:
+                self.assertFalse(safe_area.intersects(left, right))
+        self.assertNotIn("102", self._labels(board_scenes.paint_chart_board(topic, "hook", 0, 1).motion_at(1.0)))
+        window = board_scenes._confirm_window(topic)
+        self.assertLess(window[0], 0.5)
+        self.assertGreater(window[1], window[0])
+
+    def test_confirmation_candle_follows_the_spoken_words(self):
+        topic = self._topic()
+        topic["_beat_times"] = {"karein": (40.0, 60.0)}
+        topic["_audio_words"] = self._confirm_words("अगली")
+        start, end = board_scenes._confirm_window(topic)
+        self.assertAlmostEqual(start, 0.40, places=2)
+        self.assertAlmostEqual(end, 0.58, places=2)
+        frame = board_scenes.paint_chart_board(topic, "karein", 0, 1)
+        before = frame.motion_at(start - 0.02)
+        self.assertEqual(len(self._green_clusters(before)), 1)
+        self.assertNotIn("CONFIRMATION", self._labels(before))
+        done = frame.motion_at(end)
+        self.assertEqual(len(self._green_clusters(done)), 2)
+        self.assertIn("CONFIRMATION", self._labels(done))
+        self.assertIn("SL 87", self._labels(done))
+        # A misspelling, and हरी कैंडल after मत लो when अगली itself is missing.
+        topic["_audio_words"] = self._confirm_words("अगलि")
+        self.assertEqual(board_scenes._confirm_window(topic), (start, end))
+        words = [row for row in self._confirm_words("अगली") if row["word"] != "अगली"]
+        topic["_audio_words"] = words
+        anchored = board_scenes._confirm_window(topic)
+        self.assertAlmostEqual(anchored[0], 0.42, places=2)
+        self.assertAlmostEqual(anchored[1], end, places=2)
+        # No matching word: grow from that scene's start through the scene end.
+        topic["_audio_words"] = [{"word": "शब्द", "start": 42.0, "end": 42.4}]
+        topic["_scene_plan"] = [{"beat": "karein", "start": 47.0, "end": 55.0, "index": 1}]
+        topic["_scene_cards"] = {"karein": ["अगली हरी कैंडल ऊपर बंद हो, वही कन्फर्मेशन कैंडल है।"]}
+        fallen = board_scenes._confirm_window(topic)
+        self.assertAlmostEqual(fallen[0], 0.35, places=2)
+        self.assertAlmostEqual(fallen[1], 0.75, places=2)
+
+    def test_the_build_stores_word_times_for_the_candle(self):
+        """Live render and the no-TTS rerender both install cards before painting."""
+        import scene_pace
+        topic = self._topic()
+        spoken = dict(topic["_spoken_beats"])
+        beat_times = {"hook": (0.0, 10.0), "pehchan": (10.0, 25.0), "matlab": (25.0, 40.0), "karein": (40.0, 60.0)}
+        scenes = scene_pace.plan_scenes(beat_times)
+        words = self._confirm_words("अगली")
+        board_short._install_scene_cards(topic, spoken, beat_times, scenes, words)
+        self.assertIn("अगली", [row["word"] for row in topic["_audio_words"]])
+        start, end = board_scenes._confirm_window(topic)
+        self.assertAlmostEqual(start, 0.40, places=2)
+        self.assertAlmostEqual(end, 0.58, places=2)
+
+    def test_badge_text_stays_inside_the_box_while_it_pops_in(self):
+        import numpy as np
+        import scene_frames
+        topic = self._topic()
+        for beat in ("hook", "matlab", "karein"):
+            frames, _flags = scene_frames.frames_for(topic, beat, 1, {"mode": "schematic"})
+            for u in (0.64, 0.72, 0.85, 1.0):
+                shown = frames[0].animate(u)
+                layer = next(item for item in shown.text_layers if item.get("text") == "50% SE UPAR")
+                badge = layer["badge_box"]
+                box = layer["box"]
+                self.assertGreaterEqual(box[0], badge[0] - 1, (beat, u))
+                self.assertGreaterEqual(box[1], badge[1] - 1, (beat, u))
+                self.assertLessEqual(box[2], badge[2] + 1, (beat, u))
+                self.assertLessEqual(box[3], badge[3] + 1, (beat, u))
+                arr = np.asarray(shown.convert("RGB"))
+                fill = (
+                    (np.abs(arr[:, :, 0].astype(int) - 48) <= 14)
+                    & (np.abs(arr[:, :, 1].astype(int) - 36) <= 14)
+                    & (arr[:, :, 2] <= 28)
+                )
+                ys, xs = np.nonzero(fill)
+                self.assertGreater(int(xs.size), 40, (beat, u))
+                self.assertGreaterEqual(box[0], float(xs.min()) - 8, (beat, u))
+                self.assertLessEqual(box[2], float(xs.max()) + 8, (beat, u))
+                self.assertGreaterEqual(box[1], float(ys.min()) - 8, (beat, u))
+                self.assertLessEqual(box[3], float(ys.max()) + 8, (beat, u))
+
+    @staticmethod
+    def _confirm_words(agli):
+        return [
+            {"word": "क्या", "start": 40.2, "end": 40.6},
+            {"word": "करें", "start": 40.6, "end": 41.0},
+            {"word": "मत", "start": 46.0, "end": 46.3},
+            {"word": "लो", "start": 46.3, "end": 46.6},
+            {"word": agli, "start": 48.0, "end": 48.4},
+            {"word": "हरी", "start": 48.4, "end": 48.7},
+            {"word": "कैंडल", "start": 48.7, "end": 49.2},
+            {"word": "ऊपर", "start": 49.2, "end": 49.6},
+            {"word": "बंद", "start": 49.6, "end": 49.9},
+            {"word": "हो", "start": 49.9, "end": 50.2},
+            {"word": "वही", "start": 50.2, "end": 50.5},
+            {"word": "कन्फर्मेशन", "start": 50.5, "end": 51.1},
+            {"word": "कैंडल", "start": 51.1, "end": 51.4},
+            {"word": "है", "start": 51.4, "end": 51.6},
+        ]
+
+    @staticmethod
+    def _labels(img):
+        return [layer.get("text") or "" for layer in img.text_layers]
+
+    @staticmethod
+    def _green_clusters(img):
+        import numpy as np
+        arr = np.asarray(img.convert("RGB"))
+        mask = (arr[:, :, 1] > 150) & (arr[:, :, 0] < 90)
+        cols = np.flatnonzero(mask.any(axis=0))
+        groups = []
+        if cols.size == 0:
+            return groups
+        start = prev = int(cols[0])
+        for col in cols[1:]:
+            col = int(col)
+            if col - prev > 18:
+                groups.append((start, prev))
+                start = col
+            prev = col
+        groups.append((start, prev))
+        return groups
 
 
 class TitleAndHookTests(unittest.TestCase):
