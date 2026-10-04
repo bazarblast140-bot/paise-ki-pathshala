@@ -163,6 +163,8 @@ class PiercingLevelTests(unittest.TestCase):
         self.assertGreater(green[3], levels["mid"])
         self.assertLess(green[0], red[2])
         self.assertLess(levels["sl"], min(c[2] for c in levels["pat"]))
+        self.assertEqual(levels["confirm"], (97.0, 102.0, 96.5, 101.0))
+        self.assertGreater(levels["confirm"][3], levels["pat"][1][1])
         banned = ("पलटवार", "चीरती", "हद", "पूँजी", "क्षमता", "तय करो")
         blob = " ".join(PIERCING_SCRIPT["beats"].values()) + " " + topic["topic"]
         for word in banned:
@@ -213,11 +215,18 @@ class PiercingLevelTests(unittest.TestCase):
         ax = frame._level_axes
         levels = board_scenes.candle_levels(key="piercing")
         layer = next(item for item in frame.text_layers if item.get("text") == "95 (50%)")
-        for i, (o, _h, _l, c) in enumerate(levels["pat"]):
+        candles = list(levels["pat"])
+        if int(getattr(frame, "_level_draw_n", 0) or 0) >= 3 and levels.get("confirm"):
+            candles.append(levels["confirm"])
+        for i, (o, _h, _l, c) in enumerate(candles):
             cx = ax.x(i)
             top, bot = ax.y(max(o, c)), ax.y(min(o, c))
             body = (cx - ax.bw / 2, min(top, bot), cx + ax.bw / 2, max(top, bot))
             self.assertFalse(safe_area.intersects(layer["box"], body), name)
+        centres = [ax.x(i) for i in range(ax.n)]
+        self.assertAlmostEqual(sum(centres) / len(centres), 540, delta=24, msg=name)
+        self.assertGreater(ax.bw, 140, name)
+        self.assertGreater(centres[-1] + ax.bw / 2, 760, name)
 
     def test_the_hook_percent_stays_whole_on_a_wipe(self):
         """70% sits on the dark panel, so a wipe can still see the whole glyph."""
@@ -275,6 +284,56 @@ class PiercingLevelTests(unittest.TestCase):
         )
         import scene_pace
         self.assertEqual(scene_pace.vague_beats(stored["beats"]), [])
+
+    def test_karein_draws_the_confirmation_candle_when_that_line_is_said(self):
+        topic = self._topic()
+        frame = board_scenes.paint_chart_board(topic, "karein", 0, 1)
+        early = frame.motion_at(0.0)
+        done = frame.motion_at(1.0)
+        self.assertNotIn("CONFIRMATION", self._labels(early))
+        self.assertEqual(len(self._green_clusters(early)), 1)
+        self.assertIn("CONFIRMATION", self._labels(done))
+        self.assertIn("SL 87", self._labels(done))
+        self.assertIn("95 (50%)", self._labels(done))
+        self.assertEqual(len(self._green_clusters(done)), 2)
+        import safe_area
+        boxes = [layer["box"] for layer in done.text_layers if layer.get("box")]
+        left, top, right, bottom = safe_area.limits()
+        for box in boxes:
+            self.assertGreaterEqual(box[0], left - 2)
+            self.assertGreaterEqual(box[1], top - 2)
+            self.assertLessEqual(box[2], right + 2)
+            self.assertLessEqual(box[3], bottom + 2)
+        for i, left in enumerate(boxes):
+            for right in boxes[i + 1:]:
+                self.assertFalse(safe_area.intersects(left, right))
+        self.assertNotIn("102", self._labels(board_scenes.paint_chart_board(topic, "hook", 0, 1).motion_at(1.0)))
+        window = board_scenes._confirm_window(topic)
+        self.assertLess(window[0], 0.5)
+        self.assertGreater(window[1], window[0])
+
+    @staticmethod
+    def _labels(img):
+        return [layer.get("text") or "" for layer in img.text_layers]
+
+    @staticmethod
+    def _green_clusters(img):
+        import numpy as np
+        arr = np.asarray(img.convert("RGB"))
+        mask = (arr[:, :, 1] > 150) & (arr[:, :, 0] < 90)
+        cols = np.flatnonzero(mask.any(axis=0))
+        groups = []
+        if cols.size == 0:
+            return groups
+        start = prev = int(cols[0])
+        for col in cols[1:]:
+            col = int(col)
+            if col - prev > 18:
+                groups.append((start, prev))
+                start = col
+            prev = col
+        groups.append((start, prev))
+        return groups
 
 
 class TitleAndHookTests(unittest.TestCase):

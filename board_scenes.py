@@ -154,10 +154,7 @@ def candle_levels(topic=None, key=None):
         return None
     try:
         red, green = raw["red"], raw["green"]
-        pat = (
-            (float(red["open"]), float(red["high"]), float(red["low"]), float(red["close"])),
-            (float(green["open"]), float(green["high"]), float(green["low"]), float(green["close"])),
-        )
+        pat = (_ohlc_tuple(red), _ohlc_tuple(green))
         ticks = [float(v) for v in (raw.get("ticks") or [])]
         mid = float(raw["mid"])
     except (KeyError, TypeError, ValueError):
@@ -167,6 +164,15 @@ def candle_levels(topic=None, key=None):
         sl = None if sl is None else float(sl)
     except (TypeError, ValueError):
         sl = None
+    confirm = None
+    confirm_label = "CONFIRMATION"
+    raw_confirm = raw.get("confirm")
+    if isinstance(raw_confirm, dict):
+        try:
+            confirm = _ohlc_tuple(raw_confirm)
+        except (KeyError, TypeError, ValueError):
+            confirm = None
+        confirm_label = str(raw_confirm.get("label") or confirm_label).strip() or confirm_label
     return {
         "pat": pat,
         "mid": mid,
@@ -175,36 +181,103 @@ def candle_levels(topic=None, key=None):
         "sl": sl,
         "badge": str(raw.get("badge") or (topic or {}).get("badge") or "").strip(),
         "close_pct": raw.get("close_pct"),
+        "confirm": confirm,
+        "confirm_label": confirm_label,
     }
 
 
-def _level_view(img, box, levels, beat, progress, fill_bottom=False):
+def _ohlc_tuple(raw):
+    return (float(raw["open"]), float(raw["high"]), float(raw["low"]), float(raw["close"]))
+
+
+def _confirm_window(topic):
+    """Where in karein the confirmation line is spoken, as a 0–1 progress span."""
+    full = ""
+    if isinstance(topic, dict):
+        full = str(((topic.get("_spoken_beats") or {}).get("karein")) or "")
+        if not full:
+            pair = (topic.get("beats") or {}).get("karein")
+            if isinstance(pair, (list, tuple)):
+                full = " ".join(str(part) for part in pair)
+            elif isinstance(pair, str):
+                full = pair
+    mark = full.find("कन्फर्मेशन")
+    if mark < 0:
+        return 0.34, 0.62
+    start = max(0.08, mark / max(len(full), 1) - 0.05)
+    end = min(0.90, start + 0.28)
+    return start, end
+
+
+def _confirm_u(progress, topic, beat, levels):
+    """0 before the confirmation line, then a draw-in, then the candle stays."""
+    if beat != "karein" or not levels.get("confirm"):
+        return 0.0
+    start, end = _confirm_window(topic)
+    p = max(0.0, min(1.0, float(progress)))
+    if p <= start:
+        return 0.0
+    if p >= end:
+        return 1.0
+    return (p - start) / (end - start)
+
+
+def _grow_candle(ohlc, phase):
+    """Open stays put. The body and wicks grow out of it."""
+    open_, high, low, close = ohlc
+    phase = max(0.0, min(1.0, float(phase)))
+    return (
+        open_,
+        open_ + (high - open_) * phase,
+        open_ + (low - open_) * phase,
+        open_ + (close - open_) * phase,
+    )
+
+
+def _level_view(img, box, levels, beat, progress, fill_bottom=False, topic=None):
     """Candles from topic levels. `progress` 0→1 draws the midpoint, then the badge.
 
-    The right of the plot is a label column, past the candles. A cover can
-    stretch the price scale down so the panel is not empty under the low.
+    The candles are centred in the box and wide. Karein keeps a third slot so
+    the confirmation candle can grow in without shoving the pattern sideways.
+    A cover stretches the price scale down so the panel is not empty under the low.
     """
-    pat = levels["pat"]
-    lo = min(c[2] for c in pat)
-    hi = max(c[1] for c in pat)
+    pat = list(levels["pat"])
+    confirm = levels.get("confirm")
+    confirm_u = _confirm_u(progress, topic, beat, levels)
+    slots = list(pat)
+    draw_n = len(pat)
+    # The scale always includes the full confirmation candle, so the pattern
+    # does not jump while that candle grows in.
+    ranged = list(pat)
+    if beat == "karein" and confirm:
+        ranged.append(confirm)
+        if confirm_u > 0.04:
+            slots.append(_grow_candle(confirm, confirm_u))
+            draw_n = len(slots)
+        else:
+            slots.append(confirm)
+            draw_n = len(pat)
+    lo = min(c[2] for c in ranged)
+    hi = max(c[1] for c in ranged)
     if beat == "karein" and levels["sl"] is not None:
         lo = min(lo, levels["sl"] - 0.6)
     p = max(0.0, min(1.0, float(progress)))
     bottom = 36 if fill_bottom else 80
-    plot = (box[0] + 130, box[1] + 72, box[2] - 16, box[3] - bottom)
-    # Right pad keeps the '95 (50%)' column clear of both bodies.
-    pad = (24, 28, 200, 16 if fill_bottom else 28)
+    # Equal side gutters put the candle group on the centre of the frame.
+    gutter = 124
+    plot = (box[0] + gutter, box[1] + 72, box[2] - gutter, box[3] - bottom)
+    pad = (22, 28, 22, 16 if fill_bottom else 28)
     ypad = 0.02 if fill_bottom else 0.12
     ax = candles(
-        img, plot, pat, lo - 0.4, hi + 0.4, grid=False, width_frac=0.55,
-        pad=pad, ypad=ypad,
+        img, plot, slots, lo - 0.4, hi + 0.4, grid=False, width_frac=0.64,
+        pad=pad, ypad=ypad, draw_count=draw_n,
     )
     draw = __import__("PIL").ImageDraw.Draw(img)
     x_left = plot[0]
-    candle_right = ax.x(len(pat) - 1) + ax.bw / 2
+    pattern_right = ax.x(min(1, draw_n - 1)) + ax.bw / 2
     if p > 0.02:
         y = ax.y(levels["mid"])
-        reach = x_left + (candle_right - x_left) * min(1.0, p / 0.42)
+        reach = x_left + (pattern_right - x_left) * min(1.0, p / 0.42)
         band = 16 + 22 * min(1.0, p / 0.42)
         draw.rectangle([x_left, y - band / 2, reach, y + band / 2], fill=(120, 90, 16))
         dashed(img, x_left, reach, y, YELLOW, None)
@@ -213,13 +286,17 @@ def _level_view(img, box, levels, beat, progress, fill_bottom=False):
     img._level_badge = None
     if p > 0.58 and levels["badge"]:
         scale = 0.45 + 0.55 * min(1.0, (p - 0.58) / 0.42)
-        bw, bh = 640 * scale, 118 * scale
+        bw, bh = min(520, plot[2] - plot[0] - 48) * scale, 118 * scale
         cx, cy = (plot[0] + plot[2]) / 2, plot[1] + 28 + bh / 2
         rect = (cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2)
         draw.rounded_rectangle(rect, 18, fill=(48, 36, 8), outline=YELLOW, width=4)
         img._level_badge = rect
     img._level_axes = ax
     img._level_plot = plot
+    img._level_draw_n = draw_n
+    img._level_lo = lo
+    img._level_hi = hi
+    img._confirm_u = confirm_u
     return ax
 
 
@@ -231,18 +308,39 @@ def _level_labels(img, levels, beat, progress, spoken):
     if ax is None or plot is None:
         return
     p = max(0.0, min(1.0, float(progress)))
-    x = plot[0] - 18
+    draw_n = int(getattr(img, "_level_draw_n", None) or len(levels["pat"]))
+    x = plot[0] - 16
+    placed = []
+    lo = getattr(img, "_level_lo", None)
+    hi = getattr(img, "_level_hi", None)
     for value in levels["ticks"]:
+        if lo is not None and float(value) < float(lo) - 0.05:
+            continue
+        if hi is not None and float(value) > float(hi) + 0.05:
+            continue
+        y = ax.y(value)
+        if y < plot[1] + 8 or y > plot[3] - 8:
+            continue
+        if any(abs(y - prev) < 36 for prev in placed):
+            continue
+        placed.append(y)
         shown = str(int(value)) if float(value).is_integer() else str(value)
         scene_frames._text(
-            img, x, ax.y(value), shown, (226, 232, 240), 32,
+            img, x, y, shown, (226, 232, 240), 32,
             anchor="rm", band=False, role="axis",
         )
     if p > 0.22 and levels["mid_label"]:
-        # Right margin, level with the midpoint, past the green body.
+        # Past the last slot, so a confirmation candle cannot cover the label.
+        last = max(0, int(getattr(ax, "n", draw_n)) - 1)
         scene_frames._text(
-            img, plot[2] - 8, ax.y(levels["mid"]), levels["mid_label"], YELLOW, 32,
-            anchor="rm", band=False, role="axis",
+            img, ax.x(last) + ax.bw / 2 + 14, ax.y(levels["mid"]), levels["mid_label"], YELLOW, 28,
+            anchor="lm", band=False, role="axis",
+        )
+    confirm_u = float(getattr(img, "_confirm_u", 0.0) or 0.0)
+    if confirm_u > 0.35 and levels.get("confirm") and draw_n >= 3:
+        scene_frames._text(
+            img, ax.x(2), ax.y(levels["confirm"][1]) - 18, levels.get("confirm_label") or "CONFIRMATION",
+            (250, 250, 250), 28, anchor="mb", band=False, role="axis",
         )
     if beat == "karein" and levels["sl"] is not None:
         sl = levels["sl"]
@@ -2747,7 +2845,7 @@ def _compose_level_frame(topic, beat, progress, spoken):
     levels = candle_levels(topic, key)
     img = K.background()
     panel(img)
-    _level_view(img, BOARD, levels, beat, progress)
+    _level_view(img, BOARD, levels, beat, progress, topic=topic)
     _level_labels(img, levels, beat, progress, spoken)
     lines = _caption_lines(spoken)
     y = safe_area.SUBTITLE_TOP + 18
@@ -2882,7 +2980,7 @@ def _paint_topic_cover(topic):
     levels = candle_levels(topic, key)
     if levels:
         inner = (box[0] + 16, box[1] + 24, box[2] - 16, box[3] - 24)
-        _level_view(img, inner, levels, "hook", 1.0, fill_bottom=True)
+        _level_view(img, inner, levels, "hook", 1.0, fill_bottom=True, topic=topic)
         _level_labels(img, levels, "hook", 1.0, "70")
     else:
         scene = K.background()
