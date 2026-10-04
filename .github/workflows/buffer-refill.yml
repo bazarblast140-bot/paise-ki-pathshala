@@ -45,6 +45,8 @@ jobs:
           BUFFER_FILL: "0"
           PUBLISH_VISIBILITY: unlisted
           PIPELINE_MODE: preview
+          AUTOMATIC_UPLOAD: "1"
+          REQUIRE_QA_APPROVAL: ${{ vars.REQUIRE_QA_APPROVAL || 'true' }}
         run: python buffer_shorts.py --refill
       - name: Commit manifest and topic bank
         # A failed Edge build still records skipped_topics. Commit that so the

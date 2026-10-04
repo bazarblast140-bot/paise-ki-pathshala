@@ -4,6 +4,8 @@ The pad in bed.wav is not mixed. whoosh.wav and click.wav are the same numpy
 synthesis as sfx.py, written here so the files can be committed (assets/sfx/
 is gitignored). See assets/bed/LICENSE.
 """
+import json
+import math
 import wave
 from pathlib import Path
 
@@ -146,7 +148,8 @@ def mix_into(voice_path, scenes, out_path):
         raise RuntimeError(f"voice must be {SR} Hz")
     stereo = voice.ndim == 2
     mono = voice.mean(axis=1) if stereo else voice
-    spots = sfx_track(scenes, mono.shape[0], sr, voice_rms=_rms(mono))
+    voice_rms = _rms(mono)
+    spots = sfx_track(scenes, mono.shape[0], sr, voice_rms=voice_rms)
     if stereo:
         mixed = voice + spots[:, None]
     else:
@@ -155,6 +158,22 @@ def mix_into(voice_path, scenes, out_path):
     if peak > 0.98:
         mixed = mixed * np.float32(0.98 / peak)
     _write(out_path, mixed, sr)
+    spot_rms = _rms(spots)
+    present = spot_rms >= 1e-8
+    under = None
+    if present and voice_rms > 0:
+        under = 20.0 * math.log10(voice_rms / spot_rms)
+    record = {
+        "bed_mixed": False,
+        "background": False,
+        "sfx_present": present,
+        "sfx_under_db": under,
+        "voice_rms": voice_rms,
+        "sfx_rms": spot_rms,
+    }
+    out_path = Path(out_path)
+    (out_path.parent / "audio_mix.json").write_text(
+        json.dumps(record) + "\n", encoding="utf-8")
     return out_path
 
 

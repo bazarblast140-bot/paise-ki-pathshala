@@ -352,7 +352,9 @@ def main():
     visibility = os.environ.get("PUBLISH_VISIBILITY") or c["pipeline"]["publish_visibility"]
     publish_at = None
     slot = os.environ.get("PUBLISH_SLOT_IST", "").strip()
-    if visibility == "public" and slot:
+    import qa_hold
+    auto = qa_hold.auto_gate_active()
+    if visibility == "public" and slot and not auto:
         from datetime import datetime, timezone
         from slot_guard import UPLOAD_BUFFER, scheduled_publish_at
         forced = os.environ.get("PUBLISH_AT_UTC", "").strip()
@@ -370,11 +372,14 @@ def main():
         visibility = "private"
     visibility, publish_at = publish_guard.clamp_visibility(visibility, publish_at)
     import market_data
-    fresh = market_data.public_freshness_reason(RUN, visibility, publish_at)
-    if fresh:
-        die(fresh + ". Refusing a public upload.")
-    import qa_hold
+    if not auto:
+        fresh = market_data.public_freshness_reason(RUN, visibility, publish_at)
+        if fresh:
+            die(fresh + ". Refusing a public upload.")
     visibility, publish_at, held = qa_hold.apply_hold(visibility, publish_at)
+    if auto:
+        visibility, publish_at = "private", None
+        print("[auto] private upload; gates run before publishAt or a Reel")
     if held:
         qa_hold.mark_run(RUN)
         print("[qa] automatic upload held: private, no publishAt, no Instagram or Facebook")
@@ -427,13 +432,43 @@ def main():
 
     video_id = resp["id"]
     (RUN / "uploaded.txt").write_text(video_id, encoding="utf-8")
+    source_run = (os.environ.get("GITHUB_RUN_ID") or "").strip() or None if held else None
+    slot_skipped = None
+    date_ist = None
+    if auto:
+        import publish_gates
+        import approve_qa
+
+        def _update(video, privacy, when):
+            yt.videos().update(
+                part="status", body=approve_qa.status_body(video, privacy, when),
+            ).execute()
+
+        gate = publish_gates.finish(
+            RUN, video_id,
+            slot=slot,
+            date_ist=os.environ.get("PUBLISH_DATE_IST", "").strip(),
+            now=None,
+            update_status=_update,
+        )
+        publish_at = gate.get("publish_at")
+        source_run = gate.get("source_run")
+        slot_skipped = gate.get("slot_skipped")
+        date_ist = os.environ.get("PUBLISH_DATE_IST", "").strip() or None
+        if gate.get("passed") and not publish_at:
+            visibility = "public"
     record_publish(
         video_id, publish_at, slot,
+        date_ist=date_ist,
         pending_qa=held,
-        source_run=(os.environ.get("GITHUB_RUN_ID") or "").strip() or None if held else None,
+        source_run=source_run,
+        slot_skipped=slot_skipped,
         **ledger_voice_kwargs(RUN),
         credits=credit_log.ledger_fields(),
     )
+    if auto and gate.get("defer_at"):
+        import ig_defer
+        ig_defer.write_deferred(RUN, video_id, gate["defer_at"], source_run or "")
     ok(f"Uploaded as {visibility}: https://youtu.be/{video_id}")
     set_thumbnail(yt, video_id)
     print(f"\nEdit before going public: https://studio.youtube.com/video/{video_id}/edit")
