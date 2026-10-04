@@ -247,8 +247,11 @@ def ledger_voice_kwargs(run_dir):
 # configured voice is the same Madhur +0% sample.
 PREVIEW_EDGE_VOICE = "hi-IN-MadhurNeural"
 PREVIEW_EDGE_RATE = "+0%"
-# A live slot stops when fewer than this many characters remain.
-# It does not switch to Edge. Buffer and preview runs never reach this check.
+# A live slot speaks the configured Edge voice when fewer than this many
+# characters remain, when this Short would not fit, or when the API reports
+# quota exceeded. The slot is not skipped. With PAID_TTS on and remaining
+# at or above this floor (and enough characters for the Short), Rudra is
+# used and Edge is not. Buffer and preview runs never reach this check.
 LIVE_CREDIT_FLOOR = 1000
 KAMAL_VOICE_ID = "qsz5tTEjPvsiIJZIpM8S"
 RUDRA_VOICE_ID = "ypnkIsDASPgHZuanrF0q"

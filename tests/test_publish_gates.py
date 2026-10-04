@@ -198,13 +198,17 @@ class GateTests(unittest.TestCase):
             late = _write_run(Path(tmp) / "late", shots=_shot(70.0))
             self.assertTrue(publish_gates.duration_reasons(late, {"key": "hammer", "_live_short": True}))
 
-    def test_credit_floor_stops_the_live_slot_and_does_not_speak_edge(self):
+    def test_credit_floor_voices_the_live_slot_on_edge(self):
         self.assertEqual(eleven_voice.LIVE_CREDIT_FLOOR, 1000)
         preflight = inspect.getsource(board_short.preflight_eleven_credits)
         stop = inspect.getsource(board_short._credits_stop)
+        self.assertIn("_switch_to_edge", preflight)
+        self.assertIn("remaining < floor", preflight)
+        # A subscription outage is not a credit shortfall, so it still stops.
         self.assertIn("_credits_stop", preflight)
-        self.assertNotIn("_switch_to_edge", preflight)
         self.assertIn("No Edge fallback", stop)
+        render = inspect.getsource(board_short._render_short)
+        self.assertIn("_word_timings(beat_audio, beat_times)", render)
 
     def test_release_plan_schedules_ahead_and_publishes_a_recent_slot(self):
         ahead = publish_gates.release_plan(SLOT, DATE, now=NOW)

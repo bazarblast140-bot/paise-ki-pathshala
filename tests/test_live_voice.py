@@ -552,20 +552,59 @@ class DryRenderTests(unittest.TestCase):
         self.assertEqual(raw["matlab"], 14.0)
         self.assertEqual(raw["karein"], 16.0)
 
-    def test_rerender_stops_below_the_credit_floor(self):
+    def test_rerender_below_the_credit_floor_uses_edge(self):
         board_short.ELEVEN_REMAINING = 1000
+        board_short.ELEVEN_EXHAUSTED = False
+        board_short.VOICE_FALLBACK_REASON = ""
+        seen = []
 
-        def tts(*_args, **_kwargs):
-            raise AssertionError("a re-render that drops below 1,000 characters must not call TTS")
+        def tts(_text, path, _c):
+            seen.append(board_short.ELEVEN_EXHAUSTED)
+            path.write_bytes(b"e" * 2000)
 
         with tempfile.TemporaryDirectory() as tmp, \
              mock.patch.object(board_short, "RUN", Path(tmp)), \
              mock.patch.object(board_short.credit_log, "PATH", Path(tmp) / "credits.json"), \
              mock.patch.object(board_short, "tts", tts), \
+             mock.patch.object(board_short, "_trim_rendered", return_value={"hook": 12.0}), \
+             mock.patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(Path(tmp) / "summary.txt")}, clear=False), \
              redirect_stdout(io.StringIO()):
-            with self.assertRaises(SystemExit):
-                board_short._rerender_beats(
-                    {"hook": "नियम " * 40}, {"voice": _rudra_voice()}, ["hook"])
+            raw = board_short._rerender_beats(
+                {"hook": "नियम " * 40}, {"voice": _rudra_voice()}, ["hook"])
+            summary = (Path(tmp) / "summary.txt").read_text(encoding="utf-8")
+            meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
+        self.assertEqual(seen, [True])
+        self.assertIn("1000", board_short.VOICE_FALLBACK_REASON)
+        self.assertEqual(meta["engine"], "edge")
+        self.assertIn("voice_engine=edge", summary)
+        self.assertEqual(raw["hook"], 12.0)
+
+    def test_rerender_quota_retries_that_beat_on_edge(self):
+        board_short.ELEVEN_REMAINING = 5000
+        board_short.ELEVEN_EXHAUSTED = False
+        board_short.VOICE_FALLBACK_REASON = ""
+        calls = {"n": 0}
+
+        def tts(_text, path, _c):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise eleven_voice.QuotaFallback("HTTP 402; code=insufficient_credits")
+            self.assertTrue(board_short.ELEVEN_EXHAUSTED)
+            path.write_bytes(b"e" * 2000)
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(board_short.credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.object(board_short, "tts", tts), \
+             mock.patch.object(board_short, "_trim_rendered", return_value={"hook": 12.0}), \
+             redirect_stdout(io.StringIO()):
+            raw = board_short._rerender_beats(
+                {"hook": "नियम " * 10}, {"voice": _rudra_voice()}, ["hook"])
+            meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
+        self.assertEqual(calls["n"], 2)
+        self.assertEqual(meta["engine"], "edge")
+        self.assertIn("insufficient_credits", meta["fallback_reason"])
+        self.assertEqual(raw["hook"], 12.0)
 
     def test_unknown_remaining_still_rerenders_the_beat(self):
         board_short.ELEVEN_REMAINING = None

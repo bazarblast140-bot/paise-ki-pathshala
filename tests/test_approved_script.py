@@ -725,9 +725,11 @@ class RenderOnlyRudraTests(unittest.TestCase):
                 with mock.patch.dict(os.environ, self._quiet_env(extra), clear=False):
                     self.assertFalse(eleven_voice.paid_voice_allowed())
 
-    def test_the_1000_floor_and_the_hash_lock_still_stop_before_a_post(self):
+    def test_below_the_1000_floor_speaks_the_approved_script_on_edge(self):
         spoken = {beat: f"{beat} की तय लाइन।" for beat in ORDER}
         approved_script.remember({"beats": spoken, "source": "approved"})
+        locked = dict(spoken)
+        calls = []
 
         def low(_url, **_kwargs):
             return _SpeakResp(200, {
@@ -739,21 +741,43 @@ class RenderOnlyRudraTests(unittest.TestCase):
         def post(*_args, **_kwargs):
             raise AssertionError("below the floor must not POST")
 
-        env = self._quiet_env({})
-        err = io.StringIO()
+        async def edge(text, voice, rate, path):
+            calls.append((text, voice, rate))
+            path.write_bytes(b"e" * 2000)
+
+        env = self._quiet_env({"GITHUB_STEP_SUMMARY": ""})
         with tempfile.TemporaryDirectory() as tmp, \
              mock.patch.object(board_short, "RUN", Path(tmp)), \
              mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
              mock.patch.dict(os.environ, env, clear=False), \
              mock.patch("requests.get", low), \
              mock.patch("requests.post", post), \
-             redirect_stdout(io.StringIO()), redirect_stderr(err):
+             mock.patch.object(board_short, "_edge", edge), \
+             redirect_stdout(io.StringIO()):
             for key, value in env.items():
                 if value == "":
                     os.environ.pop(key, None)
-            with self.assertRaises(SystemExit):
-                board_short.synthesize_short_voices(spoken, common.cfg(), beats=ORDER)
-        self.assertIn("1000", err.getvalue())
+            os.environ["GITHUB_STEP_SUMMARY"] = str(Path(tmp) / "summary.txt")
+            engine = board_short.synthesize_short_voices(spoken, common.cfg(), beats=ORDER)
+            meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
+            tts_text = (Path(tmp) / "tts_text.txt").read_text(encoding="utf-8")
+            summary = (Path(tmp) / "summary.txt").read_text(encoding="utf-8")
+        self.assertEqual(engine, "edge")
+        self.assertEqual(spoken, locked)
+        self.assertEqual(len(calls), len(ORDER))
+        for beat, (text, voice, rate) in zip(ORDER, calls):
+            self.assertEqual(text, locked[beat])
+            self.assertEqual(voice, "hi-IN-MadhurNeural")
+            self.assertEqual(rate, "+0%")
+            self.assertIn(locked[beat], tts_text)
+        self.assertEqual(meta["engine"], "edge")
+        self.assertIn("1000", meta["fallback_reason"])
+        self.assertIn("voice_engine=edge", summary)
+
+    def test_the_hash_lock_still_stops_before_a_post(self):
+        spoken = {beat: f"{beat} की तय लाइन।" for beat in ORDER}
+        approved_script.remember({"beats": spoken, "source": "approved"})
+        env = self._quiet_env({})
 
         err = io.StringIO()
         with tempfile.TemporaryDirectory() as tmp, \

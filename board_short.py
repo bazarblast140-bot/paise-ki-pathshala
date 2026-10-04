@@ -2481,7 +2481,7 @@ def _reset_voice_state():
 
 
 def _switch_to_edge(reason):
-    """Preview-only. A live slot must call _credits_stop instead of this."""
+    """Speak this live slot with the configured Edge voice. Do not skip it."""
     global ELEVEN_EXHAUSTED, VOICE_FALLBACK_REASON
     ELEVEN_EXHAUSTED = True
     if not VOICE_FALLBACK_REASON:
@@ -2489,8 +2489,35 @@ def _switch_to_edge(reason):
         eleven_voice.log_fallback(VOICE_FALLBACK_REASON)
 
 
+def _note_edge_engine():
+    """The Actions job summary names the engine the slot actually spoke."""
+    line = "voice_engine=edge"
+    print(line, flush=True)
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    with open(path, "a", encoding="utf-8") as handle:
+        handle.write(line + "\n")
+
+
+def _write_spoken_engine(engine):
+    """voice_meta is what the ledger copies into voice_engine."""
+    key_set = bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
+    eleven_voice.write_voice_meta(
+        RUN,
+        engine,
+        VOICE_FALLBACK_REASON,
+        elevenlabs_attempted=key_set and eleven_voice.paid_voice_allowed(),
+    )
+    credit_log.set_tts_engine(engine, VOICE_FALLBACK_REASON)
+    if engine == "edge" and VOICE_FALLBACK_REASON:
+        _note_edge_engine()
+    ok(f"voice engine: {engine}" + (f" ({VOICE_FALLBACK_REASON})" if VOICE_FALLBACK_REASON else ""))
+    return engine
+
+
 def _credits_stop(reason):
-    """Live ElevenLabs cannot continue. No Edge audio, no second upload."""
+    """A non-credit ElevenLabs failure. No Edge audio, no second upload."""
     print(f"[credits] STOP: {reason}", flush=True)
     print("[STOP] live slot skipped; buffer may fill. No Edge fallback.", flush=True)
     try:
@@ -2526,7 +2553,7 @@ def preflight_eleven_credits(texts):
     status = getattr(response, "status_code", 0)
     kind = eleven_voice.classify(status, body)
     if kind == "quota":
-        _credits_stop(eleven_voice.describe(status, body))
+        _switch_to_edge(eleven_voice.describe(status, body))
         return
     if status != 200:
         # A scoped key may 401/403 on the subscription read. TTS stays the auth check.
@@ -2542,13 +2569,15 @@ def preflight_eleven_credits(texts):
     credit_log.set_eleven_remaining(remaining)
     need = sum(len(_voice_text(text or "")) for text in texts)
     floor = eleven_voice.LIVE_CREDIT_FLOOR
+    # Below the floor, or not enough characters to finish the Short: Edge.
+    # At or above the floor, with enough characters left, Rudra stays.
     if remaining < floor:
-        _credits_stop(
+        _switch_to_edge(
             f"pre-check remaining={remaining} is below the {floor} character floor"
         )
         return
     if need > 0 and remaining < need:
-        _credits_stop(
+        _switch_to_edge(
             f"pre-check remaining={remaining} characters, this Short needs {need}"
         )
 
@@ -2761,7 +2790,7 @@ def tts(text, path, c):
 
 
 def synthesize_short_voices(spoken, c, beats=None):
-    """Speak the requested beats. A live quota or credit error stops the slot."""
+    """Speak the requested beats. A live quota or credit shortfall uses Edge."""
     global ENGINES
     beats = tuple(beats) if beats else tuple(b for b in BEATS if b in (spoken or {}))
     if (RUN / "narration_block.json").exists():
@@ -2790,19 +2819,12 @@ def synthesize_short_voices(spoken, c, beats=None):
     try:
         once()
     except eleven_voice.QuotaFallback as exc:
-        _credits_stop(exc.reason)
+        # One engine for the whole slot. Paid files from earlier beats are not reused.
+        _switch_to_edge(exc.reason)
+        once()
     engine = "edge" if "edge" in ENGINES else "elevenlabs"
-    key_set = bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
-    eleven_voice.write_voice_meta(
-        RUN,
-        engine,
-        VOICE_FALLBACK_REASON,
-        elevenlabs_attempted=key_set and eleven_voice.paid_voice_allowed(),
-    )
-    # The whisper sync gate runs later on this audio, Edge or ElevenLabs.
-    credit_log.set_tts_engine(engine, VOICE_FALLBACK_REASON)
-    ok(f"voice engine: {engine}" + (f" ({VOICE_FALLBACK_REASON})" if VOICE_FALLBACK_REASON else ""))
-    return engine
+    # Word timestamps and every later gate run on this audio, Edge or ElevenLabs.
+    return _write_spoken_engine(engine)
 
 
 def duration(path):
@@ -4318,18 +4340,28 @@ def _rerender_beats(spoken, c, beats):
     """Speak only the beats whose words changed. Leave the others on disk."""
     need = sum(len(_voice_text(str(spoken.get(beat) or ""))) for beat in beats)
     floor = eleven_voice.LIVE_CREDIT_FLOOR
-    if ELEVEN_REMAINING is not None and ELEVEN_REMAINING - need < floor:
-        _credits_stop(
+    switched = False
+    if (
+        not ELEVEN_EXHAUSTED
+        and ELEVEN_REMAINING is not None
+        and ELEVEN_REMAINING - need < floor
+    ):
+        _switch_to_edge(
             f"re-render of {len(beats)} beat(s) needs {need} characters and would leave "
             f"{ELEVEN_REMAINING - need} below {floor}"
         )
+        switched = True
     for beat in beats:
         for name in (f"tts_{beat}.mp3", f"tts_{beat}.engine", f"tts_{beat}.textid", f"voice_clean_{beat}.wav"):
             (RUN / name).unlink(missing_ok=True)
         try:
             tts(spoken[beat], RUN / f"tts_{beat}.mp3", c)
         except eleven_voice.QuotaFallback as exc:
-            _credits_stop(exc.reason)
+            _switch_to_edge(exc.reason)
+            switched = True
+            tts(spoken[beat], RUN / f"tts_{beat}.mp3", c)
+    if switched:
+        _write_spoken_engine("edge")
     return _trim_rendered(beats)
 
 
