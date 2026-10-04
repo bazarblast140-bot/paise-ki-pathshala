@@ -190,8 +190,126 @@ def _ohlc_tuple(raw):
     return (float(raw["open"]), float(raw["high"]), float(raw["low"]), float(raw["close"]))
 
 
+def _fold_hi(text):
+    """Drop matras so Whisper's अगली and अगलि share one key."""
+    raw = re.sub(r"[।!?.,:;\"'“”\-–—]", "", str(text or ""))
+    out = []
+    for ch in raw:
+        o = ord(ch)
+        if o in (0x0901, 0x0902, 0x0903) or 0x093A <= o <= 0x094D or 0x0951 <= o <= 0x0957:
+            continue
+        out.append(ch.lower() if ch.isascii() else ch)
+    return "".join(out)
+
+
+def _karein_word_rows(words, t0, t1):
+    rows = []
+    for word in words or []:
+        if not isinstance(word, dict):
+            continue
+        start = float(word.get("start") or 0)
+        end = float(word.get("end") or (start + 0.2))
+        if end < float(t0) - 0.35 or start > float(t1) + 0.45:
+            continue
+        token = _fold_hi(word.get("word") or "")
+        if token:
+            rows.append((token, start, max(end, start), str(word.get("word") or "")))
+    rows.sort(key=lambda row: (row[1], row[2]))
+    return rows
+
+
+def _is_agli(token):
+    return token == "अगल" or token.startswith("अगल")
+
+
+def _is_confirm(token):
+    return "कनफर" in token or "कफरम" in token or "फरमश" in token or "confirm" in token
+
+
+def _is_candle(token):
+    return "कडल" in token or "candle" in token
+
+
+def _is_hai(token):
+    return token in ("ह", "है")
+
+
+def _confirm_word_span(words, t0, t1):
+    """Absolute (start, end) of the confirmation sentence. None when that word is missing.
+
+    Start is अगली / अगलि. If Whisper dropped it, the हरी of हरी कैंडल after मत लो.
+    End is the end of कन्फर्मेशन कैंडल है.
+    """
+    rows = _karein_word_rows(words, t0, t1)
+    start_at = None
+    start_i = None
+    for i, (token, start, _end, _raw) in enumerate(rows):
+        if _is_agli(token):
+            start_at, start_i = start, i
+            break
+    if start_at is None:
+        after_stop = None
+        for i, (token, _start, _end, _raw) in enumerate(rows):
+            if token in ("मत", "लो") or token.startswith("मत"):
+                after_stop = i
+        if after_stop is not None:
+            for i in range(after_stop + 1, len(rows)):
+                token, start, _end, _raw = rows[i]
+                if token == "हर" or (token.startswith("हर") and not _is_hai(token)):
+                    if any(_is_candle(tok) for tok, *_rest in rows[i:i + 3]):
+                        start_at, start_i = start, i
+                        break
+    end_at = None
+    scan = 0 if start_i is None else start_i
+    for i in range(scan, len(rows)):
+        token, _start, end, _raw = rows[i]
+        if not _is_confirm(token):
+            continue
+        end_at = end
+        for tok, _st, en, _raw in rows[i:i + 5]:
+            if _is_confirm(tok) or _is_candle(tok) or _is_hai(tok):
+                end_at = en
+            if _is_hai(tok) and tok != token:
+                end_at = en
+                break
+        break
+    return start_at, end_at
+
+
+def _confirm_scene_bounds(topic, t0, t1):
+    """Start and end of the karein scene that says the confirmation line."""
+    plan = [row for row in ((topic or {}).get("_scene_plan") or []) if row.get("beat") == "karein"]
+    cards = ((topic or {}).get("_scene_cards") or {}).get("karein") or []
+    for scene, card in zip(plan, cards):
+        text = str(card or "")
+        if "अगली" in text or "अगलि" in text or "कन्फर्मेशन" in text or "हरी कैंडल" in text:
+            return float(scene["start"]), float(scene["end"])
+    if plan:
+        return float(plan[0]["start"]), float(plan[0]["end"])
+    return float(t0), float(t1)
+
+
 def _confirm_window(topic):
-    """Where in karein the confirmation line is spoken, as a 0–1 progress span."""
+    """Where in karein the confirmation candle grows, as a 0–1 progress span.
+
+    Word timestamps win: grow from अगली and finish at the end of
+    कन्फर्मेशन कैंडल है. A missing word uses that scene's own start.
+    With no timestamps at all, the span follows the script text.
+    """
+    beat = ((topic or {}).get("_beat_times") or {}).get("karein") if isinstance(topic, dict) else None
+    words = (topic or {}).get("_audio_words") if isinstance(topic, dict) else None
+    if beat and words:
+        t0, t1 = float(beat[0]), float(beat[1])
+        dur = max(1e-6, t1 - t0)
+        start_t, end_t = _confirm_word_span(words, t0, t1)
+        scene_s, scene_e = _confirm_scene_bounds(topic, t0, t1)
+        if start_t is None:
+            start_t = scene_s
+        if end_t is None or end_t <= start_t + 0.05:
+            end_t = scene_e if scene_e > start_t + 0.05 else min(t1, start_t + max(0.8, 0.22 * dur))
+        start_p = max(0.0, min(0.98, (float(start_t) - t0) / dur))
+        end_p = max(start_p + 0.02, min(1.0, (float(end_t) - t0) / dur))
+        return start_p, end_p
     full = ""
     if isinstance(topic, dict):
         full = str(((topic.get("_spoken_beats") or {}).get("karein")) or "")
@@ -251,7 +369,7 @@ def _level_view(img, box, levels, beat, progress, fill_bottom=False, topic=None)
     ranged = list(pat)
     if beat == "karein" and confirm:
         ranged.append(confirm)
-        if confirm_u > 0.04:
+        if confirm_u > 0:
             slots.append(_grow_candle(confirm, confirm_u))
             draw_n = len(slots)
         else:
@@ -284,13 +402,16 @@ def _level_view(img, box, levels, beat, progress, fill_bottom=False, topic=None)
     if beat == "karein" and levels["sl"] is not None:
         dashed(img, x_left, plot[2], ax.y(levels["sl"]), SL_RED, None)
     img._level_badge = None
+    img._level_badge_scale = 1.0
     if p > 0.58 and levels["badge"]:
         scale = 0.45 + 0.55 * min(1.0, (p - 0.58) / 0.42)
         bw, bh = min(520, plot[2] - plot[0] - 48) * scale, 118 * scale
         cx, cy = (plot[0] + plot[2]) / 2, plot[1] + 28 + bh / 2
         rect = (cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2)
-        draw.rounded_rectangle(rect, 18, fill=(48, 36, 8), outline=YELLOW, width=4)
+        # The box is not painted here. It shares a sprite with its label so a
+        # zoom of the plate cannot leave the words outside the box.
         img._level_badge = rect
+        img._level_badge_scale = scale
     img._level_axes = ax
     img._level_plot = plot
     img._level_draw_n = draw_n
@@ -298,6 +419,72 @@ def _level_view(img, box, levels, beat, progress, fill_bottom=False, topic=None)
     img._level_hi = hi
     img._confirm_u = confirm_u
     return ax
+
+
+def _paint_badge_sprite(img, rect, text, scale):
+    """Box and label are one sprite, scaled from the same centre.
+
+    The plate zoom moves baked pixels and leaves sprites where they were.
+    A label drawn apart from its box sits outside the box for those frames.
+    """
+    import scene_frames
+    from PIL import Image, ImageDraw
+    x0, y0, x1, y1 = (float(v) for v in rect)
+    scale = max(0.2, min(1.0, float(scale)))
+    w = max(8, int(round(x1 - x0)))
+    h = max(8, int(round(y1 - y0)))
+    sprite = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(sprite)
+    stroke = max(2, int(round(4 * scale)))
+    radius = max(6, int(round(18 * scale)))
+    draw.rounded_rectangle(
+        [1, 1, w - 2, h - 2], radius, fill=(48, 36, 8, 255), outline=YELLOW + (255,), width=stroke,
+    )
+    margin = max(4.0, 8.0 * scale)
+    size = max(12, int(round(42 * scale)))
+    cx, cy = w / 2.0, h / 2.0
+    runs = scene_frames._runs(text)
+    while size >= 12:
+        _parts, union = scene_frames._layout_runs(text, size)
+        tw, th = union[2] - union[0], union[3] - union[1]
+        if tw <= w - 2 * margin and th <= h - 2 * margin:
+            break
+        size -= 1
+    if len(runs) == 1:
+        font = scene_frames._font(size, runs[0][0])
+        draw.text((cx, cy), text, font=font, fill=YELLOW + (255,), anchor="mm")
+        glyph = draw.textbbox((cx, cy), text, font=font, anchor="mm")
+    else:
+        parts, union = scene_frames._layout_runs(text, size)
+        dx = cx - (union[0] + union[2]) / 2.0
+        dy = cy - (union[1] + union[3]) / 2.0
+        for _path, piece, font, part_box in parts:
+            draw.text((dx + part_box[0], dy + part_box[1]), piece, font=font, fill=YELLOW + (255,))
+        glyph = (dx + union[0], dy + union[1], dx + union[2], dy + union[3])
+    scene_frames._seal(img)
+    ix, iy = int(round(x0)), int(round(y0))
+    img.paste(sprite, (ix, iy), sprite)
+    frame_box = (x0 + glyph[0], y0 + glyph[1], x0 + glyph[2], y0 + glyph[3])
+    if getattr(img, "label_boxes", None) is None:
+        img.label_boxes = []
+    if getattr(img, "text_layers", None) is None:
+        img.text_layers = []
+    img.label_boxes.append((frame_box[0] - 4, frame_box[1] - 4, frame_box[2] + 4, frame_box[3] + 4))
+    img.text_layers.append({
+        "image": sprite,
+        "xy": (ix, iy),
+        "text": text,
+        "shaped": True,
+        "box": tuple(float(v) for v in frame_box),
+        "badge_box": tuple(float(v) for v in rect),
+        "size": int(size),
+        "persist": False,
+        "faint": False,
+        "role": "axis",
+        "quantity": None,
+        "font": runs[0][0] if runs else None,
+        "runs": list(runs),
+    })
 
 
 def _level_labels(img, levels, beat, progress, spoken):
@@ -358,9 +545,8 @@ def _level_labels(img, levels, beat, progress, spoken):
         )
     badge = getattr(img, "_level_badge", None)
     if badge and p > 0.62 and levels["badge"]:
-        scene_frames._text(
-            img, (badge[0] + badge[2]) / 2, (badge[1] + badge[3]) / 2, levels["badge"], YELLOW, 42,
-            anchor="mm", band=False, role="axis",
+        _paint_badge_sprite(
+            img, badge, levels["badge"], float(getattr(img, "_level_badge_scale", 1.0) or 1.0),
         )
 
 

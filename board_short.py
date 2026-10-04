@@ -3526,6 +3526,23 @@ def _install_scene_cards(topic, spoken, beat_times, scenes, audio_words=None):
     texts, figures = scene_cards_for(spoken, beat_times, scenes, audio_words)
     topic["_scene_cards"] = texts
     topic["_scene_figures"] = figures
+    # The level chart reads these so a candle can start on a spoken word.
+    # Both the live build and the no-TTS rerender come through here.
+    topic["_audio_words"] = list(audio_words) if audio_words else None
+    topic["_beat_times"] = {
+        str(beat): (float(span[0]), float(span[1]))
+        for beat, span in (beat_times or {}).items()
+        if span and len(span) >= 2
+    }
+    topic["_scene_plan"] = [
+        {
+            "beat": scene.get("beat"),
+            "start": float(scene["start"]),
+            "end": float(scene["end"]),
+            "index": scene.get("index", 0),
+        }
+        for scene in (scenes or [])
+    ]
 
 
 def _word_timings(beat_audio, beat_times):
