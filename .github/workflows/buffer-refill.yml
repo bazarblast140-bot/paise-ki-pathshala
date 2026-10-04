@@ -67,3 +67,18 @@ jobs:
             git pull --rebase --autostash || true
             git push
           fi
+      - name: Upload buffer refill artifact
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buffer-refill-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: run/final.mp4
+      - name: QA artifact path
+        if: always()
+        run: |
+          {
+            echo "artifact: buffer-refill-${{ github.run_id }}"
+            echo "final.mp4: run/final.mp4"
+          } >> "$GITHUB_STEP_SUMMARY"

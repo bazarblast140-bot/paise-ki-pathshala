@@ -256,6 +256,11 @@ jobs:
           PUBLISH_SLOT_IST: ${{ steps.fmt.outputs.slot }}
           PUBLISH_DATE_IST: ${{ steps.fmt.outputs.date_ist }}
           PUBLISH_AT_UTC: ${{ steps.fmt.outputs.publish_at }}
+          # Crons and Slot watch hold for QA. A manual Run workflow picks privacy
+          # itself, so that dispatch is not held.
+          AUTOMATIC_UPLOAD: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}
+          REQUIRE_QA_APPROVAL: ${{ vars.REQUIRE_QA_APPROVAL || 'true' }}
+          EXPLICIT_PRIVACY: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
           # Reel only for PUBLIC runs: an unlisted test must not post a public Reel.
           IG_CROSSPOST: ${{ steps.fmt.outputs.format == 'short' && steps.fmt.outputs.visibility == 'public' && steps.fmt.outputs.render_only != 'true' && '1' || '0' }}
           IG_USER_ID: ${{ vars.IG_USER_ID }}
@@ -291,6 +296,9 @@ jobs:
           PUBLISH_SLOT_IST: ${{ steps.fmt.outputs.slot }}
           PUBLISH_DATE_IST: ${{ steps.fmt.outputs.date_ist }}
           PUBLISH_AT_UTC: ${{ steps.fmt.outputs.publish_at }}
+          AUTOMATIC_UPLOAD: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}
+          REQUIRE_QA_APPROVAL: ${{ vars.REQUIRE_QA_APPROVAL || 'true' }}
+          EXPLICIT_PRIVACY: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
           IG_CROSSPOST: ${{ steps.fmt.outputs.format == 'short' && steps.fmt.outputs.visibility == 'public' && '1' || '0' }}
           IG_USER_ID: ${{ vars.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
@@ -366,3 +374,10 @@ jobs:
             run/narration_block.json
             run/voice.wav
           retention-days: 14
+      - name: QA artifact path
+        if: always() && steps.guard.outputs.taken != 'true'
+        run: |
+          {
+            echo "artifact: ${{ steps.fmt.outputs.format }}-${{ github.run_number }}"
+            echo "final.mp4: run/final.mp4"
+          } >> "$GITHUB_STEP_SUMMARY"

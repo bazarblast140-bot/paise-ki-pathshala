@@ -24,8 +24,8 @@ def die(msg):
     raise SystemExit(1)
 
 
-def release_url_ok(url):
-    """True only for https://github.com/.../paise-ki-pathshala/releases/download/<tag>/<file>.mp4."""
+def release_url_ok(url, suffix=".mp4"):
+    """True only for https://github.com/.../releases/download/<tag>/<file><suffix>."""
     raw = str(url or "").strip()
     if not raw or raw != str(url or "").strip():
         return False
@@ -40,7 +40,12 @@ def release_url_ok(url):
     parts = path[len(PREFIX):].split("/")
     if len(parts) != 2 or not parts[0] or not parts[1]:
         return False
-    return parts[1].lower().endswith(".mp4")
+    return parts[1].lower().endswith(str(suffix).lower())
+
+
+def thumb_url_ok(url):
+    """True only for a .jpg on this repo's release downloads."""
+    return release_url_ok(url, suffix=".jpg")
 
 
 def probe(path):
@@ -148,13 +153,14 @@ def _download_private(url, token):
     })
 
 
-def _download(url, dest):
+def _download(url, dest, min_bytes=1000, label="override mp4"):
     token = _token()
     blob = _download_private(url, token) if token else _download_public(url)
     if len(blob) > MAX_BYTES:
-        die("override mp4 is larger than 80 MB")
-    if len(blob) < 1000:
-        die("override mp4 is empty")
+        die(f"{label} is larger than 80 MB")
+    if len(blob) < min_bytes:
+        die(f"{label} is empty")
+    dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(blob)
 
 
@@ -187,7 +193,33 @@ def apply(url, artifact, dest=None):
     return dest
 
 
+def apply_thumb(url, dest):
+    """Download a release jpeg over dest. Same token path as the mp4 override."""
+    url = str(url or "").strip()
+    if not thumb_url_ok(url):
+        die("thumb url must be https://github.com/bazarblast140-bot/paise-ki-pathshala/releases/download/<tag>/<file>.jpg")
+    dest = Path(dest)
+    tmp = dest.with_name(dest.name + ".override.part")
+    try:
+        _download(url, tmp, min_bytes=100, label="thumbnail")
+        blob = tmp.read_bytes()
+        if not blob.startswith(b"\xff\xd8"):
+            die("thumbnail is not a jpeg")
+        tmp.replace(dest)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    print(f"[override] replaced {dest.name} from {url}")
+    return dest
+
+
 def main():
+    if "--thumb" in sys.argv:
+        url = (os.environ.get("OVERRIDE_THUMB_URL") or "").strip()
+        if not url:
+            return
+        apply_thumb(url, RUN / "thumbnail.jpg")
+        return
     url = (os.environ.get("OVERRIDE_MP4_URL") or "").strip()
     if not url:
         return

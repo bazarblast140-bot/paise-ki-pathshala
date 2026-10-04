@@ -47,6 +47,11 @@ on:
         required: false
         type: string
         default: ""
+      override_thumb_url:
+        description: "Optional. Replace run/thumbnail.jpg before YouTube and Instagram. Only https://github.com/bazarblast140-bot/paise-ki-pathshala/releases/download/<tag>/<file>.jpg"
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: paise-ki-pathshala-publish
@@ -98,6 +103,12 @@ jobs:
           OVERRIDE_MP4_URL: ${{ inputs.override_mp4_url }}
           GH_TOKEN: ${{ github.token }}
         run: python override_mp4.py
+      - name: Replace thumbnail.jpg from a release asset
+        if: inputs.override_thumb_url != ''
+        env:
+          OVERRIDE_THUMB_URL: ${{ inputs.override_thumb_url }}
+          GH_TOKEN: ${{ github.token }}
+        run: python override_mp4.py --thumb
       - name: Schedule publishAt
         id: when
         if: inputs.ig_only != 'true'
@@ -126,6 +137,7 @@ jobs:
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
           EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
           APPROVED: "true"
+          EXPLICIT_PRIVACY: "1"
         run: python publish.py
       - name: Cross-post the Reel
         if: inputs.skip_ig != 'true'

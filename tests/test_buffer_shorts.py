@@ -309,6 +309,35 @@ class FillTests(unittest.TestCase):
         self.assertTrue(again["filled"])
         self.assertEqual(len(uploads), 1)
 
+    def test_qa_hold_uploads_private_with_no_schedule_and_no_reel(self):
+        topic = _topic()
+        item = _item(topic, "2026-10-01T00:00:00Z")
+        env = {"AUTOMATIC_UPLOAD": "1", "EXPLICIT_PRIVACY": "", "REQUIRE_QA_APPROVAL": ""}
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(buffer_shorts, "RUN", Path(tmp)), \
+             mock.patch.dict(os.environ, env, clear=False):
+            result, uploads, posts, _alerts, recorded, _manifest = self._fill([], [item])
+            held_file = (Path(tmp) / "qa_hold.txt").is_file()
+        self.assertTrue(result["filled"])
+        self.assertIsNone(result["publish_at"])
+        self.assertIsNone(uploads[0]["publish_at"])
+        self.assertEqual(posts, [])
+        self.assertTrue(recorded[0]["pending_qa"])
+        self.assertTrue(held_file)
+        self.assertIsNone(buffer_shorts.private_upload_status(None).get("publishAt"))
+        self.assertEqual(buffer_shorts.private_upload_status(PUBLISH_AT)["publishAt"], PUBLISH_AT)
+
+    def test_explicit_privacy_keeps_the_buffer_schedule_and_reel(self):
+        topic = _topic()
+        item = _item(topic, "2026-10-01T00:00:00Z")
+        env = {"AUTOMATIC_UPLOAD": "1", "EXPLICIT_PRIVACY": "1", "REQUIRE_QA_APPROVAL": "true"}
+        with mock.patch.dict(os.environ, env, clear=False):
+            result, uploads, posts, _alerts, recorded, _manifest = self._fill([], [item])
+        self.assertEqual(uploads[0]["publish_at"], PUBLISH_AT)
+        self.assertEqual(posts[0]["video_id"], "vidbuffer1")
+        self.assertFalse(recorded[0]["pending_qa"])
+        self.assertEqual(result["publish_at"], PUBLISH_AT)
+
     def test_hold_is_not_filled(self):
         topic = _topic()
         item = _item(topic, "2026-10-01T00:00:00Z")
