@@ -14,6 +14,7 @@
   "fcf",
   "penny_stock_filter",
   "fund_margin",
-  "fund_fcf"
+  "fund_fcf",
+  "penny_dilution"
  ]
 }
