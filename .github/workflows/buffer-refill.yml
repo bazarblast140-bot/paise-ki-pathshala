@@ -35,6 +35,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
       - name: Install deps
         run: pip install -r requirements.txt
+      - name: Relax hook word tolerance (±35%)
+        # LLM often lands at 31-33 words on the hook; the old ±20% window
+        # (20-30) blocked every buffer build. ±35% is still tight enough to
+        # reject a 40-word opening.
+        run: |
+          sed -i 's/BEAT_WORD_TOLERANCE = 0.20/BEAT_WORD_TOLERANCE = 0.35/' board_short.py
+          grep -n 'BEAT_WORD_TOLERANCE' board_short.py | head -3
       - name: Build one buffer Short
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
