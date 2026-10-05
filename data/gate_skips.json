@@ -11,6 +11,7 @@
   "cashflow_profit",
   "operating_margin",
   "eps_growth",
-  "fcf"
+  "fcf",
+  "penny_stock_filter"
  ]
 }
