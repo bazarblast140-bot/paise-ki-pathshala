@@ -20,6 +20,7 @@
     "ipo_drhp",
     "three_black_crows",
     "shareholding",
-    "intraday_vwap_reclaim"
+    "intraday_vwap_reclaim",
+    "intraday_first_hour"
   ]
 }
