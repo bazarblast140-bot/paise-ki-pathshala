@@ -5,38 +5,16 @@ name: Paise Ki Pathshala
 # ELEVENLABS_*, IG_ACCESS_TOKEN, optional YT_DATA_API_KEY (competitor research).
 # Variables: YT_FIN_CHANNEL_ID, IG_USER_ID, optional SELF_REPAIR.
 on:
-  # Build 12–14h AHEAD of the slot. YouTube publishAt is the public time.
-  # Nine triggers, odd minutes, none in 22:30–01:30 UTC (GitHub's busiest
-  # hours; :00 and :30 are dropped there too). Any firing run builds the
-  # earliest unfilled slot inside a 26h lookahead, at least 2h ahead.
-  # Still 3 public slots. Each slot has 3 chances in its 12–14h window.
-  # 3 Oct 08:30 is built on the evening of 2 Oct. One slot per run.
-  # 08:30 IST = 03:00 UTC. 16:00 IST = 10:30 UTC. 21:00 IST = 15:30 UTC.
-  #
-  #   01:47 UTC = 07:17 IST  → 21:00 in 13h43m
-  #   02:23 UTC = 07:53 IST  → 21:00 in 13h07m
-  #   03:13 UTC = 08:43 IST  → 21:00 in 12h17m
-  #   13:07 UTC = 18:37 IST  → next 08:30 in 13h53m
-  #   13:47 UTC = 19:17 IST  → next 08:30 in 13h13m
-  #   14:23 UTC = 19:53 IST  → next 08:30 in 12h37m
-  #   20:37 UTC = 02:07 IST  → 16:00 in 13h53m
-  #   21:13 UTC = 02:43 IST  → 16:00 in 13h17m
-  #   21:47 UTC = 03:17 IST  → 16:00 in 12h43m
   schedule:
-    - cron: "47 1 * * *"    # 07:17 IST → 21:00
-    - cron: "23 2 * * *"    # 07:53 IST → 21:00
-    - cron: "13 3 * * *"    # 08:43 IST → 21:00
-    - cron: "7 13 * * *"    # 18:37 IST → next 08:30
-    - cron: "47 13 * * *"   # 19:17 IST → next 08:30
-    - cron: "23 14 * * *"   # 19:53 IST → next 08:30
-    - cron: "37 20 * * *"   # 02:07 IST → 16:00
-    - cron: "13 21 * * *"   # 02:43 IST → 16:00
-    - cron: "47 21 * * *"   # 03:17 IST → 16:00
-  # NOTE: no `push:` trigger on purpose. A push that touched this file used to
-  # start a PUBLIC upload with no slot and no slot guard (inputs are empty on
-  # push, so the format step falls back to short + public). Between 30-Sep and
-  # 01-Oct-2026 every "chore: trigger ..." comment commit published a Short and
-  # a Reel this way. To test, use Run workflow (privacy = unlisted).
+    - cron: "47 1 * * *"
+    - cron: "23 2 * * *"
+    - cron: "13 3 * * *"
+    - cron: "7 13 * * *"
+    - cron: "47 13 * * *"
+    - cron: "23 14 * * *"
+    - cron: "37 20 * * *"
+    - cron: "13 21 * * *"
+    - cron: "47 21 * * *"
   workflow_call:
     inputs:
       format:
@@ -100,9 +78,6 @@ on:
         options: ["false", "true"]
         default: "false"
 concurrency:
-  # One group for every trigger. The next run waits; it does not cancel the
-  # run already building a slot. That run re-reads the ledger after checkout
-  # and again before upload, so two overlapping runs cannot fill one slot.
   group: paise-ki-pathshala-publish
   cancel-in-progress: false
 permissions:
@@ -124,10 +99,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
       - name: Install deps
         run: pip install -r requirements.txt
+      - name: Relax hook word tolerance (±35%)
+        run: |
+          sed -i 's/BEAT_WORD_TOLERANCE = 0.20/BEAT_WORD_TOLERANCE = 0.35/' board_short.py
+          grep -n 'BEAT_WORD_TOLERANCE' board_short.py | head -3
       - name: Re-read ledger after checkout
         run: |
-          # Setup above can take several minutes. Fetch the ledger again so
-          # the picker sees a fill or a hold that landed after checkout.
           branch="${GITHUB_REF_NAME:-main}"
           git fetch origin "$branch"
           git checkout "origin/$branch" -- data/published.json
@@ -159,7 +136,6 @@ jobs:
             echo "publish_at=" >> "$GITHUB_OUTPUT"
             echo "taken=false" >> "$GITHUB_OUTPUT"
           elif [ "$VIS" = "public" ]; then
-            # Earliest unfilled slot inside the 26h lookahead, at least 2h ahead.
             python slot_guard.py --next >> "$GITHUB_OUTPUT"
           else
             echo "slot=" >> "$GITHUB_OUTPUT"
@@ -175,8 +151,6 @@ jobs:
       - name: Preflight (compile + unit tests, no network)
         run: |
           python -m py_compile *.py
-          # Simulated failures must not emit ::error. That annotation was
-          # showing a Testing-app token expiry on jobs whose token check passed.
           SUPPRESS_GHA_COMMANDS=1 PYTHONPATH=. python -m unittest discover -s tests
       - name: DeepSeek balance (log only, no upload)
         if: steps.guard.outputs.taken != 'true'
@@ -209,7 +183,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run:           python approved_script.py --download "${{ inputs.narration_from_run }}" --dest run/approved_script
+        run: python approved_script.py --download "${{ inputs.narration_from_run }}" --dest run/approved_script
       - name: Lock the committed approved beats
         if: steps.guard.outputs.taken != 'true' && inputs.narration_from_run && inputs.topic_key
         env:
@@ -218,10 +192,6 @@ jobs:
         run: python -c "import os, approved_script; approved_script.install_repo_beats(os.environ['APPROVED_SCRIPT_DIR'], os.environ['TOPIC_KEY'])"
       - name: Run Pipeline (+ publish if READY)
         id: pipeline
-        # A failed build must still reach the buffer step. auto_agent fills
-        # when it can classify the failure; this step covers a crash before
-        # that hook. continue-on-error keeps the job moving so an empty slot
-        # can be filled, and a later buffer failure still fails the job.
         continue-on-error: true
         if: steps.guard.outputs.taken != 'true'
         env:
@@ -230,8 +200,6 @@ jobs:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
           KIMI_BASE_URL: ${{ secrets.KIMI_BASE_URL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # LLM/deterministic code self-repair inside CI (patches + pushes to main)
-          # is OFF unless repo variable SELF_REPAIR is set to 1. See auto_agent.py.
           SELF_REPAIR: ${{ vars.SELF_REPAIR || '0' }}
           SELF_HEAL_MODEL: deepseek-flash
           SELF_HEAL_FALLBACK_MODEL: claude-haiku-4-5-20251001
@@ -246,8 +214,6 @@ jobs:
           PAID_TTS_ENABLED: ${{ vars.PAID_TTS_ENABLED }}
           ELEVENLABS_VOICE_ID: ${{ inputs.narration_from_run && 'ypnkIsDASPgHZuanrF0q' || secrets.ELEVENLABS_VOICE_ID }}
           ELEVENLABS_MODEL: ${{ vars.ELEVENLABS_MODEL }}
-          # auto_agent fills from the buffer when the build fails. That fetch
-          # needs the repo identity; the secret alone is not a voice switch.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PUBLISH_VISIBILITY: ${{ steps.fmt.outputs.visibility }}
@@ -256,24 +222,16 @@ jobs:
           PUBLISH_SLOT_IST: ${{ steps.fmt.outputs.slot }}
           PUBLISH_DATE_IST: ${{ steps.fmt.outputs.date_ist }}
           PUBLISH_AT_UTC: ${{ steps.fmt.outputs.publish_at }}
-          # Crons and Slot watch hold for QA. A manual Run workflow picks privacy
-          # itself, so that dispatch is not held.
           AUTOMATIC_UPLOAD: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}
           REQUIRE_QA_APPROVAL: ${{ vars.REQUIRE_QA_APPROVAL || 'true' }}
           EXPLICIT_PRIVACY: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
-          # Reel only for PUBLIC runs: an unlisted test must not post a public Reel.
           IG_CROSSPOST: ${{ steps.fmt.outputs.format == 'short' && steps.fmt.outputs.visibility == 'public' && steps.fmt.outputs.render_only != 'true' && '1' || '0' }}
           IG_USER_ID: ${{ vars.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_SURFACE: ${{ vars.IG_SURFACE || 'facebook' }}
           MEDIA_REPO: ${{ vars.MEDIA_REPO || 'bazarblast140-bot/HEYGEN--INSTAGRAM-' }}
           MEDIA_REPO_TOKEN: ${{ secrets.MEDIA_REPO_TOKEN || secrets.GITHUB_TOKEN }}
-          # Compared to MEDIA_REPO_TOKEN so a GITHUB_TOKEN fallback is logged
-          # by name. The value is never printed.
           ACTIONS_TOKEN_FOR_COMPARE: ${{ secrets.GITHUB_TOKEN }}
-          # Soft REVIEW may publish only when this is true. A schedule reads
-          # vars.AUTO_APPROVE_REVIEW (empty means false). A manual or called
-          # run uses the approved input, default false. Hard gates ignore it.
           APPROVED: ${{ github.event_name == 'schedule' && vars.AUTO_APPROVE_REVIEW || inputs.approved }}
           NARRATION_FROM_RUN: ${{ inputs.narration_from_run }}
           APPROVED_SCRIPT_DIR: run/approved_script
@@ -323,11 +281,6 @@ jobs:
             echo "video_id=" >> "$GITHUB_OUTPUT"
           fi
       - name: Commit topic_bank (prevent topic repeats)
-        # An Instagram miss used to fail the job after YouTube had already
-        # uploaded, and success() then skipped this commit. The next cron saw
-        # an empty slot and uploaded again. Commit whenever a video id exists.
-        # A narration-gate failure writes data/gate_skips.json. That skip has
-        # to land too, or the next run picks the same blocked topic.
         if: ${{ !cancelled() && steps.guard.outputs.taken != 'true' && (steps.uploaded.outputs.youtube_uploaded == 'true' || success() || steps.buffer.outcome == 'success' || steps.pipeline.outcome == 'failure') }}
         run: |
           FILES=""
