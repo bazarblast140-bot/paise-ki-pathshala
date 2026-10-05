@@ -139,10 +139,43 @@ def _has_number(text):
     return bool(re.search(r"\d", text or ""))
 
 
+_NUMBER_TOKEN = None
+
+
+def _only_rule_of_thumb_numbers(text):
+    """True when every number is a bare small integer, such as RSI 70 or 2 गुना.
+
+    Prices, rupee amounts, percentages, decimals, comma figures, years and
+    anything above 200 are not rule-of-thumb numbers and still need an
+    example label.
+    """
+    import re
+    global _NUMBER_TOKEN
+    if _NUMBER_TOKEN is None:
+        _NUMBER_TOKEN = re.compile(
+            r"(?P<cur>₹\s*|Rs\.?\s*|\$\s*)?(?P<num>\d[\d,]*(?:\.\d+)?)"
+            r"(?P<unit>\s*(?:%|लाख|करोड़|हज़ार|lakh|crore|k\b))?",
+            re.IGNORECASE,
+        )
+    for hit in _NUMBER_TOKEN.finditer(text or ""):
+        if hit.group("cur") or hit.group("unit"):
+            return False
+        num = hit.group("num")
+        if "," in num or "." in num or int(num) > 200:
+            return False
+    return True
+
+
 def example_labelled(topic):
-    """True when on-screen copy has no number, or the number is marked as an example."""
+    """True when on-screen copy has no number, or the number is marked as an example.
+
+    A bare small number (RSI 70, 2 गुना wick) is a rule of thumb, not data, and
+    does not need the label. Any price, rupee, percent, year or large figure does.
+    """
     screen = on_screen_text(topic)
     if not _has_number(screen):
+        return True
+    if _only_rule_of_thumb_numbers(screen):
         return True
     blob = screen.lower()
     return any(marker in blob or marker in screen for marker in _EXAMPLE_MARKERS)
