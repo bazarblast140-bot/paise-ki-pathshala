@@ -18,6 +18,7 @@
     "intraday_trend_range",
     "risk_leverage",
     "ipo_drhp",
-    "three_black_crows"
+    "three_black_crows",
+    "shareholding"
   ]
 }
