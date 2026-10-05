@@ -21,6 +21,7 @@
     "three_black_crows",
     "shareholding",
     "intraday_vwap_reclaim",
-    "intraday_first_hour"
+    "intraday_first_hour",
+    "intraday_no_trade"
   ]
 }
