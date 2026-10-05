@@ -13,6 +13,7 @@
   "eps_growth",
   "fcf",
   "penny_stock_filter",
-  "fund_margin"
+  "fund_margin",
+  "fund_fcf"
  ]
 }
