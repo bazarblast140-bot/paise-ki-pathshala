@@ -19,6 +19,7 @@
     "risk_leverage",
     "ipo_drhp",
     "three_black_crows",
-    "shareholding"
+    "shareholding",
+    "intraday_vwap_reclaim"
   ]
 }
