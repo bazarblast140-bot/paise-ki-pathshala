@@ -17,6 +17,7 @@
     "opt_theta_decay",
     "intraday_trend_range",
     "risk_leverage",
-    "ipo_drhp"
+    "ipo_drhp",
+    "three_black_crows"
   ]
 }
