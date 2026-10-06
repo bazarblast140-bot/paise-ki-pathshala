@@ -956,6 +956,7 @@ def next_evergreen(bank_topics, entries, manifest):
         for key in (manifest or {}).get("skipped_topics") or []
         if str(key or "").strip()
     }
+    eligible = []
     for topic in bank_topics or []:
         if not isinstance(topic, dict):
             continue
@@ -966,8 +967,16 @@ def next_evergreen(bank_topics, entries, manifest):
             continue
         if topic_blocked(topic.get("key"), entries, bank_topics, manifest):
             continue
-        return topic
-    return None
+        eligible.append(topic)
+    # A topic with no scene of its own stops the build before TTS, so prefer
+    # one that can render. With none renderable, keep the first eligible topic.
+    try:
+        import board_scenes
+        renderable = [t for t in eligible if not board_scenes.topic_chart_block(t)]
+    except ImportError:
+        renderable = eligible
+    pool = renderable or eligible
+    return pool[0] if pool else None
 
 
 def remember_skip(manifest, topic_key):

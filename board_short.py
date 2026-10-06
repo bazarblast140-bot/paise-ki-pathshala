@@ -206,6 +206,7 @@ BEAT_WORD_TOLERANCE = 0.20
 TOTAL_WORDS = (150, 190)
 TOTAL_WORD_TARGET = (160, 180)
 NARRATION_CALL_CAP = 4
+NARRATION_STATIC_REPAIRS = 2
 
 # Live Shorts (ElevenLabs) explain the topic in six beats. Buffer/Edge keeps
 # the four-beat lesson above. Targets are derived from the voice coefficient.
@@ -2223,6 +2224,7 @@ def narration(topic, c, spec=None):
     msg = json.dumps(user, ensure_ascii=False)
     draft = None
     repair_done = False
+    repairs = 0
     last = ""
     calls = 0
     model = c["models"]["script_model"]
@@ -2295,11 +2297,14 @@ def narration(topic, c, spec=None):
             continue
         if kind == "repair":
             n = merge_repair(draft, n, rewrite, topic)
+            repairs += 1
             # Live beats that stay outside the window get another repair
-            # inside the same 4-call budget. Four-beat scripts still stop
-            # after one contentful repair.
+            # inside the same 4-call budget. Four-beat scripts stop after
+            # NARRATION_STATIC_REPAIRS contentful repairs (the model often
+            # overshoots the word window once and lands it on the next try).
             if not (topic.get("_live_short") and not topic.get("_atr")):
-                repair_done = True
+                if repairs >= NARRATION_STATIC_REPAIRS:
+                    repair_done = True
         if topic.get("_live_short") and not topic.get("_atr"):
             n = apply_live_draft(n, topic)
         draft = n
@@ -2318,7 +2323,11 @@ def narration(topic, c, spec=None):
             return _accept(n, calls)
         last = "; ".join(fails)
         print(f"[retry] narration call {calls}/{NARRATION_CALL_CAP}: {last}")
-        if kind == "repair" and not (topic.get("_live_short") and not topic.get("_atr")):
+        if (
+            kind == "repair"
+            and not (topic.get("_live_short") and not topic.get("_atr"))
+            and repairs >= NARRATION_STATIC_REPAIRS
+        ):
             break
     reason = (
         "LLM narration failed the hook/teaching gate; "
