@@ -39,7 +39,20 @@ jobs:
           PIPELINE_MODE: preview
           AUTOMATIC_UPLOAD: "1"
           REQUIRE_QA_APPROVAL: ${{ vars.REQUIRE_QA_APPROVAL || 'true' }}
-        run: python buffer_shorts.py --refill
+        run: |
+          set -o pipefail
+          mkdir -p run
+          python buffer_shorts.py --refill 2>&1 | tee run/buffer_refill_last.log
+      - name: Show why the refill failed (annotation, secrets stay masked)
+        if: always()
+        continue-on-error: true
+        run: |
+          f=run/buffer_refill_last.log
+          if [ -s "$f" ]; then
+            echo "::notice title=refill log tail::$(tail -n 22 "$f" | tr -cd '[:print:]\n' | tr '\n' '~' | cut -c1-1900)"
+          else
+            echo "::notice title=refill log tail::no run/buffer_refill_last.log"
+          fi
       - name: Commit manifest and topic bank
         if: always() && !cancelled()
         run: |
