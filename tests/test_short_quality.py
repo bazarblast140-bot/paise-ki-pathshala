@@ -300,8 +300,14 @@ class SelfReviewTests(unittest.TestCase):
         self.assertTrue(matched["public_ok"])
         missed = self_review.full_review(
             topic, narration, spec, overlays, trends={"themes": ["quantum physics"]})
-        self.assertLess(missed["parts"]["trend"], self_review.PART_BAR)
-        self.assertFalse(missed["public_ok"])
+        # A concept lesson is timeless: missing today's trend list does not fail it.
+        self.assertIsNone(missed["parts"]["trend"])
+        self.assertTrue(missed["public_ok"])
+        topic["cat"] = "REAL DATA"
+        live = self_review.full_review(
+            topic, narration, spec, overlays, trends={"themes": ["quantum physics"]})
+        self.assertLess(live["parts"]["trend"], self_review.PART_BAR)
+        self.assertFalse(live["public_ok"])
 
     def test_bad_hook_unsourced_number_and_missing_provenance_block_public(self):
         topic = _topic()
