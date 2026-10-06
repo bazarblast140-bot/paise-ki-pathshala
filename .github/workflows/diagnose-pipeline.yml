@@ -73,5 +73,8 @@ jobs:
           TOPIC_KEY: hammer
         run: |
           python run_pipeline.py --format short > out_build.txt 2>&1; rc=$?
-          echo "::notice title=build rc=$rc::$(grep -n -E 'FAIL|STOP|BLOCK|Error|error|Traceback|retry|warn' out_build.txt | tail -n 30 | tr '\n' '|')"
-          echo "::notice title=build-tail::$(tail -n 25 out_build.txt | tr '\n' '|')"
+          clean() { tr -cd '[:print:]\n' | tr '\n' '~' | cut -c1-1900; }
+          echo "::notice title=build-rc::rc=$rc lines=$(wc -l < out_build.txt)"
+          echo "::notice title=build-flags::$(grep -n -E 'FAIL|STOP|BLOCK|Error|Traceback|retry|skip' out_build.txt | tail -n 14 | clean)"
+          echo "::notice title=build-tail::$(tail -n 14 out_build.txt | clean)"
+          echo "::notice title=build-head::$(head -n 14 out_build.txt | clean)"
