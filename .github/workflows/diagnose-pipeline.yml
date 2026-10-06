@@ -1,0 +1,75 @@
+name: Diagnose pipeline (temporary)
+
+# Read-only. Runs the same setup checks and one preview build WITHOUT any
+# upload, and copies the last lines of each step into annotations so the
+# failure reason can be read through the API. Secrets stay masked.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+      KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      YOUTUBE_CLIENT_ID: ${{ secrets.YT_FIN_CLIENT_ID }}
+      YOUTUBE_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}
+      YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
+      EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      SUPPRESS_GHA_COMMANDS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install FFmpeg & fonts
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Which secrets exist (names only, never values)
+        run: |
+          for v in DEEPSEEK_API_KEY DEEPSEEK_BASE_URL KIMI_API_KEY ANTHROPIC_API_KEY PEXELS_API_KEY \
+                   YOUTUBE_CLIENT_ID YOUTUBE_CLIENT_SECRET YOUTUBE_REFRESH_TOKEN EXPECTED_CHANNEL_ID; do
+            if [ -n "${!v}" ]; then s=set; else s=EMPTY; fi
+            printf '%s=%s; ' "$v" "$s"
+          done > out_secrets.txt
+          echo "::notice title=secrets::$(cat out_secrets.txt)"
+      - name: Preflight setup check
+        continue-on-error: true
+        run: |
+          python check_setup.py > out_setup.txt 2>&1; rc=$?
+          echo "::notice title=check_setup rc=$rc::$(tail -n 25 out_setup.txt | tr '\n' '|')"
+      - name: DeepSeek balance
+        continue-on-error: true
+        run: |
+          python health_check.py --deepseek-balance > out_ds.txt 2>&1; rc=$?
+          echo "::notice title=deepseek rc=$rc::$(tail -n 15 out_ds.txt | tr '\n' '|')"
+      - name: YouTube token
+        continue-on-error: true
+        run: |
+          python yt_credentials.py > out_yt.txt 2>&1; rc=$?
+          echo "::notice title=youtube rc=$rc::$(tail -n 15 out_yt.txt | tr '\n' '|')"
+      - name: Preview build (no upload)
+        continue-on-error: true
+        env:
+          PIPELINE_MODE: preview
+          PUBLISH_VISIBILITY: unlisted
+          AUTOMATIC_UPLOAD: "0"
+          EXPLICIT_PRIVACY: "1"
+          BUFFER_FILL: "0"
+          ELEVENLABS_OPT_IN: "0"
+          DEEPSEEK_MAX_CALLS: "4"
+          TOPIC_KEY: hammer
+        run: |
+          python run_pipeline.py --format short > out_build.txt 2>&1; rc=$?
+          echo "::notice title=build rc=$rc::$(grep -n -E 'FAIL|STOP|BLOCK|Error|error|Traceback|retry|warn' out_build.txt | tail -n 30 | tr '\n' '|')"
+          echo "::notice title=build-tail::$(tail -n 25 out_build.txt | tr '\n' '|')"
