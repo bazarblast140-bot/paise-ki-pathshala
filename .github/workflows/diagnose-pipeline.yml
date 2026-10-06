@@ -5,6 +5,8 @@ name: Diagnose pipeline (temporary)
 # failure reason can be read through the API. Secrets stay masked.
 on:
   workflow_dispatch:
+  push:
+    branches: ["diag/**"]
 
 permissions:
   contents: read
