@@ -49,6 +49,7 @@ jobs:
         run: |
           f=run/buffer_refill_last.log
           if [ -s "$f" ]; then
+            echo "::notice title=refill errors::$(grep -nE 'Error|Traceback|FAIL|BLOCK|File \"|rc=|raise|assert' "$f" | tail -n 14 | tr -cd '[:print:]\n' | tr '\n' '~' | cut -c1-1900)"
             echo "::notice title=refill log tail::$(tail -n 22 "$f" | tr -cd '[:print:]\n' | tr '\n' '~' | cut -c1-1900)"
           else
             echo "::notice title=refill log tail::no run/buffer_refill_last.log"
