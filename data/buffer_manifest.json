@@ -24,6 +24,7 @@
     "intraday_first_hour",
     "intraday_no_trade",
     "opt_iv_crush",
-    "intraday_orb"
+    "intraday_orb",
+    "intraday_vwap"
   ]
 }
