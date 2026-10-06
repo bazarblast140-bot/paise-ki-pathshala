@@ -292,9 +292,9 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual(board_short.voice_wps({"voice": {"voice_id": KAMAL}}), 1.9)
         self.assertEqual(board_short.voice_wps({"voice": {}}), 1.9)
         self.assertEqual(board_short.BEAT_WORD_TARGET, {
-            "hook": 25, "pehchan": 42, "matlab": 50, "karein": 46,
+            "hook": 22, "pehchan": 29, "matlab": 36, "karein": 32,
         })
-        self.assertEqual(board_short.TOTAL_WORDS, (150, 190))
+        self.assertEqual(board_short.TOTAL_WORDS, (100, 138))
         prompt = board_short.live_narration_system(_live_topic())
         self.assertIn("140-175", prompt)
         self.assertIn("130-185", prompt)

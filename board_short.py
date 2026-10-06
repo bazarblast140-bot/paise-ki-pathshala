@@ -199,12 +199,17 @@ def allowed_numbers(topic):
     return hook_check.allowed_numbers(topic)
 
 
-# Spoken targets. The gate accepts ±20% on each beat and 150-190 words overall.
-# The hook target stays short so a 40-word opening still fails.
-BEAT_WORD_TARGET = {"hook": 25, "pehchan": 42, "matlab": 50, "karein": 46}
-BEAT_WORD_TOLERANCE = 0.20
-TOTAL_WORDS = (150, 190)
-TOTAL_WORD_TARGET = (160, 180)
+# Spoken targets for the Edge (non-live) four-beat Short: buffer and previews.
+# Edge hi-IN-MadhurNeural +0% speaks about 2.3 words/s (168 words ran 72.7s,
+# 206 words ran 94.8s), and the duration gate is 42-62s. 100-138 words is
+# 43-60s. The old 150-190 window always overran the gate on Edge.
+# The gate accepts ±30% on each beat, like the live path: the model keeps
+# missing a tight count. The hook target stays short so a 40-word opening
+# still fails.
+BEAT_WORD_TARGET = {"hook": 22, "pehchan": 29, "matlab": 36, "karein": 32}
+BEAT_WORD_TOLERANCE = 0.30
+TOTAL_WORDS = (100, 138)
+TOTAL_WORD_TARGET = (112, 126)
 NARRATION_CALL_CAP = 4
 NARRATION_STATIC_REPAIRS = 2
 
@@ -455,7 +460,7 @@ def check_narration(n, topic):
     text = " ".join(str(beats.get(b) or "") for b in order)
     words = len(text.split())
     # The ATR short is spoken at a calm rate, so its script is shorter.
-    # Every other topic targets 160-180 and may land anywhere in 150-190.
+    # Every other topic targets 112-126 and may land anywhere in 100-138.
     if topic.get("_atr"):
         if not 75 <= words <= 140:
             fails.append(f"{words} words (75-140 for the calm ATR short)")
@@ -1024,13 +1029,17 @@ def word_count_rules():
     ]
     for beat, target in BEAT_WORD_TARGET.items():
         lo, hi = beat_word_window(target)
-        lines.append(f"- {beat}: target exactly {target} words. Accept {lo}-{hi} (±20%).")
+        lines.append(f"- {beat}: target exactly {target} words. Accept {lo}-{hi} (±{round(BEAT_WORD_TOLERANCE * 100)}%).")
     total_lo, total_hi = TOTAL_WORDS
     target_lo, target_hi = TOTAL_WORD_TARGET
     lines.append(
         f"- total: target {target_lo}-{target_hi} words. Accept {total_lo}-{total_hi}."
     )
-    lines.append("The hook stays short. Its target is 25 words and it must land in 20-30 words.")
+    hook_target = BEAT_WORD_TARGET["hook"]
+    hook_lo, hook_hi = beat_word_window(hook_target)
+    lines.append(
+        f"The hook stays short. Its target is {hook_target} words and it must land in {hook_lo}-{hook_hi} words."
+    )
     lines.append(
         "Every beat needs a concrete number, a level, or a step "
         "(a figure, रेखा, नियम, कदम, or उदाहरण). A vague beat fails."
@@ -1043,11 +1052,12 @@ def word_count_rules():
     lines.append(
         "Short example of the JSON shape (write the real lesson, and hit these counts):"
     )
+    t = BEAT_WORD_TARGET
     lines.append(
         '{"title":"1:2 सेटअप और फिर भी घाटा","hook_line":"1:2 सेटअप फिर भी घाटा क्यों?",'
-        '"beats":{"hook":"<exactly 25 words, first sentence is hook_line>",'
-        '"pehchan":"<exactly 42 words>","matlab":"<exactly 50 words>",'
-        '"karein":"<exactly 46 words>"}}'
+        f'"beats":{{"hook":"<exactly {t["hook"]} words, first sentence is hook_line>",'
+        f'"pehchan":"<exactly {t["pehchan"]} words>","matlab":"<exactly {t["matlab"]} words>",'
+        f'"karein":"<exactly {t["karein"]} words>"}}}}'
     )
     return "\n".join(lines)
 
@@ -1162,7 +1172,7 @@ def fallback_narration(topic):
         hook_seed = f"{hook_line} आज पहले इसी setup का मतलब साफ समझते हैं।"
     beats = {
         "hook": _fit_words(
-            hook_seed, 22, 28,
+            hook_seed, 22, 26,
             [
                 "अब इसे पहचानने का तरीका समझिए।",
                 "आगे की जानकारी इसी विषय के संदर्भ में रहेगी।",
@@ -1170,7 +1180,7 @@ def fallback_narration(topic):
         ),
         "pehchan": _fit_words(
             f'{src["pehchan"][0]}। {src["pehchan"][1]}।',
-            38, 46,
+            29, 33,
             [
                 "अब इसे पहचानें।",
                 "दिख रहे हिस्से को एक साथ देखें।",
@@ -1180,7 +1190,7 @@ def fallback_narration(topic):
         ),
         "matlab": _fit_words(
             f'{src["matlab"][0]}। {src["matlab"][1]}।',
-            46, 54,
+            36, 41,
             [
                 "इन बातों का मतलब समझिए।",
                 "अब setup के कारण और असर को जोड़कर देखें।",
@@ -1191,7 +1201,7 @@ def fallback_narration(topic):
         ),
         "karein": _fit_words(
             f'{src["karein"][0]}। {src["karein"][1]}।',
-            42, 50,
+            32, 36,
             [
                 "अब आगे जाँच क्या होती है।",
                 "पहले confirmation और risk की सीमा समझी जाती है।",
@@ -1201,11 +1211,11 @@ def fallback_narration(topic):
             ],
         ),
     }
-    # Beat ranges can all sit near their floor and leave the lesson under 160 words.
+    # Beat ranges can all sit near their floor and leave the lesson under 112 words.
     # A whole sentence often does not fit the last 1–2 words of room, which is
     # how a lesson stopped at 159. After the sentences, add one Hindi word at a
-    # time into whichever beat still has room. Never past a beat cap or 180.
-    caps = {"hook": 28, "pehchan": 46, "matlab": 54, "karein": 50}
+    # time into whichever beat still has room. Never past a beat cap or 126.
+    caps = {"hook": 26, "pehchan": 33, "matlab": 41, "karein": 36}
     fillers = (
         ("karein", "यह सीमा याद रखने लायक है।"),
         ("matlab", "इसीलिए संदर्भ के साथ पढ़ें।"),
@@ -1213,13 +1223,13 @@ def fallback_narration(topic):
         ("hook", "इसी सवाल को आगे खोलते हैं।"),
     )
     guard = 0
-    while sum(len(beats[b].split()) for b in BEATS) < 160 and guard < 8:
+    while sum(len(beats[b].split()) for b in BEATS) < 112 and guard < 8:
         guard += 1
         added = False
         for beat, sentence in fillers:
             extra = sentence.split()
             words = beats[beat].split()
-            if len(words) + len(extra) <= caps[beat] and sum(len(beats[b].split()) for b in BEATS) + len(extra) <= 180:
+            if len(words) + len(extra) <= caps[beat] and sum(len(beats[b].split()) for b in BEATS) + len(extra) <= 126:
                 beats[beat] = " ".join(words + extra)
                 added = True
                 break
@@ -1228,13 +1238,13 @@ def fallback_narration(topic):
     pad = "यही आगे स्पष्ट सीमा संदर्भ सवाल पहचान मतलब जाँच".split()
     pad_i = 0
     guard = 0
-    while sum(len(beats[b].split()) for b in BEATS) < 160 and guard < 40:
+    while sum(len(beats[b].split()) for b in BEATS) < 112 and guard < 40:
         guard += 1
         placed = False
         for beat in ("karein", "matlab", "pehchan", "hook"):
             words = beats[beat].split()
             total = sum(len(beats[b].split()) for b in BEATS)
-            if len(words) >= caps[beat] or total >= 180:
+            if len(words) >= caps[beat] or total >= 126:
                 continue
             words.append(pad[pad_i % len(pad)])
             pad_i += 1

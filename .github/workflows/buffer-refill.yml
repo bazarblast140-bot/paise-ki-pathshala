@@ -27,14 +27,6 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
       - name: Install deps
         run: pip install -r requirements.txt
-      - name: Widen narration gates so LLM can pass
-        run: |
-          sed -i 's/BEAT_WORD_TOLERANCE = 0.20/BEAT_WORD_TOLERANCE = 0.50/' board_short.py
-          sed -i 's/BEAT_WORD_TOLERANCE = 0.35/BEAT_WORD_TOLERANCE = 0.50/' board_short.py
-          sed -i 's/TOTAL_WORDS = (150, 190)/TOTAL_WORDS = (140, 220)/' board_short.py
-          sed -i 's/TOTAL_WORD_TARGET = (160, 180)/TOTAL_WORD_TARGET = (150, 200)/' board_short.py
-          sed -i 's/BEAT_WORD_TARGET = {"hook": 25,/BEAT_WORD_TARGET = {"hook": 30,/' board_short.py
-          grep -n 'BEAT_WORD_TOLERANCE\|TOTAL_WORDS\|BEAT_WORD_TARGET' board_short.py | head -6
       - name: Build one buffer Short
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}

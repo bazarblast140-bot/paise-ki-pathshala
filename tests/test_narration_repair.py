@@ -1,7 +1,7 @@
 """Narration word tolerance and the one-shot beat repair.
 
-A beat may land ±20% from its target. The total may land in 150-190
-(target 160-180). After the first real draft, one repair rewrites only the
+A beat may land ±30% from its target. The total may land in 100-138
+(target 112-126). After the first real draft, one repair rewrites only the
 beats that missed. An empty or timed-out reply stays inside the 4-call cap
 and never becomes the topic-card template.
 """
@@ -47,7 +47,7 @@ def _pad(n, prefix=""):
     return " ".join(have + rest)
 
 
-def _script(hook=25, pehchan=42, matlab=50, karein=46, hook_line=HOOK):
+def _script(hook=22, pehchan=29, matlab=36, karein=32, hook_line=HOOK):
     return {
         "title": "सेटअप का नियम समझिए",
         "hook_line": hook_line,
@@ -61,38 +61,38 @@ def _script(hook=25, pehchan=42, matlab=50, karein=46, hook_line=HOOK):
 
 
 class WordWindowTests(unittest.TestCase):
-    def test_windows_are_twenty_percent_and_hook_stays_short(self):
-        self.assertEqual(board_short.beat_word_window(25), (20, 30))
-        self.assertEqual(board_short.beat_word_window(42), (34, 50))
-        self.assertEqual(board_short.beat_word_window(50), (40, 60))
-        self.assertEqual(board_short.beat_word_window(46), (37, 55))
-        self.assertEqual(board_short.TOTAL_WORDS, (150, 190))
-        self.assertEqual(board_short.TOTAL_WORD_TARGET, (160, 180))
+    def test_windows_are_thirty_percent_and_hook_stays_short(self):
+        self.assertEqual(board_short.beat_word_window(22), (15, 29))
+        self.assertEqual(board_short.beat_word_window(29), (20, 38))
+        self.assertEqual(board_short.beat_word_window(36), (25, 47))
+        self.assertEqual(board_short.beat_word_window(32), (22, 42))
+        self.assertEqual(board_short.TOTAL_WORDS, (100, 138))
+        self.assertEqual(board_short.TOTAL_WORD_TARGET, (112, 126))
         self.assertEqual(board_short.NARRATION_CALL_CAP, 4)
 
     def test_prompt_states_each_target_and_a_short_example(self):
         text = board_short.NARR_SYSTEM
-        self.assertIn("target exactly 25 words", text)
-        self.assertIn("target exactly 42 words", text)
-        self.assertIn("target exactly 50 words", text)
-        self.assertIn("target exactly 46 words", text)
-        self.assertIn("Accept 150-190", text)
-        self.assertIn('"hook":"<exactly 25 words, first sentence is hook_line>"', text)
+        self.assertIn("target exactly 22 words", text)
+        self.assertIn("target exactly 29 words", text)
+        self.assertIn("target exactly 36 words", text)
+        self.assertIn("target exactly 32 words", text)
+        self.assertIn("Accept 100-138", text)
+        self.assertIn('"hook":"<exactly 22 words, first sentence is hook_line>"', text)
 
     def test_off_by_a_few_words_passes_and_a_long_hook_does_not(self):
         topic = _topic()
         # matlab 45 and karein 55 sat outside the old hard windows.
-        near = _script(hook=30, pehchan=34, matlab=45, karein=55)
+        near = _script(hook=27, pehchan=30, matlab=40, karein=36)
         self.assertEqual(board_short.check_narration(near, topic), [])
-        long_hook = _script(hook=41, pehchan=35, matlab=45, karein=55)
+        long_hook = _script(hook=41, pehchan=30, matlab=40, karein=40)
         fails = board_short.check_narration(long_hook, topic)
         self.assertTrue(any(f.startswith("hook beat 41") for f in fails))
         self.assertFalse(any(f.startswith("pehchan") for f in fails))
-        short = _script(hook=25, pehchan=42, matlab=50, karein=20)
+        short = _script(hook=22, pehchan=29, matlab=36, karein=10)
         total = sum(board_short.beat_word_counts(short).values())
-        self.assertLess(total, 150)
+        self.assertLess(total, 100)
         total_fails = board_short.check_narration(short, topic)
-        self.assertTrue(any("150-190" in f for f in total_fails))
+        self.assertTrue(any("100-138" in f for f in total_fails))
 
     def test_invented_number_still_fails(self):
         topic = _topic()
@@ -134,9 +134,9 @@ class RepairLoopTests(unittest.TestCase):
         return calls, result, block
 
     def test_one_repair_rewrites_only_the_failing_beat(self):
-        bad = _script(hook=41, pehchan=42, matlab=50, karein=46)
-        good = _script(hook=25)
-        good["beats"]["pehchan"] = "यह बदलना नहीं चाहिए " + _pad(38)
+        bad = _script(hook=41)
+        good = _script(hook=22)
+        good["beats"]["pehchan"] = "यह बदलना नहीं चाहिए " + _pad(26)
         calls, result, block = self._run([bad, good])
         self.assertIsNone(block)
         script, source = result
@@ -145,17 +145,17 @@ class RepairLoopTests(unittest.TestCase):
         self.assertEqual(calls[0]["attempts"], 1)
         self.assertEqual(calls[0]["retries"], 1)
         repair = calls[1]["user"]
-        self.assertIn("REWRITE hook: current 41 words, target exactly 25 words", repair)
+        self.assertIn("REWRITE hook: current 41 words, target exactly 22 words", repair)
         self.assertIn("KEEP pehchan VERBATIM", repair)
         self.assertIn(bad["beats"]["pehchan"], repair)
         self.assertEqual(script["beats"]["pehchan"], bad["beats"]["pehchan"])
         self.assertEqual(script["beats"]["matlab"], bad["beats"]["matlab"])
         self.assertEqual(script["beats"]["karein"], bad["beats"]["karein"])
         self.assertTrue(script["beats"]["hook"].startswith(HOOK))
-        self.assertEqual(len(script["beats"]["hook"].split()), 25)
+        self.assertEqual(len(script["beats"]["hook"].split()), 22)
 
     def test_near_miss_is_accepted_without_a_repair(self):
-        near = _script(hook=30, pehchan=34, matlab=45, karein=55)
+        near = _script(hook=27, pehchan=30, matlab=40, karein=36)
         calls, result, block = self._run([near])
         self.assertIsNone(block)
         script, source = result
@@ -192,7 +192,7 @@ class RepairLoopTests(unittest.TestCase):
         calls, result, block = self._run([bad, still, still, _script()])
         self.assertIsInstance(result, SystemExit)
         self.assertEqual(len(calls), 3)
-        self.assertIn("REWRITE hook: current 41 words, target exactly 25 words", calls[1]["user"])
+        self.assertIn("REWRITE hook: current 41 words, target exactly 22 words", calls[1]["user"])
         self.assertIn("topic-card", block["reason"])
 
     def test_the_second_repair_can_land_the_script(self):
@@ -234,15 +234,15 @@ def _dark_draft(hook, pehchan, matlab, karein, *, concrete_karein=True):
 
 
 def _dark_fixed():
-    hook = _pad(25, DARK_HOOK + " उदाहरण के लिए भाव 100 पर काला बादल देखिए")
+    hook = _pad(22, DARK_HOOK + " उदाहरण के लिए भाव 100 पर काला बादल देखिए")
     return {
         "title": "काले बादल का मतलब",
         "hook_line": DARK_HOOK,
         "beats": {
             "hook": hook,
-            "pehchan": _pad(42, "नियम"),
-            "matlab": _pad(50, "कदम"),
-            "karein": _pad(46, "गलती"),
+            "pehchan": _pad(29, "नियम"),
+            "matlab": _pad(36, "कदम"),
+            "karein": _pad(32, "गलती"),
         },
     }
 
@@ -299,10 +299,10 @@ class DarkCloudRepairTests(unittest.TestCase):
                 self.assertEqual(len(calls), 2)
                 repair = calls[1]
                 self.assertIn(
-                    f"REWRITE hook: current {case['hook']} words, target exactly 25 words (accept 20-30).",
+                    f"REWRITE hook: current {case['hook']} words, target exactly 22 words (accept 15-29).",
                     repair,
                 )
-                self.assertIn("The hook must be 20-30 words.", repair)
+                self.assertIn("The hook must be 15-29 words.", repair)
                 for beat in ("hook", "pehchan", "matlab"):
                     row = next(line for line in repair.splitlines() if line.startswith(f"REWRITE {beat}:"))
                     self.assertIn("This beat is vague: it needs a concrete number, level, or step", row)
