@@ -308,6 +308,12 @@ def _near_token(src, heard):
 def recall(script, heard):
     """How much of this outline shows up in the transcript, allowing a near spelling."""
     src = [tok for tok in tokens(script) if tok not in _STOP]
+    # A Hindi recogniser writes English finance words (EBITDA, cash) in
+    # Devanagari with no fixed spelling, so a Latin token can never be matched
+    # fairly. The Hindi words and the figures around it still must be heard.
+    hindi = [tok for tok in src if not re.fullmatch(r"[A-Za-z]+", tok)]
+    if hindi:
+        src = hindi
     if not src:
         return 0.0
     got = tokens(heard)
