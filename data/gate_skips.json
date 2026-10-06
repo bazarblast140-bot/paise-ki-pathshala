@@ -25,6 +25,7 @@
   "piercing",
   "confirmation",
   "market_index_base",
-  "preopen"
+  "preopen",
+  "fund_eps_quality"
  ]
 }
