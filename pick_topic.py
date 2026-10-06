@@ -129,6 +129,19 @@ def remember_gate_skip(key, path=None):
     return keys
 
 
+def _chart_blocked(topic):
+    """True when the topic has no scene of its own and would stop the build.
+
+    board_short refuses such a topic before TTS (it would paint the crash
+    curve). Picking one only burns a run, so it is never picked.
+    """
+    try:
+        import board_scenes
+        return bool(board_scenes.topic_chart_block(topic))
+    except Exception:  # noqa: BLE001 - a broken import must not empty the bank
+        return False
+
+
 def _pick_fresh(bank, flag, avoid_cats, research, fmt, now=None, skips=None):
     weights, market, own = research[0], research[1], research[2]
     trends = research[3] if len(research) > 3 else None
@@ -140,6 +153,11 @@ def _pick_fresh(bank, flag, avoid_cats, research, fmt, now=None, skips=None):
               and not _is_competitor_duplicate(t) and not is_placeholder_topic(t)]
     if not unused:
         return None
+    # Prefer topics that can render. If none can, keep the old behaviour so the
+    # build fails with its own clear error instead of an empty-bank message.
+    renderable = [t for t in unused if not _chart_blocked(t)]
+    if renderable:
+        unused = renderable
     # Apply the category cooldown when possible, but do not stall if it would
     # otherwise exhaust the bank. Bank order remains the fallback/tie-break.
     # Trends only change the score; they do not bypass the cooldown or pull a
