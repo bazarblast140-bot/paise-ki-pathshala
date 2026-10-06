@@ -26,6 +26,7 @@
   "confirmation",
   "market_index_base",
   "preopen",
-  "fund_eps_quality"
+  "fund_eps_quality",
+  "stock_earnings"
  ]
 }
