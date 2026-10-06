@@ -53,6 +53,21 @@ jobs:
           else
             echo "::notice title=refill log tail::no run/buffer_refill_last.log"
           fi
+      - name: Show weak sync scenes (annotation)
+        if: always()
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import json, re
+          try:
+              r = json.load(open("run/self_review.json", encoding="utf-8"))
+              rows = [x for x in (r.get("sync") or {}).get("scenes", []) if float(x.get("recall") or 0) < 0.5]
+              out = " ## ".join(f"{x.get('kind')} {x.get('recall')} SCRIPT: {x.get('script')} HEARD: {x.get('heard')}" for x in rows[:3])
+          except Exception as e:
+              out = f"no self_review: {e}"
+          out = re.sub(r"[^\x20-\x7e]", "?", out)[:1800] if False else out[:1800]
+          print("::notice title=weak sync::" + out.replace("\n", " "))
+          PY
       - name: Commit manifest and topic bank
         if: always() && !cancelled()
         run: |
