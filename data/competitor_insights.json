@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-05T04:44:45+00:00",
+ "generated_at": "2026-10-06T01:27:00+00:00",
  "lookback_days": 30,
  "via": "oauth",
  "channels": [
@@ -21,51 +21,48 @@
  ],
  "errors": [],
  "analysis": {
-  "videos_analysed": 89,
+  "videos_analysed": 88,
   "title_patterns": {
    "curiosity_question": {
     "top_share": 0.55,
-    "rest_share": 0.45,
-    "lift": 1.2
+    "rest_share": 0.47,
+    "lift": 1.15
    },
    "number_led": {
-    "top_share": 0.45,
-    "rest_share": 0.31,
-    "lift": 1.39
+    "top_share": 0.55,
+    "rest_share": 0.29,
+    "lift": 1.76
    },
    "warning": {
-    "top_share": 0.09,
-    "rest_share": 0.1,
-    "lift": 0.91
+    "top_share": 0.14,
+    "rest_share": 0.11,
+    "lift": 1.19
    },
    "chart_concept": {
     "top_share": 0.36,
-    "rest_share": 0.28,
-    "lift": 1.24
+    "rest_share": 0.27,
+    "lift": 1.28
    },
    "real_data": {
     "top_share": 0.18,
-    "rest_share": 0.1,
-    "lift": 1.5
+    "rest_share": 0.12,
+    "lift": 1.35
    },
    "mechanism_explainer": {
     "top_share": 0.05,
-    "rest_share": 0.13,
-    "lift": 0.52
+    "rest_share": 0.11,
+    "lift": 0.61
    }
   },
   "winning_keywords": [
-   "market",
    "samjhe",
    "kaise",
    "candle",
-   "stock",
    "शेयर",
    "trade",
    "crash",
-   "liquidity",
-   "sweep",
-   "entry"
+   "below",
+   "share"
   ],
   "top_tags": [
    "candlestick",
@@ -74,57 +71,34 @@
    "candlestick pattern",
    "candlestick patterns",
    "candle psychology",
+   "nifty",
    "surface trader",
    "share market candle ko kaise samjhe",
    "candlestick pattern indicator on tradingview",
-   "share market",
-   "nifty",
    "trading candlestick",
    "candle reading",
    "trading",
-   "trading me candle ko kaise samjhe"
+   "share market",
+   "sensex"
   ],
   "best_upload_hours_ist": [
    18,
    17,
-   19,
-   14
+   14,
+   19
   ],
   "top_short_duration_s": {
-   "median": 46,
+   "median": 65,
    "p25": 38,
-   "p75": 142
+   "p75": 151
   },
-  "top_title_length_chars": 79,
+  "top_title_length_chars": 78,
   "top_videos": [
-   {
-    "channel": "CNBC Awaaz.",
-    "title": "शेयर बाजार में फिर क्यों मचा हाहाकार? | Stock Market India | #shorts  N18S",
-    "views": 514078,
-    "views_per_day": 88475.8,
-    "performance_index": 5.0,
-    "duration_s": 125,
-    "published_ist": "2026-09-29 14:47",
-    "tags": [
-     "Stock Market",
-     "Stock Market India",
-     "Share Market",
-     "Share Market India",
-     "Stock Market Crash",
-     "Stock Market Today",
-     "Share Market Today",
-     "Nifty",
-     "Nifty 50",
-     "Sensex",
-     "Nifty Today",
-     "Sensex Today"
-    ]
-   },
    {
     "channel": "Stock Menthol",
     "title": "5-Minute Scalping Strategy That Traders Need to Know",
-    "views": 9682,
-    "views_per_day": 2083.0,
+    "views": 9921,
+    "views_per_day": 1800.3,
     "performance_index": 5.0,
     "duration_s": 567,
     "published_ist": "2026-09-30 18:41",
@@ -133,8 +107,8 @@
    {
     "channel": "Surface Trader",
     "title": "candlestick ko kaise samjhe | candlestick pattern #candlestick #candlestickpattern #trading",
-    "views": 5770,
-    "views_per_day": 1583.5,
+    "views": 6485,
+    "views_per_day": 1439.1,
     "performance_index": 5.0,
     "duration_s": 35,
     "published_ist": "2026-10-01 18:47",
@@ -154,11 +128,34 @@
     ]
    },
    {
+    "channel": "CNBC Awaaz.",
+    "title": "शेयर बाजार में फिर क्यों मचा हाहाकार? | Stock Market India | #shorts  N18S",
+    "views": 534097,
+    "views_per_day": 80037.9,
+    "performance_index": 4.93,
+    "duration_s": 125,
+    "published_ist": "2026-09-29 14:47",
+    "tags": [
+     "Stock Market",
+     "Stock Market India",
+     "Share Market",
+     "Share Market India",
+     "Stock Market Crash",
+     "Stock Market Today",
+     "Share Market Today",
+     "Nifty",
+     "Nifty 50",
+     "Sensex",
+     "Nifty Today",
+     "Sensex Today"
+    ]
+   },
+   {
     "channel": "Surface Trader",
     "title": "candlestick ko kaise samjhe | candlestick pattern | #candlestick #candlestickpattern #trading",
-    "views": 11501,
-    "views_per_day": 1188.5,
-    "performance_index": 4.31,
+    "views": 11627,
+    "views_per_day": 1103.2,
+    "performance_index": 3.94,
     "duration_s": 35,
     "published_ist": "2026-09-25 18:00",
     "tags": [
@@ -179,9 +176,9 @@
    {
     "channel": "Deepu Maurya",
     "title": "Market Structure Explained in Just 60 Seconds #shorts",
-    "views": 640,
-    "views_per_day": 50.6,
-    "performance_index": 3.47,
+    "views": 654,
+    "views_per_day": 48.4,
+    "performance_index": 3.38,
     "duration_s": 81,
     "published_ist": "2026-09-22 18:33",
     "tags": [
@@ -200,19 +197,29 @@
    {
     "channel": "Stock Menthol",
     "title": "Find Accurate Support & Resistance & Trade 1:4 RR",
-    "views": 12229,
-    "views_per_day": 1149.0,
-    "performance_index": 3.32,
+    "views": 12301,
+    "views_per_day": 1069.2,
+    "performance_index": 3.19,
     "duration_s": 524,
     "published_ist": "2026-09-24 18:49",
     "tags": []
    },
    {
+    "channel": "Stock Menthol",
+    "title": "Liquidity Sweep Entry Strategy – 1:4 RR Setup!",
+    "views": 8532,
+    "views_per_day": 897.4,
+    "performance_index": 2.68,
+    "duration_s": 531,
+    "published_ist": "2026-09-26 18:46",
+    "tags": []
+   },
+   {
     "channel": "Zee Business",
     "title": "Market Crash Alert! 📉 Nifty Breaks 23,000, Bank Nifty Below 55,000 | Anil Singhvi",
-    "views": 585831,
-    "views_per_day": 83636.6,
-    "performance_index": 3.22,
+    "views": 591798,
+    "views_per_day": 75223.9,
+    "performance_index": 2.46,
     "duration_s": 151,
     "published_ist": "2026-09-28 10:08",
     "tags": [
@@ -231,21 +238,34 @@
     ]
    },
    {
-    "channel": "Stock Menthol",
-    "title": "Liquidity Sweep Entry Strategy – 1:4 RR Setup!",
-    "views": 8426,
-    "views_per_day": 974.7,
-    "performance_index": 2.81,
-    "duration_s": 531,
-    "published_ist": "2026-09-26 18:46",
-    "tags": []
+    "channel": "Zee Business",
+    "title": "Nifty Below 23,000! 📉 क्या अब 22,200 आएगा? Market Fall Analysis by Anil Singhvi",
+    "views": 487327,
+    "views_per_day": 71630.3,
+    "performance_index": 2.34,
+    "duration_s": 180,
+    "published_ist": "2026-09-29 11:40",
+    "tags": [
+     "zee business",
+     "stock market news",
+     "share market news",
+     "stock market news live",
+     "live share market news",
+     "sensex",
+     "nifty",
+     "stock market updates",
+     "nifty today",
+     "nifty 23000",
+     "nifty support",
+     "nifty support levels"
+    ]
    },
    {
     "channel": "Surface Trader",
     "title": "trading me candle ko kaise samjhe | candlestick pattern | #trading #candlestickpattern",
-    "views": 15932,
-    "views_per_day": 646.3,
-    "performance_index": 2.34,
+    "views": 16128,
+    "views_per_day": 632.1,
+    "performance_index": 2.26,
     "duration_s": 38,
     "published_ist": "2026-09-10 18:35",
     "tags": [
@@ -264,11 +284,21 @@
     ]
    },
    {
+    "channel": "Dr. Mukul Agrawal : Stock Market Coach",
+    "title": "Stock Market Crash Today: 4 Reasons Why Nifty Fell | IRDAI, Crude Oil & Bond Yield #shorts",
+    "views": 249618,
+    "views_per_day": 21559.5,
+    "performance_index": 2.01,
+    "duration_s": 141,
+    "published_ist": "2026-09-24 17:04",
+    "tags": []
+   },
+   {
     "channel": "Surface Trader",
     "title": "share market me candle ko kaise samjhe #sharemarket #sharemarketnews #trading",
-    "views": 3537,
-    "views_per_day": 622.8,
-    "performance_index": 2.26,
+    "views": 3659,
+    "views_per_day": 559.3,
+    "performance_index": 2.0,
     "duration_s": 36,
     "published_ist": "2026-09-29 17:56",
     "tags": [
@@ -287,11 +317,21 @@
     ]
    },
    {
+    "channel": "Sourav Trader",
+    "title": "🔥 Trading Se Paisa Banega Ya Loss?",
+    "views": 4121,
+    "views_per_day": 1530.8,
+    "performance_index": 1.91,
+    "duration_s": 49,
+    "published_ist": "2026-10-03 14:20",
+    "tags": []
+   },
+   {
     "channel": "Tech Net India",
     "title": "5 अक्टूबर से शेयर बाजार में नए नियम! NSE फ्रीज लिमिट! | F&O Trading New Rule | Stock Market New Rule",
-    "views": 107506,
-    "views_per_day": 145460.6,
-    "performance_index": 1.9,
+    "views": 137913,
+    "views_per_day": 86101.6,
+    "performance_index": 1.84,
     "duration_s": 173,
     "published_ist": "2026-10-04 16:30",
     "tags": [
@@ -310,34 +350,11 @@
     ]
    },
    {
-    "channel": "StockBox",
-    "title": "Moneyview IPO Review 2026: Should You Apply or Avoid? | Price, GMP, Financials & Risks #shorts",
-    "views": 135654,
-    "views_per_day": 11599.8,
-    "performance_index": 1.78,
-    "duration_s": 155,
-    "published_ist": "2026-09-23 17:34",
-    "tags": [
-     "moneyview ipo review 2026",
-     "moneyview ipo review",
-     "moneyview ipo gmp today",
-     "moneyview ipo price band 32 34",
-     "moneyview ipo dates 24 to 28 september 2026",
-     "moneyview ipo lot size 441 shares",
-     "moneyview ipo listing date 1 october 2026",
-     "moneyview ipo financials",
-     "moneyview ipo valuation",
-     "moneyview ipo apply or avoid",
-     "moneyview gmp today",
-     "moneyview ipo analysis"
-    ]
-   },
-   {
     "channel": "Trading Tech (Jitendra Baghel) ",
     "title": "Monday Market Prediction | Monday Nifty Prediction | #niftyprediction #shortsfeeds #nifty",
-    "views": 18091,
-    "views_per_day": 2041.4,
-    "performance_index": 1.78,
+    "views": 18095,
+    "views_per_day": 1860.7,
+    "performance_index": 1.77,
     "duration_s": 157,
     "published_ist": "2026-09-26 13:33",
     "tags": [
@@ -353,39 +370,6 @@
      "market update",
      "monday market",
      "nifty"
-    ]
-   },
-   {
-    "channel": "Sourav Trader",
-    "title": "🚨 Market Ab Kis Side Jayega? 📈📉",
-    "views": 6895,
-    "views_per_day": 1809.6,
-    "performance_index": 1.69,
-    "duration_s": 45,
-    "published_ist": "2026-10-01 14:48",
-    "tags": []
-   },
-   {
-    "channel": "Surface Trader",
-    "title": "trading me candle ko kaise samjhe | candlestick patterns #trading #candlestickpatterns #candlestick",
-    "views": 3434,
-    "views_per_day": 450.5,
-    "performance_index": 1.63,
-    "duration_s": 34,
-    "published_ist": "2026-09-27 19:18",
-    "tags": [
-     "trading me candle ko kaise samjhe",
-     "candlestick patterns",
-     "candlestick",
-     "share market candle ko kaise samjhe",
-     "trading candle ko kaise samjhe",
-     "candlestick pattern indicator on tradingview",
-     "candlestick analysis",
-     "trading candlestick",
-     "trading for beginners",
-     "candle psychology",
-     "candle reading",
-     "trading"
     ]
    }
   ]

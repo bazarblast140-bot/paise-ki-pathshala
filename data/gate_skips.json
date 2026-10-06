@@ -16,6 +16,7 @@
   "fund_margin",
   "fund_fcf",
   "penny_dilution",
-  "business_unit_economics"
+  "business_unit_economics",
+  "risk_leverage"
  ]
 }
