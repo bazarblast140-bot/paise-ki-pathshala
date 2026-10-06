@@ -79,3 +79,23 @@ jobs:
           echo "::notice title=build-flags::$(grep -n -E 'FAIL|STOP|BLOCK|Error|Traceback|retry|skip' out_build.txt | tail -n 14 | clean)"
           echo "::notice title=build-tail::$(tail -n 14 out_build.txt | clean)"
           echo "::notice title=build-head::$(head -n 14 out_build.txt | clean)"
+      - name: Live-slot build exactly like the schedule (render only, no upload)
+        continue-on-error: true
+        env:
+          PUBLISH_VISIBILITY: public
+          AUTOMATIC_UPLOAD: "1"
+          REQUIRE_QA_APPROVAL: "true"
+          EXPLICIT_PRIVACY: "0"
+          IG_CROSSPOST: "0"
+          SELF_REPAIR: "0"
+          DEEPSEEK_MAX_CALLS: "4"
+        run: |
+          set +e
+          eval "$(python slot_guard.py --next 2>/dev/null | sed -n 's/^\(slot\|date_ist\|publish_at\)=\(.*\)$/export \1=\2/p' | sed 's/^export slot=/export PUBLISH_SLOT_IST=/; s/^export date_ist=/export PUBLISH_DATE_IST=/; s/^export publish_at=/export PUBLISH_AT_UTC=/')"
+          echo "slot=$PUBLISH_SLOT_IST date=$PUBLISH_DATE_IST at=$PUBLISH_AT_UTC" > out_live.txt
+          python auto_agent.py --format short >> out_live.txt 2>&1; rc=$?
+          clean() { tr -cd '[:print:]\n' | tr '\n' '~' | cut -c1-1900; }
+          echo "::notice title=live-rc::rc=$rc lines=$(wc -l < out_live.txt)"
+          echo "::notice title=live-flags::$(grep -n -E 'FAIL|STOP|BLOCK|Error|Traceback|retry|skip|taken|guard|hold|OK' out_live.txt | tail -n 16 | clean)"
+          echo "::notice title=live-tail::$(tail -n 16 out_live.txt | clean)"
+          echo "::notice title=live-head::$(head -n 12 out_live.txt | clean)"
