@@ -72,6 +72,7 @@ jobs:
           DEEPSEEK_MAX_CALLS: "4"
           TOPIC_KEY: hammer
         run: |
+          set +e
           python run_pipeline.py --format short > out_build.txt 2>&1; rc=$?
           clean() { tr -cd '[:print:]\n' | tr '\n' '~' | cut -c1-1900; }
           echo "::notice title=build-rc::rc=$rc lines=$(wc -l < out_build.txt)"
