@@ -231,6 +231,16 @@ jobs:
           else
             python auto_agent.py --format ${{ steps.fmt.outputs.format }} --publish
           fi
+      - name: Show why the build failed (annotation, secrets stay masked)
+        if: always() && steps.guard.outputs.taken != 'true'
+        continue-on-error: true
+        run: |
+          f=run/auto_agent_last.log
+          if [ -s "$f" ]; then
+            echo "::notice title=build log tail::$(tail -n 22 "$f" | tr -cd '[:print:]\n' | tr '\n' '~' | cut -c1-1900)"
+          else
+            echo "::notice title=build log tail::no run/auto_agent_last.log (the build stopped before it wrote one)"
+          fi
       - name: Buffer fill if this slot is still empty
         id: buffer
         if: always() && steps.guard.outputs.taken != 'true' && steps.fmt.outputs.render_only != 'true'
