@@ -177,6 +177,11 @@ def score_trend(topic, trends):
     ]).lower()
     if any(theme in blob for theme in themes):
         return 100, []
+    cat = str((topic or {}).get("cat") or "").strip().upper()
+    if cat not in ("REAL DATA", "MARKET FACT"):
+        # A concept lesson is timeless. Not matching today's trend list is not a
+        # defect, so it must not pull a good evergreen Short below the bar.
+        return None, []
     return 45, ["topic does not match data/trends.json"]
 
 
