@@ -23,6 +23,7 @@
     "intraday_vwap_reclaim",
     "intraday_first_hour",
     "intraday_no_trade",
-    "opt_iv_crush"
+    "opt_iv_crush",
+    "intraday_orb"
   ]
 }
