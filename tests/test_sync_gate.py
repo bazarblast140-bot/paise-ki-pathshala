@@ -257,3 +257,15 @@ class SyncGateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LatinTermRecallTests(unittest.TestCase):
+    def test_english_finance_words_do_not_fail_a_correct_hindi_read(self):
+        script = "EBITDA 100 करोड़, cash सिर्फ़ 40? यानी"
+        heard = "एबिट्द 100 करोड करसा सर्फ चालीस यानी"
+        self.assertGreaterEqual(sync_gate.recall(script, heard), sync_gate.MIN_RECALL)
+
+    def test_a_different_hindi_lesson_still_fails(self):
+        script = "EBITDA 100 करोड़, cash सिर्फ़ 40? यानी"
+        heard = "आज मौसम बहुत अच्छा है घूमने चलते हैं"
+        self.assertLess(sync_gate.recall(script, heard), sync_gate.MIN_RECALL)
