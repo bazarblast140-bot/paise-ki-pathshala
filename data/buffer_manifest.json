@@ -29,6 +29,7 @@
     "intraday_volume",
     "stock_turnaround",
     "business_cash",
-    "option_vega"
+    "option_vega",
+    "option_theta"
   ]
 }
