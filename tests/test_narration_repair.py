@@ -186,14 +186,19 @@ class RepairLoopTests(unittest.TestCase):
         self.assertIn("topic-card", block["reason"])
         self.assertIn("empty or timeout", block["reason"])
 
-    def test_a_contentful_repair_is_not_repeated(self):
+    def test_a_four_beat_script_gets_two_repairs_and_no_more(self):
         bad = _script(hook=41)
         still = _script(hook=40)
-        calls, result, block = self._run([bad, still, _script()])
+        calls, result, block = self._run([bad, still, still, _script()])
         self.assertIsInstance(result, SystemExit)
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 3)
         self.assertIn("REWRITE hook: current 41 words, target exactly 25 words", calls[1]["user"])
         self.assertIn("topic-card", block["reason"])
+
+    def test_the_second_repair_can_land_the_script(self):
+        calls, result, block = self._run([_script(hook=41), _script(hook=40), _script()])
+        self.assertNotIsInstance(result, SystemExit)
+        self.assertEqual(len(calls), 3)
 
 
 DARK_HOOK = "काले बादल छा गए क्यों?"
