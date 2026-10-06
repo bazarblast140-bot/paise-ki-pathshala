@@ -28,6 +28,7 @@
     "intraday_vwap",
     "intraday_volume",
     "stock_turnaround",
-    "business_cash"
+    "business_cash",
+    "option_vega"
   ]
 }
