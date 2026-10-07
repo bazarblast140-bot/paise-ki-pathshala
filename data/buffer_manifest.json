@@ -6,6 +6,7 @@
     "dark_cloud",
     "confirmation",
     "opt_iv_crush",
-    "opt_protective_put"
+    "opt_protective_put",
+    "opt_theta_decay"
   ]
 }
