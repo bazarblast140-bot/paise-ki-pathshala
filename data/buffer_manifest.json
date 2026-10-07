@@ -10,6 +10,7 @@
     "opt_theta_decay",
     "intraday_orb",
     "intraday_vwap",
-    "intraday_trend_range"
+    "intraday_trend_range",
+    "intraday_volume"
   ]
 }
