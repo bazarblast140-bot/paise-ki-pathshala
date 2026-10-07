@@ -43,6 +43,11 @@ _TITLE_EQUIV = {
     "line": ("लाइन", "line"),
     "पियर्सिंग": ("piercing", "पियर्सिंग"),
     "लाइन": ("line", "लाइन"),
+    # English finance words a Hindi recogniser writes in Devanagari.
+    "multibagger": ("मल्टीबैगर", "मल्टीबैगर्स", "मल्टी", "बैगर", "multibagger"),
+    "penny": ("पेनी", "पैनी", "penny"),
+    "survivorship": ("सर्वाइवरशिप", "सरवाइवरशिप", "सर्वाइवल", "survivorship"),
+    "bias": ("बायस", "बाइस", "bias"),
 }
 _WORD = {
     "स्ल": "एसएल", "क्यो": "क्यों", "ल": "एसएल", "एल": "एसएल",
