@@ -22,10 +22,7 @@ VISUAL_MIN_DELTA = 1.0
 _CONCRETE_RE = re.compile(
     r"(\d|"
     r"\b(?:ATR|SL|RSI|entry|target|wick|range|support|resistance|high|low|quantity)\b|"
-    r"(?:बॉडी|नियम|कदम|गलती|उदाहरण|रेखा|औसत|पॉइंट|गुना|मात्रा|"
-    # Hindi chart words a lesson uses for a level or a step.
-    r"कैंडल|क्लोज|ओपन|लेवल|स्टॉप|कन्फर्म|कंफर्म|पुष्टि|ब्रेकआउट|वॉल्यूम|"
-    r"सपोर्ट|रेजिस्टेंस|रेसिस्टेंस|टारगेट|एंट्री|शैडो)\w*)",
+    r"(?:बॉडी|नियम|कदम|गलती|उदाहरण|रेखा|औसत|पॉइंट|गुना|मात्रा))",
     re.I,
 )
 

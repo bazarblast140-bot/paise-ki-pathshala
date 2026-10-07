@@ -1950,7 +1950,7 @@ def repair_instructions(draft, rewrite, topic=None, failures=None):
                     f"The hook must land in {lo}-{hi} words."
                 )
             elif beat == "hook":
-                line += " The hook must be 20-30 words."
+                line += f" The hook must be {lo}-{hi} words."
             if current < lo:
                 line += (
                     " This beat is short. Add words until it lands in the window. "
