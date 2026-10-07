@@ -35,6 +35,7 @@
   "depository",
   "stock_turnaround",
   "opt_protective_put",
-  "opt_iv_crush"
+  "opt_iv_crush",
+  "opt_theta_decay"
  ]
 }
