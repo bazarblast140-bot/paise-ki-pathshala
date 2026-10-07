@@ -150,8 +150,17 @@ def cue_spoken(topic_key, on_screen, spoken):
     if not tokens:
         return False, "chart scene has no key cue word"
     word = max(tokens, key=len)
-    if word in set(sync_gate.content_tokens(spoken)):
+    said = set(sync_gate.content_tokens(spoken))
+    if word in said:
         return True, ""
+    # The voice inflects (लाल / लालिमा) and a card may carry several words.
+    # The scene still belongs to this beat when any of its words, or a
+    # four-letter stem of one, is spoken in it.
+    for tok in tokens:
+        if tok in said:
+            return True, ""
+        if len(tok) >= 4 and any(len(s) >= 4 and s[:4] == tok[:4] for s in said):
+            return True, ""
     return False, f"key cue word {word} is not spoken in this beat"
 
 
@@ -268,6 +277,17 @@ def audio_reasons(run_dir):
     return reasons
 
 
+def _ass_spoken_text(raw):
+    """Caption words only. The ASS header (PlayResY: 1920) is not a spoken year."""
+    lines = []
+    for line in str(raw or "").splitlines():
+        if not line.startswith("Dialogue:"):
+            continue
+        text = line.split(",", 9)[-1]
+        lines.append(re.sub(r"\{[^}]*\}", "", text).replace("\\N", " "))
+    return "\n".join(lines)
+
+
 def _blobs(run_dir):
     run_dir = Path(run_dir)
     parts = []
@@ -276,7 +296,7 @@ def _blobs(run_dir):
         parts.append(script.read_text(encoding="utf-8"))
     captions = run_dir / "subs.ass"
     if captions.exists():
-        parts.append(captions.read_text(encoding="utf-8"))
+        parts.append(_ass_spoken_text(captions.read_text(encoding="utf-8")))
     extra = run_dir / "captions.txt"
     if extra.exists():
         parts.append(extra.read_text(encoding="utf-8"))
