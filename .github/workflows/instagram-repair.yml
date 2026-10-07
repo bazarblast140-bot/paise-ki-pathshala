@@ -7,6 +7,14 @@ on:
     # failure-only: the artifact step looks for run/ig_status.txt.
     workflows: ["Paise Ki Pathshala", "Slot watch"]
     types: [completed]
+  # A build-time run sees the Reel as deferred, because the YouTube video is
+  # not public yet. Slot watch failed to start on 7 Oct, so that later trigger
+  # never posted. This schedule catches a video once publishAt has passed.
+  # 08:00–23:00 IST is 02:30–17:30 UTC, every 20 minutes.
+  schedule:
+    - cron: "30,50 2 * * *"
+    - cron: "10,30,50 3-16 * * *"
+    - cron: "10,30 17 * * *"
   workflow_dispatch:
     inputs:
       run_id:
@@ -26,7 +34,7 @@ permissions:
 
 jobs:
   retry-instagram:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion != 'cancelled' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.event.workflow_run.conclusion != 'cancelled' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -80,8 +88,9 @@ jobs:
 
       - name: Install dependencies
         # A skipped Reel retries from this run's artifact. A deferred Reel
-        # is posted from the ledger on Slot watch, which needs the same deps.
-        if: steps.artifact.outputs.ready == 'true' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.name == 'Slot watch'
+        # is posted from the ledger once the video is public: on a schedule,
+        # on Slot watch, or from a manual dispatch.
+        if: steps.artifact.outputs.ready == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.event.workflow_run.name == 'Slot watch'
         run: python -m pip install -r requirements.txt
 
       - name: Publish Reel only
@@ -100,10 +109,12 @@ jobs:
         run: python publish_instagram.py
 
       - name: Post deferred Reels once YouTube is public
-        # Slot watch finishes at 08:49, 16:49, and 21:49 IST, after the
-        # 08:30, 16:00, and 21:00 publishAt times. The build-time trigger
-        # from Paise Ki Pathshala is hours early and does not run this step.
-        if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.name == 'Slot watch'
+        id: deferred
+        # The build-time trigger from Paise Ki Pathshala is hours early and
+        # does not run this step. The schedule and Slot watch do, after
+        # publishAt. Each public Short is posted once; the media id lands
+        # on the ledger row and in run/ig_reel.txt.
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.event.workflow_run.name == 'Slot watch'
         env:
           VIDEO_FORMAT: short
           IG_CROSSPOST: "1"
@@ -138,7 +149,7 @@ jobs:
           fi
 
       - name: Upload verified Instagram ID
-        if: always() && steps.artifact.outputs.ready == 'true'
+        if: always() && (steps.artifact.outputs.ready == 'true' || steps.deferred.outcome == 'success')
         uses: actions/upload-artifact@v4
         with:
           name: instagram-retry-result-${{ github.run_id }}

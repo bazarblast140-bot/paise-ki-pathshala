@@ -95,9 +95,20 @@ class PostDueTests(unittest.TestCase):
         repair = (WF / "instagram-repair.yml").read_text(encoding="utf-8")
         self.assertIn("python ig_defer.py --post-due", repair)
         self.assertIn("github.event.workflow_run.name == 'Slot watch'", repair)
+        self.assertIn("github.event_name == 'schedule'", repair)
+        self.assertIn('cron: "30,50 2 * * *"', repair)
+        self.assertIn('cron: "10,30,50 3-16 * * *"', repair)
+        self.assertIn('cron: "10,30 17 * * *"', repair)
         self.assertIn("grep -q '^skipped:'", repair)
         install = repair.split("name: Install dependencies", 1)[1].split("name: Publish Reel only", 1)[0]
         self.assertIn("github.event.workflow_run.name == 'Slot watch'", install)
+        self.assertIn("github.event_name == 'schedule'", install)
+        deferred = repair.split("name: Post deferred Reels", 1)[1].split("name: Commit the deferred Reel", 1)[0]
+        self.assertIn("github.event_name == 'schedule'", deferred)
+        watch = (WF / "slot-watch.yml").read_text(encoding="utf-8")
+        called = (WF / "paise-ki-pathshala.yml").read_text(encoding="utf-8")
+        self.assertIn("actions: read", called)
+        self.assertIn("actions: read", watch)
         posted = []
 
         def poster(dest, video_id):

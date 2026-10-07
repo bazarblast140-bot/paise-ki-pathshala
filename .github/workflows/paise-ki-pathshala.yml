@@ -319,3 +319,10 @@ jobs:
             run/narration_block.json
             run/voice.wav
           retention-days: 14
+      - name: QA artifact path
+        if: always()
+        run: |
+          {
+            echo "artifact: ${{ steps.fmt.outputs.format }}-${{ github.run_number }}"
+            echo "final.mp4: run/final.mp4"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -54,6 +54,8 @@ class WorkflowTriggerTests(unittest.TestCase):
         repair = (WF / "instagram-repair.yml").read_text(encoding="utf-8")
         self.assertIn("group: paise-ki-pathshala-publish", repair)
         self.assertIn("group: paise-ki-pathshala-publish", watch)
+        self.assertIn("actions: read", watch)
+        self.assertIn("actions: read", (WF / "paise-ki-pathshala.yml").read_text(encoding="utf-8"))
         self.assertIn("cancel-in-progress: false", publish)
         self.assertIn("cancel-in-progress: false", repair)
         self.assertIn("cancel-in-progress: false", watch)

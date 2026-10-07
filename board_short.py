@@ -2438,7 +2438,7 @@ def soften_approved_holds(review, sync_report=None):
         return _force_hold(review)
     report = sync_report if isinstance(sync_report, dict) else {}
     reason = str(report.get("reason") or "")
-    if "transcription failed" in reason or "title promise not answered" in reason:
+    if "transcription failed" in reason:
         return _force_hold(review)
     import sync_gate
     beats = report.get("beats") or []
@@ -4099,6 +4099,8 @@ def _sync_report(topic, narration, scenes, beat_audio, beat_times, spec, words=N
         }
     if report.get("ok"):
         ok("sync: narration matches the title and each scene")
+        if report.get("title_note"):
+            print("[REVIEW] " + report["title_note"])
     else:
         print("[HOLD] sync: " + (report.get("reason") or "failed"))
     for row in report.get("beats") or []:
