@@ -40,6 +40,7 @@
   "opt_bull_call_spread",
   "opt_bear_put_spread",
   "opt_straddle",
-  "intraday_orb"
+  "intraday_orb",
+  "intraday_trend_range"
  ]
 }
