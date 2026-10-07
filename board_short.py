@@ -2315,7 +2315,9 @@ def narration(topic, c, spec=None):
             if not (topic.get("_live_short") and not topic.get("_atr")):
                 if repairs >= NARRATION_STATIC_REPAIRS:
                     repair_done = True
-        if topic.get("_live_short") and not topic.get("_atr"):
+        if not topic.get("_atr"):
+            # The model often overshoots a beat by a sentence. Dropping the
+            # trailing sentence in code is cheaper and safer than another call.
             n = apply_live_draft(n, topic)
         draft = n
         fails = _gate(n)
