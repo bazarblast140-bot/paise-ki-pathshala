@@ -37,6 +37,7 @@
   "opt_protective_put",
   "opt_iv_crush",
   "opt_theta_decay",
-  "opt_bull_call_spread"
+  "opt_bull_call_spread",
+  "opt_bear_put_spread"
  ]
 }
