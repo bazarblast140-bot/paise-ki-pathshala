@@ -1,35 +1,5 @@
 {
   "tag": "buffer-shorts",
   "items": [],
-  "skipped_topics": [
-    "dark_cloud",
-    "piercing",
-    "confirmation",
-    "intraday_volume_price",
-    "option_covered_call",
-    "option_protective_put",
-    "option_straddle",
-    "option_strangle",
-    "multibagger_case_eicher",
-    "multibagger_case_bajajfinance",
-    "multibagger_case_trent",
-    "opt_protective_put",
-    "opt_theta_decay",
-    "intraday_trend_range",
-    "risk_leverage",
-    "ipo_drhp",
-    "three_black_crows",
-    "shareholding",
-    "intraday_vwap_reclaim",
-    "intraday_first_hour",
-    "intraday_no_trade",
-    "opt_iv_crush",
-    "intraday_orb",
-    "intraday_vwap",
-    "intraday_volume",
-    "stock_turnaround",
-    "business_cash",
-    "option_vega",
-    "option_theta"
-  ]
+  "skipped_topics": []
 }
