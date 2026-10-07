@@ -11,6 +11,7 @@
     "intraday_orb",
     "intraday_vwap",
     "intraday_trend_range",
-    "intraday_volume"
+    "intraday_volume",
+    "stock_turnaround"
   ]
 }
