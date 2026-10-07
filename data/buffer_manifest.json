@@ -9,6 +9,7 @@
     "opt_protective_put",
     "opt_theta_decay",
     "intraday_orb",
-    "intraday_vwap"
+    "intraday_vwap",
+    "intraday_trend_range"
   ]
 }
