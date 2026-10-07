@@ -211,7 +211,7 @@ BEAT_WORD_TOLERANCE = 0.30
 TOTAL_WORDS = (100, 138)
 TOTAL_WORD_TARGET = (112, 126)
 NARRATION_CALL_CAP = 6
-NARRATION_STATIC_REPAIRS = 2
+NARRATION_STATIC_REPAIRS = 4
 
 # Live Shorts (ElevenLabs) explain the topic in six beats. Buffer/Edge keeps
 # the four-beat lesson above. Targets are derived from the voice coefficient.
