@@ -68,7 +68,7 @@ class WordWindowTests(unittest.TestCase):
         self.assertEqual(board_short.beat_word_window(32), (22, 42))
         self.assertEqual(board_short.TOTAL_WORDS, (100, 138))
         self.assertEqual(board_short.TOTAL_WORD_TARGET, (112, 126))
-        self.assertEqual(board_short.NARRATION_CALL_CAP, 4)
+        self.assertEqual(board_short.NARRATION_CALL_CAP, 6)
 
     def test_prompt_states_each_target_and_a_short_example(self):
         text = board_short.NARR_SYSTEM
@@ -178,10 +178,10 @@ class RepairLoopTests(unittest.TestCase):
         self.assertIn("empty, timed out", calls[2]["user"])
         self.assertNotIn("REWRITE", calls[2]["user"])
 
-    def test_four_timeouts_block_without_the_template(self):
-        calls, result, block = self._run([TimeoutError("timed out")] * 4)
+    def test_six_timeouts_block_without_the_template(self):
+        calls, result, block = self._run([TimeoutError("timed out")] * 6)
         self.assertIsInstance(result, SystemExit)
-        self.assertEqual(len(calls), 4)
+        self.assertEqual(len(calls), 6)
         self.assertTrue(block["blocked"])
         self.assertIn("topic-card", block["reason"])
         self.assertIn("empty or timeout", block["reason"])

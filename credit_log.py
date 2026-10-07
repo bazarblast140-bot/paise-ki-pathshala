@@ -12,7 +12,7 @@ from pathlib import Path
 PATH = Path(__file__).resolve().parent / "run" / "credits.json"
 
 # One Short used to retry script and review until the balance was gone.
-DEFAULT_DEEPSEEK_CALLS = 4
+DEFAULT_DEEPSEEK_CALLS = 6
 
 
 class DeepSeekCallCap(RuntimeError):

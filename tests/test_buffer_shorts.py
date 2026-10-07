@@ -509,16 +509,16 @@ class _IssueHttp:
 
 class CreditAndRefillTests(unittest.TestCase):
     def test_deepseek_cap_still_holds(self):
-        self.assertEqual(credit_log.DEFAULT_DEEPSEEK_CALLS, 4)
+        self.assertEqual(credit_log.DEFAULT_DEEPSEEK_CALLS, 6)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "credits.json"
             with mock.patch.object(credit_log, "PATH", path):
-                for _ in range(4):
+                for _ in range(6):
                     credit_log.reserve_deepseek_call()
                 with self.assertRaises(credit_log.DeepSeekCallCap):
                     credit_log.reserve_deepseek_call()
                 saved = json.loads(path.read_text(encoding="utf-8"))
-        self.assertEqual(saved["deepseek_calls"], 4)
+        self.assertEqual(saved["deepseek_calls"], 6)
 
     def test_buffer_runner_is_edge_madhur_and_strips_elevenlabs(self):
         import board_short
@@ -580,7 +580,7 @@ class CreditAndRefillTests(unittest.TestCase):
             saved = json.loads(credits.read_text(encoding="utf-8"))
             self.assertEqual(saved["deepseek_calls"], 0)
             self.assertEqual(saved["elevenlabs_characters_sent"], 0)
-            self.assertEqual(os.environ.get("DEEPSEEK_MAX_CALLS"), "4")
+            self.assertEqual(os.environ.get("DEEPSEEK_MAX_CALLS"), "6")
             failed = buffer_shorts.load_manifest(manifest_path)
             self.assertEqual(buffer_shorts.count_ready(failed), 0)
             self.assertIn(_topic()["key"], failed.get("skipped_topics") or [])
@@ -724,7 +724,7 @@ class HealthAndWorkflowTests(unittest.TestCase):
         self.assertIn("cancel-in-progress: false", watch)
         self.assertIn("issues: write", watch)
         self.assertIn('cron: "41 6 * * *"', refill)
-        self.assertIn('DEEPSEEK_MAX_CALLS: "4"', refill)
+        self.assertIn('DEEPSEEK_MAX_CALLS: "6"', refill)
         self.assertIn("BUFFER_FILL: \"0\"", refill)
         self.assertNotIn("ELEVENLABS_API_KEY", refill)
         self.assertNotIn("ELEVENLABS_VOICE_ID", refill)
