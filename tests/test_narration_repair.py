@@ -266,7 +266,7 @@ class DarkCloudRepairTests(unittest.TestCase):
     def test_logged_failures_repair_vague_beats_and_shrink_the_hook(self):
         cloud = _dark_cloud()
         cases = [
-            {"hook": 47, "pehchan": 42, "matlab": 43, "karein": 46, "keep": ("karein",)},
+            {"hook": 47, "pehchan": 42, "matlab": 43, "karein": 40, "keep": ("karein",)},
             {"hook": 48, "pehchan": 56, "matlab": 64, "karein": 58, "keep": ()},
             {"hook": 26, "pehchan": 34, "matlab": 33, "karein": 38, "keep": ("karein",)},
         ]
