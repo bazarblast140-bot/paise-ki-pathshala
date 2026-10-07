@@ -7,6 +7,7 @@
     "confirmation",
     "opt_iv_crush",
     "opt_protective_put",
-    "opt_theta_decay"
+    "opt_theta_decay",
+    "intraday_orb"
   ]
 }
