@@ -15,7 +15,7 @@ MAX_SLICE_S = 4.0
 MAX_HOLD_S = 5.0
 # A four-second span must change the picture, not only the cut list.
 VISUAL_SPAN_S = 4.0
-VISUAL_MIN_DELTA = 1.0
+VISUAL_MIN_DELTA = 0.8
 
 # A segment is concrete when it names a number or a level/step the viewer can
 # point at. Vague filler ("यह समझिए") fails the craft score.
