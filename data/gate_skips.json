@@ -33,6 +33,7 @@
   "nifty_cagr",
   "penny_history",
   "depository",
-  "stock_turnaround"
+  "stock_turnaround",
+  "opt_protective_put"
  ]
 }
