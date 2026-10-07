@@ -29,6 +29,7 @@
   "fund_eps_quality",
   "stock_earnings",
   "business_cash",
-  "niftybank_2010"
+  "niftybank_2010",
+  "nifty_cagr"
  ]
 }
