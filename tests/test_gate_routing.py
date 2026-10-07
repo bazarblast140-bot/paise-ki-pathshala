@@ -129,7 +129,7 @@ class VagueRepairTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 board_short.narration(topic, CFG)
             block = json.loads((Path(tmp) / "narration_block.json").read_text(encoding="utf-8"))
-        self.assertEqual(len(calls), 4)
+        self.assertEqual(len(calls), 6)
         self.assertNotIn("REWRITE karein", calls[0])
         for user in calls[1:]:
             self.assertIn("REWRITE karein", user)

@@ -210,7 +210,7 @@ BEAT_WORD_TARGET = {"hook": 22, "pehchan": 29, "matlab": 36, "karein": 32}
 BEAT_WORD_TOLERANCE = 0.30
 TOTAL_WORDS = (100, 138)
 TOTAL_WORD_TARGET = (112, 126)
-NARRATION_CALL_CAP = 4
+NARRATION_CALL_CAP = 6
 NARRATION_STATIC_REPAIRS = 2
 
 # Live Shorts (ElevenLabs) explain the topic in six beats. Buffer/Edge keeps

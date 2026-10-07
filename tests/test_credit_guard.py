@@ -409,9 +409,9 @@ class DeepSeekCapTests(unittest.TestCase):
     def test_timeouts_stay_75s_and_240s(self):
         self.assertEqual(common.LLM_ATTEMPT_TIMEOUT, 75)
         self.assertEqual(common.LLM_TOTAL_BUDGET, 240)
-        self.assertEqual(credit_log.DEFAULT_DEEPSEEK_CALLS, 4)
+        self.assertEqual(credit_log.DEFAULT_DEEPSEEK_CALLS, 6)
 
-    def test_fifth_call_is_not_sent(self):
+    def test_seventh_call_is_not_sent(self):
         calls = {"n": 0}
 
         def create(**_kwargs):
@@ -425,16 +425,16 @@ class DeepSeekCapTests(unittest.TestCase):
              mock.patch("common.time.sleep"), \
              redirect_stderr(err):
             os.environ.pop("DEEPSEEK_MAX_CALLS", None)
-            for _ in range(4):
+            for _ in range(6):
                 self.assertEqual(common.claude("system", "user", model="deepseek-flash", retries=1), "ok")
             with self.assertRaises(SystemExit):
                 common.claude("system", "user", model="deepseek-flash", retries=1)
-        self.assertEqual(calls["n"], 4)
+        self.assertEqual(calls["n"], 6)
         self.assertIn("skipping the slot", err.getvalue())
         data = json.loads(self.path.read_text(encoding="utf-8"))
-        self.assertEqual(data["deepseek_calls"], 4)
-        self.assertEqual(data["deepseek_prompt_tokens"], 12)
-        self.assertEqual(data["deepseek_completion_tokens"], 4)
+        self.assertEqual(data["deepseek_calls"], 6)
+        self.assertEqual(data["deepseek_prompt_tokens"], 18)
+        self.assertEqual(data["deepseek_completion_tokens"], 6)
 
     def test_retries_count_toward_the_cap(self):
         calls = {"n": 0}
