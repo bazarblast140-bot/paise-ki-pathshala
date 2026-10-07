@@ -32,6 +32,7 @@
   "niftybank_2010",
   "nifty_cagr",
   "penny_history",
-  "depository"
+  "depository",
+  "stock_turnaround"
  ]
 }
