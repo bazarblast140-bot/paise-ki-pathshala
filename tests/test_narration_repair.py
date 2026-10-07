@@ -186,12 +186,12 @@ class RepairLoopTests(unittest.TestCase):
         self.assertIn("topic-card", block["reason"])
         self.assertIn("empty or timeout", block["reason"])
 
-    def test_a_four_beat_script_gets_two_repairs_and_no_more(self):
+    def test_a_four_beat_script_gets_four_repairs_and_no_more(self):
         bad = _script(hook=41)
         still = _script(hook=40)
-        calls, result, block = self._run([bad, still, still, _script()])
+        calls, result, block = self._run([bad, still, still, still, still, _script()])
         self.assertIsInstance(result, SystemExit)
-        self.assertEqual(len(calls), 3)
+        self.assertEqual(len(calls), 5)
         self.assertIn("REWRITE hook: current 41 words, target exactly 22 words", calls[1]["user"])
         self.assertIn("topic-card", block["reason"])
 
