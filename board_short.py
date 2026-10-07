@@ -1041,8 +1041,8 @@ def word_count_rules():
         f"The hook stays short. Its target is {hook_target} words and it must land in {hook_lo}-{hook_hi} words."
     )
     lines.append(
-        "Every beat needs a concrete number, a level, or a step "
-        "(a figure, रेखा, नियम, कदम, or उदाहरण). A vague beat fails."
+        "Every beat, the hook included, must contain "
+        f"a digit, or one of these exact words: ATR, SL, RSI, entry, target, wick, range, support, resistance, high, low, quantity, बॉडी, नियम, कदम, गलती, उदाहरण, रेखा, औसत, पॉइंट, गुना, मात्रा (spell it exactly; synonyms like कैंडल or चार्ट do not count). A vague beat fails."
     )
     lines.append(
         "On an evergreen topic with no market data, a new figure is allowed only in the "
@@ -1959,7 +1959,9 @@ def repair_instructions(draft, rewrite, topic=None, failures=None):
             if beat in vague:
                 line += (
                     " This beat is vague: it needs a concrete number, level, or step "
-                    "the viewer can point at."
+                    "the viewer can point at. Include a digit or one of these exact words: "
+                    "ATR, SL, RSI, entry, target, wick, range, support, resistance, high, low, "
+                    "quantity, बॉडी, नियम, कदम, गलती, उदाहरण, रेखा, औसत, पॉइंट, गुना, मात्रा."
                 )
             if topic is not None and topic.get("_live_short"):
                 bad = sorted(hook_check.live_number_faults({beat: text}, topic, (beat,)))
