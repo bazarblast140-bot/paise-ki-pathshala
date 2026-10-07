@@ -2279,12 +2279,36 @@
    ],
    "badge": "50% SE UPAR",
    "levels": {
-    "red": {"open": 100, "high": 100, "low": 89, "close": 90},
-    "green": {"open": 88, "high": 98, "low": 87.5, "close": 97},
-    "confirm": {"open": 97, "high": 102, "low": 96.5, "close": 101, "label": "CONFIRMATION"},
+    "red": {
+     "open": 100,
+     "high": 100,
+     "low": 89,
+     "close": 90
+    },
+    "green": {
+     "open": 88,
+     "high": 98,
+     "low": 87.5,
+     "close": 97
+    },
+    "confirm": {
+     "open": 97,
+     "high": 102,
+     "low": 96.5,
+     "close": 101,
+     "label": "CONFIRMATION"
+    },
     "mid": 95,
     "mid_label": "95 (50%)",
-    "ticks": [102, 101, 100, 95, 90, 88, 97],
+    "ticks": [
+     102,
+     101,
+     100,
+     95,
+     90,
+     88,
+     97
+    ],
     "sl": 87,
     "badge": "50% SE UPAR",
     "close_pct": 70
@@ -2816,7 +2840,7 @@
   {
    "id": 75,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "intraday_gap",
    "cat": "INTRADAY",
    "topic": "Gap-up के बाद पहले 15 मिनट — gap भरेगा या चलेगा?",
@@ -2849,7 +2873,8 @@
     "पहले 15 मिनट spread और हलचल ज़्यादा",
     "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Gap Up Gap Down"
+   "seo": "Gap Up Gap Down",
+   "used_short_at": "2026-10-07T09:46:00Z"
   },
   {
    "id": 76,

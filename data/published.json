@@ -366,5 +366,19 @@
   "ig_media_id": "18102311315289964",
   "content_hash": "dd022b937f75dbc8",
   "title_norm": "piercing line \u2014 \u0917\u093f\u0930\u093e\u0935\u091f \u092e\u0947\u0902 \u0930\u093f\u0935\u0930\u094d\u0938\u0932?"
+ },
+ {
+  "date_ist": "2026-10-07",
+  "slot": "15:15",
+  "video_id": "lj5MtbgciYE",
+  "format": "short",
+  "topic_key": "intraday_gap",
+  "voice_engine": "edge",
+  "deepseek_calls": 2,
+  "deepseek_prompt_tokens": 3665,
+  "deepseek_completion_tokens": 1008,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": "edge"
  }
 ]
