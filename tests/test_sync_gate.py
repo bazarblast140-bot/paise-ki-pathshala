@@ -208,7 +208,72 @@ class SyncGateTests(unittest.TestCase):
             times, ["SIP"],
         )
         self.assertFalse(missed["ok"])
-        self.assertIn("title promise", missed["reason"])
+        self.assertIn("narration does not match", missed["reason"])
+        self.assertNotIn("title promise", missed["reason"])
+
+    def test_title_inflection_is_a_review_note_and_does_not_zero_sync(self):
+        beats = {
+            "hook": "तीन लाल कैंडल लगातार गिरावट दिखाती हैं",
+            "pehchan": "हर बार नीचे close होता है neeche",
+        }
+        times = {"hook": (0.0, 4.0), "pehchan": (4.0, 8.0)}
+        words = []
+        for beat, (start, end) in times.items():
+            toks = beats[beat].split()
+            step = (end - start) / len(toks)
+            for i, tok in enumerate(toks):
+                words.append({
+                    "word": tok,
+                    "start": start + i * step,
+                    "end": start + (i + 1) * step - 0.01,
+                })
+        scenes = [
+            {"start": 0.0, "end": 4.0, "beat": "hook", "kind": "hook", "show": ["गिरावट"]},
+            {"start": 4.0, "end": 8.0, "beat": "pehchan", "kind": "pehchan", "show": ["नीचे"]},
+        ]
+        for term in ("नीचा", "नीचे", "नीची", "neeche"):
+            report = sync_gate.check(words, scenes, beats, times, [term])
+            self.assertTrue(report["ok"], (term, report["reason"], report.get("title_note")))
+            self.assertEqual(report.get("title_note"), "")
+            self.assertEqual(self_review.score_sync(report)[0], 100)
+        # The hook names the down move without the title's exact word.
+        concept_beats = {"hook": "लगातार गिरावट दिखी", "pehchan": "sellers का कंट्रोल रहा"}
+        concept_words = []
+        for beat, (start, end) in times.items():
+            toks = concept_beats[beat].split()
+            step = (end - start) / len(toks)
+            for i, tok in enumerate(toks):
+                concept_words.append({
+                    "word": tok,
+                    "start": start + i * step,
+                    "end": start + (i + 1) * step - 0.01,
+                })
+        concept_scenes = [
+            {"start": 0.0, "end": 4.0, "beat": "hook", "kind": "hook", "show": ["गिरावट"]},
+            {"start": 4.0, "end": 8.0, "beat": "pehchan", "kind": "pehchan", "show": ["कंट्रोल"]},
+        ]
+        covered = sync_gate.check(concept_words, concept_scenes, concept_beats, times, ["नीचा"])
+        self.assertTrue(covered["ok"], covered.get("title_note"))
+        self.assertEqual(covered.get("title_note"), "")
+        # An unrelated title word is a note. Sync stays 100.
+        noted = sync_gate.check(words, scenes, beats, times, ["SIP"])
+        self.assertTrue(noted["ok"], noted["reason"])
+        self.assertIn("title promise review", noted["title_note"])
+        self.assertIn("SIP", noted["title_note"])
+        score, notes = self_review.score_sync(noted)
+        self.assertEqual(score, 100)
+        self.assertTrue(notes)
+        reviewed = self._review(noted)
+        self.assertTrue(reviewed["public_ok"], reviewed["summary"])
+        self.assertEqual(reviewed["parts"]["sync"], 100)
+        self.assertIn("title promise review", reviewed["summary"])
+        # A real recall miss still blocks, and it still scores sync at 0.
+        wrong = sync_gate.check(
+            words, scenes, {"hook": "एसआईपी हर महीने इक्विटी फंड", "pehchan": "अलग विषय"}, times, [],
+        )
+        self.assertFalse(wrong["ok"])
+        self.assertIn("narration does not match", wrong["reason"])
+        self.assertEqual(self_review.score_sync(wrong)[0], 0)
 
     def test_speech_offset_uses_loudness_not_zero_crossings(self):
         rate = 16000

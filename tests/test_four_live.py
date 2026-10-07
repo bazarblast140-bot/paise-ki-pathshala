@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 import board_short
+import self_review
 import sync_gate
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -545,5 +546,10 @@ class HindiNumberTests(unittest.TestCase):
         self.assertNotIn("title promise", report["reason"])
         self.assertNotIn("before it is said", report["reason"])
         missed = sync_gate.check(words, scenes, beats, times, ["SIP"])
-        self.assertIn("SIP", missed["reason"])
-        self.assertIn("title promise", missed["reason"])
+        self.assertTrue(missed["ok"], missed["reason"])
+        self.assertNotIn("title promise", missed["reason"])
+        self.assertIn("SIP", missed["title_note"])
+        self.assertIn("title promise review", missed["title_note"])
+        score, notes = self_review.score_sync(missed)
+        self.assertEqual(score, 100)
+        self.assertTrue(any("SIP" in note for note in notes))

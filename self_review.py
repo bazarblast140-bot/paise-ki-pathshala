@@ -370,13 +370,19 @@ def score_craft(narration, overlays=None, scenes=None, labels=None, samples=None
 
 
 def score_sync(report):
-    """None when the caller did not transcribe. A failed transcript scores 0."""
+    """None when the caller did not transcribe. A failed transcript scores 0.
+
+    A title-promise note does not change the score. Only a real sync or ASR
+    miss returns 0.
+    """
     if report is None:
         return None, []
+    note = str(report.get("title_note") or "").strip()
+    notes = [note] if note else []
     if report.get("ok"):
-        return 100, []
+        return 100, notes
     reason = report.get("reason") or "narration does not match the title and the scenes"
-    return 0, [reason]
+    return 0, [reason, *notes]
 
 
 def full_review(topic, narration, spec, overlays, trends=None, scenes=None, labels=None,

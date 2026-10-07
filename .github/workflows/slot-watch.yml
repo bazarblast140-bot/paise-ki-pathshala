@@ -22,10 +22,13 @@ on:
         type: boolean
         default: true
 
-# build workflow topic_bank + ledger commit karta hai
+# build workflow topic_bank + ledger commit karta hai.
+# The fill job calls paise-ki-pathshala.yml, which requests actions: read.
+# A caller that does not grant that permission dies at startup with 0 jobs.
 permissions:
   contents: write
   issues: write
+  actions: read
 
 jobs:
   check:

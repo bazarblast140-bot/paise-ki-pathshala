@@ -70,6 +70,36 @@ class CronTests(unittest.TestCase):
 
 
 class NextSlotTests(unittest.TestCase):
+    def test_stale_oct4_row_does_not_hide_oct7_2100(self):
+        # 07 Oct 15:40 IST. 16:00 is 20 minutes away, inside the 2h lead, so the
+        # next open slot is 21:00 the same day. A filled 4 Oct row is history.
+        now = datetime(2026, 10, 7, 15, 40, tzinfo=IST)
+        entries = [{
+            "date_ist": "2026-10-04",
+            "slot": "08:30",
+            "video_id": "already",
+            "platform": "youtube",
+        }]
+        choice = SG.next_unfilled(now, entries)
+        self.assertEqual(choice["date_ist"], "2026-10-07")
+        self.assertEqual(choice["slot"], "21:00")
+        self.assertEqual(choice["publish_at"], "2026-10-07T15:30:00Z")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "published.json"
+            path.write_text(json.dumps(entries), encoding="utf-8")
+            env = {
+                "PUBLISH_VISIBILITY": "public",
+                "PUBLISH_SLOT_IST": "08:30",
+                "PUBLISH_DATE_IST": "2026-10-04",
+            }
+            with mock.patch.object(SG, "LEDGER", path), \
+                 mock.patch.object(SG, "_now", return_value=now), \
+                 mock.patch.dict(os.environ, env):
+                self.assertIsNone(SG.bind_next_open_slot())
+                self.assertEqual(os.environ["PUBLISH_DATE_IST"], "2026-10-07")
+                self.assertEqual(os.environ["PUBLISH_SLOT_IST"], "21:00")
+                self.assertEqual(os.environ["PUBLISH_AT_UTC"], "2026-10-07T15:30:00Z")
+
     def test_early_trigger_selects_oct2_0830(self):
         # 00:17 UTC = 05:47 IST on 2 Oct, the trigger that can still land before 03:00 UTC.
         now = datetime(2026, 10, 2, 5, 47, tzinfo=IST)
@@ -333,6 +363,34 @@ class WatchFillTests(unittest.TestCase):
         self.assertIn("publishAt", text)
         self.assertNotIn("privacy=now", text)
 
+    def test_dropped_evening_crons_leave_oct8_0830_to_slot_watch(self):
+        # 13:07 / 13:47 / 14:23 UTC on 7 Oct did not fire. Slot watch at
+        # 21:49 IST (16:19 UTC) is the fallback. The missed 21:00 is already
+        # past the 2h lead, so the full gated build is the next open slot:
+        # 8 Oct 08:30, 10h41m ahead, inside the 2h–26h window.
+        import slot_watch
+        now = slot_watch.datetime(2026, 10, 7, 21, 49, tzinfo=slot_watch.IST)
+        entries = [{
+            "date_ist": "2026-10-04",
+            "slot": "08:30",
+            "video_id": "already",
+            "platform": "youtube",
+        }]
+        choice = SG.next_unfilled(now, entries)
+        self.assertEqual((choice["date_ist"], choice["slot"]), ("2026-10-08", "08:30"))
+        lead = SG._at(choice["date_ist"], choice["slot"]) - now
+        self.assertEqual(lead, SG.timedelta(hours=10, minutes=41))
+        self.assertGreaterEqual(lead, SG.MIN_LEAD)
+        self.assertLessEqual(lead, SG.MAX_LOOKAHEAD)
+        flags, text = self._run(now, entries, slot="21:00")
+        self.assertIn("missing=true", flags)
+        self.assertIn("fill=true", flags)
+        self.assertIn("2026-10-08 08:30", text)
+        watch = (WF / "slot-watch.yml").read_text(encoding="utf-8")
+        fill = watch.split("  fill:", 1)[1]
+        self.assertIn("uses: ./.github/workflows/paise-ki-pathshala.yml", fill)
+        self.assertIn("needs.check.outputs.fill == 'true'", watch)
+
 
 class PreUploadRereadTests(unittest.TestCase):
     def test_workflow_rereads_the_ledger_after_checkout(self):
@@ -374,6 +432,7 @@ class PreUploadRereadTests(unittest.TestCase):
                 "VIDEO_FORMAT": "long",
             }
             with mock.patch.object(SG, "LEDGER", ledger_path), \
+                 mock.patch.object(SG, "_now", return_value=datetime(2026, 10, 4, 5, 0, tzinfo=IST)), \
                  mock.patch.object(credit_log, "PATH", credits), \
                  mock.patch.object(run_pipeline, "run", fake_run), \
                  mock.patch.dict(os.environ, env), \

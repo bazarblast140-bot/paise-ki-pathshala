@@ -167,6 +167,16 @@ def _pick_fresh(bank, flag, avoid_cats, research, fmt, now=None, skips=None):
     return max(candidates, key=lambda t: score_topic(t, weights, market, own, fmt, trends, now=now))
 
 
+def fresh_short(now=None):
+    """Next Short the narration gate may try. Gate skips and used flags stay out."""
+    bank_path = ROOT / "topic_bank.json"
+    bank = json.loads(bank_path.read_text(encoding="utf-8"))
+    flag = "used_short" if video_format() == "short" else "used"
+    research = (*load_research(ROOT), load_trends(ROOT))
+    avoid = _bank_recent_cats(bank, flag, CAT_COOLDOWN)
+    return _pick_fresh(bank, flag, avoid, research, video_format(), now=now, skips=load_gate_skips())
+
+
 def main():
     bank_path = ROOT / "topic_bank.json"
     bank = json.loads(bank_path.read_text(encoding="utf-8"))

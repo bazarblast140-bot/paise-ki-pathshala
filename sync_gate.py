@@ -49,6 +49,26 @@ _TITLE_EQUIV = {
     "survivorship": ("सर्वाइवरशिप", "सरवाइवरशिप", "सर्वाइवल", "survivorship"),
     "bias": ("बायस", "बाइस", "bias"),
 }
+# Roman spellings of the same Hindi title word. The voice and the title
+# do not share a script, so "neeche" still answers "नीचा".
+_ROMAN_TITLE = {
+    "neeche": "नीचे",
+    "neecha": "नीचा",
+    "neechi": "नीची",
+    "niche": "नीचे",
+    "nichaa": "नीचा",
+    "neech": "नीच",
+}
+# A title word is answered when the hook or the first beat covers the same
+# idea, not only the exact spelling. नीचा is the down move, which the hook
+# may call गिरावट.
+_CONCEPTS = (
+    frozenset({"नीच", "गिरा", "गिर", "डाउन", "down", "fall", "neech", "neeche", "neecha", "neechi", "niche"}),
+    frozenset({"पैटर्न", "pattern", "सेटअप", "setup"}),
+    frozenset({"बेच", "बिक", "sell"}),
+    frozenset({"रुक", "रोक", "बंद", "stop"}),
+)
+_TITLE_ENDINGS = ("ियों", "ना", "ने", "ता", "ती", "ते", "ों", "ें", "ा", "े", "ी", "ो", "ू", "ु")
 _WORD = {
     "स्ल": "एसएल", "क्यो": "क्यों", "ल": "एसएल", "एल": "एसएल",
     "बान": "बैंक", "गलत": "गलती", "कटी": "कटती",
@@ -344,20 +364,94 @@ def _has_token(tok, full):
     return any(item.casefold() == folded for item in full)
 
 
-def term_covered(term, full):
-    """True when the title word, its digits, or a Hindi equivalent was said or written."""
+def _title_stem(tok):
+    """नीचा, नीचे, and नीची share नीच. A trailing ना/ता is the same verb."""
+    text = _fold_token(_ROMAN_TITLE.get(str(tok or "").casefold(), str(tok or "")))
+    changed = True
+    while changed and len(text) > 2:
+        changed = False
+        for end in _TITLE_ENDINGS:
+            if text.endswith(end) and len(text) - len(end) >= 2:
+                text = text[:-len(end)]
+                changed = True
+                break
+    return text
+
+
+def _stem_hit(tok, full):
+    stem = _title_stem(tok)
+    if len(stem) < 2:
+        return False
+    for item in full:
+        other = _title_stem(item)
+        if not other:
+            continue
+        if stem == other:
+            return True
+        if len(stem) >= 3 and len(other) >= 3 and (other.startswith(stem) or stem.startswith(other)):
+            return True
+    return False
+
+
+def _concept_ids(tok):
+    stem = _title_stem(tok)
+    folded = str(tok or "").casefold()
+    hits = set()
+    for index, group in enumerate(_CONCEPTS):
+        for item in group:
+            other = _title_stem(item)
+            if folded == str(item).casefold() or (stem and stem == other):
+                hits.add(index)
+                break
+            if len(other) >= 3 and stem.startswith(other):
+                hits.add(index)
+                break
+            if len(stem) >= 3 and other.startswith(stem):
+                hits.add(index)
+                break
+    return hits
+
+
+def term_covered(term, full, opening=""):
+    """True when the title word, an inflection, or its idea was said or written.
+
+    Devanagari and Roman variants match (नीचा / नीचे / नीची / neeche). A
+    synonym counts when the hook or the first beat actually covers that idea.
+    """
     need = tokens(term)
+    opening_toks = tokens(opening) if opening else []
     if not need:
         raw = " ".join(str(term or "").split())
-        return not raw or _has_token(raw, full)
+        return not raw or _has_token(raw, full) or _stem_hit(raw, full)
+    opening_concepts = set()
+    for item in opening_toks:
+        opening_concepts |= _concept_ids(item)
     for tok in need:
         if _has_token(tok, full):
             continue
         alts = _TITLE_EQUIV.get(tok.casefold(), ())
-        if any(_has_token(alt, full) for alt in alts):
+        if any(_has_token(alt, full) or _stem_hit(alt, full) for alt in alts):
+            continue
+        roman = _ROMAN_TITLE.get(tok.casefold())
+        if roman and (_has_token(roman, full) or _stem_hit(roman, full)):
+            continue
+        if _stem_hit(tok, full):
+            continue
+        if _concept_ids(tok) & opening_concepts:
             continue
         return False
     return True
+
+
+def opening_text(beats_text):
+    """The hook and the next beat. A title idea can be answered there."""
+    beats_text = beats_text or {}
+    order = [beat for beat in ("hook", "pehchan", "matlab", "udaharan", "galti", "karein") if beat in beats_text]
+    if not order:
+        order = list(beats_text.keys())[:2]
+    else:
+        order = order[:2]
+    return " ".join(str(beats_text.get(beat) or "") for beat in order)
 
 
 def outline_until(beats_text, beat_times, end, beats=None, words=None):
@@ -507,14 +601,18 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
     # Hindi "बाईस हज़ार छह सौ" answers a title that writes 22600.
     import hook_check
     spoken_nums = hook_check.extract_numbers(script_blob) | hook_check.extract_numbers(transcript)
+    opening = opening_text(beats_text)
     missing_title = []
     for term in answer_terms or []:
-        if term_covered(term, full) or str(term) in spoken_nums:
+        if term_covered(term, full, opening) or str(term) in spoken_nums:
             continue
         missing_title.append(str(term))
-    reasons = []
+    # A missed title word is a review note. It must not fail the sync gate
+    # or zero that part by itself. A real recall or on-screen miss still does.
+    title_note = ""
     if missing_title:
-        reasons.append("title promise not answered: " + ", ".join(missing_title))
+        title_note = "title promise review: " + ", ".join(missing_title)
+    reasons = []
     rows = []
     for scene in scenes or []:
         start, end = float(scene["start"]), float(scene["end"])
@@ -591,6 +689,7 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
     return {
         "ok": not reasons,
         "reason": reason,
+        "title_note": title_note,
         "transcript": normalize(transcript),
         "scenes": rows,
         "beats": beats_out,

@@ -105,17 +105,13 @@ class GateBeforeTtsTests(unittest.TestCase):
              mock.patch.object(board_short, "claude_json", return_value={}), \
              mock.patch("requests.post", post), \
              mock.patch("requests.get", side_effect=AssertionError("no subscription read")):
-            with self.assertRaises(SystemExit):
+            with self.assertRaises(board_short.NarrationSkip) as caught:
                 board_short.narration(topic, {"models": {"script_model": "deepseek-flash"}})
-            block = json.loads((Path(tmp) / "narration_block.json").read_text(encoding="utf-8"))
-            review = json.loads((Path(tmp) / "self_review.json").read_text(encoding="utf-8"))
             cache_left = (Path(tmp) / "narration.json").exists()
+            blocked = (Path(tmp) / "narration_block.json").exists()
         self.assertEqual(posts, [])
-        self.assertTrue(block["blocked"])
-        self.assertTrue(block["narration_fallback"])
-        self.assertIn("topic-card", block["reason"])
-        self.assertIn("no paid voice", block["reason"])
-        self.assertFalse(review["public_ok"])
+        self.assertIn("empty or timeout", caught.exception.reason)
+        self.assertFalse(blocked)
         self.assertFalse(cache_left)
 
     def test_synthesize_refuses_when_the_block_file_exists(self):
@@ -200,7 +196,9 @@ class SlotPaidCallTests(unittest.TestCase):
                         "PUBLISH_SLOT_IST": "21:00",
                         "PUBLISH_DATE_IST": "2026-10-02",
                     }
+                    ahead = datetime(2026, 10, 2, 18, 0, tzinfo=slot_guard.IST)
                     with mock.patch.object(slot_guard, "LEDGER", ledger_path), \
+                         mock.patch.object(slot_guard, "_now", return_value=ahead), \
                          mock.patch.dict(os.environ, env), \
                          mock.patch.object(run_pipeline, "run", side_effect=AssertionError("stage")), \
                          mock.patch.object(common, "claude", side_effect=AssertionError("deepseek")), \
@@ -372,6 +370,7 @@ class LedgerHoldTests(unittest.TestCase):
                     credits = Path(tmp) / "credits.json"
                     log = io.StringIO()
                     with mock.patch.dict(os.environ, env), \
+                         mock.patch.object(slot_guard, "_now", return_value=now), \
                          mock.patch.object(credit_log, "PATH", credits), \
                          mock.patch.object(run_pipeline, "run", side_effect=AssertionError("stage")), \
                          mock.patch.object(common, "claude", claude), \
