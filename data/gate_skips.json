@@ -36,6 +36,7 @@
   "stock_turnaround",
   "opt_protective_put",
   "opt_iv_crush",
-  "opt_theta_decay"
+  "opt_theta_decay",
+  "opt_bull_call_spread"
  ]
 }
