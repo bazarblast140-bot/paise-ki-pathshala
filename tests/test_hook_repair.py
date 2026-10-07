@@ -203,7 +203,7 @@ class UsedShortFlagTests(unittest.TestCase):
             with mock.patch.object(board_short, "RUN", run), \
                  mock.patch.object(board_short, "claude_json", return_value={"title": "खाली"}), \
                  mock.patch.object(board_short, "_content_ok", return_value={"passed": True, "summary": "ok"}):
-                with self.assertRaises(SystemExit):
+                with self.assertRaises(board_short.NarrationSkip):
                     board_short.narration(topic, {"models": {"script_model": "deepseek-flash"}, "voice": {}})
             self.assertEqual(path.read_bytes(), before)
             self.assertFalse(json.loads(path.read_text(encoding="utf-8"))["topics"][0]["used_short"])

@@ -237,7 +237,7 @@ def _finish_credits():
 def main():
     global STAGES
     import slot_guard
-    reason = slot_guard.scheduled_slot_block()
+    reason = slot_guard.bind_next_open_slot()
     if reason:
         print(f"[skip] {reason}; exiting before paid APIs")
         _finish_credits()

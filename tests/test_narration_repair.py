@@ -127,7 +127,7 @@ class RepairLoopTests(unittest.TestCase):
              ):
             try:
                 result = board_short.narration(_topic(), CFG)
-            except SystemExit as exc:
+            except (SystemExit, board_short.NarrationSkip) as exc:
                 result = exc
             block_path = Path(tmp) / "narration_block.json"
             block = json.loads(block_path.read_text(encoding="utf-8")) if block_path.exists() else None
@@ -163,28 +163,46 @@ class RepairLoopTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(script["beats"]["matlab"], near["beats"]["matlab"])
 
-    def test_timeout_and_empty_retry_inside_the_cap_and_skip_the_template(self):
+    def test_timeout_retries_once_inside_the_cap_and_can_land(self):
         good = _script()
         calls, result, block = self._run([
             TimeoutError("no response in 75s"),
-            {"verdict": "FAIL", "ai_verdict_valid": False},
             good,
         ])
         self.assertIsNone(block)
         script, source = result
         self.assertEqual(source, "llm")
-        self.assertEqual(len(calls), 3)
-        self.assertLessEqual(len(calls), 4)
-        self.assertIn("empty, timed out", calls[2]["user"])
-        self.assertNotIn("REWRITE", calls[2]["user"])
+        self.assertEqual(len(calls), 2)
+        self.assertLess(len(calls), board_short.NARRATION_CALL_CAP)
+        self.assertIn("empty, timed out", calls[1]["user"])
+        self.assertNotIn("REWRITE", calls[1]["user"])
 
-    def test_six_timeouts_block_without_the_template(self):
-        calls, result, block = self._run([TimeoutError("timed out")] * 6)
-        self.assertIsInstance(result, SystemExit)
-        self.assertEqual(len(calls), 6)
-        self.assertTrue(block["blocked"])
-        self.assertIn("topic-card", block["reason"])
-        self.assertIn("empty or timeout", block["reason"])
+    def test_a_second_empty_reply_skips_the_topic_without_blocking(self):
+        calls, result, block = self._run([
+            TimeoutError("timed out"),
+            {"verdict": "FAIL", "ai_verdict_valid": False},
+            _script(),
+        ])
+        self.assertIsInstance(result, board_short.NarrationSkip)
+        self.assertEqual(len(calls), board_short.EMPTY_NARRATION_TRIES)
+        self.assertLess(len(calls), board_short.NARRATION_CALL_CAP)
+        self.assertIsNone(block)
+        self.assertIn("empty or timeout", result.reason)
+
+    def test_next_topic_is_saved_after_an_empty_skip(self):
+        import pick_topic
+        current = {"key": "opt_iv_crush", "topic": "IV", "cat": "OPTIONS"}
+        nxt = {"key": "hammer", "topic": "Hammer", "cat": "CANDLESTICK", "id": 3}
+        import common
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(common, "RUN", Path(tmp)), \
+             mock.patch.object(pick_topic, "remember_gate_skip") as remember, \
+             mock.patch.object(pick_topic, "fresh_short", return_value=nxt):
+            chosen = board_short.next_topic_after_empty(current, "empty or timeout response")
+            saved = json.loads((Path(tmp) / "topic.json").read_text(encoding="utf-8"))
+        remember.assert_called_once_with("opt_iv_crush")
+        self.assertEqual(chosen["key"], "hammer")
+        self.assertEqual(saved["key"], "hammer")
 
     def test_a_four_beat_script_gets_four_repairs_and_no_more(self):
         bad = _script(hook=41)

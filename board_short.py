@@ -211,6 +211,18 @@ BEAT_WORD_TOLERANCE = 0.30
 TOTAL_WORDS = (100, 138)
 TOTAL_WORD_TARGET = (112, 126)
 NARRATION_CALL_CAP = 6
+# An empty or timed-out DeepSeek reply gets one more try inside that cap.
+# A second empty reply skips the topic. It does not burn the rest of the cap
+# and it does not stop Chart Board.
+EMPTY_NARRATION_TRIES = 2
+
+
+class NarrationSkip(Exception):
+    """DeepSeek stayed empty after one retry. Chart Board tries the next topic."""
+
+    def __init__(self, reason):
+        super().__init__(reason)
+        self.reason = reason
 NARRATION_STATIC_REPAIRS = 4
 
 # Live Shorts (ElevenLabs) explain the topic in six beats. Buffer/Edge keeps
@@ -2239,7 +2251,17 @@ def narration(topic, c, spec=None):
     repairs = 0
     last = ""
     calls = 0
+    empty_tries = 0
     model = c["models"]["script_model"]
+
+    def _empty(reason):
+        nonlocal last, empty_tries
+        last = reason
+        empty_tries += 1
+        print(f"[retry] narration call {calls}/{NARRATION_CALL_CAP}: {last}")
+        if empty_tries >= EMPTY_NARRATION_TRIES:
+            print(f"[skip] DeepSeek stayed empty after one retry: {last}")
+            raise NarrationSkip(last)
 
     def _gate(candidate):
         fails = check_narration(candidate, topic)
@@ -2299,14 +2321,15 @@ def narration(topic, c, spec=None):
             )
         except SystemExit:
             raise
+        except NarrationSkip:
+            raise
         except Exception as e:  # noqa: BLE001
-            last = f"empty or timeout: {e}"
-            print(f"[retry] narration call {calls}/{NARRATION_CALL_CAP}: {last}")
+            _empty(f"empty or timeout: {e}")
             continue
         if not _usable_narration(n, topic):
-            last = "empty or timeout response"
-            print(f"[retry] narration call {calls}/{NARRATION_CALL_CAP}: {last}")
+            _empty("empty or timeout response")
             continue
+        empty_tries = 0
         if kind == "repair":
             n = merge_repair(draft, n, rewrite, topic)
             repairs += 1
@@ -4654,6 +4677,21 @@ def prepare_spoken(spoken, narration, topic, c, spec):
     return spoken, narration, audio, raw, beat_times, total
 
 
+def next_topic_after_empty(topic, reason):
+    """Record the skip and return the next Short. Chart Board keeps going."""
+    import pick_topic
+    key = str((topic or {}).get("key") or "").strip()
+    print(f"[skip] {key}: {reason}; next topic")
+    pick_topic.remember_gate_skip(key)
+    nxt = pick_topic.fresh_short()
+    if not nxt or nxt.get("key") == key:
+        die(f"no next topic after empty DeepSeek: {reason}")
+    save("topic.txt", nxt["topic"])
+    save("topic.json", json.dumps(nxt, ensure_ascii=False, indent=1))
+    ok(f"next topic after empty DeepSeek: {nxt['key']}")
+    return nxt
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--qa", action="store_true", help="no LLM/voice: frames + thumbnail only")
@@ -4673,43 +4711,50 @@ def main():
         topic = next(t for t in bank if t["key"] == args.key)
     else:
         topic = load_topic()
-    ok(f"template: {topic['key']} ({topic['cat']})")
-    # Script prices and the गुना line use the same closes the chart divides.
-    market_data.sync_topic_numbers(topic)
-    spec = market_data.spec_for_topic(topic)
-    if spec.get("atr"):
-        market_data.apply_atr_card(topic, spec["atr"])
-    topic["_chart_spec"] = spec
-    # Sample renders (`--key`) may teach from the checked-in July print.
-    # Scheduled and dispatch publishes never set this, and publish.py ignores it.
-    topic["_allow_stale_sample"] = bool(args.key)
-    if spec.get("mode") == "non_numeric":
-        print(f"[market_data] non-numeric card: {spec.get('reason')}")
-    elif spec.get("mode") == "series":
-        print(f"[market_data] {spec.get('source')} as of {spec.get('as_of')}")
+    locked = bool(args.key or os.environ.get("TOPIC_KEY", "").strip())
+    while True:
+        ok(f"template: {topic['key']} ({topic['cat']})")
+        # Script prices and the गुना line use the same closes the chart divides.
+        market_data.sync_topic_numbers(topic)
+        spec = market_data.spec_for_topic(topic)
+        if spec.get("atr"):
+            market_data.apply_atr_card(topic, spec["atr"])
+        topic["_chart_spec"] = spec
+        # Sample renders (`--key`) may teach from the checked-in July print.
+        # Scheduled and dispatch publishes never set this, and publish.py ignores it.
+        topic["_allow_stale_sample"] = bool(args.key)
+        if spec.get("mode") == "non_numeric":
+            print(f"[market_data] non-numeric card: {spec.get('reason')}")
+        elif spec.get("mode") == "series":
+            print(f"[market_data] {spec.get('source')} as of {spec.get('as_of')}")
 
-    if _live_lesson(c) and not spec.get("atr"):
-        topic["_live_short"] = True
-        topic["_voice"] = dict((c or {}).get("voice") or {})
-        if not topic.get("_live_beats"):
-            topic["_live_beats"] = resolve_live_beats(topic)
-        lesson = _lesson(topic)[0]
-    else:
-        lesson = BEATS
-    beat_pngs = {}
-    for b in lesson:
-        pics = beat_images(topic, b)
-        paths = tuple(RUN / f"b_{b}_{'ABC'[i]}.png" for i in range(len(pics)))
-        for im, p in zip(pics, paths):
-            im.save(p)
-        beat_pngs[b] = paths
-    visual_gate(beat_pngs)
-    thumbnail(topic, RUN / "thumbnail.jpg", Image.open(beat_pngs["hook"][1]))
-    ok("frames + thumbnail")
-    if args.qa:
-        return
-
-    n, source = narration(topic, c, spec)
+        if _live_lesson(c) and not spec.get("atr"):
+            topic["_live_short"] = True
+            topic["_voice"] = dict((c or {}).get("voice") or {})
+            if not topic.get("_live_beats"):
+                topic["_live_beats"] = resolve_live_beats(topic)
+            lesson = _lesson(topic)[0]
+        else:
+            lesson = BEATS
+        beat_pngs = {}
+        for b in lesson:
+            pics = beat_images(topic, b)
+            paths = tuple(RUN / f"b_{b}_{'ABC'[i]}.png" for i in range(len(pics)))
+            for im, p in zip(pics, paths):
+                im.save(p)
+            beat_pngs[b] = paths
+        visual_gate(beat_pngs)
+        thumbnail(topic, RUN / "thumbnail.jpg", Image.open(beat_pngs["hook"][1]))
+        ok("frames + thumbnail")
+        if args.qa:
+            return
+        try:
+            n, source = narration(topic, c, spec)
+            break
+        except NarrationSkip as skipped:
+            if locked:
+                die(str(skipped))
+            topic = next_topic_after_empty(topic, skipped.reason)
     require_llm_narration(n, source)
     produce_short(topic, n, c, spec, source, beat_pngs=beat_pngs)
 

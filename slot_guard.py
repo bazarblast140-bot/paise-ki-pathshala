@@ -227,6 +227,50 @@ def scheduled_slot_block():
     return None
 
 
+def bind_next_open_slot(now=None):
+    """Aim a scheduled run at the next open slot. A past date does not stick.
+
+    PUBLISH_DATE_IST from an earlier day (a filled 4 Oct row, a default, a
+    ledger value) must not block today's build. A hold or a fill on a slot
+    that is still ahead still stops this run. The pre-upload re-read uses
+    scheduled_slot_block and does not call this again.
+    """
+    vis = os.environ.get("PUBLISH_VISIBILITY", "").strip().lower()
+    slot = os.environ.get("PUBLISH_SLOT_IST", "").strip()
+    date = os.environ.get("PUBLISH_DATE_IST", "").strip()
+    if vis not in ("public", "now") or not slot or not date:
+        return None
+    now = now or _now()
+    try:
+        when = _at(date, slot)
+    except (TypeError, ValueError):
+        when = None
+    state = row_state(find_entry(_read(), date, slot))
+    ahead = when is not None and when >= now
+    if ahead and state == "held":
+        return f"{date} {slot} IST is on hold"
+    if ahead and state == "filled":
+        return f"{date} {slot} IST is already filled"
+    if ahead and state == "open":
+        return None
+    choice = next_unfilled(now)
+    if not choice:
+        if state == "held":
+            return f"{date} {slot} IST is on hold"
+        if state == "filled":
+            return f"{date} {slot} IST is already filled"
+        return "no unfilled slot far enough ahead"
+    print(
+        f"[slot] {date} {slot} IST is not the next open slot; "
+        f"using {choice['date_ist']} {choice['slot']} IST",
+        file=sys.stderr,
+    )
+    os.environ["PUBLISH_SLOT_IST"] = choice["slot"]
+    os.environ["PUBLISH_DATE_IST"] = choice["date_ist"]
+    os.environ["PUBLISH_AT_UTC"] = choice["publish_at"]
+    return None
+
+
 def _candidates(now):
     start = now.date() - timedelta(days=1)
     out = []
