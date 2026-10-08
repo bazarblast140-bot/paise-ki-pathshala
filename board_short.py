@@ -5109,6 +5109,8 @@ def main():
             lesson = _lesson(topic)[0]
         else:
             lesson = BEATS
+        import pattern_charts
+        pattern_charts.reject_chart_gate()
         beat_pngs = {}
         for b in lesson:
             pics = beat_images(topic, b)

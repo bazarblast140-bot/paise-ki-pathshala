@@ -61,7 +61,8 @@ def gha_output(key, value):
             print(f"{key}={value}", file=f)
 
 
-def _flags(missing, fill=False, use_buffer=False, buffer_date="", buffer_slot="", nifty_fill=False):
+def _flags(missing, fill=False, use_buffer=False, buffer_date="", buffer_slot="",
+          nifty_fill=False, nifty_dispatch=False):
     gha_output("missing", "true" if missing else "false")
     # fill is the earliest unfilled slot still inside the lookahead,
     # scheduled via publishAt. A missed slot is not rolled and does not
@@ -69,6 +70,10 @@ def _flags(missing, fill=False, use_buffer=False, buffer_date="", buffer_slot=""
     gha_output("fill", "true" if fill else "false")
     # 16:00 on a trading day is the Nifty data Short, even when the cron dropped.
     gha_output("nifty_fill", "true" if nifty_fill else "false")
+    # After 16:20 IST the dropped 15:51 cron is caught by dispatching
+    # aaj-ka-nifty.yml once. This stays false when that workflow is already
+    # running or today's Short is already in the ledger.
+    gha_output("nifty_dispatch", "true" if nifty_dispatch else "false")
     # Last-chance buffer fill for THIS slot when it is still empty, not on
     # hold, and close to its publish time. A late complete post beats a skip.
     gha_output("use_buffer", "true" if use_buffer else "false")
@@ -155,15 +160,26 @@ def main():
     if use_buffer:
         print(f"[buffer] last chance for {date} {slot} IST — fill from the buffer if it is still empty")
     import nifty_day
-    nifty_fill = (
+    trading = (
         slot == nifty_day.SLOT
         and nifty_day.is_trading_day(datetime.strptime(date, "%Y-%m-%d").date())
     )
-    if nifty_fill:
+    due = trading and nifty_day.catchup_due(now, ents, busy=False)
+    busy = nifty_day.workflow_busy() if due else False
+    nifty_dispatch = due and not busy
+    # Before 16:20 the direct data-Short job is the fallback. After that,
+    # dispatch owns the catch-up so the two jobs do not both publish.
+    nifty_fill = trading and not nifty_dispatch and not busy
+    if nifty_dispatch:
+        print(f"[nifty] {date} {slot} IST is still empty after 16:20; dispatching aaj-ka-nifty.yml")
+    elif busy and trading:
+        print(f"[nifty] {date} {slot} IST catch-up skipped; a run is already in progress")
+    elif nifty_fill:
         print(f"[nifty] {date} {slot} IST is empty on a trading day; data Short is the fallback")
     _flags(
         True, fill=bool(nxt), use_buffer=use_buffer,
         buffer_date=date, buffer_slot=slot, nifty_fill=nifty_fill,
+        nifty_dispatch=nifty_dispatch,
     )
     try:
         send(msg)

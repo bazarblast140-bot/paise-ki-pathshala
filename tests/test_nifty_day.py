@@ -217,8 +217,15 @@ class ScheduleTests(unittest.TestCase):
                 dt.strptime = datetime.strptime
                 slot_watch.main()
             flags = gout.read_text(encoding="utf-8")
-        self.assertIn("nifty_fill=true", flags)
+        # 16:49 is after 16:20, so the dropped cron is caught by dispatching
+        # aaj-ka-nifty.yml. The direct nifty-fill job stays off.
+        self.assertIn("nifty_dispatch=true", flags)
+        self.assertIn("nifty_fill=false", flags)
         watch = (ROOT / ".github" / "workflows" / "slot-watch.yml").read_text(encoding="utf-8")
+        self.assertIn('"51 10 * * 1-5"', watch)
+        self.assertIn("gh workflow run aaj-ka-nifty.yml", watch)
+        self.assertEqual(watch.count("group: paise-ki-pathshala-publish"), 2)
+        self.assertIn("needs.check.outputs.nifty_dispatch == 'true'", watch)
         nifty = watch.split("nifty-fill:", 1)[1]
         self.assertIn("data_short: true", nifty)
         self.assertIn("uses: ./.github/workflows/paise-ki-pathshala.yml", nifty)
@@ -258,3 +265,49 @@ class ScheduleTests(unittest.TestCase):
         self.assertEqual(rows[0]["slot"], "16:00")
         self.assertIsNone(rows[0]["video_id"])
         self.assertIn("NSE holiday", rows[0]["slot_skipped"])
+
+    def _watch(self, now, entries, env=None):
+        import slot_watch
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "published.json"
+            ledger.write_text(json.dumps(entries), encoding="utf-8")
+            gout = Path(tmp) / "out.txt"
+            full = {"SLOT_CHECK": "16:00", "GITHUB_OUTPUT": str(gout)}
+            full.update(env or {})
+            with mock.patch.object(slot_watch, "LEDGER", ledger), \
+                 mock.patch.object(slot_guard, "LEDGER", ledger), \
+                 mock.patch.dict("os.environ", full), \
+                 mock.patch.object(slot_watch, "send"), \
+                 mock.patch.object(slot_watch, "datetime") as dt:
+                dt.now.return_value = now
+                dt.strptime = datetime.strptime
+                slot_watch.main()
+            return gout.read_text(encoding="utf-8")
+
+    def test_nifty_catchup_waits_until_after_1620(self):
+        early = self._watch(datetime(2026, 10, 8, 16, 10, tzinfo=IST), [])
+        self.assertIn("nifty_dispatch=false", early)
+        self.assertIn("nifty_fill=true", early)
+        late = self._watch(datetime(2026, 10, 8, 16, 21, tzinfo=IST), [])
+        self.assertIn("nifty_dispatch=true", late)
+        self.assertIn("nifty_fill=false", late)
+
+    def test_nifty_catchup_skips_an_upload_or_a_run_in_progress(self):
+        uploaded = self._watch(datetime(2026, 10, 8, 16, 30, tzinfo=IST), [
+            {"date_ist": "2026-10-08", "slot": "16:00", "video_id": "abc123", "format": "short"},
+        ])
+        self.assertIn("nifty_dispatch=false", uploaded)
+        self.assertIn("nifty_fill=false", uploaded)
+        busy = self._watch(
+            datetime(2026, 10, 8, 16, 30, tzinfo=IST), [],
+            env={"NIFTY_RUN_IN_PROGRESS": "1"},
+        )
+        self.assertIn("nifty_dispatch=false", busy)
+        self.assertIn("nifty_fill=false", busy)
+
+    def test_nifty_catchup_skips_a_weekend_and_a_holiday(self):
+        weekend = self._watch(datetime(2026, 10, 10, 16, 30, tzinfo=IST), [])
+        self.assertIn("nifty_dispatch=false", weekend)
+        holiday = self._watch(datetime(2026, 10, 2, 16, 30, tzinfo=IST), [])
+        self.assertIn("nifty_dispatch=false", holiday)
+        self.assertIn("nifty_fill=false", holiday)
