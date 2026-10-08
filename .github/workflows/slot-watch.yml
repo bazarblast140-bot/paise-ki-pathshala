@@ -45,6 +45,7 @@ jobs:
       use_buffer: ${{ steps.check.outputs.use_buffer }}
       buffer_date: ${{ steps.check.outputs.buffer_date }}
       buffer_slot: ${{ steps.check.outputs.buffer_slot }}
+      nifty_fill: ${{ steps.check.outputs.nifty_fill }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -174,4 +175,16 @@ jobs:
     with:
       format: short
       privacy: public
+    secrets: inherit
+
+  # Dropped 15:51 IST cron: the missed 16:00 slot is still today's Nifty bar.
+  nifty-fill:
+    needs: check
+    if: needs.check.outputs.nifty_fill == 'true' && (github.event_name == 'schedule' || inputs.fill == true)
+    uses: ./.github/workflows/paise-ki-pathshala.yml
+    with:
+      format: short
+      privacy: public
+      data_short: true
+      topic_key: aaj_ka_nifty
     secrets: inherit

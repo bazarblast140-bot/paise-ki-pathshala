@@ -61,12 +61,14 @@ def gha_output(key, value):
             print(f"{key}={value}", file=f)
 
 
-def _flags(missing, fill=False, use_buffer=False, buffer_date="", buffer_slot=""):
+def _flags(missing, fill=False, use_buffer=False, buffer_date="", buffer_slot="", nifty_fill=False):
     gha_output("missing", "true" if missing else "false")
     # fill is the earliest unfilled slot still inside the lookahead,
     # scheduled via publishAt. A missed slot is not rolled and does not
     # become an extra instant-public video.
     gha_output("fill", "true" if fill else "false")
+    # 16:00 on a trading day is the Nifty data Short, even when the cron dropped.
+    gha_output("nifty_fill", "true" if nifty_fill else "false")
     # Last-chance buffer fill for THIS slot when it is still empty, not on
     # hold, and close to its publish time. A late complete post beats a skip.
     gha_output("use_buffer", "true" if use_buffer else "false")
@@ -152,7 +154,17 @@ def main():
     use_buffer = buffer_shorts.in_last_chance(now, date, slot)
     if use_buffer:
         print(f"[buffer] last chance for {date} {slot} IST — fill from the buffer if it is still empty")
-    _flags(True, fill=bool(nxt), use_buffer=use_buffer, buffer_date=date, buffer_slot=slot)
+    import nifty_day
+    nifty_fill = (
+        slot == nifty_day.SLOT
+        and nifty_day.is_trading_day(datetime.strptime(date, "%Y-%m-%d").date())
+    )
+    if nifty_fill:
+        print(f"[nifty] {date} {slot} IST is empty on a trading day; data Short is the fallback")
+    _flags(
+        True, fill=bool(nxt), use_buffer=use_buffer,
+        buffer_date=date, buffer_slot=slot, nifty_fill=nifty_fill,
+    )
     try:
         send(msg)
     except Exception as e:  # noqa: BLE001 — khabar na jaaye to bhi run fail na ho

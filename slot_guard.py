@@ -23,6 +23,8 @@ UTC = timezone.utc
 LEDGER = pathlib.Path(__file__).parent / "data" / "published.json"
 
 SLOTS = ("08:30", "16:00", "21:00")
+# 16:00 IST is the Aaj ka Nifty data Short, not a free-form topic.
+DATA_SLOT = "16:00"
 
 # Upload-time buffer. YouTube rejects a publishAt that is not in the future.
 # publish.py refuses rather than adding a day when the instant is inside this.
@@ -240,6 +242,10 @@ def bind_next_open_slot(now=None):
     date = os.environ.get("PUBLISH_DATE_IST", "").strip()
     if vis not in ("public", "now") or not slot or not date:
         return None
+    if os.environ.get("DATA_SHORT", "").strip().lower() in ("1", "true", "yes"):
+        # This run is the 16:00 data Short. A clock that has already passed
+        # 16:00 must not be retargeted onto the next topic slot.
+        return scheduled_slot_block()
     now = now or _now()
     try:
         when = _at(date, slot)
@@ -375,6 +381,11 @@ def next_unfilled(now=None, entries=None, min_lead=None, max_lookahead=None):
             break
         date_ist = when.strftime("%Y-%m-%d")
         slot = when.strftime("%H:%M")
+        if (
+            slot == DATA_SLOT
+            and os.environ.get("SKIP_DATA_SLOT", "").strip().lower() in ("1", "true", "yes")
+        ):
+            continue
         if _filled(entries, date_ist, slot):
             continue
         return {

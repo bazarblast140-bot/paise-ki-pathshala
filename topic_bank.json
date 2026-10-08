@@ -6680,6 +6680,47 @@
     "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
    "seo": "Q2 Results"
+  },
+  {
+   "id": 178,
+   "used": false,
+   "used_short": false,
+   "data_short": true,
+   "key": "aaj_ka_nifty",
+   "cat": "NIFTY",
+   "topic": "आज का निफ्टी बंद",
+   "thumb": [
+    "AAJ KA NIFTY",
+    "CLOSE + LEVEL"
+   ],
+   "sticker": "आज का बंद",
+   "cover_lines": [
+    "AAJ KA NIFTY",
+    "CLOSE + LEVEL"
+   ],
+   "badge": "15:30 CLOSE",
+   "beats": {
+    "hook": [
+     "आज का निफ्टी",
+     "बंद और बदलाव"
+    ],
+    "pehchan": [
+     "हाई और लो",
+     "दिन की रेंज"
+    ],
+    "matlab": [
+     "की लेवल",
+     "सपोर्ट या रेसिस्टेंस"
+    ],
+    "karein": [
+     "क्या देखें",
+     "सिर्फ़ जानकारी"
+    ]
+   },
+   "facts": [
+    "आंकड़े रन के Yahoo ^NSEI डेली बार से भरते हैं"
+   ],
+   "seo": "Aaj ka Nifty"
   }
  ]
 }

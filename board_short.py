@@ -383,6 +383,8 @@ def live_voice_bounds(topic):
     A hash-locked approved script is voiced as stored. The 65s four-beat cap
     would discard Rudra after the characters were already spent.
     """
+    if str((topic or {}).get("key") or "") == "aaj_ka_nifty":
+        return (45.0, 59.0)
     if _approved_narration(None, topic):
         return APPROVED_VOICE_SECONDS
     if four_live(topic):
@@ -2192,6 +2194,24 @@ def narration(topic, c, spec=None):
         topic["_voice"] = dict((c or {}).get("voice") or {})
     if topic.get("_live_short") and not topic.get("_atr") and not topic.get("_live_beats"):
         topic["_live_beats"] = resolve_live_beats(topic)
+    if str((topic or {}).get("key") or "") == "aaj_ka_nifty":
+        import nifty_day
+        try:
+            n = nifty_day.narration_from_session(topic)
+        except FileNotFoundError as exc:
+            die(f"Nifty session missing; refusing a DeepSeek script: {exc}")
+        fails = check_narration(n, topic)
+        vague = scene_pace.vague_beats(n.get("beats"), order=_lesson(topic)[0])
+        if vague:
+            fails.append("vague explanation (no number, level or step): " + ", ".join(vague))
+        if fails:
+            die("Nifty narration failed its gate: " + "; ".join(fails))
+        n["source"] = "template"
+        n["narration_fallback"] = False
+        (RUN / "narration.json").write_text(
+            json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
+        ok("narration: fixed Nifty template, no DeepSeek script")
+        return n, "template"
     approved = _approved_script(topic)
     if approved is not None:
         if topic.get("_live_short") and not topic.get("_atr"):
@@ -4923,6 +4943,8 @@ def _eleven_spent():
 
 def _output_bounds(topic):
     """Seconds final.mp4 must land in. A live short uses its voice window."""
+    if str((topic or {}).get("key") or "") == "aaj_ka_nifty":
+        return (45.0, 59.0)
     if (topic or {}).get("_live_short"):
         return live_voice_bounds(topic)
     return (45.0, 62.0)
