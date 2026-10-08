@@ -225,6 +225,24 @@ class ScheduleTests(unittest.TestCase):
         cron = (ROOT / ".github" / "workflows" / "aaj-ka-nifty.yml").read_text(encoding="utf-8")
         self.assertIn('"21 10 * * 1-5"', cron)
         self.assertIn("data_short: true", cron)
+        self.assertIn("secrets: inherit", cron)
+        self.assertIn("secrets: inherit", nifty)
+        pipeline = (ROOT / ".github" / "workflows" / "paise-ki-pathshala.yml").read_text(encoding="utf-8")
+        slot_env = pipeline.split("Format decide karo", 1)[1].split("Slot pehle", 1)[0]
+        self.assertIn("DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}", slot_env)
+        run = pipeline.split("Run Pipeline", 1)[1].split("Show why the build failed", 1)[0]
+        for line in (
+            "DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}",
+            "GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}",
+            "ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}",
+            "ELEVENLABS_VOICE_ID:",
+            "YOUTUBE_CLIENT_ID: ${{ secrets.YT_FIN_CLIENT_ID }}",
+            "YOUTUBE_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}",
+            "YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}",
+            "IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}",
+            "IG_USER_ID:",
+        ):
+            self.assertIn(line, run, line)
 
     def test_holiday_skip_is_written_to_the_ledger(self):
         import ledger
