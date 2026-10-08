@@ -178,7 +178,39 @@ def fresh_short(now=None):
     return _pick_fresh(bank, flag, avoid, research, video_format(), now=now, skips=load_gate_skips())
 
 
+def _pick_approved_bank():
+    """08:30 and 21:00 speak an approved file, or the slot is skipped."""
+    import approved_bank
+    import slot_guard
+    approved_bank.clear_skip_marker()
+    test_key = os.environ.get("TOPIC_KEY", "").strip()
+    if test_key:
+        script = approved_bank.by_key(test_key)
+        if script is None:
+            die(f"TOPIC_KEY '{test_key}' approved/ me nahi hai")
+        topic = approved_bank.topic_from(script)
+        save("topic.txt", topic["topic"])
+        save("topic.json", json.dumps(topic, ensure_ascii=False, indent=1))
+        ok(f"approved bank topic (used mark nahi): {topic['key']}")
+        return
+    script = approved_bank.next_script(slot_guard._read())
+    if script is None:
+        reason = approved_bank.skip_reason(slot_guard._read()) or "no unused approved script left"
+        approved_bank.occupy_skip(reason)
+        approved_bank.skip_marker(reason)
+        print(f"[skip] {reason}")
+        return
+    topic = approved_bank.topic_from(script)
+    save("topic.txt", topic["topic"])
+    save("topic.json", json.dumps(topic, ensure_ascii=False, indent=1))
+    ok(f"approved bank topic: {topic['key']}")
+
+
 def main():
+    import approved_bank
+    if approved_bank.active():
+        _pick_approved_bank()
+        return
     bank_path = ROOT / "topic_bank.json"
     bank = json.loads(bank_path.read_text(encoding="utf-8"))
     flag = "used_short" if video_format() == "short" else "used"

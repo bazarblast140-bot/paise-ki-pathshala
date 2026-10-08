@@ -127,7 +127,7 @@ jobs:
           elif [ "${{ inputs.data_short }}" = "true" ]; then
             python nifty_day.py --slot-env >> "$GITHUB_OUTPUT"
           elif [ "$VIS" = "public" ]; then
-            SKIP_DATA_SLOT=1 python slot_guard.py --next >> "$GITHUB_OUTPUT"
+            APPROVED_BANK=1 SKIP_DATA_SLOT=1 python slot_guard.py --next >> "$GITHUB_OUTPUT"
           else
             echo "slot=" >> "$GITHUB_OUTPUT"
             echo "date_ist=" >> "$GITHUB_OUTPUT"
@@ -210,6 +210,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PUBLISH_VISIBILITY: ${{ steps.fmt.outputs.visibility }}
+          APPROVED_BANK: ${{ steps.fmt.outputs.visibility == 'public' && inputs.data_short != true && '1' || '0' }}
           TOPIC_KEY: ${{ inputs.data_short && 'aaj_ka_nifty' || inputs.topic_key }}
           DATA_SHORT: ${{ inputs.data_short && '1' || '0' }}
           SKIP_DATA_SLOT: ${{ inputs.data_short && '0' || '1' }}

@@ -1,0 +1,76 @@
+name: Render topic sample
+
+# Manual only. Renders one approved topic on the Gemini, then Rudra, then
+# Edge voice path, runs the full gate set, and stores the picture plus the
+# QA report as an artifact. YouTube, Instagram, and Facebook are not called.
+on:
+  workflow_dispatch:
+    inputs:
+      topic_key:
+        description: "Approved topic key, for example pat_hammer"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install FFmpeg and fonts
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Render with Gemini, then Rudra, then Edge
+        id: render
+        continue-on-error: true
+        env:
+          VIDEO_FORMAT: short
+          APPROVED_BANK: "1"
+          TOPIC_KEY: ${{ inputs.topic_key }}
+          LIVE_BEATS: four
+          PUBLISH_VISIBILITY: public
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+          PAID_TTS_ENABLED: ${{ vars.PAID_TTS_ENABLED }}
+        run: python run_pipeline.py --format short
+      - name: Full gate report
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import publish_gates
+          run = Path("run")
+          run.mkdir(exist_ok=True)
+          verdict = publish_gates.evaluate(run)
+          lines = ["# QA report", "", "passed: " + str(bool(verdict.get("passed")))]
+          for reason in verdict.get("reasons") or []:
+              lines.append("- " + str(reason))
+          (run / "qa_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("\n".join(lines))
+          PY
+          if [ "${{ steps.render.outcome }}" != "success" ]; then
+            echo "render failed"
+            exit 1
+          fi
+          python -c "import publish_gates; from pathlib import Path; raise SystemExit(0 if publish_gates.evaluate(Path('run')).get('passed') else 1)"
+      - name: Upload final, thumbnail, and QA report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: topic-sample-${{ inputs.topic_key }}
+          path: |
+            run/final.mp4
+            run/thumbnail.jpg
+            run/report.md
+            run/qa_report.md
+          if-no-files-found: error

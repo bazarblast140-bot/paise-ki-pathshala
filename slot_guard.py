@@ -381,10 +381,10 @@ def next_unfilled(now=None, entries=None, min_lead=None, max_lookahead=None):
             break
         date_ist = when.strftime("%Y-%m-%d")
         slot = when.strftime("%H:%M")
-        if (
-            slot == DATA_SLOT
-            and os.environ.get("SKIP_DATA_SLOT", "").strip().lower() in ("1", "true", "yes")
-        ):
+        skip_data = os.environ.get("SKIP_DATA_SLOT", "").strip().lower() in ("1", "true", "yes")
+        approved_topics = os.environ.get("APPROVED_BANK", "").strip().lower() in ("1", "true", "yes")
+        # 16:00 is the Nifty data Short. Topic slots are 08:30 and 21:00.
+        if slot == DATA_SLOT and (skip_data or approved_topics):
             continue
         if _filled(entries, date_ist, slot):
             continue

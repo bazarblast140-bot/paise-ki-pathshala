@@ -249,6 +249,11 @@ def main():
     for label, script in STAGES:
         print(f"\n=== {label} ===")
         rc = run(script)
+        if label == "Pick topic" and (RUN / "bank_skip.txt").is_file():
+            reason = (RUN / "bank_skip.txt").read_text(encoding="utf-8").strip()
+            print(f"[skip] {reason}; no video")
+            _finish_credits()
+            sys.exit(0)
         if rc != 0:
             print(f"[STOP] {label} failed (rc={rc}). Pipeline halted.")
             status = f"failed at: {label}"
