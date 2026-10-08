@@ -1,6 +1,7 @@
 """One Gemini TTS request for a whole Short.
 
-The free daily quota is unknown, so a Short is one POST. The reply audio is
+The free daily quota is unknown, so a Short is one POST, or two when the
+first take is under 45 seconds. The reply audio is
 raw s16le at 24 kHz mono, unless the bytes start with RIFF. Callers split
 that file into beats. This module never prints the API key.
 """
@@ -17,9 +18,17 @@ URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 SAMPLE_RATE = 24000
 TIMEOUT = 180
 STYLE = (
-    "energetic but clear Indian finance teacher, confident deep male narrator, "
-    "natural Hinglish with English words pronounced the Indian way, crisp and punchy pacing"
+    "confident deep male narrator, natural Hinglish with English words pronounced the Indian way, "
+    "calm, clear teacher pace with short natural pauses between sentences"
 )
+SLOW_STYLE = (
+    "confident deep male narrator, natural Hinglish with English words pronounced the Indian way, "
+    "slow, deliberate pace, pause after every sentence"
+)
+# A four-beat Gemini take may be shorter than Rudra. Under 45s, one slower retry.
+GEMINI_MIN_SECONDS = 34.0
+GEMINI_RETRY_UNDER = 45.0
+GEMINI_MAX_SECONDS = 65.0
 # A reply this far from words / pace is not the Short. The caller falls back.
 FAR_LO = 0.60
 FAR_HI = 1.50
@@ -42,7 +51,7 @@ def redact(text):
     return raw
 
 
-def request_body(text):
+def request_body(text, style=None):
     return {
         "model": MODEL,
         "input": [{
@@ -52,7 +61,7 @@ def request_body(text):
                 "text": text,
                 "annotations": [{
                     "type": "speech_metadata",
-                    "style": STYLE,
+                    "style": style or STYLE,
                 }],
             }],
         }],
@@ -147,7 +156,7 @@ def duration_far(actual, expected):
     return ratio < FAR_LO or ratio > FAR_HI
 
 
-def write_speech(text, dest):
+def write_speech(text, dest, style=None):
     """POST the whole script once. Write a wav. Never log the key or the body."""
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not key:
@@ -157,7 +166,7 @@ def write_speech(text, dest):
         response = requests.post(
             URL,
             headers={"x-goog-api-key": key, "Content-Type": "application/json"},
-            json=request_body(text),
+            json=request_body(text, style=style),
             timeout=TIMEOUT,
         )
     except requests.Timeout:
