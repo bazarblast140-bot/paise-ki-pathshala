@@ -89,7 +89,9 @@ def short_duration_window():
     try:
         data = json.loads((RUN / "narration.json").read_text(encoding="utf-8"))
         if data.get("plan"):
-            return 45.0, 75.0, "45-75s"
+            import trade_plan
+            lo, hi = trade_plan.hard_voice_seconds()
+            return lo, hi, f"{lo:.0f}-{hi:.0f}s"
         if str(data.get("source") or "") == "approved":
             import board_short
             lo, hi = board_short.apply_gemini_floor(

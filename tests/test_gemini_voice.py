@@ -455,6 +455,62 @@ class SpeakTests(unittest.TestCase):
         self.assertIn("voice_engine=edge", summary)
         self.assertGreaterEqual(len(edge.calls), len(ORDER))
 
+    def test_approved_plan_speaks_charon(self):
+        import approved_bank
+        import board_short
+        import credit_log
+        import trade_plan
+
+        topic = approved_bank.topic_from(approved_bank.by_key("pat_hammer"))
+        spoken = dict(approved_bank.narration_for(topic)["beats"])
+        seen = self._posts()
+
+        def trim(beats):
+            each = trim.seconds / len(tuple(beats))
+            return {beat: each for beat in beats}
+
+        trim.seconds = 46.0
+        buf = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.dict(os.environ, self._env()), \
+             mock.patch("requests.post", seen["post"]), \
+             mock.patch("sync_gate.transcribe_file", return_value=_words(24, 8.0)), \
+             mock.patch.object(gemini_voice, "duration_far", return_value=False), \
+             mock.patch.object(board_short, "_trim_rendered", side_effect=trim), \
+             redirect_stdout(buf):
+            engine = board_short.synthesize_short_voices(
+                dict(spoken), VOICE, beats=trade_plan.BEATS, topic=topic,
+            )
+        self.assertEqual(engine, "gemini")
+        self.assertEqual(len(seen["calls"]), 1)
+        voice = seen["calls"][0][1]["json"]["generation_config"]["speech_config"][0]["voice"]
+        self.assertEqual(voice, "Charon")
+        said = seen["calls"][0][1]["json"]["input"][0]["content"][0]["text"]
+        self.assertNotIn("Sirf", said)
+        self.assertIn("सीखने", said)
+        self.assertNotIn("[REVIEW] duration", buf.getvalue())
+
+        trim.seconds = 52.0
+        seen["calls"].clear()
+        buf = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.dict(os.environ, self._env()), \
+             mock.patch("requests.post", seen["post"]), \
+             mock.patch("sync_gate.transcribe_file", return_value=_words(24, 8.0)), \
+             mock.patch.object(gemini_voice, "duration_far", return_value=False), \
+             mock.patch.object(board_short, "_trim_rendered", side_effect=trim), \
+             redirect_stdout(buf):
+            engine = board_short.synthesize_short_voices(
+                dict(spoken), VOICE, beats=trade_plan.BEATS, topic=topic,
+            )
+        self.assertEqual(engine, "gemini")
+        self.assertEqual(len(seen["calls"]), 1)
+        self.assertIn("[REVIEW] duration 52.0s", buf.getvalue())
+
     def test_proof_audio_does_not_call_gemini(self):
         import board_short
         import credit_log

@@ -259,9 +259,41 @@ def _numbers(tokens):
     return out
 
 
+# Roman Hinglish the plan scripts and the old beat names still say.
+# Finance abbreviations stay Latin so the alias table can fold SL and ATR.
+_HINGLISH = {
+    "karein": "करें",
+    "matlab": "मतलब",
+    "sirf": "सिर्फ",
+    "seekhne": "सीखने",
+    "liye": "लिए",
+    "ke": "के",
+    "financial": "फाइनेंशियल",
+    "advice": "एडवाइस",
+    "nahi": "नहीं",
+    "pehchan": "पहचान",
+    "hook": "हुक",
+    "udaharan": "उदाहरण",
+    "galti": "गलती",
+}
+_LATIN_TOKEN = re.compile(r"(?<![A-Za-z])([A-Za-z]{2,})(?![A-Za-z])")
+
+
+def _known_roman(text):
+    """Map a known Roman token to Devanagari. An unknown word is left as it is.
+
+    The map is a .get, so 'karein' or 'matlab' cannot crash the matcher.
+    """
+    def repl(match):
+        word = match.group(0)
+        return _HINGLISH.get(word.casefold(), word)
+
+    return _LATIN_TOKEN.sub(repl, text or "")
+
+
 def normalize(text):
     """Canonical tokens: aliases applied, Hindi number-words written as digits."""
-    return " ".join(_numbers(_tokenize(text)))
+    return " ".join(_numbers(_tokenize(_known_roman(text))))
 
 
 def tokens(text):
@@ -754,26 +786,63 @@ def transcribe_file(path):
     return transcribe_pcm(pcm(path))
 
 
-def transcribe_beats(beat_audio, beat_times, beats=("hook", "pehchan", "matlab", "karein"),
-                     sources=None):
+_DEFAULT_BEATS = ("hook", "pehchan", "matlab", "karein")
+
+
+def _beats_to_transcribe(beat_audio, beat_times, beats):
+    """Beats that exist on both maps. A plan clock has cta, not karein.
+
+    The old four-beat default is used only when those files are actually there.
+    A missing name is skipped. It is never a KeyError.
+    """
+    audio = beat_audio or {}
+    times = beat_times or {}
+    # hook and pehchan exist on both clocks. The old default must not stop
+    # after those two and then KeyError on matlab.
+    defaulting = beats is None or tuple(beats) == _DEFAULT_BEATS
+    if defaulting and "entry" in times and "cta" in times:
+        import trade_plan
+        plan = [beat for beat in trade_plan.BEATS if beat in audio and beat in times]
+        if plan:
+            return tuple(plan)
+    if beats is None:
+        beats = _DEFAULT_BEATS
+    chosen = [beat for beat in beats if beat in audio and beat in times]
+    if chosen:
+        return tuple(chosen)
+    import trade_plan
+    plan = [beat for beat in trade_plan.BEATS if beat in audio and beat in times]
+    if plan:
+        return tuple(plan)
+    return tuple(beat for beat in times if beat in audio)
+
+
+def transcribe_beats(beat_audio, beat_times, beats=None, sources=None):
     """Word times on the joined timeline. Each beat's clock starts at the beat.
 
     `sources`, when given, are the original TTS files. Their leading silence is
     removed from the timestamps so they line up with the trimmed narration.
+    Callers that omit `beats` still get the four-beat clock when it exists,
+    and the eight-beat plan clock otherwise.
     """
     words = []
     sources = sources or {}
-    for beat in beats:
-        path = sources.get(beat) or beat_audio[beat]
+    audio_map = beat_audio or {}
+    time_map = beat_times or {}
+    for beat in _beats_to_transcribe(audio_map, time_map, beats):
+        path = sources.get(beat) or audio_map.get(beat)
+        span = time_map.get(beat)
+        if not path or not span or len(span) < 2:
+            continue
         audio = pcm(path)
         if audio.size == 0:
             raise RuntimeError(f"empty audio for {beat}")
         offset = speech_offset(audio) if sources.get(beat) else 0.0
-        t0 = float(beat_times[beat][0]) - offset
+        t0 = float(span[0]) - offset
         for word in transcribe_pcm(audio):
             start = word["start"] + t0
             end = word["end"] + t0
-            if end <= float(beat_times[beat][0]) - 0.05:
+            if end <= float(span[0]) - 0.05:
                 continue
             words.append({"word": word["word"], "start": start, "end": end})
     return words

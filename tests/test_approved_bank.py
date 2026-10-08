@@ -49,8 +49,8 @@ class ScriptTests(unittest.TestCase):
             self.assertTrue(narration["beats"]["cta"].endswith(trade_plan.DISCLAIMER), key)
             self.assertEqual(trade_plan.raw_digit_faults(script), [], key)
             total = sum(len(narration["beats"][beat].split()) for beat in trade_plan.BEATS)
-            self.assertGreaterEqual(total, 90, key)
-            self.assertLessEqual(total, 140, key)
+            self.assertGreaterEqual(total, trade_plan.TOTAL_WORDS[0], key)
+            self.assertLessEqual(total, trade_plan.TOTAL_WORDS[1], key)
             self.assertLessEqual(len(narration["hook_line"].split()), 12, key)
             raw = json.dumps(
                 {"beats": script.get("beats"), "on_screen": script.get("on_screen")},
