@@ -13,9 +13,11 @@ bottom band.
 
 Taken from top Shorts (2.1M / 2.1M / 451K views).
 
-1. **Hook.** The finished red/green RR box is visible from 0 to 2 s, then
-   fades out. A big Hindi question title is in by 300 ms. The open is never
-   an empty chart. Context candles keep building through about 5 s.
+1. **Hook.** The finished red/green RR box is visible from 0 to 2 s, with
+   solid ENTRY, SL, and TARGET ghost lines, then both fade out. A big Hindi
+   question title is in by 300 ms. The open is never an empty chart. Context
+   candles keep building through about 5 s. The price plot is about 60% of
+   the frame height.
 2. **Candle pacing.** The first context candle is finished at t=0. The rest
    are staggered across the hook, each drawing in about 150 ms, so the hook
    does not sit still. The 2–3 key candles slow to one candle per beat.
@@ -38,7 +40,8 @@ Taken from top Shorts (2.1M / 2.1M / 451K views).
    (ease-in-out), then eases back before the next beat.
 8. **Look.** Flat background `#161616`. Bull `#22B53C`, bear `#F01E32`.
    Yellow is only for attention. Captions are one block, at most two shaped
-   lines, in the bottom band. The disclaimer is at least 36 px. The chart
+   lines, in the bottom band. The on-screen disclaimer is one line,
+   `सिर्फ सीखने के लिए, फाइनेंशियल एडवाइस नहीं`, at least 36 px. The chart
    fills the top 60–65%. A soft whoosh sits about −20 dB under the voice, at most 4 per video, and only on
    major reveals: the RR box, ENTRY, TARGET, and the key-candle zoom. The
    video ends on what kills the trade: price breaks the SL and the SL line
@@ -160,8 +163,8 @@ title has started.
 
 ## Stop break
 
-On the invalidation beat the price marker travels from entry to the stop,
-and the stop line flashes red.
+On the invalidation beat a red candle trades through the stop (below it on
+a long, above it on a short) and the stop line flashes red.
 
 ```python
 motion_lib.sl_break(img, ax, plan, progress, flash_on=True)

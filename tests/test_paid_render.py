@@ -184,18 +184,16 @@ class PaidRenderTests(unittest.TestCase):
         self.assertNotIn("get", posts)
         self.assertNotIn("encode", posts)
 
-    def test_craft_hold_never_calls_elevenlabs(self):
-        posts, log = self._run(
+    def test_craft_hold_still_reaches_the_voice(self):
+        posts, spent = self._run(
             craft=None,
             review=self._review(ok=False, craft=0, summary="craft hold empty background"),
             env={"PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
         )
-        self.assertIn("HOLD", log)
-        self.assertIn("0 characters spent", log)
         self.assertIn("craft", posts)
         self.assertIn("encode", posts)
-        self.assertNotIn("eleven", posts)
-        self.assertNotIn("get", posts)
+        self.assertIn("eleven", posts)
+        self.assertGreater(spent, 0)
 
     def test_switch_off_never_calls_elevenlabs(self):
         for flag in (None, "false", "False", "1", "yes"):
@@ -279,7 +277,7 @@ class PaidRenderTests(unittest.TestCase):
         self.assertLess(posts.index("encode"), posts.index("eleven"))
         self.assertGreater(second, 0)
 
-    def test_edge_sync_hold_never_calls_elevenlabs(self):
+    def test_edge_sync_hold_still_reaches_the_voice(self):
         def reviewed(*_args, **kwargs):
             sync = kwargs.get("sync") or {}
             if not sync.get("ok"):
@@ -295,13 +293,11 @@ class PaidRenderTests(unittest.TestCase):
             review_fn=reviewed,
             proof_seen=proof,
         )
-        self.assertEqual(proof, ["edge"])
-        self.assertIn("0 characters spent", log)
-        self.assertIn("sync hold", log)
-        self.assertNotIn("eleven", posts)
-        self.assertNotIn("get", posts)
+        self.assertEqual(proof[0], "edge")
+        self.assertIn("eleven", posts)
+        self.assertGreater(log, 0)
 
-    def test_paid_timeline_hold_blocks_upload_and_logs_characters(self):
+    def test_paid_timeline_hold_keeps_the_file(self):
         calls = {"n": 0}
 
         def reviewed(*_args, **_kwargs):
@@ -318,10 +314,7 @@ class PaidRenderTests(unittest.TestCase):
         )
         self.assertGreaterEqual(calls["n"], 2)
         self.assertIn("eleven", posts)
-        self.assertIn("no upload", log)
-        self.assertIn("characters spent", log)
-        self.assertNotIn("0 characters spent", log)
-        self.assertIn("panel fill", log)
+        self.assertGreater(log, 0)
 
     def test_prepare_spoken_does_not_add_a_library_voice(self):
         topic = _topic()

@@ -4134,16 +4134,19 @@ def on_screen_boxes(topic, beat_times, spoken, hook_line, cta, t, audio_words=No
     """Boxes for the one spoken cue at t, plus the grey disclaimer on the last beat.
 
     The poll stays on the recap card. Headlines and key lines are not burned.
+    A plan chart paints its own disclaimer, so this track does not add a second box.
     """
     import safe_area
-    del topic, hook_line, cta
+    import trade_plan
+    plan_topic = trade_plan.is_plan_topic(topic)
+    del hook_line, cta
     boxes = []
     t = float(t)
     for cue in cues_at(plan_cues(spoken, beat_times, audio_words), t):
         boxes.extend(row[1] for row in _cue_rows(cue["text"]))
         break
     span = closing_span(beat_times)
-    if span and span[0] - 1e-6 <= t <= span[1] + 1e-6:
+    if span and span[0] - 1e-6 <= t <= span[1] + 1e-6 and not plan_topic:
         boxes.append(_top_box(DISCLAIMER, 540, safe_area.SOURCE_Y, DISCLAIMER_SIZE))
     return boxes
 
@@ -4264,14 +4267,17 @@ def _ass_rows(rows, t0, t1, colour, fade):
 
 def build_ass(topic, beat_times, spoken, hook_line, cta, audio_words=None):
     import safe_area
-    del topic, hook_line, cta, spoken, audio_words
+    import trade_plan
     # The card already shows the spoken line at a phone-readable size. A 40px
     # bottom caption is too small to read and sits on the card, so it is not
     # burned. plan_cues still times those lines for the number check. Sync
-    # reads the audio, not this track.
+    # reads the audio, not this track. A plan CTA paints one Devanagari
+    # disclaimer on the frame, so this track must not draw a second line.
+    plan_topic = trade_plan.is_plan_topic(topic)
+    del hook_line, cta, spoken, audio_words
     ev = []
     span = closing_span(beat_times)
-    if span:
+    if span and not plan_topic:
         t0, t1 = span
         # Grey disclaimer sits in the brand band, under the fixed subtitle box.
         ev.append(K.ass_text(t0, t1, 540, safe_area.SOURCE_Y, DISCLAIMER_SIZE, "&H00B8A394&", DISCLAIMER, 8))
@@ -5540,6 +5546,28 @@ def _continue_plan_review(review):
     return review
 
 
+def _release_review(review, path, topic):
+    """Print the self-review. It never chooses the voice engine.
+
+    A soft plan miss stays a REVIEW flag. A hard miss stays the verdict
+    full_review already wrote. Publish reads that file later.
+    """
+    summary = str((review or {}).get("summary") or "self-review")
+    import trade_plan
+    if trade_plan.is_plan_topic(topic) and not _hard_pre_render_block(review):
+        _continue_plan_review(review)
+        if path is not None:
+            path.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
+        print("[REVIEW] " + summary, flush=True)
+        return review
+    if review.get("review_flag") and approved_publish():
+        print("[REVIEW] approved=true; " + summary, flush=True)
+        return review
+    kind = "REVIEW" if review.get("review_flag") else "HOLD"
+    print(f"[{kind}] " + summary, flush=True)
+    return review
+
+
 def _pay_and_remux(topic, n, c, spec, source, proven):
     """The upload voice, then mux it and review the file that would upload.
 
@@ -5635,19 +5663,16 @@ def _pay_and_remux(topic, n, c, spec, source, proven):
     ]
     review_path = RUN / "self_review.json"
     review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
+    if final_dur < lo or final_dur > hi:
+        _spent_hold(
+            f"paid voice duration outside {lo:.0f}-{hi:.0f}s; refusing the slot: {final_dur:.1f}s"
+        )
+    if outside:
+        _spent_hold(
+            "text outside the frame safe area: " + "; ".join(outside[:4])
+        )
     if not review.get("public_ok"):
-        import trade_plan
-        if review.get("review_flag") and approved_publish():
-            print("[REVIEW] approved=true; " + str(review.get("summary") or ""), flush=True)
-        elif trade_plan.is_plan_topic(topic) and not _hard_pre_render_block(review):
-            _continue_plan_review(review)
-            review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
-            print("[REVIEW] " + str(review.get("summary") or ""), flush=True)
-        else:
-            kind = "REVIEW" if review.get("review_flag") else "HOLD"
-            _spent_hold(
-                f"paid render {kind}; " + str(review.get("summary") or "self-review failed")
-            )
+        _release_review(review, review_path, topic)
     topic["_spoken_beats"] = {beat: spoken[beat] for beat in order}
     write_compat(topic, n, spoken, beat_times)
     (RUN / "narration.json").write_text(
@@ -5661,8 +5686,9 @@ def prove_full_render(topic, n, c, spec, source="llm", beat_pngs=None, free="edg
 
     The live proof uses Edge and the real whisper sync gate, the duration
     gate, and the full self-review. `free=\"silence\"` only builds a timed
-    picture; it is not a passing live proof. A crash, an Edge failure, or a
-    self-review hold exits with 0 characters spent.
+    picture; it is not a passing live proof. A crash or an Edge failure
+    exits with 0 characters spent. The self-review never chooses the engine:
+    Gemini, then Rudra, then Edge still run, and the verdict only blocks publish.
     The returned picture is what a later paid pass muxes onto.
     """
     kind = "edge" if str(free or "").strip().lower() == "edge" else "silence"
@@ -5690,29 +5716,9 @@ def prove_full_render(topic, n, c, spec, source="llm", beat_pngs=None, free="edg
                 review = json.loads(review_path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 review = {}
-        if review.get("public_ok"):
-            return proven
-        summary = str(review.get("summary") or "no passing self-review")
-        import trade_plan
-        if trade_plan.is_plan_topic(topic) and not _hard_pre_render_block(review):
-            _continue_plan_review(review)
-            review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
-            print("[REVIEW] " + summary, flush=True)
-            return proven
-        if review.get("review_flag"):
-            if os.environ.get("DRY_RUN", "").strip() == "1":
-                print("[REVIEW] " + summary, flush=True)
-                return proven
-            if approved_publish():
-                print("[REVIEW] approved=true; " + summary, flush=True)
-                return proven
-            die(
-                "REVIEW; refusing paid publish without approved=true; 0 characters spent: "
-                + summary
-            )
-        die(
-            "pre-render HOLD before paid TTS; 0 characters spent: " + summary
-        )
+        if not review.get("public_ok"):
+            _release_review(review, review_path, topic)
+        return proven
     finally:
         os.environ.pop("PROOF_FREE_AUDIO", None)
 
@@ -5720,9 +5726,9 @@ def prove_full_render(topic, n, c, spec, source="llm", beat_pngs=None, free="edg
 def produce_short(topic, n, c, spec, source="llm", beat_pngs=None):
     """Voice, scenes, sync, and final.mp4. No upload and no git commit.
 
-    A live or ATR ElevenLabs slot renders the whole Short on Edge first,
-    including whisper sync, duration, and craft. Paid TTS runs only after
-    that proof passes, then the paid file is reviewed again before upload.
+    A live or ATR ElevenLabs slot renders the whole Short on Edge first.
+    The proof's self-review does not choose the engine. The pay pass tries
+    Gemini, then Rudra, then Edge, and the verdict only blocks publish.
     """
     if topic.get("_live_short") and not topic.get("_atr"):
         n["live_beats"] = resolve_live_beats(topic)

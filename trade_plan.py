@@ -12,6 +12,8 @@ BEATS = (
 )
 REQUIRED = ("context", "entry", "sl", "target", "invalidation")
 DISCLAIMER = "Sirf seekhne ke liye, financial advice nahi."
+# One burned line. The Latin sentence stays in the script; it is not painted.
+ON_SCREEN_DISCLAIMER = "सिर्फ सीखने के लिए, फाइनेंशियल एडवाइस नहीं"
 DISCLAIMER_PX = 40
 # The topic the owner asked for is 40–50s. A take up to 55s is a review, not a block.
 VOICE_SECONDS = (40.0, 50.0)
@@ -989,7 +991,7 @@ def _paint_disclaimer(img):
     import scene_frames
     import safe_area
     scene_frames._text(
-        img=img, x=540, y=safe_area.SOURCE_Y, text=DISCLAIMER,
+        img=img, x=540, y=safe_area.SOURCE_Y, text=ON_SCREEN_DISCLAIMER,
         fill=(230, 230, 230), size=DISCLAIMER_PX, anchor="mt", band=False, role="source",
     )
 

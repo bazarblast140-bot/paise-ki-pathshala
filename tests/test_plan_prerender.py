@@ -55,7 +55,8 @@ class PreRenderTests(unittest.TestCase):
                 )
                 self.assertIsInstance(boxes, list, key)
             ass = board_short.build_ass(topic, beat_times, spoken, hook, "कमेंट")
-            self.assertIn("Dialogue", ass, key)
+            self.assertNotIn(board_short.DISCLAIMER, ass, key)
+            self.assertNotIn(trade_plan.DISCLAIMER, ass, key)
             scenes = [
                 {
                     "frame": _Frame(),
@@ -170,14 +171,39 @@ class PreRenderTests(unittest.TestCase):
             self.assertFalse(saved["public_ok"])
             holder["review"] = {
                 **soft,
-                "parts": {**soft["parts"], "accuracy": 0},
+                "parts": {**soft["parts"], "accuracy": 0, "sync": 0},
                 "notes": ["numbers with no source: ['100', '118']"],
                 "summary": "numbers with no source: ['100', '118']",
             }
-            err = io.StringIO()
-            with redirect_stderr(err), self.assertRaises(SystemExit):
-                board_short.prove_full_render(topic, {}, {}, {})
-            self.assertIn("pre-render HOLD", err.getvalue())
+            out = io.StringIO()
+            with redirect_stdout(out):
+                blocked = board_short.prove_full_render(topic, {}, {}, {})
+            self.assertEqual(blocked["final_dur"], 46.0)
+            self.assertIn("[HOLD]", out.getvalue())
+            self.assertNotIn("pre-render HOLD", out.getvalue())
+            kept = json.loads((Path(tmp) / "self_review.json").read_text(encoding="utf-8"))
+            self.assertFalse(kept["public_ok"])
+            self.assertFalse(kept["review_flag"])
+            holder["review"] = {
+                **soft,
+                "parts": {**soft["parts"], "sync": 0, "craft": 0},
+                "notes": ["vague explanation: cta"],
+                "summary": (
+                    "overall 65.0 (hook 100, visual 90, accuracy 100, trend 100, "
+                    "craft 0, sync 0) — vague explanation: cta"
+                ),
+            }
+            seen = {}
+
+            def pay(*_args, **_kwargs):
+                seen["proof"] = os.environ.get("PROOF_FREE_AUDIO")
+                return 46.0
+
+            with mock.patch.object(board_short, "_needs_paid_proof", return_value=True), \
+                 mock.patch.object(board_short, "_pay_and_remux", side_effect=pay), \
+                 mock.patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=False):
+                board_short.produce_short(topic, {"beats": {}}, {"voice": {}}, {})
+            self.assertIsNone(seen["proof"])
 
 
 if __name__ == "__main__":
