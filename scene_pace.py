@@ -165,5 +165,8 @@ def beat_times_from_overlays(overlays):
         else:
             spans[beat][0] = min(spans[beat][0], start)
             spans[beat][1] = max(spans[beat][1], end)
-    order = ("hook", "pehchan", "matlab", "udaharan", "galti", "karein")
+    order = (
+        "hook", "pehchan", "context", "entry", "sl", "target", "invalidation", "cta",
+        "matlab", "udaharan", "galti", "karein",
+    )
     return {b: tuple(spans[b]) for b in order if b in spans}

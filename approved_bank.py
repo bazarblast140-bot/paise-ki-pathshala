@@ -88,6 +88,9 @@ def skip_reason(entries, scripts=None):
 
 
 def narration_from(script):
+    import trade_plan
+    if trade_plan.is_plan_script(script):
+        return trade_plan.narration_from(script)
     beats_in = (script or {}).get("beats") or {}
     if isinstance(beats_in, dict) and all(isinstance(beats_in.get(beat), str) for beat in ORDER):
         beats = {beat: " ".join(str(beats_in.get(beat) or "").split()) for beat in ORDER}
@@ -106,7 +109,37 @@ def narration_from(script):
 
 def topic_from(script):
     """The chart topic. Spoken lines stay on _spoken_beats, not the card."""
+    import trade_plan
     narration = narration_from(script)
+    if narration.get("plan"):
+        on_screen = (script or {}).get("on_screen") or {}
+        beats = {}
+        for beat in trade_plan.BEATS:
+            pair = on_screen.get(beat)
+            if isinstance(pair, list) and len(pair) >= 2:
+                beats[beat] = [str(pair[0]), str(pair[1])]
+            else:
+                beats[beat] = ["प्लान", "लेवल"]
+        topic = {
+            "key": script["key"],
+            "cat": str(script.get("cat") or "PATTERN"),
+            "topic": narration["title"],
+            "thumb": list(script.get("thumb") or ["PLAN", "LEVEL"]),
+            "sticker": str(script.get("sticker") or "प्लान"),
+            "beats": beats,
+            "facts": list(narration["facts"]),
+            "seo": str(script.get("seo") or narration["title"]),
+            "_spoken_beats": dict(narration["beats"]),
+            "_approved_bank": True,
+            "_live_short": True,
+            "_live_beats": "plan",
+            "_voice": {"words_per_second": 1.9},
+        }
+        if script.get("cover_lines"):
+            topic["cover_lines"] = list(script["cover_lines"])
+        if script.get("badge"):
+            topic["badge"] = script["badge"]
+        return topic
     on_screen = (script or {}).get("on_screen") or {}
     beats = {}
     for beat in ORDER:
@@ -139,6 +172,20 @@ def topic_from(script):
 
 def narration_for(topic):
     """The file script for this topic. Never a generated draft."""
+    import trade_plan
+    if trade_plan.has_plan((topic or {}).get("key")) and (
+        trade_plan.is_plan_topic(topic) or (topic or {}).get("_approved_bank")
+    ):
+        script = by_key((topic or {}).get("key"))
+        if script is None:
+            raise FileNotFoundError(f"approved script missing for {(topic or {}).get('key')}")
+        spoken = (topic or {}).get("_spoken_beats")
+        if isinstance(spoken, dict) and all(str(spoken.get(beat) or "").strip() for beat in trade_plan.BEATS):
+            merged = dict(script)
+            merged["beats"] = spoken
+            merged["title"] = (topic or {}).get("topic") or script.get("title")
+            return trade_plan.narration_from(merged)
+        return trade_plan.narration_from(script)
     spoken = (topic or {}).get("_spoken_beats")
     if isinstance(spoken, dict) and all(str(spoken.get(beat) or "").strip() for beat in ORDER):
         script = by_key((topic or {}).get("key")) or {}

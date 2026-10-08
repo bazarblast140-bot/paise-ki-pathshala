@@ -272,6 +272,8 @@ def _live_lesson(c):
 def resolve_live_beats(topic=None):
     """four or six. Topic flag, then LIVE_BEATS, then config.json. Default four."""
     raw = str((topic or {}).get("_live_beats") or "").strip().lower()
+    if raw == "plan":
+        return "plan"
     if raw in ("four", "six"):
         return raw
     raw = os.environ.get("LIVE_BEATS", "").strip().lower()
@@ -290,6 +292,8 @@ def resolve_live_beats(topic=None):
 
 def four_live(topic):
     """The default live Short: four beats, ~55s, not the six-beat lesson."""
+    if resolve_live_beats(topic) == "plan":
+        return False
     return (
         bool((topic or {}).get("_live_short"))
         and not (topic or {}).get("_atr")
@@ -385,6 +389,9 @@ def live_voice_bounds(topic):
     """
     if str((topic or {}).get("key") or "") == "aaj_ka_nifty":
         return (45.0, 59.0)
+    import trade_plan
+    if trade_plan.is_plan_topic(topic):
+        return trade_plan.VOICE_SECONDS
     if _approved_narration(None, topic):
         return APPROVED_VOICE_SECONDS
     if four_live(topic):
@@ -398,6 +405,9 @@ def _topic_voice(topic):
 
 def _lesson(topic):
     """Beat order, per-beat targets, accept window, and the prompt's target band."""
+    import trade_plan
+    if trade_plan.is_plan_topic(topic):
+        return trade_plan.BEATS, trade_plan.WORD_TARGETS, trade_plan.TOTAL_WORDS, trade_plan.WORD_TARGET
     if (topic or {}).get("_live_short") and not (topic or {}).get("_atr"):
         wps = voice_wps(_topic_voice(topic))
         if resolve_live_beats(topic) == "six":
@@ -408,6 +418,9 @@ def _lesson(topic):
 
 
 def timed_beats(beat_times):
+    import trade_plan
+    if beat_times and "entry" in beat_times and "cta" in beat_times:
+        return tuple(beat for beat in trade_plan.BEATS if beat in beat_times)
     found = tuple(b for b in LIVE_ORDER if b in (beat_times or {}))
     return found or BEATS
 
@@ -462,6 +475,13 @@ def _teaching_beat_ranges():
 
 
 def check_narration(n, topic):
+    import trade_plan
+    if trade_plan.is_plan_topic(topic) or (n or {}).get("plan"):
+        checked = dict(topic or {})
+        if (n or {}).get("plan"):
+            checked["_live_beats"] = "plan"
+            checked["key"] = checked.get("key") or n.get("key")
+        return trade_plan.script_fails(n, checked)
     fails = []
     beats = n.get("beats") or {}
     if topic.get("_atr") or not topic.get("_live_short"):
@@ -2220,12 +2240,14 @@ def narration(topic, c, spec=None):
             die(f"approved script missing; refusing a DeepSeek script: {exc}")
         topic["_approved_bank"] = True
         topic["_live_short"] = True
-        topic["_live_beats"] = "four"
+        topic["_live_beats"] = "plan" if n.get("plan") else "four"
         topic["_voice"] = {"words_per_second": 1.9}
         topic["_spoken_beats"] = dict(n["beats"])
         topic["facts"] = list(n.get("facts") or topic.get("facts") or [])
         fails = check_narration(n, topic)
         vague = scene_pace.vague_beats(n.get("beats"), order=_lesson(topic)[0])
+        if n.get("plan"):
+            vague = [beat for beat in vague if beat != "cta"]
         if vague:
             fails.append("vague explanation (no number, level or step): " + ", ".join(vague))
         if fails:
@@ -2608,6 +2630,15 @@ def _write_spoken_engine(engine, elevenlabs_attempted=None):
     )
     credit_log.set_tts_engine(engine, VOICE_FALLBACK_REASON)
     _note_voice_engine(engine)
+    import trade_plan
+    if trade_plan.voice_review(engine, _VOICE_TOPIC):
+        try:
+            meta_path = RUN / "voice_meta.json"
+            data = json.loads(meta_path.read_text(encoding="utf-8"))
+            data["review"] = True
+            meta_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        except (OSError, ValueError):
+            pass
     ok(f"voice engine: {engine}" + (f" ({VOICE_FALLBACK_REASON})" if VOICE_FALLBACK_REASON else ""))
     return engine
 
@@ -2908,6 +2939,21 @@ def _drop_gemini_audio(beats):
             (RUN / name).unlink(missing_ok=True)
 
 
+def _fold_voice_line(text):
+    """Fold Latin, but keep the exact English disclaimer the owner asked for."""
+    import trade_plan
+    mark = trade_plan.DISCLAIMER
+    raw = str(text or "")
+    if mark not in raw:
+        return fold_roman_words(raw)
+    head, _, tail = raw.partition(mark)
+    folded = fold_roman_words(head).rstrip()
+    rest = fold_roman_words(tail).strip()
+    if rest:
+        return f"{folded} {mark} {rest}".strip()
+    return f"{folded} {mark}".strip()
+
+
 def _gemini_script(spoken, beats):
     """One speakable script. Folding stays on a copy until Gemini is kept."""
     import approved_script
@@ -2916,7 +2962,7 @@ def _gemini_script(spoken, beats):
     for beat in beats:
         text = spoken.get(beat) or ""
         if not approved_script.active():
-            text = fold_roman_words(text)
+            text = _fold_voice_line(text)
         folded[beat] = text
         voice = _voice_text(text).strip()
         approved_script.refuse_paid_mismatch(voice)
@@ -2937,17 +2983,63 @@ def _expected_voice_seconds(spoken, beats, c):
     return (words / wps) if words else 0.0
 
 
-def _speak_gemini(spoken, c, beats, topic):
-    """One Charon request, then beat files timed from whisper word ends."""
+def _gemini_take_names(beats):
+    names = ["gemini_voice.wav", "gemini_words.json", "words.json"]
+    for beat in beats:
+        names.extend([
+            f"tts_{beat}.wav", f"tts_{beat}.engine", f"tts_{beat}.textid",
+            f"voice_clean_{beat}.wav",
+        ])
+    return names
+
+
+def _snapshot_run_files(names):
+    saved = {}
+    for name in names:
+        path = RUN / name
+        if path.exists():
+            saved[name] = path.read_bytes()
+    return saved
+
+
+def _restore_run_files(saved):
+    for name, data in saved.items():
+        (RUN / name).write_bytes(data)
+
+
+def _gemini_pace_window(topic):
+    """34-65s for a four-beat Gemini take. Topic plans stay 45-75s."""
+    import trade_plan
+    if trade_plan.is_plan_topic(topic):
+        return trade_plan.VOICE_SECONDS
+    if topic is None or not four_live(topic):
+        return None
+    lo, hi = _output_bounds(topic, engine="")
+    if lo == 45.0 and hi == 65.0:
+        import gemini_voice
+        return (gemini_voice.GEMINI_MIN_SECONDS, gemini_voice.GEMINI_MAX_SECONDS)
+    return None
+
+
+def _better_gemini_take(new, old):
+    """Prefer a take that reaches 45s. Otherwise keep the longer one."""
     import gemini_voice
-    folded, script = _gemini_script(spoken, beats)
-    if not script:
-        raise gemini_voice.GeminiFallback("Gemini TTS script was empty")
+    if new >= gemini_voice.GEMINI_RETRY_UNDER and old < gemini_voice.GEMINI_RETRY_UNDER:
+        return True
+    if old >= gemini_voice.GEMINI_RETRY_UNDER and new < gemini_voice.GEMINI_RETRY_UNDER:
+        return False
+    return new > old
+
+
+def _one_gemini_take(spoken, c, beats, folded, script, style, durations, attempt, topic, window):
+    import gemini_voice
     dest = RUN / "gemini_voice.wav"
-    gemini_voice.write_speech(script, dest)
+    gemini_voice.write_speech(script, dest, style=style)
     seconds = gemini_voice.wav_seconds(dest)
     expected = _expected_voice_seconds(folded, beats, c)
     if gemini_voice.duration_far(seconds, expected):
+        durations.append(seconds)
+        print(f"[gemini] take {attempt + 1}: {seconds:.1f}s", flush=True)
         raise gemini_voice.GeminiFallback(
             f"duration {seconds:.1f}s is far from expected {expected:.1f}s"
         )
@@ -2958,22 +3050,70 @@ def _speak_gemini(spoken, c, beats, topic):
         raw = _trim_rendered(beats)
     except SystemExit as exc:
         raise gemini_voice.GeminiFallback(str(exc))
-    _total = sum(raw.values())
-    if topic is not None:
-        lo, hi = _output_bounds(topic)
-        # Seams add a few hundredths after this trim. Stay inside the same gate.
-        if _total < lo or _total > hi:
+    total = sum(raw.values())
+    durations.append(total)
+    print(f"[gemini] take {attempt + 1}: {total:.1f}s", flush=True)
+    if window is None and topic is not None:
+        lo, hi = _output_bounds(topic, engine="")
+        if total < lo or total > hi:
             raise gemini_voice.GeminiFallback(
-                f"duration {_total:.1f}s is outside {lo:.0f}-{hi:.0f}s"
+                f"duration {total:.1f}s is outside {lo:.0f}-{hi:.0f}s"
             )
+    return total
+
+
+def _speak_gemini(spoken, c, beats, topic):
+    """Charon, then one slower retry when the take is under 45s. At most two calls."""
+    import gemini_voice
+    folded, script = _gemini_script(spoken, beats)
+    if not script:
+        raise gemini_voice.GeminiFallback("Gemini TTS script was empty")
+    window = _gemini_pace_window(topic)
+    durations = []
+    kept = None
+    last_error = None
+    styles = (gemini_voice.STYLE, gemini_voice.SLOW_STYLE)
+    for attempt, style in enumerate(styles):
+        if attempt:
+            _drop_gemini_audio(beats)
+        try:
+            total = _one_gemini_take(
+                spoken, c, beats, folded, script, style, durations, attempt, topic, window,
+            )
+        except gemini_voice.GeminiFallback as exc:
+            last_error = exc
+            fast = durations and durations[-1] < gemini_voice.GEMINI_RETRY_UNDER
+            if window is not None and attempt == 0 and fast:
+                continue
+            break
+        if window is None:
+            kept = (total, None)
+            break
+        lo, hi = window
+        if lo <= total <= hi:
+            snap = _snapshot_run_files(_gemini_take_names(beats))
+            if kept is None or _better_gemini_take(total, kept[0]):
+                kept = (total, snap)
+        if total >= gemini_voice.GEMINI_RETRY_UNDER or attempt == 1:
+            break
+    if kept is not None and kept[1] is not None:
+        _restore_run_files(kept[1])
+    if kept is None:
+        if last_error is not None and (window is None or not durations):
+            raise last_error
+        shown = ", ".join(f"{item:.1f}s" for item in durations) or "none"
+        lo, hi = window or (gemini_voice.GEMINI_MIN_SECONDS, gemini_voice.GEMINI_MAX_SECONDS)
+        raise gemini_voice.GeminiFallback(f"no take in {lo:.0f}-{hi:.0f}s ({shown})")
+    shown = ", ".join(f"{item:.1f}s" for item in durations)
+    print(f"[gemini] takes: {shown}; voice_engine=gemini", flush=True)
     for beat in beats:
         (RUN / f"tts_{beat}.engine").write_text("gemini", encoding="utf-8")
     ENGINES.append("gemini")
-    return _total
+    return kept[0]
 
 
 def synthesize_short_voices(spoken, c, beats=None, topic=None):
-    """Gemini Charon once, then Rudra when credits cover it, then Edge Madhur."""
+    """Gemini Charon, then Rudra when credits cover it, then Edge Madhur."""
     global ENGINES, VOICE_FALLBACK_REASON
     if topic is None:
         topic = _VOICE_TOPIC
@@ -3768,6 +3908,11 @@ def _install_scene_cards(topic, spoken, beat_times, scenes, audio_words=None):
         }
         for scene in (scenes or [])
     ]
+    import trade_plan
+    if trade_plan.is_plan_topic(topic):
+        topic["_chart_overlays"] = trade_plan.chart_overlay_events(
+            topic, topic["_beat_times"], topic.get("_audio_words") or [],
+        )
 
 
 def _gemini_word_timings(beat_times):
@@ -4823,7 +4968,7 @@ def prepare_spoken(spoken, narration, topic, c, spec):
     global _VOICE_TOPIC
     _VOICE_TOPIC = topic
     try:
-        synthesize_short_voices(spoken, c, beats=order)
+        engine = synthesize_short_voices(spoken, c, beats=order)
     finally:
         _VOICE_TOPIC = None
     raw = _trim_rendered(order)
@@ -4836,7 +4981,7 @@ def prepare_spoken(spoken, narration, topic, c, spec):
             die(f"voice duration outside 42-62s; refusing artificial speed change: {total:.1f}s — {detail}")
         audio = {beat: RUN / f"voice_clean_{beat}.wav" for beat in order}
         return spoken, narration, audio, raw, beat_times, total
-    lo, hi = live_voice_bounds(topic)
+    lo, hi = _output_bounds(topic, engine=engine)
     label = f"{lo:.0f}-{hi:.0f}"
     if _approved_narration(narration, topic) and not (lo <= total <= hi):
         die(
@@ -4989,6 +5134,9 @@ def main():
 
 def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
     """Picture, free or paid audio, and final.mp4. Callers decide which voice."""
+    import trade_plan
+    if trade_plan.is_plan_topic(topic):
+        trade_plan.require(topic, n)
     if topic.get("_live_short") and not topic.get("_atr"):
         n["live_beats"] = resolve_live_beats(topic)
     # CTA/disclaimer stay on-screen; do not spend TTS credits speaking them.
@@ -5108,7 +5256,7 @@ def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
     final_path = RUN / "final.mp4"
     final_dur = duration(final_path)
     if topic.get("_live_short"):
-        lo, hi = live_voice_bounds(topic)
+        lo, hi = _output_bounds(topic)
         label = f"{lo:.0f}-{hi:.0f}"
         if final_dur < lo or final_dur > hi:
             _hold_hard(review)
@@ -5149,13 +5297,31 @@ def _eleven_spent():
         return 0
 
 
-def _output_bounds(topic):
+def apply_gemini_floor(lo, hi, engine):
+    """Four-beat Gemini audio may land at 34s. Edge and Rudra stay at 45s."""
+    if str(engine or "").strip().lower() != "gemini":
+        return float(lo), float(hi)
+    if float(lo) == 45.0 and float(hi) in (65.0, 85.0):
+        return gemini_min_seconds(), float(hi)
+    return float(lo), float(hi)
+
+
+def gemini_min_seconds():
+    import gemini_voice
+    return float(gemini_voice.GEMINI_MIN_SECONDS)
+
+
+def _output_bounds(topic, engine=None):
     """Seconds final.mp4 must land in. A live short uses its voice window."""
     if str((topic or {}).get("key") or "") == "aaj_ka_nifty":
-        return (45.0, 59.0)
-    if (topic or {}).get("_live_short"):
-        return live_voice_bounds(topic)
-    return (45.0, 62.0)
+        lo, hi = 45.0, 59.0
+    elif (topic or {}).get("_live_short"):
+        lo, hi = live_voice_bounds(topic)
+    else:
+        lo, hi = 45.0, 62.0
+    if engine is None:
+        engine = (eleven_voice.load_voice_record(RUN).get("engine") or "")
+    return apply_gemini_floor(lo, hi, engine)
 
 
 def _needs_paid_proof(topic, c):

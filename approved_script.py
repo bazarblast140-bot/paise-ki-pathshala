@@ -31,18 +31,26 @@ def beat_digest(text):
     return hashlib.sha256(str(text or "").encode("utf-8")).hexdigest()
 
 
+def _hash_order(beats):
+    import trade_plan
+    if trade_plan.is_plan_script({"beats": beats}):
+        return trade_plan.BEATS
+    return ORDER
+
+
 def hashes_for(beats):
-    return {beat: beat_digest((beats or {}).get(beat) or "") for beat in ORDER}
+    return {beat: beat_digest((beats or {}).get(beat) or "") for beat in _hash_order(beats)}
 
 
 def remember(script):
     """Lock the approved beat hashes for this process. Later edits do not move them."""
     global _LOCKED
     beats = (script or {}).get("beats") or {}
+    order = _hash_order(beats)
     stored = (script or {}).get("approved_hashes") or hashes_for(beats)
-    _LOCKED = {beat: stored[beat] for beat in ORDER if stored.get(beat)}
+    _LOCKED = {beat: stored[beat] for beat in order if stored.get(beat)}
     if isinstance(script, dict):
-        script["approved_hashes"] = {beat: _LOCKED[beat] for beat in ORDER if beat in _LOCKED}
+        script["approved_hashes"] = {beat: _LOCKED[beat] for beat in order if beat in _LOCKED}
     return script
 
 
@@ -162,6 +170,35 @@ def _opening_hook(beats, topic):
 def narration_from_payload(payload, topic, run_id=""):
     """Exact beats. Title falls back to the topic line. Nothing is trimmed."""
     beats_in = (payload or {}).get("beats") or {}
+    import trade_plan
+    if (payload or {}).get("plan") or trade_plan.is_plan_script({"beats": beats_in}):
+        beats = {beat: str(beats_in.get(beat) or "").strip() for beat in trade_plan.BEATS}
+        missing = [beat for beat in trade_plan.BEATS if not beats[beat]]
+        if missing:
+            die(
+                "approved dry-run script is missing "
+                + ", ".join(missing)
+                + "; refusing a new DeepSeek script"
+            )
+        title = " ".join(str((payload or {}).get("title") or "").split())
+        if not title:
+            title = " ".join(str((topic or {}).get("topic") or (topic or {}).get("key") or "पाठ").split())
+        hook_line = " ".join(str((payload or {}).get("hook_line") or "").split())
+        if not hook_line:
+            hook_line = _opening_hook(beats, topic)
+        script = {
+            "title": title,
+            "hook_line": hook_line,
+            "beats": beats,
+            "source": "approved",
+            "plan": True,
+            "live_beats": "plan",
+            "narration_fallback": False,
+            "review_attempts": 1,
+            "from_run": str(run_id or ""),
+            "approved_hashes": hashes_for(beats),
+        }
+        return remember(script)
     beats = {beat: str(beats_in.get(beat) or "").strip() for beat in ORDER}
     missing = [beat for beat in ORDER if not beats[beat]]
     if missing:
@@ -234,12 +271,21 @@ def install_repo_beats(directory, topic_key):
     payload = load_payload(directory, topic_key) or {}
     beats = dict((payload.get("beats") or {}))
     incoming = extra.get("beats") if isinstance(extra.get("beats"), dict) else extra
-    for beat, text in (incoming or {}).items():
-        if beat not in ORDER:
-            continue
-        cleaned = " ".join(str(text or "").split())
-        if cleaned:
-            beats[beat] = cleaned
+    import trade_plan
+    if trade_plan.is_plan_script(extra):
+        beats = {
+            beat: " ".join(str((incoming or {}).get(beat) or "").split())
+            for beat in trade_plan.BEATS
+        }
+        payload["plan"] = True
+        payload["live_beats"] = "plan"
+    else:
+        for beat, text in (incoming or {}).items():
+            if beat not in ORDER:
+                continue
+            cleaned = " ".join(str(text or "").split())
+            if cleaned:
+                beats[beat] = cleaned
     payload["beats"] = beats
     title = " ".join(str(extra.get("title") or "").split())
     hook_line = " ".join(str(extra.get("hook_line") or "").split())
