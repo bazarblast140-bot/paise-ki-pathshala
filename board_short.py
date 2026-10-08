@@ -4424,8 +4424,15 @@ def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, h
                     "-c", "copy", "voice.wav"], cwd=RUN, check=True)
     # voice.wav stays the clean narration so a later remix needs no new TTS.
     # Whoosh and the callout click go on mixed.wav. There is no bed and no air.
+    # A trade-plan frame carries motion_reveals: those cues get the library
+    # whoosh, about 20 dB under the voice. Every other short keeps mix_into.
     mixed = RUN / "mixed.wav"
-    bed_audio.mix_into(RUN / "voice.wav", scenes, mixed)
+    import motion_lib
+    reveals = motion_lib.unique_reveals(frames)
+    if reveals:
+        motion_lib.mix_under(RUN / "voice.wav", reveals, mixed)
+    else:
+        bed_audio.mix_into(RUN / "voice.wav", scenes, mixed)
     if str(hook_line or "").strip():
         hook_sfx.mix_file(mixed, hook_motion.click_times(hook_line))
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(mixed),

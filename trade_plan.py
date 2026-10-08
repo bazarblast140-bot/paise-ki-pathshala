@@ -774,18 +774,23 @@ def _grid(img):
         grid.line([(box[0] + 12, y), (box[2] - 12, y)], fill=(120, 150, 190), width=2)
 
 
-def _draw_price(img, plan, shown):
+def _chart_geometry(plan, shown):
+    """Price scale shared by the settled chart and the motion library."""
     import board_kit as K
-    box = K.BOARD
     prices = [candle[1] for candle in plan.ohlc] + [candle[2] for candle in plan.ohlc]
-    for row in shown:
-        if row["price"] is not None:
+    for row in shown or []:
+        if row.get("price") is not None:
             prices.append(float(row["price"]))
     lo, hi = min(prices), max(prices)
-    top_pad = 118 if any(row["kind"] == "rr" for row in shown) else 70
+    top_pad = 118 if any(row.get("kind") == "rr" for row in (shown or [])) else 70
+    return K.BOARD, lo, hi, (64, top_pad, 64, 72)
+
+
+def _draw_price(img, plan, shown):
+    import board_kit as K
+    box, lo, hi, pad = _chart_geometry(plan, shown)
     ax = K.candles(
-        img, box, plan.ohlc, lo, hi, grid=False, width_frac=0.62,
-        pad=(64, top_pad, 64, 72),
+        img, box, plan.ohlc, lo, hi, grid=False, width_frac=0.62, pad=pad,
     )
     kinds = {row["kind"] for row in shown}
     if "trend" in kinds and plan.focus > 0:
@@ -847,17 +852,60 @@ def _rsi_strip(img, plan):
     K.dashed(img, box[0] + 24, box[2] - 24, ax.y(plan.extras["os"]), K.GREEN, str(int(plan.extras["os"])), size=20)
 
 
-def paint_frame(topic, beat, index=0, n=1, spoken=""):
+def _scene_time(topic, beat, index, local):
+    """Map a scene's 0–1 playhead onto the absolute clock. None if it has no clock."""
+    local = max(0.0, min(1.0, float(local)))
+    rows = [row for row in (topic.get("_scene_plan") or []) if row.get("beat") == beat]
+    if 0 <= int(index) < len(rows):
+        start = float(rows[int(index)]["start"])
+        end = float(rows[int(index)]["end"])
+    else:
+        span = (topic.get("_beat_times") or {}).get(beat)
+        if not span or len(span) < 2:
+            return None
+        start, end = float(span[0]), float(span[1])
+    if end < start:
+        end = start
+    return start + (end - start) * local
+
+
+def _hook_question(topic, beat, spoken):
+    if beat != "hook":
+        return ""
+    line = str((topic or {}).get("hook_line") or "").strip()
+    if not line and (topic or {}).get("key"):
+        import approved_bank
+        try:
+            line = str(approved_bank.narration_for(topic).get("hook_line") or "").strip()
+        except (FileNotFoundError, KeyError, OSError):
+            line = ""
+        if line and isinstance(topic, dict):
+            topic["hook_line"] = line
+    if line:
+        return line
+    return str(spoken or "").strip()
+
+
+def _compose(topic, beat, index, n, spoken, when):
     import board_kit as K
     import board_scenes
     import scene_frames
     import safe_area
     plan = plan_for(topic.get("key"))
     shown = active_overlays(topic, beat, index)
-    img = K.background()
-    K.panel(img)
-    _grid(img)
-    _draw_price(img, plan, shown)
+    if when is None:
+        img = K.background()
+        K.panel(img)
+        _grid(img)
+        _draw_price(img, plan, shown)
+        img.motion_state = None
+    else:
+        from PIL import Image
+        import motion_lib
+        img = Image.new("RGB", (K.W, K.H), motion_lib.BG)
+        img.motion_state = motion_lib.draw_plan(
+            img, plan, shown, when, motion_lib.clock_from(topic, plan),
+        )
     img.shown_overlays = [row["kind"] for row in shown]
     img.overlay_labels = [row["label"] for row in shown]
     img.label_boxes = []
@@ -865,14 +913,34 @@ def paint_frame(topic, beat, index=0, n=1, spoken=""):
     img.shapes = []
     img.labelled_graphic_boxes = []
     img.chart_bar_boxes = []
-    lines = board_scenes._caption_lines(spoken)
-    y = safe_area.SUBTITLE_TOP + 18
-    for line in lines:
-        scene_frames._text(
-            img=img, x=540, y=y, text=line, fill=(250, 250, 250), size=36,
-            anchor="mt", band=False, role="caption",
-        )
-        y += 70
+    if when is None:
+        lines = board_scenes._caption_lines(spoken)
+        y = safe_area.SUBTITLE_TOP + 18
+        for line in lines:
+            scene_frames._text(
+                img=img, x=540, y=y, text=line, fill=(250, 250, 250), size=36,
+                anchor="mt", band=False, role="caption",
+            )
+            y += 70
+    else:
+        import motion_lib
+        question = _hook_question(topic, beat, spoken)
+        title = img.motion_state.get("title") or {}
+        if question:
+            # The hook question eases in by 300 ms. The lesson line stays off this beat.
+            if float(title.get("progress") or 0) > 0:
+                title["text"] = question
+                title["shown"] = float(title.get("progress") or 0) >= 1.0
+                img.motion_state["title"] = title
+                motion_lib.paint_caption(
+                    img, question, safe_area.SUBTITLE_TOP + 8, motion_lib.CAPTION_SIZE,
+                )
+        else:
+            lines = board_scenes._caption_lines(spoken, size=motion_lib.CAPTION_SIZE)
+            y = safe_area.SUBTITLE_TOP + 8
+            for line in lines:
+                motion_lib.paint_caption(img, line, y, motion_lib.CAPTION_SIZE)
+                y += motion_lib.CAPTION_SIZE + 8
     scene_frames._brand(img)
     caps = [
         layer["box"] for layer in (img.text_layers or [])
@@ -897,4 +965,17 @@ def paint_frame(topic, beat, index=0, n=1, spoken=""):
     }
     img.trade_plan = True
     del n
+    return img
+
+
+def paint_frame(topic, beat, index=0, n=1, spoken=""):
+    """Settled chart for still checks. The encode redraws it from the motion library."""
+    import motion_lib
+    img = _compose(topic, beat, index, n, spoken, None)
+
+    def motion_at(u, _topic=topic, _beat=beat, _index=index, _n=n, _spoken=spoken):
+        return _compose(_topic, _beat, _index, _n, _spoken, _scene_time(_topic, _beat, _index, u))
+
+    img.motion_at = motion_at
+    img.motion_reveals = tuple(motion_lib.reveal_times(topic))
     return img

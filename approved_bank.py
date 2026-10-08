@@ -129,6 +129,7 @@ def topic_from(script):
             "beats": beats,
             "facts": list(narration["facts"]),
             "seo": str(script.get("seo") or narration["title"]),
+            "hook_line": narration.get("hook_line") or "",
             "_spoken_beats": dict(narration["beats"]),
             "_approved_bank": True,
             "_live_short": True,
