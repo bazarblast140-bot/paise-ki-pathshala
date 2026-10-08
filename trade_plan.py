@@ -774,18 +774,23 @@ def _grid(img):
         grid.line([(box[0] + 12, y), (box[2] - 12, y)], fill=(120, 150, 190), width=2)
 
 
-def _draw_price(img, plan, shown):
+def _chart_geometry(plan, shown):
+    """Price scale shared by the settled chart and the motion library."""
     import board_kit as K
-    box = K.BOARD
     prices = [candle[1] for candle in plan.ohlc] + [candle[2] for candle in plan.ohlc]
-    for row in shown:
-        if row["price"] is not None:
+    for row in shown or []:
+        if row.get("price") is not None:
             prices.append(float(row["price"]))
     lo, hi = min(prices), max(prices)
-    top_pad = 118 if any(row["kind"] == "rr" for row in shown) else 70
+    top_pad = 118 if any(row.get("kind") == "rr" for row in (shown or [])) else 70
+    return K.BOARD, lo, hi, (64, top_pad, 64, 72)
+
+
+def _draw_price(img, plan, shown):
+    import board_kit as K
+    box, lo, hi, pad = _chart_geometry(plan, shown)
     ax = K.candles(
-        img, box, plan.ohlc, lo, hi, grid=False, width_frac=0.62,
-        pad=(64, top_pad, 64, 72),
+        img, box, plan.ohlc, lo, hi, grid=False, width_frac=0.62, pad=pad,
     )
     kinds = {row["kind"] for row in shown}
     if "trend" in kinds and plan.focus > 0:
@@ -847,7 +852,24 @@ def _rsi_strip(img, plan):
     K.dashed(img, box[0] + 24, box[2] - 24, ax.y(plan.extras["os"]), K.GREEN, str(int(plan.extras["os"])), size=20)
 
 
-def paint_frame(topic, beat, index=0, n=1, spoken=""):
+def _scene_time(topic, beat, index, local):
+    """Map a scene's 0–1 playhead onto the absolute clock. None if it has no clock."""
+    local = max(0.0, min(1.0, float(local)))
+    rows = [row for row in (topic.get("_scene_plan") or []) if row.get("beat") == beat]
+    if 0 <= int(index) < len(rows):
+        start = float(rows[int(index)]["start"])
+        end = float(rows[int(index)]["end"])
+    else:
+        span = (topic.get("_beat_times") or {}).get(beat)
+        if not span or len(span) < 2:
+            return None
+        start, end = float(span[0]), float(span[1])
+    if end < start:
+        end = start
+    return start + (end - start) * local
+
+
+def _compose(topic, beat, index, n, spoken, when):
     import board_kit as K
     import board_scenes
     import scene_frames
@@ -857,7 +879,14 @@ def paint_frame(topic, beat, index=0, n=1, spoken=""):
     img = K.background()
     K.panel(img)
     _grid(img)
-    _draw_price(img, plan, shown)
+    if when is None:
+        _draw_price(img, plan, shown)
+        img.motion_state = None
+    else:
+        import motion_lib
+        img.motion_state = motion_lib.draw_plan(
+            img, plan, shown, when, motion_lib.clock_from(topic, plan),
+        )
     img.shown_overlays = [row["kind"] for row in shown]
     img.overlay_labels = [row["label"] for row in shown]
     img.label_boxes = []
@@ -897,4 +926,17 @@ def paint_frame(topic, beat, index=0, n=1, spoken=""):
     }
     img.trade_plan = True
     del n
+    return img
+
+
+def paint_frame(topic, beat, index=0, n=1, spoken=""):
+    """Settled chart for still checks. The encode redraws it from the motion library."""
+    import motion_lib
+    img = _compose(topic, beat, index, n, spoken, None)
+
+    def motion_at(u, _topic=topic, _beat=beat, _index=index, _n=n, _spoken=spoken):
+        return _compose(_topic, _beat, _index, _n, _spoken, _scene_time(_topic, _beat, _index, u))
+
+    img.motion_at = motion_at
+    img.motion_reveals = tuple(motion_lib.reveal_times(topic))
     return img
