@@ -43,6 +43,7 @@
   "intraday_orb",
   "intraday_trend_range",
   "intraday_vwap",
-  "intraday_volume"
+  "intraday_volume",
+  "opt_sebi_fy25_study"
  ]
 }
