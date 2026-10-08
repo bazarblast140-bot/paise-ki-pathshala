@@ -583,6 +583,31 @@ def emit_slot_env(now=None, bars=None, entries=None):
     return decision
 
 
+def ensure_session(topic):
+    """Put the verified OHLC on the topic before any board is drawn.
+
+    Narration loads this later. The visual check runs first, and without
+    these bars the data Short was a blank background.
+    """
+    if not isinstance(topic, dict):
+        return {}
+    current = topic.get("_nifty")
+    if isinstance(current, dict) and current.get("bars"):
+        return current
+    from common import RUN
+    path = RUN / "nifty_session.json"
+    if not path.is_file():
+        return current if isinstance(current, dict) else {}
+    try:
+        session = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return current if isinstance(current, dict) else {}
+    if isinstance(session, dict) and session.get("bars"):
+        topic["_nifty"] = session
+        return session
+    return current if isinstance(current, dict) else {}
+
+
 def paint_frame(topic, beat, index=0, n=1, spoken=""):
     """Chart on the top board (about 65% of the frame), captions underneath."""
     import board_kit as K

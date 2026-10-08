@@ -2148,6 +2148,17 @@ def intraday_ema_scene():
         return A, img
     return beat
 
+def _nifty_data_scene():
+    """The 16:00 data chart. A missing session still draws the grid, not a blank plate."""
+    def beat(name, img):
+        import nifty_day
+        painted = nifty_day.paint_frame({"key": "aaj_ka_nifty"}, name, 0, 1, "")
+        del img
+        return painted, painted.copy()
+
+    return beat
+
+
 # ================================================================ registry
 SCENES = {
     **{k: (lambda k=k: finance_card_scene(k)) for k in (
@@ -2184,7 +2195,7 @@ SCENES = {
     "titan_vs_yes_2015": lambda: compare_lines("TITAN", "YES BANK", 2015),
     "circuit": circuit, "bse_1875": bse_timeline, "nifty_base": nifty_base, "preopen": preopen,
     "muhurat": muhurat, "depository": depository,
-    "aaj_ka_nifty": lambda: (lambda _beat, img: (img, img)),
+    "aaj_ka_nifty": lambda: _nifty_data_scene(),
 }
 
 
@@ -3205,7 +3216,13 @@ def _paint_topic_cover(topic):
     draw = ImageDraw.Draw(img)
     draw.rounded_rectangle(box, 28, fill=K.PANEL, outline=(60, 80, 110), width=4)
     levels = candle_levels(topic, key)
-    if levels:
+    if key == "aaj_ka_nifty":
+        import nifty_day
+        nifty_day.ensure_session(topic)
+        shot = nifty_day.paint_frame(topic, "hook", 0, 1, "").crop(BOARD)
+        fitted = shot.resize((box[2] - box[0] - 24, box[3] - box[1] - 24), Image.Resampling.LANCZOS)
+        img.paste(fitted, (box[0] + 12, box[1] + 12))
+    elif levels:
         inner = (box[0] + 16, box[1] + 24, box[2] - 16, box[3] - 24)
         _level_view(img, inner, levels, "hook", 1.0, fill_bottom=True, topic=topic)
         _level_labels(img, levels, "hook", 1.0, "70")
@@ -3238,6 +3255,12 @@ def paint_chart_board(topic, beat, index=0, n=1):
     """One Chart Board frame. The spec is this scene's line, or the render fails."""
     import trade_plan
     key = str((topic or {}).get("key") or "").strip()
+    if key == "aaj_ka_nifty":
+        import nifty_day
+        import scene_frames
+        nifty_day.ensure_session(topic)
+        spoken = scene_frames._scene_card_text(topic, beat, index, n)
+        return nifty_day.paint_frame(topic, beat, index, n, spoken)
     if trade_plan.is_plan_topic(topic) and trade_plan.has_plan(key):
         import scene_frames
         spoken = scene_frames._scene_card_text(topic, beat, index, n)
