@@ -820,7 +820,7 @@ class SoftReviewTests(unittest.TestCase):
         """Dry run 37095205924: trend 45 with paid sync would be overall 89.2."""
         import io
         import tempfile
-        from contextlib import redirect_stderr
+        from contextlib import redirect_stderr, redirect_stdout
         from pathlib import Path
 
         parts = {
@@ -861,20 +861,26 @@ class SoftReviewTests(unittest.TestCase):
                  mock.patch.dict(os.environ, {}, clear=False):
                 os.environ.pop("DRY_RUN", None)
                 os.environ.pop("APPROVED", None)
-                err = io.StringIO()
-                with redirect_stderr(err), self.assertRaises(SystemExit):
-                    board_short.prove_full_render({}, {}, {}, {})
-                text = err.getvalue()
+                out = io.StringIO()
+                with redirect_stdout(out):
+                    proven = board_short.prove_full_render({}, {}, {}, {})
+                text = out.getvalue()
+                self.assertEqual(proven["final_dur"], 55.0)
                 self.assertNotIn("pre-render HOLD", text)
-                self.assertIn("REVIEW", text)
+                self.assertIn("[REVIEW]", text)
                 os.environ["APPROVED"] = "true"
                 allowed = board_short.prove_full_render({}, {}, {}, {})
                 self.assertEqual(allowed["final_dur"], 55.0)
                 payload["review"] = held
-                err = io.StringIO()
-                with redirect_stderr(err), self.assertRaises(SystemExit):
-                    board_short.prove_full_render({}, {}, {}, {})
-                self.assertIn("pre-render HOLD", err.getvalue())
+                out = io.StringIO()
+                with redirect_stdout(out):
+                    held_proven = board_short.prove_full_render({}, {}, {}, {})
+                self.assertEqual(held_proven["final_dur"], 55.0)
+                self.assertIn("[HOLD]", out.getvalue())
+                self.assertNotIn("pre-render HOLD", out.getvalue())
+                saved = json.loads((run / "self_review.json").read_text(encoding="utf-8"))
+                self.assertEqual(saved["verdict"], "HOLD")
+                self.assertFalse(saved["review_flag"])
             os.environ.pop("APPROVED", None)
 
         publish = (ROOT / ".github" / "workflows" / "paise-ki-pathshala.yml").read_text(
@@ -934,11 +940,12 @@ class SoftReviewTests(unittest.TestCase):
                 with mock.patch.dict(os.environ, {}, clear=False):
                     os.environ.pop("DRY_RUN", None)
                     os.environ.pop("APPROVED", None)
-                    err = io.StringIO()
-                    with redirect_stderr(err), self.assertRaises(SystemExit):
-                        board_short.prove_full_render({}, {}, {}, {})
-                    self.assertIn("REVIEW", err.getvalue())
-                    self.assertIn("approved=true", err.getvalue())
+                    out = io.StringIO()
+                    with redirect_stdout(out):
+                        unapproved = board_short.prove_full_render({}, {}, {}, {})
+                    self.assertEqual(unapproved["final_dur"], 55.0)
+                    self.assertIn("[REVIEW]", out.getvalue())
+                    self.assertNotIn("pre-render HOLD", out.getvalue())
                     self.assertTrue((run / "final.mp4").is_file())
                     os.environ["APPROVED"] = "true"
                     allowed = board_short.prove_full_render({}, {}, {}, {})

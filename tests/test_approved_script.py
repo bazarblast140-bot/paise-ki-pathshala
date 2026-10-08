@@ -385,22 +385,32 @@ class ApprovedScriptTests(unittest.TestCase):
             allowed = board_short.prove_full_render({}, {}, {}, {})
             self.assertEqual(allowed["final_dur"], 55.0)
             os.environ.pop("APPROVED", None)
-            err = io.StringIO()
-            with redirect_stderr(err), self.assertRaises(SystemExit):
-                board_short.prove_full_render({}, {}, {}, {})
-            self.assertIn("approved=true", err.getvalue())
+            out = io.StringIO()
+            with redirect_stdout(out):
+                unapproved = board_short.prove_full_render({}, {}, {}, {})
+            self.assertEqual(unapproved["final_dur"], 55.0)
+            self.assertIn("[REVIEW]", out.getvalue())
+            self.assertNotIn("pre-render HOLD", out.getvalue())
             held = dict(review, review_flag=False, verdict="HOLD")
             (Path(tmp) / "self_review.json").write_text(json.dumps(held), encoding="utf-8")
 
             def render_hold(*_args, **_kwargs):
+                (board_short.RUN / "self_review.json").write_text(
+                    json.dumps(held), encoding="utf-8",
+                )
                 return {"final_dur": 55.0}
 
             os.environ["APPROVED"] = "true"
-            err = io.StringIO()
+            out = io.StringIO()
             with mock.patch.object(board_short, "_render_short", side_effect=render_hold), \
-                 redirect_stderr(err), self.assertRaises(SystemExit):
-                board_short.prove_full_render({}, {}, {}, {})
-            self.assertIn("pre-render HOLD", err.getvalue())
+                 redirect_stdout(out):
+                held_proven = board_short.prove_full_render({}, {}, {}, {})
+            self.assertEqual(held_proven["final_dur"], 55.0)
+            self.assertIn("[HOLD]", out.getvalue())
+            self.assertNotIn("pre-render HOLD", out.getvalue())
+            saved = json.loads((Path(tmp) / "self_review.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["verdict"], "HOLD")
+            self.assertFalse(saved["review_flag"])
             os.environ.pop("APPROVED", None)
 
     def test_download_unpacks_the_edge_artifact(self):

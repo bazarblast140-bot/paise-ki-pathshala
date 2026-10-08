@@ -434,11 +434,16 @@ class BreakTests(unittest.TestCase):
         lit = motion_lib.sl_break(flash, ax, plan, 1.0, flash_on=True)
         self.assertEqual(held["price"], plan.sl)
         self.assertTrue(lit["flash"])
+        self.assertLess(held["low"], plan.sl)
         steady_px = tuple(int(v) for v in np.asarray(steady.convert("RGB"))[y, x])
         flash_px = tuple(int(v) for v in np.asarray(flash.convert("RGB"))[y, x])
         self.assertEqual(steady_px, motion_lib.SL)
         self.assertNotEqual(flash_px, steady_px)
         self.assertGreater(flash_px[0], steady_px[0])
+        y_body = int(round((ax.y(plan.sl) + ax.y(held["close"])) / 2.0))
+        body = tuple(int(v) for v in np.asarray(steady.convert("RGB"))[y_body, int(round(held["cx"]))])
+        self.assertEqual(body, motion_lib.BEAR)
+        self.assertGreater(y_body, y)
         clock = motion_lib.clock_from(_clock_topic(), plan)
         before = motion_lib.draw_plan(_flat(), plan, [], 47.0, clock)
         after = motion_lib.draw_plan(_flat(), plan, [], 56.0, clock)
@@ -556,6 +561,36 @@ class PlanPathTests(unittest.TestCase):
             self.assertLessEqual(layer["box"][3], safe_area.SUBTITLE_LIMIT + 1)
         self.assertEqual(question.motion_state["title"]["text"], topic["hook_line"])
 
+    def test_hook_shows_ghost_levels_and_the_plot_is_about_60_percent(self):
+        import scene_pace
+        plan = _hammer()
+        topic = self._topic()
+        clock = motion_lib.clock_from(topic, plan)
+        opening = _flat()
+        state = motion_lib.draw_plan(opening, plan, trade_plan.overlays(plan), 0.0, clock)
+        self.assertEqual(state["progress"]["rr"], 1.0)
+        self.assertEqual(state["progress"]["entry"], 0.0)
+        self.assertFalse(state["levels"]["entry"]["drawn"])
+        self.assertFalse(state["levels"]["sl"]["drawn"])
+        self.assertFalse(state["levels"]["target"]["drawn"])
+        self.assertGreater(_near(opening, motion_lib.ENTRY), 40)
+        self.assertGreater(_near(opening, motion_lib.SL), 40)
+        self.assertGreater(_near(opening, motion_lib.TARGET), 40)
+        rgb = np.asarray(opening.convert("RGB"))
+        bright = rgb.max(axis=2) > 80
+        rows = np.where(bright[:1380].any(axis=1))[0]
+        height = (int(rows[-1]) - int(rows[0])) / float(rgb.shape[0])
+        self.assertGreaterEqual(height, 0.55, height)
+        self.assertLessEqual(height, 0.66, height)
+        self.assertLessEqual(scene_pace.empty_row_fraction(opening), scene_pace.EMPTY_MAX_FRAC)
+        later = _flat()
+        motion_lib.draw_plan(later, plan, trade_plan.overlays(plan), 4.0, clock)
+        self.assertLessEqual(scene_pace.empty_row_fraction(later), scene_pace.EMPTY_MAX_FRAC)
+        gone = _flat()
+        motion_lib.draw_plan(gone, plan, [], 3.0, clock)
+        self.assertEqual(motion_lib.rr_progress(3.0, clock), 0.0)
+        self.assertLess(_near(gone, motion_lib.ENTRY), 10)
+
     def test_all_eight_beats_use_the_library_and_keep_the_chart_band(self):
         topic = self._topic()
         plan = trade_plan.plan_for("pat_hammer")
@@ -610,8 +645,15 @@ class PlanPathTests(unittest.TestCase):
                 self.assertEqual(done.motion_state["progress"]["candles"], 1.0)
                 self.assertEqual(done.motion_state["progress"]["rr"], 1.0)
                 sources = [layer for layer in done.text_layers if layer.get("role") == "source"]
-                self.assertTrue(sources)
+                self.assertEqual(len(sources), 1)
+                self.assertEqual(sources[0]["text"], trade_plan.ON_SCREEN_DISCLAIMER)
                 self.assertGreaterEqual(sources[0]["size"], 36)
+                blob = " ".join(layer.get("text") or "" for layer in done.text_layers)
+                self.assertNotIn(trade_plan.DISCLAIMER, blob)
+                self.assertNotIn(board_short.DISCLAIMER, blob)
+                ass = board_short.build_ass(topic, _beats(), {}, topic["hook_line"], "")
+                self.assertNotIn(board_short.DISCLAIMER, ass)
+                self.assertNotIn(trade_plan.DISCLAIMER, ass)
 
     def test_every_approved_plan_settles_on_its_computed_numbers(self):
         clock = {

@@ -33,6 +33,11 @@ COUNTER_S = 0.50
 TITLE_S = 0.30
 CANDLE_DIM = 0.35
 RR_ALPHA = 0.30
+# The moving plot, not the still board. ypad 0.02 and a short pad put the
+# price range at about 60% of the 1920 frame. The still path keeps 0.12.
+MOTION_YPAD = 0.02
+MOTION_PAD = (36, 26, 36, 24)
+AXIS = (120, 142, 170)
 LABEL_SIZE = 48
 COUNTER_SIZE = 72
 CAPTION_SIZE = 68
@@ -166,9 +171,9 @@ def candle_windows(plan, beats=None):
     return windows
 
 
-def _axes(box, n, lo, hi, pad, width_frac=0.62):
+def _axes(box, n, lo, hi, pad, width_frac=0.62, ypad=0.12):
     import board_kit as K
-    ax = K.Axes(box, max(len(n) if not isinstance(n, int) else n, 1), lo, hi, pad=pad, ypad=0.12)
+    ax = K.Axes(box, max(len(n) if not isinstance(n, int) else n, 1), lo, hi, pad=pad, ypad=ypad)
     ax.bw = max(10, int(ax.step * width_frac))
     return ax
 
@@ -178,7 +183,7 @@ def motion_geometry(plan):
     import board_kit as K
     prices = [candle[1] for candle in plan.ohlc] + [candle[2] for candle in plan.ohlc]
     prices.extend([float(plan.entry), float(plan.sl), float(plan.target), float(plan.sr)])
-    return K.BOARD, min(prices), max(prices), (40, 64, 40, 48)
+    return K.BOARD, min(prices), max(prices), MOTION_PAD
 
 
 def _stroke_candle(draw, ax, index, row, color, frac):
@@ -204,7 +209,8 @@ def candle_build(img, box, ohlc, lo, hi, progress, pad, width_frac=0.80,
     import numpy as np
 
     ohlc = list(ohlc)
-    ax = _axes(box, len(ohlc), lo, hi, pad, width_frac)
+    ax = _axes(box, len(ohlc), lo, hi, pad, width_frac, ypad=MOTION_YPAD)
+    _plot_rails(img, ax)
     if per_candle is None:
         progress = clamp(progress)
         per_candle = [progress] * len(ohlc)
@@ -235,6 +241,30 @@ def _hline(img, x0, x1, y, color, width=6):
     if x1 <= x0 + 0.5:
         return
     ImageDraw.Draw(img).line([(x0, y), (x1, y)], fill=tuple(color), width=int(width))
+
+
+def _fade_hline(img, x0, x1, y, color, alpha, width=6):
+    """A full-width level. Alpha 1 is solid. The hook ghosts fade with the RR box."""
+    alpha = clamp(alpha)
+    if alpha <= 0.0 or x1 <= x0 + 0.5:
+        return
+    if alpha >= 0.999:
+        _hline(img, x0, x1, y, color, width=width)
+        return
+    half = max(1.0, float(width) / 2.0)
+    _blend_rect(img, [x0, y - half, x1, y + half], color, alpha)
+
+
+def _plot_rails(img, ax):
+    """Vertical edges of the price plot, so the chart occupies its rows."""
+    from PIL import ImageDraw
+    top = float(ax.y(ax.hi))
+    bot = float(ax.y(ax.lo))
+    if bot < top:
+        top, bot = bot, top
+    draw = ImageDraw.Draw(img)
+    for x in (ax.x0 + 12, ax.x1 - 12):
+        draw.line([(x, top), (x, bot)], fill=AXIS, width=4)
 
 
 def _hdash(img, x0, x1, y, color, width=4):
@@ -409,8 +439,17 @@ def risk_reward_box(img, plan, progress, ax=None):
     _blend_rect(img, [cx - half, gy0, cx + half, gy1], TARGET, RR_ALPHA * progress)
     _blend_rect(img, [cx - half, ry0, cx + half, ry1], SL, RR_ALPHA * progress)
     if progress >= 1.0:
+        _outline_rect(img, [cx - half, gy0, cx + half, gy1], TARGET, 4)
+        _outline_rect(img, [cx - half, ry0, cx + half, ry1], SL, 4)
         _pill(img, cx + half + 12, min(gy0, gy1) + 8, info["text"], size=44)
     return info
+
+
+def _outline_rect(img, rect, color, width=4):
+    from PIL import ImageDraw
+    if rect[2] - rect[0] < 2 or rect[3] - rect[1] < 2:
+        return
+    ImageDraw.Draw(img).rectangle(list(rect), outline=tuple(color), width=int(width))
 
 
 def _zoom_candle(img, cx, cy, zoom):
@@ -517,21 +556,59 @@ def number_counter(img, value, progress, xy=(80, 1188), label="TARGET", paint=Tr
     return {"value": value, "shown": shown}
 
 
+def _failure_candle(img, ax, plan, progress):
+    """A red candle that trades through the stop. Longs break below it."""
+    from PIL import ImageDraw
+    progress = clamp(progress)
+    sl = float(plan.sl)
+    entry = float(plan.entry)
+    gap = max(abs(entry - sl) * 0.35, 6.0)
+    short = str(getattr(plan, "side", "long")) == "short"
+    if short:
+        open_p = sl - gap * 0.15
+        close_p = sl + gap * progress
+        high_p = close_p + gap * 0.2
+        low_p = open_p - gap * 0.05
+    else:
+        open_p = sl + gap * 0.15
+        close_p = sl - gap * progress
+        low_p = close_p - gap * 0.2
+        high_p = open_p + gap * 0.05
+    last = max(0, len(plan.ohlc) - 1)
+    half = max(8.0, float(ax.bw) * 0.45)
+    cx = ax.x(last) + ax.step * 0.62
+    cx = min(cx, ax.x1 - ax.pr - half - 8)
+    cx = max(cx, ax.x(0) + ax.step)
+    draw = ImageDraw.Draw(img)
+    draw.line(
+        [(cx, ax.y(high_p)), (cx, ax.y(low_p))],
+        fill=BEAR, width=max(3, int(ax.bw) // 6),
+    )
+    top, bot = ax.y(max(open_p, close_p)), ax.y(min(open_p, close_p))
+    draw.rectangle([cx - half, top, cx + half, max(bot, top + 4)], fill=BEAR)
+    return {"low": low_p, "high": high_p, "close": close_p, "cx": cx}
+
+
 def sl_break(img, ax, plan, progress, flash_on=False):
-    """The price trades through the stop, and the stop line flashes red."""
+    """Price breaks the stop with a red candle, and the stop line flashes red."""
     import board_kit as K
     progress = clamp(progress)
-    info = {"price": float(plan.sl), "progress": progress, "flash": False}
+    info = {
+        "price": float(plan.sl), "progress": progress, "flash": False,
+        "low": float(plan.sl), "high": float(plan.sl), "close": float(plan.sl), "cx": 0.0,
+    }
     if progress <= 0.0:
         return info
+    candle = _failure_candle(img, ax, plan, progress)
+    info.update(candle)
     box = (ax.x0, ax.y0, ax.x1, ax.y1)
     y = ax.y(float(plan.sl))
     color = (255, 48, 48) if flash_on else SL
     _hline(img, box[0] + 24, box[2] - 24, y, color, width=8 if flash_on else 6)
     entry_y = ax.y(float(plan.entry))
     mark_y = entry_y + (y - entry_y) * progress
-    cx = ax.x(max(0, min(int(plan.focus), len(plan.ohlc) - 1)))
-    K.label(img, cx + 16, mark_y - 20, _fmt(plan.sl), WHITE, 36)
+    label_x = ax.x(max(0, min(int(plan.focus), len(plan.ohlc) - 1)))
+    K.label(img, label_x + 16, mark_y - 20, _fmt(plan.sl), WHITE, 36)
     info["flash"] = bool(flash_on)
     return info
 
@@ -722,6 +799,9 @@ def draw_plan(img, plan, shown, t, clock):
     anchor = None
     if 0 <= focus < len(plan.ohlc):
         anchor = (ax.x(focus), ax.y(plan.ohlc[focus][3]))
+    # Finished ENTRY/SL/TARGET ghosts share the hook RR window, then fade.
+    # They are not the spoken lines: those still wait for their own beat.
+    ghost = rr_progress(t, clock) if (clock or {}).get("rr_hook") else 0.0
     for kind in _LEVELS:
         row = labels.get(kind)
         price = float(row["price"]) if row and row.get("price") is not None else {
@@ -740,11 +820,13 @@ def draw_plan(img, plan, shown, t, clock):
                 pill=pill, dashed=(kind == "sr"), width=6,
                 anchor=anchor if kind != "sr" else None,
             )
+        elif ghost > 0.0 and kind in ("entry", "sl", "target"):
+            _fade_hline(img, box[0] + 24, box[2] - 24, ax.y(price), colors[kind], ghost, width=6)
         levels[kind] = {
             "price": price, "drawn": bool(drawn["drawn"]), "label": label,
             "progress": prog, "pill": bool(drawn.get("pill")),
         }
-    rr_p = rr_progress(t, clock)
+    rr_p = ghost if (clock or {}).get("rr_hook") else rr_progress(t, clock)
     rr = risk_reward_box(img, plan, rr_p, ax) if rr_p > 0.0 else rr_readout(plan)
     if rr_p <= 0.0:
         rr["shown"] = False
