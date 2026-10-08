@@ -5,6 +5,34 @@ Runs first in run_pipeline.py. Can also be run alone:  python check_setup.py
 import os, shutil, sys
 from common import cfg, ROOT, ok
 
+DEEPSEEK_KEY_PROBLEM = (
+    "config.json selects DeepSeek, but DEEPSEEK_API_KEY is missing. "
+    "Add DEEPSEEK_API_KEY in GitHub Repository Secrets."
+)
+
+
+def _on(name):
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes")
+
+
+def skips_deepseek_key():
+    """Approved scripts, the topic bank, and the Nifty data Short do not need the key to pass preflight."""
+    if _on("APPROVED_BANK") or _on("DATA_SHORT"):
+        return True
+    if os.environ.get("NARRATION_FROM_RUN", "").strip():
+        return True
+    topic = os.environ.get("TOPIC_KEY", "").strip()
+    if topic == "aaj_ka_nifty":
+        return True
+    return bool(topic) and (ROOT / "approved" / f"{topic}.json").is_file()
+
+
+def deepseek_key_problem():
+    if os.environ.get("DEEPSEEK_API_KEY") or skips_deepseek_key():
+        return None
+    return DEEPSEEK_KEY_PROBLEM
+
+
 def main():
     problems, warnings = [], []
     c = cfg()
@@ -22,9 +50,11 @@ def main():
     elif provider == "deepseek":
         # Pehle ye branch tha hi nahi: config DeepSeek chunta tha par preflight
         # Kimi/Anthropic key maangta tha — naye repo me sirf DeepSeek key ho to
-        # pipeline bina wajah ruk jaati.
-        if not os.environ.get("DEEPSEEK_API_KEY"):
-            problems.append("config.json selects DeepSeek, but DEEPSEEK_API_KEY is missing. Add DEEPSEEK_API_KEY in GitHub Repository Secrets.")
+        # pipeline bina wajah ruk jaati. An approved script, the topic bank, or
+        # the Nifty data Short does not ask DeepSeek to write the narration.
+        missing = deepseek_key_problem()
+        if missing:
+            problems.append(missing)
     elif not (has_kimi or has_anthropic):
         problems.append("No LLM API key set. Set KIMI_API_KEY or ANTHROPIC_API_KEY in GitHub Repository Secrets.")
 

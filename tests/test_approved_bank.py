@@ -142,6 +142,11 @@ class PickTests(unittest.TestCase):
         self.assertIn("GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}", text)
         self.assertIn("ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}", text)
         self.assertIn("PAID_TTS_ENABLED: ${{ vars.PAID_TTS_ENABLED }}", text)
+        self.assertIn("DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}", text)
+        self.assertIn("KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}", text)
+        self.assertIn("ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}", text)
+        self.assertIn("TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}", text)
+        self.assertIn("TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}", text)
         self.assertIn("PUBLISH_VISIBILITY: public", text)
         self.assertNotIn("PROOF_FREE_AUDIO", text)
         self.assertNotIn("python publish.py", text)
@@ -152,6 +157,31 @@ class PickTests(unittest.TestCase):
         pipeline = (ROOT / ".github/workflows/paise-ki-pathshala.yml").read_text(encoding="utf-8")
         self.assertIn("APPROVED_BANK=1 SKIP_DATA_SLOT=1 python slot_guard.py --next", pipeline)
         self.assertIn("slot_guard.py --next", pipeline)
+
+    def test_preflight_skips_deepseek_key_for_bank_script_and_nifty(self):
+        import check_setup
+        base = {
+            key: value for key, value in os.environ.items()
+            if key not in ("DEEPSEEK_API_KEY", "APPROVED_BANK", "DATA_SHORT", "NARRATION_FROM_RUN", "TOPIC_KEY")
+        }
+        with mock.patch.dict(os.environ, base, clear=True):
+            self.assertFalse(check_setup.skips_deepseek_key())
+            self.assertEqual(check_setup.deepseek_key_problem(), check_setup.DEEPSEEK_KEY_PROBLEM)
+        for extra in (
+            {"APPROVED_BANK": "1"},
+            {"DATA_SHORT": "1"},
+            {"NARRATION_FROM_RUN": "37095205924"},
+            {"TOPIC_KEY": "aaj_ka_nifty"},
+            {"TOPIC_KEY": "pat_hammer"},
+        ):
+            with mock.patch.dict(os.environ, {**base, **extra}, clear=True):
+                self.assertTrue(check_setup.skips_deepseek_key(), extra)
+                self.assertIsNone(check_setup.deepseek_key_problem())
+        with mock.patch.dict(os.environ, {**base, "DEEPSEEK_API_KEY": "sk-test"}, clear=True):
+            self.assertIsNone(check_setup.deepseek_key_problem())
+        with mock.patch.dict(os.environ, {**base, "TOPIC_KEY": "not_a_real_topic"}, clear=True):
+            self.assertFalse(check_setup.skips_deepseek_key())
+            self.assertIn("DEEPSEEK_API_KEY is missing", check_setup.deepseek_key_problem())
 
 
 if __name__ == "__main__":

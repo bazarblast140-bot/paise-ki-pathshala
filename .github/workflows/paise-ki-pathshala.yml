@@ -99,6 +99,9 @@ jobs:
           git checkout "origin/$branch" -- data/published.json
       - name: Format decide karo
         id: fmt
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
         run: |
           F="${{ inputs.format }}"
           VIS="${{ inputs.privacy }}"
