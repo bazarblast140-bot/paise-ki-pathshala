@@ -533,6 +533,7 @@ class CreditAndRefillTests(unittest.TestCase):
             "ELEVENLABS_API_KEY": "secret-key",
             "ELEVENLABS_VOICE_ID": "voice",
             "ELEVENLABS_OPT_IN": "1",
+            "GEMINI_API_KEY": "gemini-secret",
         }
         with mock.patch.dict(os.environ, parent, clear=False), \
              mock.patch("subprocess.run", fake_run):
@@ -541,6 +542,7 @@ class CreditAndRefillTests(unittest.TestCase):
         env = captured["env"]
         self.assertNotIn("ELEVENLABS_API_KEY", env)
         self.assertNotIn("ELEVENLABS_VOICE_ID", env)
+        self.assertNotIn("GEMINI_API_KEY", env)
         self.assertEqual(env["ELEVENLABS_OPT_IN"], "0")
         self.assertEqual(env["PIPELINE_MODE"], "preview")
         self.assertEqual(env["PUBLISH_VISIBILITY"], "unlisted")

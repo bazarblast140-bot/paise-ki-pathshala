@@ -1090,6 +1090,7 @@ def default_preview_runner(topic_key):
     for key in (
         "PUBLISH_SLOT_IST", "PUBLISH_DATE_IST", "PUBLISH_AT_UTC",
         "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "ELEVENLABS_MODEL",
+        "GEMINI_API_KEY",
     ):
         env.pop(key, None)
     return subprocess.run(
