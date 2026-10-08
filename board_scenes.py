@@ -3330,3 +3330,13 @@ def paint_cover(topic):
         )
     del safe_area
     return img
+
+
+def _register_pattern_scenes():
+    """Approved-bank charts. Existing candle keys keep their own painters."""
+    import pattern_charts
+    for key in pattern_charts.PATTERNS:
+        SCENES[key] = (lambda k=key: pattern_charts.make_scene(k))
+
+
+_register_pattern_scenes()

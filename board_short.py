@@ -2212,6 +2212,30 @@ def narration(topic, c, spec=None):
             json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
         ok("narration: fixed Nifty template, no DeepSeek script")
         return n, "template"
+    import approved_bank
+    if approved_bank.active() or topic.get("_approved_bank"):
+        try:
+            n = approved_bank.narration_for(topic)
+        except FileNotFoundError as exc:
+            die(f"approved script missing; refusing a DeepSeek script: {exc}")
+        topic["_approved_bank"] = True
+        topic["_live_short"] = True
+        topic["_live_beats"] = "four"
+        topic["_voice"] = {"words_per_second": 1.9}
+        topic["_spoken_beats"] = dict(n["beats"])
+        topic["facts"] = list(n.get("facts") or topic.get("facts") or [])
+        fails = check_narration(n, topic)
+        vague = scene_pace.vague_beats(n.get("beats"), order=_lesson(topic)[0])
+        if vague:
+            fails.append("vague explanation (no number, level or step): " + ", ".join(vague))
+        if fails:
+            die("approved narration failed its gate: " + "; ".join(fails))
+        n["source"] = "approved"
+        n["narration_fallback"] = False
+        (RUN / "narration.json").write_text(
+            json.dumps(n, ensure_ascii=False, indent=2), encoding="utf-8")
+        ok("narration: approved bank script, no DeepSeek")
+        return n, "approved"
     approved = _approved_script(topic)
     if approved is not None:
         if topic.get("_live_short") and not topic.get("_atr"):
