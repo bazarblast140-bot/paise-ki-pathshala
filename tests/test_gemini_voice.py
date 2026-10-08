@@ -96,7 +96,14 @@ class DecodeTests(unittest.TestCase):
         content = body["input"][0]["content"][0]
         self.assertEqual(content["text"], "पूरा स्क्रिप्ट")
         self.assertEqual(content["annotations"][0]["type"], "speech_metadata")
-        self.assertIn("Indian finance teacher", content["annotations"][0]["style"])
+        style = content["annotations"][0]["style"]
+        self.assertIn("confident deep male narrator", style)
+        self.assertIn("natural Hinglish with English words pronounced the Indian way", style)
+        self.assertIn("calm, clear teacher pace with short natural pauses between sentences", style)
+        self.assertNotIn("crisp and punchy", style)
+        slow = gemini_voice.request_body("पूरा स्क्रिप्ट", style=gemini_voice.SLOW_STYLE)
+        slow_style = slow["input"][0]["content"][0]["annotations"][0]["style"]
+        self.assertIn("slow, deliberate pace, pause after every sentence", slow_style)
         self.assertEqual(body["response_format"]["mime_type"], "audio/l16")
         self.assertEqual(body["response_format"]["sample_rate"], 24000)
         self.assertEqual(body["generation_config"]["speech_config"], [{"voice": "Charon"}])
@@ -215,6 +222,104 @@ class SpeakTests(unittest.TestCase):
         self.assertNotIn(SECRET, text)
         self.assertNotIn(SECRET, summary)
         self.assertNotIn(SECRET, json.dumps(meta))
+
+    def test_fast_charon_retries_once_and_keeps_a_take_down_to_34s(self):
+        import board_short
+        import credit_log
+        import quality_check
+        import auto_agent
+
+        topic = {"_live_short": True, "_live_beats": "four", "key": "pat_hammer"}
+        spoken = {beat: " ".join(["शब्द"] * 25) for beat in ORDER}
+
+        def loud(seconds, rate=24000):
+            frames = int(seconds * rate)
+            burst = struct.pack("<h", 12000) * 50 + struct.pack("<h", -12000) * 50
+            return (burst * ((frames // 100) + 1))[: frames * 2]
+
+        def audio(seconds):
+            return base64.b64encode(loud(seconds)).decode("ascii")
+
+        def run(lengths, paid="false"):
+            seen = {"styles": []}
+
+            def post(_url, **kwargs):
+                style = kwargs["json"]["input"][0]["content"][0]["annotations"][0]["style"]
+                seen["styles"].append(style)
+                seconds = lengths[len(seen["styles"]) - 1]
+                return FakeResp(200, {
+                    "output": [{"content": [{"type": "audio", "data": audio(seconds)}]}],
+                })
+
+            def transcribe(path):
+                return _words(100, gemini_voice.wav_seconds(path))
+
+            async def edge(_text, voice, rate, path):
+                edge.calls.append((voice, rate))
+                path.write_bytes(b"e" * 2000)
+
+            edge.calls = []
+            buf = io.StringIO()
+            with tempfile.TemporaryDirectory() as tmp:
+                run_dir = Path(tmp)
+                with mock.patch.object(board_short, "RUN", run_dir), \
+                     mock.patch.object(credit_log, "PATH", run_dir / "credits.json"), \
+                     mock.patch.dict(os.environ, self._env(PAID_TTS_ENABLED=paid)), \
+                     mock.patch("requests.post", post), \
+                     mock.patch("sync_gate.transcribe_file", transcribe), \
+                     mock.patch.object(board_short, "_edge", edge), \
+                     redirect_stdout(buf):
+                    engine = board_short.synthesize_short_voices(dict(spoken), VOICE, topic=topic)
+                text = buf.getvalue()
+                wav = gemini_voice.wav_seconds(run_dir / "gemini_voice.wav") if engine == "gemini" else None
+            return engine, seen["styles"], text, wav, edge.calls
+
+        engine, styles, text, wav, _edge_calls = run([37.3, 52.5])
+        self.assertEqual(engine, "gemini")
+        self.assertEqual(len(styles), 2)
+        self.assertIn("calm, clear teacher pace with short natural pauses between sentences", styles[0])
+        self.assertIn("slow, deliberate pace, pause after every sentence", styles[1])
+        self.assertIn("[gemini] take 1:", text)
+        self.assertIn("[gemini] take 2:", text)
+        self.assertIn("voice_engine=gemini", text)
+        self.assertAlmostEqual(wav, 52.5, delta=0.2)
+
+        engine, styles, text, wav, _edge_calls = run([37.3, 36.0])
+        self.assertEqual(engine, "gemini")
+        self.assertEqual(len(styles), 2)
+        self.assertIn("voice_engine=gemini", text)
+        self.assertAlmostEqual(wav, 37.3, delta=0.2)
+
+        engine, styles, text, wav, edge_calls = run([32.0, 33.0])
+        self.assertEqual(engine, "edge")
+        self.assertEqual(len(styles), 2)
+        self.assertIn("no take in 34-65s", text)
+        self.assertIn("voice_engine=edge", text)
+        self.assertEqual(len(edge_calls), len(ORDER))
+        self.assertIsNone(wav)
+
+        engine, styles, text, wav, _edge_calls = run([50.0])
+        self.assertEqual(engine, "gemini")
+        self.assertEqual(len(styles), 1)
+        self.assertIn("voice_engine=gemini", text)
+        self.assertAlmostEqual(wav, 50.0, delta=0.2)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            (run_dir / "narration.json").write_text(json.dumps({
+                "live_beats": "four",
+                "beats": {"hook": "सवाल", "karein": "कदम"},
+            }), encoding="utf-8")
+            (run_dir / "voice_engine.txt").write_text("gemini\n", encoding="utf-8")
+            with mock.patch.object(quality_check, "RUN", run_dir):
+                self.assertEqual(quality_check.short_duration_bounds(), (34.0, 65.0, "34-65s"))
+            with mock.patch.object(auto_agent, "RUN", run_dir):
+                self.assertEqual(auto_agent.short_duration_window(), (34.0, 65.0, "34-65s"))
+            (run_dir / "voice_engine.txt").write_text("edge\n", encoding="utf-8")
+            with mock.patch.object(quality_check, "RUN", run_dir):
+                self.assertEqual(quality_check.short_duration_bounds(), (45.0, 65.0, "45-65s"))
+            self.assertEqual(board_short._output_bounds(topic, engine="gemini"), (34.0, 65.0))
+            self.assertEqual(board_short._output_bounds(topic, engine="edge"), (45.0, 65.0))
 
     def test_http_429_timeout_missing_audio_and_short_file_fall_back(self):
         import board_short
