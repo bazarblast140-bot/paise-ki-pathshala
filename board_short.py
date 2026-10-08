@@ -411,10 +411,6 @@ def _topic_voice(topic):
 
 def _lesson(topic):
     """Beat order, per-beat targets, accept window, and the prompt's target band."""
-    if str((topic or {}).get("key") or "") == "aaj_ka_nifty":
-        wps = voice_wps(_topic_voice(topic))
-        target, total = four_live_bounds(wps)
-        return BEATS, four_live_targets(wps), total, target
     import trade_plan
     if trade_plan.is_plan_topic(topic):
         return trade_plan.BEATS, trade_plan.WORD_TARGETS, trade_plan.TOTAL_WORDS, trade_plan.WORD_TARGET
