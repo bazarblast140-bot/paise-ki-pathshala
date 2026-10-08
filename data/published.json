@@ -380,5 +380,14 @@
   "elevenlabs_characters_sent": 0,
   "elevenlabs_characters_remaining": null,
   "tts_engine": "edge"
+ },
+ {
+  "date_ist": "2026-10-08",
+  "slot": "21:00",
+  "video_id": null,
+  "format": "short",
+  "platform": "skip",
+  "note": "no owner_approved script left in approved/",
+  "slot_skipped": "no owner_approved script left in approved/"
  }
 ]
