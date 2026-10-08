@@ -1,20 +1,49 @@
-"""Shared motion components for every Paise chart.
+"""Shared motion for every Paise topic video.
 
-Each component takes code-computed numbers and a 0–1 progress. Progress comes
-from Whisper word times through `window_progress` (smoothstep). At progress 1
-the candles, arrow, level lines, risk box, and glow ring match the settled
-Chart Board primitives. The whoosh is a short ffmpeg noise sweep mixed about
-24 dB under the voice. There is no music bed.
+The numbers come from the trade plan. Timing comes from the Whisper word
+clock. Reveals use ease-out cubic over 250–400 ms. The picture style is the
+reference sheet in docs/MOTION_LIBRARY.md.
+
+The settled still used by pixel checks is drawn elsewhere. This module is the
+moving chart. Aaj ka Nifty does not use it.
 """
 import math
 import subprocess
 import wave
 from pathlib import Path
 
-WHOOSH_UNDER_DB = 24.0
+# Reference palette. Yellow is attention only.
+BG = (0x16, 0x16, 0x16)
+BULL = (0x22, 0xB5, 0x3C)
+BEAR = (0xF0, 0x1E, 0x32)
+ENTRY = (0xF5, 0xD9, 0x0A)
+SL = (0xEF, 0x44, 0x44)
+TARGET = (0x22, 0xC5, 0x5E)
+ATTENTION = (0xF5, 0xC5, 0x18)
+WHITE = (255, 255, 255)
+PILL = (0x2A, 0x2A, 0x2A)
+
+REVEAL_S = 0.32
+CONTEXT_CANDLE_S = 0.15
+PILL_LAG_S = 0.12
+ZOOM_S = 0.60
+ZOOM_BACK_S = 2.5
+ZOOM_PEAK = 1.35
+COUNTER_S = 0.50
+TITLE_S = 0.30
+CANDLE_DIM = 0.35
+RR_ALPHA = 0.30
+LABEL_SIZE = 48
+COUNTER_SIZE = 72
+CAPTION_SIZE = 68
+WHOOSH_UNDER_DB = 20.0
 WHOOSH_SECONDS = 0.42
-_REVEAL_KINDS = ("trend", "sr", "entry", "sl", "target")
+MAX_WHOOSH = 4
 _LEVELS = ("sr", "entry", "sl", "target")
+_KEYWORDS = (
+    "टारगेट", "स्टॉप", "एंट्री", "सपोर्ट", "रेसिस्टेंस",
+    "रिस्क", "हैमर", "कैंडल",
+)
 
 
 def clamp(u):
@@ -26,10 +55,25 @@ def clamp(u):
     return u
 
 
-def ease(u):
-    """Smoothstep. 0 and 1 stay exact."""
+def ease_out_cubic(u):
+    """Ease-out cubic. 0 and 1 stay exact. The move is fastest at the start."""
     u = clamp(u)
-    return u * u * (3.0 - 2.0 * u)
+    inv = 1.0 - u
+    return 1.0 - inv * inv * inv
+
+
+def ease_in_out(u):
+    """Ease-in-out cubic. The midpoint stays at 0.5."""
+    u = clamp(u)
+    if u < 0.5:
+        return 4.0 * u * u * u
+    inv = -2.0 * u + 2.0
+    return 1.0 - (inv * inv * inv) / 2.0
+
+
+def ease(u):
+    """Reveal easing for lines, candles, and counters."""
+    return ease_out_cubic(u)
 
 
 def window_progress(t, start, end):
@@ -63,40 +107,171 @@ def _progress(clock, key, t, default=0.0):
     return window_progress(t, window[0], window[1])
 
 
-def candle_build(img, box, ohlc, lo, hi, progress, pad, width_frac=0.62):
-    """Candles appear one by one. The newest body grows from its midpoint.
+def split_keyword(text):
+    """Prefix, the one yellow word, and the suffix. The word stays intact."""
+    text = str(text or "")
+    for word in _KEYWORDS:
+        at = text.find(word)
+        if at >= 0:
+            return text[:at], word, text[at + len(word):]
+    return text, "", ""
 
-    Progress 1 draws the same candles as `board_kit.candles` with no
-    `draw_count`.
+
+def candle_roles(plan):
+    """Context candles, then the 2–3 candles that define the pattern."""
+    n = len(plan.ohlc)
+    focus = max(0, min(int(plan.focus), n - 1))
+    start = max(0, focus - 1)
+    end = min(n, start + 3)
+    if end - start < 2 and n >= 2:
+        start = max(0, end - 2)
+    key = list(range(start, end))
+    context = [i for i in range(n) if i not in key]
+    if not context and key:
+        context = [key[0]]
+        key = key[1:]
+    return context, key
+
+
+def candle_windows(plan, beats=None):
+    """Context candles burst at 150 ms. Each key candle waits for its beat.
+
+    The first context candle finishes at t=0, so the open is never an empty chart.
     """
+    beats = beats or {}
+    context, key = candle_roles(plan)
+    windows = [None] * len(plan.ohlc)
+    cursor = -CONTEXT_CANDLE_S
+    for index in context:
+        windows[index] = (cursor, cursor + CONTEXT_CANDLE_S)
+        cursor += CONTEXT_CANDLE_S
+    names = ("pehchan", "context", "entry")
+    for nth, index in enumerate(key):
+        span = beats.get(names[min(nth, len(names) - 1)])
+        start = float(span[0]) if span else 2.0 + nth * 2.5
+        windows[index] = (start, start + REVEAL_S)
+    return windows
+
+
+def _axes(box, n, lo, hi, pad, width_frac=0.62):
     import board_kit as K
-    from PIL import ImageDraw
+    ax = K.Axes(box, max(len(n) if not isinstance(n, int) else n, 1), lo, hi, pad=pad, ypad=0.12)
+    ax.bw = max(10, int(ax.step * width_frac))
+    return ax
+
+
+def motion_geometry(plan):
+    """One price scale for the whole video, so a new beat does not jump the chart."""
+    import board_kit as K
+    prices = [candle[1] for candle in plan.ohlc] + [candle[2] for candle in plan.ohlc]
+    prices.extend([float(plan.entry), float(plan.sl), float(plan.target), float(plan.sr)])
+    return K.BOARD, min(prices), max(prices), (72, 100, 72, 96)
+
+
+def _stroke_candle(draw, ax, index, row, color, frac):
+    o, h, l, c = row
+    cx = ax.x(index)
+    bw = ax.bw
+    draw.line([(cx, ax.y(h)), (cx, ax.y(l))], fill=color, width=max(3, bw // 6))
+    top, bot = ax.y(max(o, c)), ax.y(min(o, c))
+    mid = (top + bot) / 2.0
+    half = max((bot - top) / 2.0, 2.5) * clamp(frac)
+    draw.rectangle([cx - bw / 2, mid - half, cx + bw / 2, mid + half], fill=color)
+    return cx, mid - half, mid + half
+
+
+def candle_build(img, box, ohlc, lo, hi, progress, pad, width_frac=0.62,
+                 per_candle=None, focus=None, dim=1.0):
+    """Draw candles. A float progress fills them together. A list is one value each.
+
+    Bull bodies are #22B53C and bear bodies are #F01E32. During the key-candle
+    push, every other candle drops to 35% opacity.
+    """
+    from PIL import Image, ImageDraw
+    import numpy as np
 
     ohlc = list(ohlc)
-    progress = clamp(progress)
-    if progress >= 1.0:
-        return K.candles(
-            img, box, ohlc, lo, hi, grid=False, width_frac=width_frac, pad=pad,
-        )
-    grown = progress * len(ohlc)
-    full = int(math.floor(grown + 1e-9))
-    frac = grown - full
-    ax = K.candles(
-        img, box, ohlc, lo, hi, grid=False, width_frac=width_frac, pad=pad,
-        draw_count=full,
-    )
-    if frac > 1e-6 and full < len(ohlc):
-        o, h, l, c = ohlc[full]
-        col = K.GREEN if c >= o else K.RED
-        cx = ax.x(full)
-        bw = ax.bw
-        draw = ImageDraw.Draw(img)
-        draw.line([(cx, ax.y(h)), (cx, ax.y(l))], fill=col, width=max(3, bw // 6))
-        top, bot = ax.y(max(o, c)), ax.y(min(o, c))
-        mid = (top + bot) / 2.0
-        half = max((bot - top) / 2.0, 2.5) * frac
-        draw.rectangle([cx - bw / 2, mid - half, cx + bw / 2, mid + half], fill=col)
+    ax = _axes(box, len(ohlc), lo, hi, pad, width_frac)
+    if per_candle is None:
+        progress = clamp(progress)
+        per_candle = [progress] * len(ohlc)
+    else:
+        per_candle = [clamp(v) for v in per_candle]
+    dim_others = focus is not None and float(dim) < 0.999
+    ghost = Image.new("RGBA", img.size, (0, 0, 0, 0)) if dim_others else None
+    ghost_draw = ImageDraw.Draw(ghost) if ghost is not None else None
+    draw = ImageDraw.Draw(img)
+    for index, row in enumerate(ohlc):
+        frac = per_candle[index] if index < len(per_candle) else 0.0
+        if frac <= 0.0:
+            continue
+        color = BULL if row[3] >= row[0] else BEAR
+        pen = ghost_draw if dim_others and index != int(focus) else draw
+        _stroke_candle(pen, ax, index, row, color, frac)
+    if ghost is not None:
+        arr = np.array(ghost)
+        arr[..., 3] = (arr[..., 3].astype(np.float32) * float(dim)).astype(np.uint8)
+        faded = Image.fromarray(arr, "RGBA")
+        merged = Image.alpha_composite(img.convert("RGBA"), faded).convert("RGB")
+        img.paste(merged, (0, 0))
     return ax
+
+
+def _hline(img, x0, x1, y, color, width=6):
+    from PIL import ImageDraw
+    if x1 <= x0 + 0.5:
+        return
+    ImageDraw.Draw(img).line([(x0, y), (x1, y)], fill=tuple(color), width=int(width))
+
+
+def _hdash(img, x0, x1, y, color, width=4):
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(img)
+    x = float(x0)
+    x1 = float(x1)
+    while x < x1:
+        draw.line([(x, y), (min(x + 18.0, x1), y)], fill=tuple(color), width=int(width))
+        x += 30.0
+
+
+def _blend_rect(img, rect, color, alpha):
+    from PIL import Image, ImageDraw
+    alpha = int(round(clamp(alpha) * 255))
+    if alpha <= 0:
+        return
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(overlay).rectangle(list(rect), fill=tuple(color) + (alpha,))
+    merged = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+    img.paste(merged, (0, 0))
+
+
+def _pill(img, x, y, text, size=LABEL_SIZE):
+    import board_kit as K
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(img)
+    font = K.font(int(size))
+    tw = draw.textlength(str(text), font=font)
+    th = int(size)
+    rect = [x, y, x + tw + 28, y + th + 16]
+    draw.rounded_rectangle(rect, 12, fill=PILL)
+    draw.text((x + 14, y + 6), str(text), font=font, fill=WHITE)
+    return rect
+
+
+def _dashed_curve(img, p0, p1, color=WHITE):
+    from PIL import ImageDraw
+    mx = (p0[0] + p1[0]) / 2.0
+    my = (p0[1] + p1[1]) / 2.0 - 40.0
+    pts = []
+    for step in range(17):
+        u = step / 16.0
+        omu = 1.0 - u
+        x = omu * omu * p0[0] + 2 * omu * u * mx + u * u * p1[0]
+        y = omu * omu * p0[1] + 2 * omu * u * my + u * u * p1[1]
+        pts.append((x, y))
+    draw = ImageDraw.Draw(img)
+    for step in range(0, len(pts) - 1, 2):
+        draw.line([pts[step], pts[step + 1]], fill=tuple(color), width=3)
 
 
 def trend_arrow(img, ax, plan, progress):
@@ -113,106 +288,120 @@ def trend_arrow(img, ax, plan, progress):
         p1[0] + (p2[0] - p1[0]) * progress,
         p1[1] + (p2[1] - p1[1]) * progress,
     )
-    K.arrow(img, p1, tip, K.YELLOW, w=8, head=26)
+    K.arrow(img, p1, tip, ATTENTION, w=8, head=26)
     return True
 
 
 def sr_band(img, ax, price, progress, color=None):
-    """Translucent support or resistance band around the computed price."""
-    import board_kit as K
-    from PIL import Image, ImageDraw
-
+    """Translucent white band around support or resistance."""
     progress = clamp(progress)
     if progress <= 0.0 or price is None:
         return False
-    color = color or K.BLUE
-    alpha = int(round(78 * progress))
-    if alpha <= 0:
-        return False
+    color = WHITE if color is None else color
     y = float(ax.y(float(price)))
-    half = 16.0
-    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    ImageDraw.Draw(overlay).rectangle(
+    half = 18.0
+    _blend_rect(
+        img,
         [ax.x0 + ax.pl, y - half, ax.x1 - ax.pr, y + half],
-        fill=tuple(color) + (alpha,),
+        color,
+        0.22 * progress,
     )
-    merged = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
-    img.paste(merged, (0, 0))
     return True
 
 
-def level_line(img, box, y, color, label, side, progress):
-    """ENTRY / SL / TARGET / SR line draws left to right. The pill waits until 0.45.
+def level_line(img, box, y, color, label, side, progress, pill=None, dashed=False,
+               width=6, anchor=None):
+    """Draw a trade line left to right. The pill pops after the line, with the price.
 
-    Progress 1 is the same dashed call as the settled chart.
+    ENTRY, SL, and TARGET are solid 6 px. Support and resistance stay dashed.
     """
-    import board_kit as K
-
     progress = clamp(progress)
     x0 = box[0] + 24
     x1 = box[2] - 24
     if progress <= 0.0:
-        return {"price_label": label, "drawn": False, "x1": x0}
+        return {"price_label": None, "drawn": False, "x1": x0, "pill": False}
     end = x1 if progress >= 1.0 else x0 + (x1 - x0) * progress
-    show = label if progress >= 0.45 else None
-    K.dashed(img, x0, end, y, color, show, size=22, label_side=side)
-    return {"price_label": show, "drawn": True, "x1": end}
+    if dashed:
+        _hdash(img, x0, end, y, WHITE, width=4)
+    else:
+        _hline(img, x0, end, y, color, width=width)
+    show_pill = progress >= 1.0 if pill is None else float(pill) > 0.0
+    shown = None
+    if show_pill and label:
+        size = LABEL_SIZE if not dashed else 36
+        text = str(label)
+        import board_kit as K
+        from PIL import ImageDraw
+        tw = ImageDraw.Draw(img).textlength(text, font=K.font(size))
+        if side == "right":
+            lx = x1 - tw - 36
+        else:
+            lx = x0 + 8
+        ly = y - size - 28
+        if ly < box[1] + 8:
+            ly = y + 18
+        _pill(img, lx, ly, text, size=size)
+        if anchor is not None:
+            _dashed_curve(img, (lx + 20, ly + size), anchor, WHITE)
+        shown = text
+    return {"price_label": shown, "drawn": True, "x1": end, "pill": bool(shown)}
 
 
 def rr_readout(plan):
-    """Risk, reward, and RR from the computed plan. Not a second rounding."""
+    """Risk, reward, and the RR text from the computed plan."""
     risk = float(plan.risk)
     reward = float(plan.reward)
-    text = f"RISK {_fmt(risk)}  REWARD {_fmt(reward)}  RR {plan.rr_text}"
-    return {"risk": risk, "reward": reward, "rr": plan.rr_text, "text": text}
+    text = f"RR {plan.rr_text}"
+    return {
+        "risk": risk,
+        "reward": reward,
+        "rr": plan.rr_text,
+        "text": text,
+        "reward_px": 0.0,
+        "risk_px": 0.0,
+    }
 
 
-def _rr_words(img, text):
-    import board_kit as K
-    x0 = K.BOARD[0] + 20
-    y0 = K.BOARD[1] + 16 + 54 + 8
-    K.label(img, x0, y0, text, K.INK, 22)
+def risk_reward_box(img, plan, progress, ax=None):
+    """Tall green reward box over a short red risk box, anchored at the key candle.
 
-
-def _rr_partial(img, plan, progress, text):
-    import board_kit as K
-    from PIL import ImageDraw
-
-    x0, y0 = K.BOARD[0] + 20, K.BOARD[1] + 16
-    full, height = 860, 54
-    width = max(24, int(round(full * clamp(progress))))
-    draw = ImageDraw.Draw(img)
-    mid = x0 + int(width * 0.38)
-    draw.rounded_rectangle([x0, y0, mid, y0 + height], 10, fill=K.RED)
-    draw.rectangle([mid - 8, y0, min(mid + 8, x0 + width), y0 + height], fill=K.RED)
-    if mid < x0 + width:
-        draw.rounded_rectangle([mid, y0, x0 + width, y0 + height], 10, fill=K.GREEN)
-    K.fit_label(
-        img, x0 + 12, y0 + 14,
-        f"Entry {_fmt(plan.entry)} · SL {_fmt(plan.sl)} · Target {_fmt(plan.target)} = {plan.rr_text}",
-        max(20, width - 24), col=(10, 10, 10), size=26, min_size=16,
-    )
-    _rr_words(img, text)
-
-
-def risk_reward_box(img, plan, progress):
-    """Red/green reward box. Progress 1 calls the settled `_rr_box`."""
+    Alpha is about 0.30. Progress 1 is the finished box. It is on screen at 0 ms.
+    """
     progress = clamp(progress)
     info = rr_readout(plan)
     info["shown"] = progress > 0.0
     if progress <= 0.0:
         return info
+    if ax is None:
+        box, lo, hi, pad = motion_geometry(plan)
+        ax = _axes(box, len(plan.ohlc), lo, hi, pad)
+    focus = max(0, min(int(plan.focus), len(plan.ohlc) - 1))
+    cx = ax.x(focus)
+    half = max(28.0, ax.bw * 1.6)
+    entry_y = ax.y(float(plan.entry))
+    sl_y = ax.y(float(plan.sl))
+    target_y = ax.y(float(plan.target))
+    reward_h = abs(target_y - entry_y) * progress
+    risk_h = abs(sl_y - entry_y) * progress
+    info["reward_px"] = reward_h
+    info["risk_px"] = risk_h
+
+    def span(origin, dest, height):
+        if dest <= origin:
+            return origin - height, origin
+        return origin, origin + height
+
+    gy0, gy1 = span(entry_y, target_y, reward_h)
+    ry0, ry1 = span(entry_y, sl_y, risk_h)
+    _blend_rect(img, [cx - half, gy0, cx + half, gy1], TARGET, RR_ALPHA * progress)
+    _blend_rect(img, [cx - half, ry0, cx + half, ry1], SL, RR_ALPHA * progress)
     if progress >= 1.0:
-        import trade_plan
-        trade_plan._rr_box(img, plan)
-        _rr_words(img, info["text"])
-        return info
-    _rr_partial(img, plan, progress, info["text"])
+        _pill(img, cx + half + 12, min(gy0, gy1) + 8, info["text"], size=44)
     return info
 
 
 def _zoom_candle(img, cx, cy, zoom):
-    """Scale a window around the key candle and paste it back, inside the board."""
+    """Push in on the key candle. The crop stays inside the board."""
     import board_kit as K
     from PIL import Image
 
@@ -220,7 +409,7 @@ def _zoom_candle(img, cx, cy, zoom):
     if zoom <= 1.001:
         return
     board = K.BOARD
-    half_w, half_h = 88, 116
+    half_w, half_h = 110, 150
     x0 = int(max(board[0], math.floor(cx - half_w)))
     y0 = int(max(board[1], math.floor(cy - half_h)))
     x1 = int(min(board[2], math.ceil(cx + half_w)))
@@ -241,36 +430,62 @@ def _zoom_candle(img, cx, cy, zoom):
     src_b = min(zh, board[3] - top)
     if src_r <= src_x or src_b <= src_y:
         return
-    piece = scaled.crop((src_x, src_y, src_r, src_b))
-    img.paste(piece, (dst_x, dst_y))
+    img.paste(scaled.crop((src_x, src_y, src_r, src_b)), (dst_x, dst_y))
 
 
-def highlight_candle(img, ax, plan, progress):
-    """Glow ring on the key candle, with a gentle zoom that settles at progress 1.
+def key_zoom_at(t, start, push_s=ZOOM_S, back_s=ZOOM_BACK_S):
+    """1.0 → 1.35 over 600 ms ease-in-out, then back down before the next beat."""
+    if t is None or start is None:
+        return 1.0, False
+    t = float(t)
+    start = float(start)
+    if t <= start:
+        return 1.0, False
+    push_end = start + float(push_s)
+    back_end = push_end + float(back_s)
+    if t >= back_end:
+        return 1.0, False
+    if t <= push_end:
+        u = ease_in_out((t - start) / float(push_s))
+        return 1.0 + (ZOOM_PEAK - 1.0) * u, True
+    u = ease_in_out((t - push_end) / float(back_s))
+    return ZOOM_PEAK - (ZOOM_PEAK - 1.0) * u, True
 
-    Progress 1 is `board_kit.ring` at rx 28, ry 40 and zoom 1, the settled mark.
+
+def highlight_candle(img, ax, plan, progress, zoom=None):
+    """Yellow #F5C518 outline on the key candle, then the push-in.
+
+    `progress` 0 leaves the candle alone. A zoom above 1 dims the caller's
+    other candles (they are already drawn) and outlines this one.
     """
-    import board_kit as K
+    from PIL import ImageDraw
 
-    progress = clamp(progress)
-    if plan.focus >= len(plan.ohlc) or progress <= 0.0:
-        return {"zoom": 1.0, "rx": 0.0, "ry": 0.0}
-    candle = plan.ohlc[plan.focus]
-    cx = ax.x(plan.focus)
-    cy = (ax.y(candle[1]) + ax.y(candle[2])) / 2.0
-    if progress >= 1.0:
-        K.ring(img, cx, cy, 28, 40, K.YELLOW)
-        return {"zoom": 1.0, "rx": 28.0, "ry": 40.0}
-    zoom = 1.0 + 0.06 * progress
-    _zoom_candle(img, cx, cy, zoom)
-    rx = 28.0 * (0.35 + 0.65 * progress)
-    ry = 40.0 * (0.35 + 0.65 * progress)
-    K.ring(img, cx, cy, rx, ry, K.YELLOW)
-    return {"zoom": zoom, "rx": rx, "ry": ry}
+    focus = int(plan.focus)
+    if focus < 0 or focus >= len(plan.ohlc):
+        return {"zoom": 1.0, "dim": 1.0, "attention": False}
+    if zoom is None:
+        zoom = 1.0 if progress <= 0.0 else 1.0 + (ZOOM_PEAK - 1.0) * ease_in_out(progress)
+    active = float(zoom) > 1.001
+    candle = plan.ohlc[focus]
+    cx = ax.x(focus)
+    top = ax.y(max(candle[0], candle[3]))
+    bot = ax.y(min(candle[0], candle[3]))
+    if active:
+        bw = ax.bw
+        ImageDraw.Draw(img).rectangle(
+            [cx - bw / 2 - 8, top - 10, cx + bw / 2 + 8, bot + 10],
+            outline=ATTENTION, width=6,
+        )
+        _zoom_candle(img, cx, (top + bot) / 2.0, zoom)
+    return {
+        "zoom": float(zoom),
+        "dim": CANDLE_DIM if active else 1.0,
+        "attention": active,
+    }
 
 
-def number_counter(img, value, progress, xy=(80, 1264), label="TARGET"):
-    """Count up to `value`. Progress 1 shows that value exactly."""
+def number_counter(img, value, progress, xy=(80, 1188), label="TARGET"):
+    """Count up to `value` over the caller's window. Progress 1 is exact."""
     import board_kit as K
 
     value = float(value)
@@ -282,13 +497,31 @@ def number_counter(img, value, progress, xy=(80, 1264), label="TARGET"):
     else:
         shown = value * progress
     if progress > 0.0:
-        K.label(img, xy[0], xy[1], f"{label} {_fmt(shown)}", K.INK, 28)
+        K.label(img, xy[0], xy[1], f"{label} {_fmt(shown)}", WHITE, COUNTER_SIZE)
     return {"value": value, "shown": shown}
 
 
+def sl_break(img, ax, plan, progress, flash_on=False):
+    """The price trades through the stop, and the stop line flashes red."""
+    import board_kit as K
+    progress = clamp(progress)
+    info = {"price": float(plan.sl), "progress": progress, "flash": False}
+    if progress <= 0.0:
+        return info
+    box = (ax.x0, ax.y0, ax.x1, ax.y1)
+    y = ax.y(float(plan.sl))
+    color = (255, 48, 48) if flash_on else SL
+    _hline(img, box[0] + 24, box[2] - 24, y, color, width=8 if flash_on else 6)
+    entry_y = ax.y(float(plan.entry))
+    mark_y = entry_y + (y - entry_y) * progress
+    cx = ax.x(max(0, min(int(plan.focus), len(plan.ohlc) - 1)))
+    K.label(img, cx + 16, mark_y - 20, _fmt(plan.sl), WHITE, 36)
+    info["flash"] = bool(flash_on)
+    return info
+
+
 def clock_from(topic, plan=None):
-    """Start/end for each component from overlay word times, else the beat clock."""
-    del plan
+    """Word times for the lines. The RR box is already finished at t=0."""
     topic = topic or {}
     beats = topic.get("_beat_times") or {}
     by = {}
@@ -304,54 +537,74 @@ def clock_from(topic, plan=None):
             return float(span[0])
         return None
 
-    hook = beats.get("hook")
-    if hook and len(hook) >= 2:
-        c0 = float(hook[0])
-        span = max(0.8, float(hook[1]) - c0)
-        c1 = c0 + min(span, max(1.2, span * 0.8))
-    else:
-        c0, c1 = 0.0, 3.2
-
-    def window(kind, beat, dur):
+    def window(kind, beat, dur=REVEAL_S):
         t0 = start(kind, beat)
         if t0 is None:
             return None
         return (t0, t0 + float(dur))
 
-    return {
-        "candles": (c0, c1),
-        "trend": window("trend", "pehchan", 0.65),
-        "sr": window("sr", "context", 0.75),
-        "entry": window("entry", "entry", 0.65),
-        "sl": window("sl", "sl", 0.65),
-        "target": window("target", "target", 0.65),
-        "rr": window("rr", "target", 0.55),
-        "highlight": window("trend", "pehchan", 1.15),
-        "counter": window("target", "target", 0.85),
+    zoom_at = start("trend", "pehchan")
+    if zoom_at is None:
+        zoom_at = start("entry", "entry")
+    inv = beats.get("invalidation")
+    clock = {
+        "candle_windows": candle_windows(plan, beats) if plan is not None else None,
+        "trend": window("trend", "pehchan"),
+        "sr": window("sr", "context"),
+        "entry": window("entry", "entry"),
+        "sl": window("sl", "sl"),
+        "target": window("target", "target"),
+        "rr": (-REVEAL_S, 0.0),
+        "highlight": None if zoom_at is None else (zoom_at, zoom_at + ZOOM_S),
+        "counter": window("target", "target", COUNTER_S),
+        "title": (0.0, TITLE_S),
+        "break": None if not inv else (float(inv[0]), float(inv[0]) + REVEAL_S),
     }
+    return clock
+
+
+def _pill_on(t, window):
+    """The label pill pops 120 ms after the line has finished drawing."""
+    if not window or t is None:
+        return 0.0
+    return 1.0 if float(t) >= float(window[1]) + PILL_LAG_S else 0.0
 
 
 def reveal_times(topic):
-    """Whoosh cues: trend, support, entry, stop, target, and a late candle start."""
-    times = []
+    """At most four whooshes: RR box, key-candle zoom, ENTRY, TARGET."""
+    beats = (topic or {}).get("_beat_times") or {}
+    by = {}
     for row in (topic or {}).get("_chart_overlays") or []:
-        if row.get("kind") not in _REVEAL_KINDS:
+        by.setdefault(str(row.get("kind") or ""), row)
+
+    def at(kind, beat):
+        row = by.get(kind)
+        if row and row.get("start") is not None:
+            return float(row["start"])
+        span = beats.get(beat)
+        if span:
+            return float(span[0])
+        return None
+
+    cues = [0.0]
+    for value in (at("trend", "pehchan"), at("entry", "entry"), at("target", "target")):
+        if value is not None:
+            cues.append(value)
+    found = []
+    seen = set()
+    for raw in cues:
+        key = round(float(raw), 3)
+        if key < 0.0 or key in seen:
             continue
-        try:
-            times.append(float(row["start"]))
-        except (TypeError, ValueError):
-            continue
-    hook = ((topic or {}).get("_beat_times") or {}).get("hook")
-    if hook:
-        try:
-            times.append(float(hook[0]))
-        except (TypeError, ValueError):
-            pass
-    return times
+        seen.add(key)
+        found.append(key)
+        if len(found) >= MAX_WHOOSH:
+            break
+    return found
 
 
 def unique_reveals(frames):
-    """One whoosh per cue. t≈0 is skipped so the voice is not hit at the cut."""
+    """One whoosh per cue, four at most. The opening RR cue at t=0 is kept."""
     found = []
     seen = set()
     for frame in frames or []:
@@ -360,75 +613,115 @@ def unique_reveals(frames):
                 t = round(float(raw), 3)
             except (TypeError, ValueError):
                 continue
-            if t <= 0.05 or t in seen:
+            if t < 0.0 or t in seen:
                 continue
             seen.add(t)
             found.append(t)
+            if len(found) >= MAX_WHOOSH:
+                found.sort()
+                return found
     found.sort()
     return found
 
 
-def draw_plan(img, plan, shown, t, clock):
-    """Draw every component that the clock says is on at time t.
+def _candle_progresses(plan, t, clock):
+    windows = (clock or {}).get("candle_windows")
+    n = len(plan.ohlc)
+    if windows and len(windows) == n:
+        return [window_progress(t, pair[0], pair[1]) if pair else 1.0 for pair in windows]
+    shared = _progress(clock, "candles", t, 1.0)
+    return [shared] * n
 
-    `shown` is the scene's overlay list and only sets the price scale, matching
-    the settled chart for that beat. A line still waits for its own word.
-    """
-    import board_kit as K
+
+def draw_plan(img, plan, shown, t, clock):
+    """One continuous chart. Overlays accumulate. Nothing here hard-cuts a beat."""
     import trade_plan
 
     shown = list(shown or [])
-    box, lo, hi, pad = trade_plan._chart_geometry(plan, shown)
-    candles_p = _progress(clock, "candles", t, 1.0)
-    ax = candle_build(img, box, plan.ohlc, lo, hi, candles_p, pad)
-    trend_p = _progress(clock, "trend", t, 1.0 if any(row.get("kind") == "trend" for row in shown) else 0.0)
+    box, lo, hi, pad = motion_geometry(plan)
+    per = _candle_progresses(plan, t, clock)
+    zoom_start = None
+    highlight_window = (clock or {}).get("highlight")
+    if highlight_window:
+        zoom_start = float(highlight_window[0])
+    zoom, attention = key_zoom_at(t, zoom_start)
+    focus = int(plan.focus)
+    ax = candle_build(
+        img, box, plan.ohlc, lo, hi, 1.0, pad,
+        per_candle=per,
+        focus=focus if attention else None,
+        dim=CANDLE_DIM if attention else 1.0,
+    )
+    if attention and 0 <= focus < len(plan.ohlc):
+        from PIL import ImageDraw
+        candle = plan.ohlc[focus]
+        cx = ax.x(focus)
+        top = ax.y(max(candle[0], candle[3]))
+        bot = ax.y(min(candle[0], candle[3]))
+        ImageDraw.Draw(img).rectangle(
+            [cx - ax.bw / 2 - 8, top - 10, cx + ax.bw / 2 + 8, bot + 10],
+            outline=ATTENTION, width=6,
+        )
+        _zoom_candle(img, cx, (top + bot) / 2.0, zoom)
+    highlight = {"zoom": zoom, "dim": CANDLE_DIM if attention else 1.0, "attention": attention}
+    trend_p = _progress(clock, "trend", t, 0.0)
     if trend_p > 0.0:
         trend_arrow(img, ax, plan, trend_p)
     sr_p = _progress(clock, "sr", t, 0.0)
-    sr_price = None
+    sr_price = float(plan.sr)
     for row in shown:
         if row.get("kind") == "sr" and row.get("price") is not None:
             sr_price = float(row["price"])
-    if sr_price is None:
-        sr_price = float(plan.sr)
-    if sr_p <= 0.0 and any(row.get("kind") == "sr" for row in shown) and not (clock or {}).get("sr"):
-        sr_p = 1.0
     if sr_p > 0.0:
-        sr_band(img, ax, sr_price, sr_p, K.BLUE)
-    colors = {"sr": K.BLUE, "entry": K.YELLOW, "sl": K.RED, "target": K.GREEN}
+        sr_band(img, ax, sr_price, sr_p, WHITE)
+    colors = {"sr": WHITE, "entry": ENTRY, "sl": SL, "target": TARGET}
     sides = {"sr": "left", "entry": "right", "sl": "left", "target": "right"}
     labels = {}
     for row in shown:
         if row.get("kind") in colors and row.get("price") is not None:
             labels[row["kind"]] = row
+    names = {"sr": "SR", "entry": "ENTRY", "sl": "SL", "target": "TARGET"}
     levels = {}
+    anchor = None
+    if 0 <= focus < len(plan.ohlc):
+        anchor = (ax.x(focus), ax.y(plan.ohlc[focus][3]))
     for kind in _LEVELS:
         row = labels.get(kind)
         price = float(row["price"]) if row and row.get("price") is not None else {
-            "sr": float(plan.sr),
-            "entry": float(plan.entry),
-            "sl": float(plan.sl),
-            "target": float(plan.target),
+            "sr": float(plan.sr), "entry": float(plan.entry),
+            "sl": float(plan.sl), "target": float(plan.target),
         }[kind]
-        label = row["label"] if row else f"{kind.upper()} {_fmt(price)}"
-        default = 1.0 if row and not (clock or {}).get(kind) else 0.0
+        label = f"{names[kind]} {_fmt(price)}"
+        default = 0.0
         prog = _progress(clock, kind, t, default)
-        drawn = level_line(
-            img, box, ax.y(price), colors[kind], label, sides[kind], prog,
-        ) if prog > 0.0 else {"price_label": None, "drawn": False, "x1": box[0] + 24}
-        levels[kind] = {"price": price, "drawn": bool(drawn["drawn"]), "label": label, "progress": prog}
-    rr_default = 1.0 if any(row.get("kind") == "rr" for row in shown) and not (clock or {}).get("rr") else 0.0
-    rr_p = _progress(clock, "rr", t, rr_default)
-    rr = risk_reward_box(img, plan, rr_p) if rr_p > 0.0 else rr_readout(plan)
+        window = (clock or {}).get(kind)
+        pill = _pill_on(t, window) if window else (1.0 if prog >= 1.0 else 0.0)
+        drawn = {"price_label": None, "drawn": False, "x1": box[0] + 24, "pill": False}
+        if prog > 0.0:
+            drawn = level_line(
+                img, box, ax.y(price), colors[kind], label, sides[kind], prog,
+                pill=pill, dashed=(kind == "sr"), width=6,
+                anchor=anchor if kind != "sr" else None,
+            )
+        levels[kind] = {
+            "price": price, "drawn": bool(drawn["drawn"]), "label": label,
+            "progress": prog, "pill": bool(drawn.get("pill")),
+        }
+    rr_p = _progress(clock, "rr", t, 0.0)
+    rr = risk_reward_box(img, plan, rr_p, ax) if rr_p > 0.0 else rr_readout(plan)
     if rr_p <= 0.0:
         rr["shown"] = False
     if plan.rsi and any(row.get("kind") == "rsi_os" for row in shown) and trend_p >= 1.0:
         trade_plan._rsi_strip(img, plan)
-    hi_default = 1.0 if not (clock or {}).get("highlight") else 0.0
-    hi_p = _progress(clock, "highlight", t, hi_default)
-    highlight = highlight_candle(img, ax, plan, hi_p)
+    break_p = _progress(clock, "break", t, 0.0)
+    flash_on = bool(break_p > 0.0 and t is not None and int(float(t) * 4) % 2 == 0)
+    broken = sl_break(img, ax, plan, break_p, flash_on=flash_on) if break_p > 0.0 else {
+        "price": float(plan.sl), "progress": 0.0, "flash": False,
+    }
     counter_p = _progress(clock, "counter", t, 0.0)
     counter = number_counter(img, plan.target, counter_p, label="TARGET")
+    title_p = _progress(clock, "title", t, 0.0)
+    candles_p = sum(per) / float(len(per) or 1)
     return {
         "progress": {
             "candles": candles_p,
@@ -438,14 +731,60 @@ def draw_plan(img, plan, shown, t, clock):
             "sl": levels["sl"]["progress"],
             "target": levels["target"]["progress"],
             "rr": rr_p,
-            "highlight": hi_p,
+            "highlight": 1.0 if attention else 0.0,
             "counter": counter_p,
+            "title": title_p,
+            "break": break_p,
         },
         "levels": levels,
         "rr": rr,
         "highlight": highlight,
         "counter": counter,
+        "title": {"progress": title_p, "shown": title_p >= 1.0, "text": ""},
+        "break": broken,
+        "candles": per,
     }
+
+
+def paint_caption(img, text, y, size=CAPTION_SIZE):
+    """Bottom-band caption. One keyword is yellow. The rest is white."""
+    import scene_frames
+
+    pre, word, post = split_keyword(text)
+    if not str(text or "").strip():
+        return []
+    if not word:
+        scene_frames._text(
+            img, 540, y, str(text), WHITE, int(size),
+            anchor="mt", band=False, role="caption",
+        )
+        return [str(text)]
+    w_pre = scene_frames._text_extent(pre, int(size))[0] if pre else 0
+    w_word = scene_frames._text_extent(word, int(size))[0]
+    w_post = scene_frames._text_extent(post, int(size))[0] if post else 0
+    left = 540 - (w_pre + w_word + w_post) / 2.0
+    cursor = left
+    drawn = []
+    if pre:
+        scene_frames._text(
+            img, cursor, y, pre, WHITE, int(size),
+            anchor="lt", band=False, role="caption",
+        )
+        drawn.append(pre)
+        cursor += w_pre
+    scene_frames._text(
+        img, cursor, y, word, ATTENTION, int(size),
+        anchor="lt", band=False, role="caption",
+    )
+    drawn.append(word)
+    cursor += w_word
+    if post:
+        scene_frames._text(
+            img, cursor, y, post, WHITE, int(size),
+            anchor="lt", band=False, role="caption",
+        )
+        drawn.append(post)
+    return drawn
 
 
 def render_whoosh(path, seconds=WHOOSH_SECONDS, sr=44100):
@@ -512,9 +851,9 @@ def _rms(mono):
 
 
 def mix_under(voice_path, reveals, out_path, under_db=WHOOSH_UNDER_DB):
-    """Place one whoosh at each reveal, about `under_db` under the voice RMS.
+    """Place one whoosh at each reveal, about 20 dB under the voice RMS.
 
-    The voice file is only read. No bed, no music, no second noise layer.
+    Four cues maximum. The voice file is only read. No bed and no music.
     """
     import numpy as np
 
@@ -532,14 +871,21 @@ def mix_under(voice_path, reveals, out_path, under_db=WHOOSH_UNDER_DB):
     peak = float(np.max(np.abs(clip))) if clip.size else 0.0
     track = np.zeros(mono.shape[0], dtype=np.float32)
     cues = []
+    seen = set()
     for raw in reveals or []:
         try:
             t = float(raw)
         except (TypeError, ValueError):
             continue
-        if t <= 0.05:
+        if t < 0.0:
             continue
+        key = round(t, 3)
+        if key in seen:
+            continue
+        seen.add(key)
         cues.append(t)
+        if len(cues) >= MAX_WHOOSH:
+            break
     if peak > 0.0 and cues:
         for t in cues:
             i = int(round(t * sr))

@@ -4425,7 +4425,7 @@ def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, h
     # voice.wav stays the clean narration so a later remix needs no new TTS.
     # Whoosh and the callout click go on mixed.wav. There is no bed and no air.
     # A trade-plan frame carries motion_reveals: those cues get the library
-    # whoosh, about 24 dB under the voice. Every other short keeps mix_into.
+    # whoosh, about 20 dB under the voice. Every other short keeps mix_into.
     mixed = RUN / "mixed.wav"
     import motion_lib
     reveals = motion_lib.unique_reveals(frames)

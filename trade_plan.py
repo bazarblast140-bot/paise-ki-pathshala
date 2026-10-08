@@ -869,6 +869,23 @@ def _scene_time(topic, beat, index, local):
     return start + (end - start) * local
 
 
+def _hook_question(topic, beat, spoken):
+    if beat != "hook":
+        return ""
+    line = str((topic or {}).get("hook_line") or "").strip()
+    if not line and (topic or {}).get("key"):
+        import approved_bank
+        try:
+            line = str(approved_bank.narration_for(topic).get("hook_line") or "").strip()
+        except (FileNotFoundError, KeyError, OSError):
+            line = ""
+        if line and isinstance(topic, dict):
+            topic["hook_line"] = line
+    if line:
+        return line
+    return str(spoken or "").strip()
+
+
 def _compose(topic, beat, index, n, spoken, when):
     import board_kit as K
     import board_scenes
@@ -876,14 +893,16 @@ def _compose(topic, beat, index, n, spoken, when):
     import safe_area
     plan = plan_for(topic.get("key"))
     shown = active_overlays(topic, beat, index)
-    img = K.background()
-    K.panel(img)
-    _grid(img)
     if when is None:
+        img = K.background()
+        K.panel(img)
+        _grid(img)
         _draw_price(img, plan, shown)
         img.motion_state = None
     else:
+        from PIL import Image
         import motion_lib
+        img = Image.new("RGB", (K.W, K.H), motion_lib.BG)
         img.motion_state = motion_lib.draw_plan(
             img, plan, shown, when, motion_lib.clock_from(topic, plan),
         )
@@ -894,14 +913,34 @@ def _compose(topic, beat, index, n, spoken, when):
     img.shapes = []
     img.labelled_graphic_boxes = []
     img.chart_bar_boxes = []
-    lines = board_scenes._caption_lines(spoken)
-    y = safe_area.SUBTITLE_TOP + 18
-    for line in lines:
-        scene_frames._text(
-            img=img, x=540, y=y, text=line, fill=(250, 250, 250), size=36,
-            anchor="mt", band=False, role="caption",
-        )
-        y += 70
+    if when is None:
+        lines = board_scenes._caption_lines(spoken)
+        y = safe_area.SUBTITLE_TOP + 18
+        for line in lines:
+            scene_frames._text(
+                img=img, x=540, y=y, text=line, fill=(250, 250, 250), size=36,
+                anchor="mt", band=False, role="caption",
+            )
+            y += 70
+    else:
+        import motion_lib
+        question = _hook_question(topic, beat, spoken)
+        title = img.motion_state.get("title") or {}
+        if question:
+            # The hook question eases in by 300 ms. The lesson line stays off this beat.
+            if float(title.get("progress") or 0) > 0:
+                title["text"] = question
+                title["shown"] = float(title.get("progress") or 0) >= 1.0
+                img.motion_state["title"] = title
+                motion_lib.paint_caption(
+                    img, question, safe_area.SUBTITLE_TOP + 8, motion_lib.CAPTION_SIZE,
+                )
+        else:
+            lines = board_scenes._caption_lines(spoken, size=motion_lib.CAPTION_SIZE)
+            y = safe_area.SUBTITLE_TOP + 8
+            for line in lines:
+                motion_lib.paint_caption(img, line, y, motion_lib.CAPTION_SIZE)
+                y += motion_lib.CAPTION_SIZE + 8
     scene_frames._brand(img)
     caps = [
         layer["box"] for layer in (img.text_layers or [])
