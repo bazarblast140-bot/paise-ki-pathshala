@@ -209,6 +209,178 @@ PATTERNS = {
 }
 
 
+PLAN_BEATS = (
+    "hook", "pehchan", "context", "entry", "sl", "target", "invalidation", "cta",
+)
+_PLAN_MARKS = {
+    "context": "TREND + SUPPORT",
+    "entry": "ENTRY",
+    "sl": "SL",
+    "target": "TARGET",
+    "invalidation": "SKIP",
+    "cta": "COMMENT",
+}
+_SHOWN = {
+    "context": ("trend", "support"),
+    "entry": ("trend", "support", "entry"),
+    "sl": ("trend", "support", "entry", "sl"),
+    "target": ("trend", "support", "entry", "sl", "target"),
+    "invalidation": ("trend", "support", "entry", "sl", "target"),
+    "cta": ("trend", "support", "entry", "sl", "target"),
+}
+
+
+def _fill_marks():
+    """Every pattern has a label for the eight trade-plan beats."""
+    for spec in PATTERNS.values():
+        marks = spec.setdefault("marks", {})
+        for beat, label in _PLAN_MARKS.items():
+            marks.setdefault(beat, label)
+
+
+_fill_marks()
+
+EXTRA_MARKS = {
+    "piercing": {
+        "hook": "PIERCING",
+        "pehchan": "GREEN THROUGH MID",
+        **_PLAN_MARKS,
+    },
+    "risk_daily_loss_limit": {
+        "hook": "DAILY LIMIT",
+        "pehchan": "CAPITAL LIMIT",
+        **_PLAN_MARKS,
+    },
+}
+
+
+def mark_for(spec, beat):
+    """A label that always exists. A new beat never raises KeyError."""
+    label = str((spec or {}).get("marks", {}).get(beat) or "").strip()
+    if label:
+        return label
+    return _PLAN_MARKS.get(beat) or "PLAN"
+
+
+def marks_for(key):
+    spec = PATTERNS.get(str(key or ""))
+    if spec is not None:
+        return dict(spec.get("marks") or {})
+    return dict(EXTRA_MARKS.get(str(key or "")) or {})
+
+
+def _price_text(value):
+    number = float(value)
+    if abs(number - round(number)) < 1e-6:
+        return str(int(round(number)))
+    return f"{number:.2f}".rstrip("0").rstrip(".")
+
+
+def _levels(spec):
+    """Entry, stop, target, and support from this spec's own prices."""
+    ohlc = list((spec or {}).get("ohlc") or ())
+    if not ohlc:
+        points = list((spec or {}).get("points") or (spec or {}).get("top") or ())
+        if len(points) < 2:
+            return None
+        ohlc = [(float(value), float(value), float(value), float(value)) for value in points]
+    support = min(candle[2] for candle in ohlc)
+    resist = max(candle[1] for candle in ohlc)
+    short = ohlc[-1][3] < ohlc[0][3]
+    if short:
+        entry, sl = support, resist
+        risk = max(sl - entry, 1.0)
+        target = entry - 2 * risk
+        sr, name = resist, "RESIST"
+    else:
+        entry, sl = resist, support
+        risk = max(entry - sl, 1.0)
+        target = entry + 2 * risk
+        sr, name = support, "SUPPORT"
+    return {
+        "support": sr,
+        "sr_name": name,
+        "entry": entry,
+        "sl": sl,
+        "target": target,
+        "start": (0, ohlc[0][3]),
+        "end": (max(0, len(ohlc) - 2), ohlc[max(0, len(ohlc) - 2)][3]),
+    }
+
+
+def _include_plan(spec, beat, lo, hi):
+    levels = _levels(spec) if beat in _SHOWN else None
+    if not levels:
+        return lo, hi, None
+    values = (levels["support"], levels["entry"], levels["sl"], levels["target"])
+    return min(lo, *values), max(hi, *values), levels
+
+
+def _paint_levels(img, ax, levels, beat):
+    import board_kit as K
+    shown = _SHOWN.get(beat) or ()
+    box = K.BOARD
+    if "trend" in shown:
+        start, end = levels["start"], levels["end"]
+        K.arrow(img, (ax.x(start[0]), ax.y(start[1])), (ax.x(end[0]), ax.y(end[1])), K.YELLOW, 8, 26)
+    if "support" in shown:
+        K.dashed(
+            img, box[0] + 24, box[2] - 24, ax.y(levels["support"]),
+            K.BLUE, f"{levels['sr_name']} {_price_text(levels['support'])}",
+            size=24, label_side="left",
+        )
+    if "entry" in shown:
+        K.dashed(
+            img, box[0] + 24, box[2] - 24, ax.y(levels["entry"]),
+            K.YELLOW, f"ENTRY {_price_text(levels['entry'])}", size=24, label_side="right",
+        )
+    if "sl" in shown:
+        K.dashed(
+            img, box[0] + 24, box[2] - 24, ax.y(levels["sl"]),
+            K.RED, f"SL {_price_text(levels['sl'])}", size=24, label_side="left",
+        )
+    if "target" in shown:
+        K.dashed(
+            img, box[0] + 24, box[2] - 24, ax.y(levels["target"]),
+            K.GREEN, f"TARGET {_price_text(levels['target'])}", size=24, label_side="right",
+        )
+
+
+def gate_problems(scripts=None, marks=None):
+    """Missing beats or chart marks across approved/*.json. Empty when the bank can render."""
+    import trade_plan
+    if scripts is None:
+        import approved_bank
+        scripts = approved_bank.all_scripts()
+    problems = []
+    for script in scripts or []:
+        key = str((script or {}).get("key") or "")
+        beats = (script or {}).get("beats") or {}
+        missing = [beat for beat in trade_plan.BEATS if not str(beats.get(beat) or "").strip()]
+        if missing:
+            problems.append(f"{key} missing beats: {', '.join(missing)}")
+        if isinstance(marks, dict) and key in marks:
+            chart = marks[key] or {}
+        else:
+            chart = marks_for(key)
+        if not chart:
+            problems.append(f"{key} missing chart marks")
+            continue
+        absent = [beat for beat in trade_plan.BEATS if not str(chart.get(beat) or "").strip()]
+        if absent:
+            problems.append(f"{key} missing chart marks: {', '.join(absent)}")
+    return problems
+
+
+def reject_chart_gate():
+    """Stop before any frame. A missing beat or mark is a message, not a traceback."""
+    problems = gate_problems()
+    if not problems:
+        return
+    print("[GATE] " + "; ".join(problems), flush=True)
+    raise SystemExit(1)
+
+
 def prices_of(spec):
     """Every price this chart draws, as the digit string the script must use."""
     found = set()
@@ -237,7 +409,7 @@ def prices_of(spec):
 
 
 def make_scene(key):
-    """Four beats. Each beat draws the same pattern and marks a different part."""
+    """Eight beats. Each beat draws the same pattern and marks a different part."""
     spec = PATTERNS[key]
 
     def beat(name, img):
@@ -269,7 +441,7 @@ def _paint(img, spec, beat, annotate):
     else:
         _candles(img, spec, beat, annotate)
     if annotate:
-        K.label(img, box[0] + 48, box[1] + 64, spec["marks"][beat], K.INK, 32)
+        K.label(img, box[0] + 48, box[1] + 64, mark_for(spec, beat), K.INK, 32)
 
 
 def _candles(img, spec, beat, annotate):
@@ -281,6 +453,7 @@ def _candles(img, spec, beat, annotate):
     for price, _label in spec.get("lines") or ():
         lo = min(lo, float(price))
         hi = max(hi, float(price))
+    lo, hi, levels = _include_plan(spec, beat, lo, hi)
     ax = K.candles(
         img, box, ohlc, lo, hi, grid=False, width_frac=0.5, pad=(70, 100, 70, 80),
     )
@@ -297,6 +470,8 @@ def _candles(img, spec, beat, annotate):
             img, box[0] + 24, box[2] - 24, ax.y(float(price)),
             K.YELLOW, text, size=26, label_side="left",
         )
+    if levels:
+        _paint_levels(img, ax, levels, beat)
 
 
 def _line(img, spec, beat, annotate):
@@ -307,6 +482,7 @@ def _line(img, spec, beat, annotate):
     for price, _label in spec.get("lines") or ():
         lo = min(lo, float(price))
         hi = max(hi, float(price))
+    lo, hi, levels = _include_plan(spec, beat, lo, hi)
     ax = K.Axes(box, len(pts), lo, hi, pad=(70, 100, 70, 90))
     xy = [(ax.x(i), ax.y(value)) for i, value in enumerate(pts)]
     K.polyline(img, xy, K.YELLOW, 8)
@@ -319,22 +495,36 @@ def _line(img, spec, beat, annotate):
             img, box[0] + 24, box[2] - 24, ax.y(float(price)),
             K.YELLOW, text, size=26, label_side="left",
         )
-    del beat
+    if levels:
+        _paint_levels(img, ax, levels, beat)
 
 
 def _double(img, spec, beat, annotate):
     import board_kit as K
     box = K.BOARD
     mid = (box[1] + box[3]) / 2
-    _one_line(img, (box[0], box[1], box[2], mid - 8), spec["top"], annotate and beat in ("hook", "pehchan"))
+    levels = _levels({"points": spec["top"]}) if beat in _SHOWN else None
+    lo = hi = None
+    if levels:
+        values = (levels["support"], levels["entry"], levels["sl"], levels["target"])
+        lo = min(min(spec["top"]), *values)
+        hi = max(max(spec["top"]), *values)
+    top = _one_line(
+        img, (box[0], box[1], box[2], mid - 8), spec["top"],
+        annotate and (beat in ("hook", "pehchan") or beat in _SHOWN),
+        lo=lo, hi=hi,
+    )
     _one_line(img, (box[0], mid + 8, box[2], box[3]), spec["bottom"], annotate and beat in ("matlab", "karein"))
-    del beat
+    if top is not None and levels:
+        _paint_levels(img, top, levels, beat)
 
 
-def _one_line(img, box, pts, annotate):
+def _one_line(img, box, pts, annotate, lo=None, hi=None):
     import board_kit as K
     pts = list(pts)
-    ax = K.Axes(box, len(pts), min(pts), max(pts), pad=(36, 36, 36, 36))
+    lo = min(pts) if lo is None else lo
+    hi = max(pts) if hi is None else hi
+    ax = K.Axes(box, len(pts), lo, hi, pad=(36, 36, 36, 36))
     K.polyline(img, [(ax.x(i), ax.y(value)) for i, value in enumerate(pts)], K.YELLOW, 8)
     for i, value in enumerate(pts):
         K.ring(img, ax.x(i), ax.y(value), 12, 12, K.GREEN)
@@ -343,6 +533,7 @@ def _one_line(img, box, pts, annotate):
             img, box[0] + 16, box[2] - 16, ax.y(pts[1]),
             K.YELLOW, str(int(pts[1])), size=24, label_side="left",
         )
+    return ax
 
 
 def _rsi(img, spec, beat, annotate):
@@ -350,8 +541,11 @@ def _rsi(img, spec, beat, annotate):
     box = K.BOARD
     mid = box[1] + (box[3] - box[1]) * 0.58
     ohlc = list(spec["ohlc"])
+    lo = min(candle[2] for candle in ohlc)
+    hi = max(candle[1] for candle in ohlc)
+    lo, hi, levels = _include_plan(spec, beat, lo, hi)
     ax = K.candles(
-        img, (box[0], box[1], box[2], mid - 8), ohlc,
+        img, (box[0], box[1], box[2], mid - 8), ohlc, lo, hi,
         grid=False, width_frac=0.46, pad=(40, 70, 40, 36),
     )
     series = list(spec["rsi"])
@@ -361,4 +555,5 @@ def _rsi(img, spec, beat, annotate):
         K.dashed(img, box[0] + 20, box[2] - 20, rx.y(70), K.RED, "70", size=24, label_side="left")
         K.dashed(img, box[0] + 20, box[2] - 20, rx.y(30), K.GREEN, "30", size=24, label_side="left")
         K.ring(img, ax.x(1), ax.y(ohlc[1][3]), 28, 28, K.YELLOW)
-    del beat
+        if levels:
+            _paint_levels(img, ax, levels, beat)

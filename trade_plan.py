@@ -465,6 +465,9 @@ def plan_for(key):
 def is_plan_topic(topic):
     if not isinstance(topic, dict):
         return False
+    # The 16:00 data Short keeps its own chart and its own four-beat gate.
+    if str(topic.get("key") or "") == "aaj_ka_nifty":
+        return False
     if str(topic.get("_live_beats") or "") == "plan":
         return True
     return bool(topic.get("_approved_bank")) and has_plan(topic.get("key"))

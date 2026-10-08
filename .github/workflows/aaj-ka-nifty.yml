@@ -3,7 +3,8 @@ name: Aaj ka Nifty
 # One data Short a day, aimed at the 16:00 IST slot. Cash close is 15:30 IST,
 # so the build starts at 15:51 IST on weekdays. Weekends are not scheduled.
 # NSE holidays skip inside nifty_day.py with a ledger row and no video.
-# Slot watch (16:49 IST) is the fallback when this cron does not fire.
+# Slot watch dispatches this workflow after 16:20 IST when this cron does not fire.
+# The 16:49 IST watch is the later check of the same 16:00 slot.
 on:
   schedule:
     - cron: "21 10 * * 1-5"   # 15:51 IST, Mon-Fri

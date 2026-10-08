@@ -181,6 +181,51 @@ class ChartTests(unittest.TestCase):
             self.assertGreaterEqual(float(chart_rows.any(axis=1).mean()), 0.90)
             self.assertEqual(scene_frames.frames_safe_area_notes([still]), [])
 
+    def test_data_short_boards_keep_the_ohlc_and_skip_the_plan_gate(self):
+        import board_kit
+        import board_short
+        import numpy as np
+        import scene_frames
+        import short_layout
+        import trade_plan
+        now = datetime(2026, 10, 8, 15, 50, tzinfo=IST)
+        session, reason = nifty_day.session_from_bars(_week(now), now, reply="1")
+        self.assertEqual(reason, "")
+        topic = {
+            "key": "aaj_ka_nifty",
+            "cat": "NIFTY",
+            "_nifty": session,
+            "_live_short": True,
+            "_live_beats": "plan",
+            "_approved_bank": True,
+            "_spoken_beats": session["narration"]["beats"],
+        }
+        self.assertFalse(trade_plan.is_plan_topic(topic))
+        self.assertEqual(board_short._lesson(topic)[0], board_short.BEATS)
+        x0, y0, x1, y1 = board_kit.BOARD
+        for beat in board_short.BEATS:
+            pics = board_short.beat_images(topic, beat)
+            frames = scene_frames.frames_for(topic, beat, 1, {"mode": "schematic"})[0]
+            for image in (*pics, *frames):
+                gray = np.asarray(image.convert("RGB").crop((x0, y0, x1, y1)), dtype=np.uint8).mean(axis=2)
+                self.assertGreaterEqual(float((gray > 42).mean()), 0.010, beat)
+                self.assertGreaterEqual(float(gray.std()), 5.0, beat)
+            rgb = np.asarray(pics[1].convert("RGB").crop((x0, y0, x1, y1)), dtype=np.int16)
+            red = np.abs(rgb - np.array(board_kit.RED, dtype=np.int16)).sum(axis=2) <= 12
+            green = np.abs(rgb - np.array(board_kit.GREEN, dtype=np.int16)).sum(axis=2) <= 12
+            self.assertGreater(int(red.sum() + green.sum()), 40, beat)
+        times = {
+            beat: (index * 10.0, index * 10.0 + 10.0)
+            for index, beat in enumerate(("hook", "pehchan", "matlab", "karein", "entry", "cta"))
+        }
+        events = short_layout.overlay_plan(topic, times, session["narration"]["hook_line"])
+        self.assertNotIn("entry", {event.get("beat") for event in events})
+        import pattern_charts
+        with mock.patch.object(pattern_charts, "gate_problems", return_value=["pat_hammer missing beats: context"]):
+            board_short._reject_topic_chart_gate(topic)
+            with self.assertRaises(SystemExit):
+                board_short._reject_topic_chart_gate({"key": "pat_hammer"})
+
 
 class ScheduleTests(unittest.TestCase):
     def test_topic_picker_skips_the_data_short_and_the_16_slot(self):
@@ -217,8 +262,15 @@ class ScheduleTests(unittest.TestCase):
                 dt.strptime = datetime.strptime
                 slot_watch.main()
             flags = gout.read_text(encoding="utf-8")
-        self.assertIn("nifty_fill=true", flags)
+        # 16:49 is after 16:20, so the dropped cron is caught by dispatching
+        # aaj-ka-nifty.yml. The direct nifty-fill job stays off.
+        self.assertIn("nifty_dispatch=true", flags)
+        self.assertIn("nifty_fill=false", flags)
         watch = (ROOT / ".github" / "workflows" / "slot-watch.yml").read_text(encoding="utf-8")
+        self.assertIn('"51 10 * * 1-5"', watch)
+        self.assertIn("gh workflow run aaj-ka-nifty.yml", watch)
+        self.assertEqual(watch.count("group: paise-ki-pathshala-publish"), 2)
+        self.assertIn("needs.check.outputs.nifty_dispatch == 'true'", watch)
         nifty = watch.split("nifty-fill:", 1)[1]
         self.assertIn("data_short: true", nifty)
         self.assertIn("uses: ./.github/workflows/paise-ki-pathshala.yml", nifty)
@@ -258,3 +310,49 @@ class ScheduleTests(unittest.TestCase):
         self.assertEqual(rows[0]["slot"], "16:00")
         self.assertIsNone(rows[0]["video_id"])
         self.assertIn("NSE holiday", rows[0]["slot_skipped"])
+
+    def _watch(self, now, entries, env=None):
+        import slot_watch
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "published.json"
+            ledger.write_text(json.dumps(entries), encoding="utf-8")
+            gout = Path(tmp) / "out.txt"
+            full = {"SLOT_CHECK": "16:00", "GITHUB_OUTPUT": str(gout)}
+            full.update(env or {})
+            with mock.patch.object(slot_watch, "LEDGER", ledger), \
+                 mock.patch.object(slot_guard, "LEDGER", ledger), \
+                 mock.patch.dict("os.environ", full), \
+                 mock.patch.object(slot_watch, "send"), \
+                 mock.patch.object(slot_watch, "datetime") as dt:
+                dt.now.return_value = now
+                dt.strptime = datetime.strptime
+                slot_watch.main()
+            return gout.read_text(encoding="utf-8")
+
+    def test_nifty_catchup_waits_until_after_1620(self):
+        early = self._watch(datetime(2026, 10, 8, 16, 10, tzinfo=IST), [])
+        self.assertIn("nifty_dispatch=false", early)
+        self.assertIn("nifty_fill=true", early)
+        late = self._watch(datetime(2026, 10, 8, 16, 21, tzinfo=IST), [])
+        self.assertIn("nifty_dispatch=true", late)
+        self.assertIn("nifty_fill=false", late)
+
+    def test_nifty_catchup_skips_an_upload_or_a_run_in_progress(self):
+        uploaded = self._watch(datetime(2026, 10, 8, 16, 30, tzinfo=IST), [
+            {"date_ist": "2026-10-08", "slot": "16:00", "video_id": "abc123", "format": "short"},
+        ])
+        self.assertIn("nifty_dispatch=false", uploaded)
+        self.assertIn("nifty_fill=false", uploaded)
+        busy = self._watch(
+            datetime(2026, 10, 8, 16, 30, tzinfo=IST), [],
+            env={"NIFTY_RUN_IN_PROGRESS": "1"},
+        )
+        self.assertIn("nifty_dispatch=false", busy)
+        self.assertIn("nifty_fill=false", busy)
+
+    def test_nifty_catchup_skips_a_weekend_and_a_holiday(self):
+        weekend = self._watch(datetime(2026, 10, 10, 16, 30, tzinfo=IST), [])
+        self.assertIn("nifty_dispatch=false", weekend)
+        holiday = self._watch(datetime(2026, 10, 2, 16, 30, tzinfo=IST), [])
+        self.assertIn("nifty_dispatch=false", holiday)
+        self.assertIn("nifty_fill=false", holiday)

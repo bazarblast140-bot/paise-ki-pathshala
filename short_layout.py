@@ -23,7 +23,11 @@ def _lines(topic, beat):
 def overlay_plan(topic, beat_times, hook_line, cta=None):
     """List of {role, beat, text, start, end}. Times are seconds."""
     cta = cta or engagement_question(topic)
-    if beat_times and "entry" in beat_times and "cta" in beat_times:
+    # Aaj ka Nifty is four data beats. entry/cta on the clock must not
+    # switch it onto the topic trade-plan overlay.
+    if str((topic or {}).get("key") or "") != "aaj_ka_nifty" and (
+        beat_times and "entry" in beat_times and "cta" in beat_times
+    ):
         return _plan_overlay(topic, beat_times, hook_line, cta)
     events = []
     beats = [b for b in ORDER if b in (beat_times or {})] or list(BEATS)

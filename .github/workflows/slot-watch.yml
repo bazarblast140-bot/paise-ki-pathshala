@@ -8,6 +8,7 @@ name: Slot watch
 on:
   schedule:
     - cron: "19 3 * * *"     # 08:49 IST -> 08:30 slot (03:19 UTC, outside the midnight crush)
+    - cron: "51 10 * * 1-5"  # 16:21 IST -> 16:00 slot, weekdays, if the 15:51 Nifty cron dropped
     - cron: "19 11 * * *"    # 16:49 IST -> 16:00 slot
     - cron: "19 16 * * *"    # 21:49 IST -> 21:00 slot
   workflow_dispatch:
@@ -46,6 +47,7 @@ jobs:
       buffer_date: ${{ steps.check.outputs.buffer_date }}
       buffer_slot: ${{ steps.check.outputs.buffer_slot }}
       nifty_fill: ${{ steps.check.outputs.nifty_fill }}
+      nifty_dispatch: ${{ steps.check.outputs.nifty_dispatch }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -62,6 +64,7 @@ jobs:
           if [ -z "$SLOT_CHECK" ]; then
             case "${{ github.event.schedule }}" in
               "19 3 * * *")  SLOT_CHECK="08:30" ;;
+              "51 10 * * 1-5") SLOT_CHECK="16:00" ;;
               "19 11 * * *") SLOT_CHECK="16:00" ;;
               "19 16 * * *") SLOT_CHECK="21:00" ;;
             esac
@@ -177,10 +180,12 @@ jobs:
       privacy: public
     secrets: inherit
 
-  # Dropped 15:51 IST cron: the missed 16:00 slot is still today's Nifty bar.
+  # Dropped 15:51 IST cron, before 16:20: the missed 16:00 slot is still today's Nifty bar.
+  # After 16:20 the catch-up job dispatches aaj-ka-nifty.yml instead, so this
+  # job stays off and the two paths cannot both publish.
   nifty-fill:
     needs: check
-    if: needs.check.outputs.nifty_fill == 'true' && (github.event_name == 'schedule' || inputs.fill == true)
+    if: needs.check.outputs.nifty_fill == 'true' && needs.check.outputs.nifty_dispatch != 'true' && (github.event_name == 'schedule' || inputs.fill == true)
     uses: ./.github/workflows/paise-ki-pathshala.yml
     with:
       format: short
@@ -188,3 +193,20 @@ jobs:
       data_short: true
       topic_key: aaj_ka_nifty
     secrets: inherit
+
+  # 15:51 IST cron dropped. After 16:20 IST on a trading day, start Aaj ka
+  # Nifty once. The check job already skipped this when today's Short is
+  # uploaded or a run is in progress. No second publish concurrency group:
+  # aaj-ka-nifty.yml takes the publish group itself.
+  nifty-catchup:
+    needs: check
+    if: needs.check.outputs.nifty_dispatch == 'true' && (github.event_name == 'schedule' || inputs.fill == true)
+    permissions:
+      actions: write
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Aaj ka Nifty
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run aaj-ka-nifty.yml --ref "${GITHUB_REF_NAME:-main}"

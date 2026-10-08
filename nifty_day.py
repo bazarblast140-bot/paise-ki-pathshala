@@ -62,6 +62,73 @@ def is_trading_day(day):
     return not is_weekend(day) and not is_nse_holiday(day)
 
 
+# Slot watch looks here once the 15:51 IST cron has had time to upload.
+CATCHUP_AT = (16, 20)
+_BUSY_STATUSES = {"queued", "in_progress", "waiting", "requested", "pending"}
+
+
+def catchup_due(now, entries, busy=False):
+    """True when today's 16:00 Nifty Short is still missing after 16:20 IST.
+
+    A ledger row with a video id is already uploaded. A row with no video id
+    is a skip or a recorded failure, and a second dispatch would post again.
+    """
+    if busy:
+        return False
+    now = now.astimezone(IST)
+    if (now.hour, now.minute) < CATCHUP_AT:
+        return False
+    if not is_trading_day(now.date()):
+        return False
+    import slot_guard
+    hit = slot_guard.find_entry(entries or [], now.strftime("%Y-%m-%d"), SLOT)
+    if not hit:
+        return True
+    return False
+
+
+def workflow_busy():
+    """True when Aaj ka Nifty is already queued or running.
+
+    NIFTY_RUN_IN_PROGRESS forces the answer so a test never calls GitHub.
+    Outside GitHub Actions there is nothing to dispatch, so this is not busy.
+    A failed status check is treated as busy so a dropped response cannot
+    start a second upload.
+    """
+    flag = os.environ.get("NIFTY_RUN_IN_PROGRESS", "").strip().lower()
+    if flag in ("1", "true", "yes"):
+        return True
+    if flag in ("0", "false", "no"):
+        return False
+    if os.environ.get("GITHUB_ACTIONS", "").strip().lower() not in ("true", "1"):
+        return False
+    repo = os.environ.get("GITHUB_REPOSITORY", "").strip()
+    token = os.environ.get("GITHUB_TOKEN", "").strip() or os.environ.get("GH_TOKEN", "").strip()
+    if not repo or not token:
+        print("[nifty] catch-up skipped: GitHub token missing; treating the workflow as busy")
+        return True
+    url = (
+        f"https://api.github.com/repos/{repo}/actions/workflows/"
+        "aaj-ka-nifty.yml/runs?per_page=20"
+    )
+    try:
+        import urllib.request
+        req = urllib.request.Request(url, headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "paise-ki-pathshala",
+        })
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001 — unknown status must not double-dispatch
+        print(f"[nifty] catch-up skipped: workflow status unknown ({type(exc).__name__})")
+        return True
+    for run in payload.get("workflow_runs") or []:
+        if str(run.get("status") or "").lower() in _BUSY_STATUSES:
+            return True
+    return False
+
+
 def _as_ist(stamp):
     if isinstance(stamp, datetime):
         if stamp.tzinfo is None:
@@ -514,6 +581,31 @@ def emit_slot_env(now=None, bars=None, entries=None):
     print("publish_at=")
     print("taken=true")
     return decision
+
+
+def ensure_session(topic):
+    """Put the verified OHLC on the topic before any board is drawn.
+
+    Narration loads this later. The visual check runs first, and without
+    these bars the data Short was a blank background.
+    """
+    if not isinstance(topic, dict):
+        return {}
+    current = topic.get("_nifty")
+    if isinstance(current, dict) and current.get("bars"):
+        return current
+    from common import RUN
+    path = RUN / "nifty_session.json"
+    if not path.is_file():
+        return current if isinstance(current, dict) else {}
+    try:
+        session = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return current if isinstance(current, dict) else {}
+    if isinstance(session, dict) and session.get("bars"):
+        topic["_nifty"] = session
+        return session
+    return current if isinstance(current, dict) else {}
 
 
 def paint_frame(topic, beat, index=0, n=1, spoken=""):

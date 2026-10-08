@@ -115,6 +115,12 @@ def _scene_images(topic, beat):
 
 def beat_images(topic, beat):
     """Scene art, then a real-data stamp or a non-numeric card. Never a fake price line."""
+    if str((topic or {}).get("key") or "") == "aaj_ka_nifty":
+        import nifty_day
+        nifty_day.ensure_session(topic)
+        spoken = str(((topic or {}).get("_spoken_beats") or {}).get(beat) or "")
+        frame = nifty_day.paint_frame(topic, beat, 0, 1, spoken)
+        return (frame, frame.copy())
     spec = topic.get("_chart_spec") or market_data.spec_for_topic(topic)
     if spec.get("atr"):
         frames, _flags = scene_frames.frames_for(topic, beat, 3, spec)
@@ -4406,6 +4412,14 @@ def write_compat(topic, n, spoken, beat_times):
 
 
 # ---------------------------------------------------------------- visual QA gate
+def _reject_topic_chart_gate(topic):
+    """Approved topic videos must have eight beats. The Nifty data Short does not."""
+    if str((topic or {}).get("key") or "") == "aaj_ka_nifty":
+        return
+    import pattern_charts
+    pattern_charts.reject_chart_gate()
+
+
 def visual_gate(beat_pngs):
     """Reject blank/placeholder boards before TTS or publishing.
     The board must contain a meaningful amount of visible graphic content;
@@ -5109,6 +5123,7 @@ def main():
             lesson = _lesson(topic)[0]
         else:
             lesson = BEATS
+        _reject_topic_chart_gate(topic)
         beat_pngs = {}
         for b in lesson:
             pics = beat_images(topic, b)

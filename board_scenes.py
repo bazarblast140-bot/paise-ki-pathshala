@@ -613,6 +613,8 @@ def candle_scene(key):
         return [(p, p + 2.0, p - 2.0, p + 0.1)]
 
     def beat(b, img):
+        if b not in ("hook", "pehchan", "matlab", "karein") and not levels:
+            return _plan_card(img, b)
         if levels:
             return leveled_candle_pair(levels, b)
         if b == "hook":
@@ -976,6 +978,39 @@ def _draw_finance_visual(img, kind, key, beat):
     label(img, X0 + 85, Y0 + 280, "NO PRICE DATA ON THIS CARD", YELLOW, 32)
 
 
+def _plan_card(img, beat):
+    """Trend, support, and the entry / stop / target lines for a plan beat.
+
+    Unknown beats used to fall through a four-name dict and raise KeyError.
+    """
+    panel(img)
+    label(img, (X0 + X1) / 2, Y0 + 70, "TRADE PLAN", YELLOW, 44, anchor="ma")
+    ohlc = ((100, 108, 96, 104), (104, 112, 100, 110), (110, 120, 108, 118))
+    ax = candles(
+        img, (X0 + 40, Y0 + 150, X1 - 40, Y1 - 40), ohlc,
+        80, 170, grid=False, width_frac=0.5, pad=(50, 80, 50, 70),
+    )
+    plain = img.copy()
+    arrow(img, (ax.x(0), ax.y(104)), (ax.x(1), ax.y(110)), YELLOW, 8, 22)
+    dashed(img, X0 + 70, X1 - 70, ax.y(100), BLUE, "SUPPORT 100", size=24, label_side="left")
+    if beat in ("entry", "sl", "target", "invalidation", "cta"):
+        dashed(img, X0 + 70, X1 - 70, ax.y(118), YELLOW, "ENTRY 118", size=24, label_side="right")
+    if beat in ("sl", "target", "invalidation", "cta"):
+        dashed(img, X0 + 70, X1 - 70, ax.y(96), RED, "SL 96", size=24, label_side="left")
+    if beat in ("target", "invalidation", "cta"):
+        dashed(img, X0 + 70, X1 - 70, ax.y(154), GREEN, "TARGET 154", size=24, label_side="right")
+    stage = {
+        "context": "TREND + SUPPORT",
+        "entry": "ENTRY",
+        "sl": "SL",
+        "target": "TARGET",
+        "invalidation": "SKIP",
+        "cta": "COMMENT",
+    }.get(beat, "PLAN")
+    label(img, X0 + 80, Y0 + 120, stage, INK, 32)
+    return plain, img
+
+
 def finance_card_scene(key):
     """Safe generic scene with a genuinely different visual composition per beat.
 
@@ -991,6 +1026,8 @@ def finance_card_scene(key):
     title = _ascii_title(key)
 
     def beat(b, img):
+        if b not in ("hook", "pehchan", "matlab", "karein"):
+            return _plan_card(img, b)
         panel(img)
         label(img, (X0 + X1) / 2, Y0 + 92, title, YELLOW, 54, anchor="ma")
         stage = {
@@ -998,7 +1035,7 @@ def finance_card_scene(key):
             "pehchan": "WHAT IT IS",
             "matlab": "HOW IT WORKS",
             "karein": "WHAT TO CHECK",
-        }[b]
+        }.get(b, "PLAN")
         label(img, (X0 + X1) / 2, Y0 + 170, stage, MUTED, 30, anchor="ma")
 
         from PIL import ImageDraw
@@ -1439,7 +1476,7 @@ def product_cards():
             boxes.append((y, y + 190))
             y += 215
         A = img.copy()
-        k = {"hook": None, "pehchan": 0, "matlab": 1, "karein": 2}[b]
+        k = {"hook": None, "pehchan": 0, "matlab": 1, "karein": 2}.get(b)
         if k is not None:
             y0, y1 = boxes[k]
             d = ImageDraw.Draw(img)
@@ -1472,7 +1509,7 @@ def t_plus_1():
     def beat(b, img):
         panel(img)
         timeline(img, (X0, Y0 + 120, X1, Y1 - 200), [("DAY T", "BUY"), ("T+1", "DEMAT ME")],
-                 active={"hook": None, "pehchan": [0], "matlab": [1], "karein": [0, 1]}[b])
+                 active={"hook": None, "pehchan": [0], "matlab": [1], "karein": [0, 1]}.get(b))
         A = img.copy()
         if b == "karein":
             label(img, X0 + 60, Y1 - 150, "SELL BEFORE T+1 = BTST RISK", YELLOW, 34)
@@ -1635,7 +1672,7 @@ def one_percent():
         lines = {"hook": [("1%", 120, YELLOW)],
                  "pehchan": [("CAPITAL 1,00,000", 44, INK), ("RISK 1% = 1,000", 52, YELLOW)],
                  "matlab": [("500 - 490 = 10 / SHARE", 50, INK)],
-                 "karein": [("1,000 / 10 = 100 SHARES", 56, GREEN)]}[b]
+                 "karein": [("1,000 / 10 = 100 SHARES", 56, GREEN)]}.get(b) or [("PLAN", 48, YELLOW)]
         big_text(img, (X0, Y1 - 240, X1, Y1), lines)
         return A, img
     return beat
@@ -1649,7 +1686,7 @@ def rr_breakeven():
         lines = {"hook": [("1 : 2", 110, YELLOW)],
                  "pehchan": [("RISK 1 : REWARD 2", 52, INK)],
                  "matlab": [("1 / (1 + 2) = 33%", 62, YELLOW)],
-                 "karein": [("33% SE ZYADA JEETO = PROFIT", 42, GREEN)]}[b]
+                 "karein": [("33% SE ZYADA JEETO = PROFIT", 42, GREEN)]}.get(b) or [("PLAN", 48, YELLOW)]
         big_text(img, (X0, Y1 - 200, X1, Y1), lines)
         return A, img
     return beat
@@ -1972,7 +2009,7 @@ def compare_lines(a_name, b_name, year):
         lines = {"hook": [(f"{a_name}  vs  {b_name}", 46, INK)],
                  "pehchan": [("GREEN vs RED", 50, INK)],
                  "matlab": [(f"Rs {ma:.1f} LAKH  vs  Rs {round(mb * 100000, -3):,.0f}", 44, YELLOW)],
-                 "karein": [("EK SHARE = BADA RISK", 50, RED)]}[b]
+                 "karein": [("EK SHARE = BADA RISK", 50, RED)]}.get(b) or [("PLAN", 48, YELLOW)]
         big_text(img, (X0, Y1 - 170, X1, Y1), lines)
         return A, img
     return beat
@@ -1986,7 +2023,7 @@ def circuit():
                   fmt="{:g}%", hi=24)
         A = img.copy()
         label(img, X0 + 60, Y0 + 30, "INDEX MOVE -> MARKET HALT", INK, 34)
-        k = {"hook": None, "pehchan": 0, "matlab": 1, "karein": 2}[b]
+        k = {"hook": None, "pehchan": 0, "matlab": 1, "karein": 2}.get(b)
         if k is not None:
             ring(img, ax.x(k), ax.y([10, 15, 20][k]) - 40, 90, 70)
         return A, img
@@ -1997,7 +2034,7 @@ def bse_timeline():
     def beat(b, img):
         panel(img)
         timeline(img, (X0, Y0 + 120, X1, Y1 - 160), [("1875", "BSE"), ("1986", "SENSEX"), ("1994", "NSE")],
-                 active={"hook": [0], "pehchan": [0], "matlab": [1], "karein": [2]}[b])
+                 active={"hook": [0], "pehchan": [0], "matlab": [1], "karein": [2]}.get(b))
         A = img.copy()
         if b == "hook":
             label(img, X0 + 60, Y1 - 130, "ASIA KA SABSE PURANA (1 OF)", YELLOW, 32)
@@ -2025,7 +2062,7 @@ def preopen():
     def beat(b, img):
         panel(img)
         timeline(img, (X0, Y0 + 120, X1, Y1 - 160), [("9:00", "ORDER"), ("9:08", "MATCH"), ("9:15", "OPEN")],
-                 active={"hook": None, "pehchan": [0], "matlab": [1], "karein": [2]}[b])
+                 active={"hook": None, "pehchan": [0], "matlab": [1], "karein": [2]}.get(b))
         A = img.copy()
         if b == "matlab":
             label(img, X0 + 60, Y1 - 130, "EQUILIBRIUM PRICE TAY HOTA", YELLOW, 32)
@@ -2060,7 +2097,7 @@ def depository():
         for y in (Y0 + 190, Y0 + 410):
             arrow(img, ((X0 + X1) / 2, y + 5), ((X0 + X1) / 2, y + 85), YELLOW, 8, 24)
         A = img.copy()
-        k = {"hook": 2, "pehchan": 2, "matlab": 1, "karein": 0}[b]
+        k = {"hook": 2, "pehchan": 2, "matlab": 1, "karein": 0}.get(b, 0)
         t, y = boxes[k]
         d = ImageDraw.Draw(img)
         d.rounded_rectangle([X0 + 142, y - 8, X1 - 142, y + 138], 28, outline=GREEN, width=8)
@@ -2111,6 +2148,17 @@ def intraday_ema_scene():
         return A, img
     return beat
 
+def _nifty_data_scene():
+    """The 16:00 data chart. A missing session still draws the grid, not a blank plate."""
+    def beat(name, img):
+        import nifty_day
+        painted = nifty_day.paint_frame({"key": "aaj_ka_nifty"}, name, 0, 1, "")
+        del img
+        return painted, painted.copy()
+
+    return beat
+
+
 # ================================================================ registry
 SCENES = {
     **{k: (lambda k=k: finance_card_scene(k)) for k in (
@@ -2147,7 +2195,7 @@ SCENES = {
     "titan_vs_yes_2015": lambda: compare_lines("TITAN", "YES BANK", 2015),
     "circuit": circuit, "bse_1875": bse_timeline, "nifty_base": nifty_base, "preopen": preopen,
     "muhurat": muhurat, "depository": depository,
-    "aaj_ka_nifty": lambda: (lambda _beat, img: (img, img)),
+    "aaj_ka_nifty": lambda: _nifty_data_scene(),
 }
 
 
@@ -3168,7 +3216,13 @@ def _paint_topic_cover(topic):
     draw = ImageDraw.Draw(img)
     draw.rounded_rectangle(box, 28, fill=K.PANEL, outline=(60, 80, 110), width=4)
     levels = candle_levels(topic, key)
-    if levels:
+    if key == "aaj_ka_nifty":
+        import nifty_day
+        nifty_day.ensure_session(topic)
+        shot = nifty_day.paint_frame(topic, "hook", 0, 1, "").crop(BOARD)
+        fitted = shot.resize((box[2] - box[0] - 24, box[3] - box[1] - 24), Image.Resampling.LANCZOS)
+        img.paste(fitted, (box[0] + 12, box[1] + 12))
+    elif levels:
         inner = (box[0] + 16, box[1] + 24, box[2] - 16, box[3] - 24)
         _level_view(img, inner, levels, "hook", 1.0, fill_bottom=True, topic=topic)
         _level_labels(img, levels, "hook", 1.0, "70")
@@ -3201,6 +3255,12 @@ def paint_chart_board(topic, beat, index=0, n=1):
     """One Chart Board frame. The spec is this scene's line, or the render fails."""
     import trade_plan
     key = str((topic or {}).get("key") or "").strip()
+    if key == "aaj_ka_nifty":
+        import nifty_day
+        import scene_frames
+        nifty_day.ensure_session(topic)
+        spoken = scene_frames._scene_card_text(topic, beat, index, n)
+        return nifty_day.paint_frame(topic, beat, index, n, spoken)
     if trade_plan.is_plan_topic(topic) and trade_plan.has_plan(key):
         import scene_frames
         spoken = scene_frames._scene_card_text(topic, beat, index, n)
