@@ -679,6 +679,14 @@ def live_number_faults(beats, topic, order, allowed=None):
     the sourced set only: no multiplier and no extra arithmetic.
     """
     card = set(allowed if allowed is not None else allowed_numbers(topic))
+    import trade_plan
+    if isinstance(topic, dict) and trade_plan.has_plan(topic.get("key")) and (
+        trade_plan.is_plan_topic(topic) or topic.get("_approved_bank")
+    ):
+        try:
+            card |= set(trade_plan.number_strings(trade_plan.plan_for(topic.get("key"))))
+        except KeyError:
+            pass
     sourced = set()
     if allowed is not None:
         sourced = set(allowed) - set(allowed_numbers(topic))

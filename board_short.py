@@ -4477,11 +4477,18 @@ def write_compat(topic, n, spoken, beat_times):
     save("spoken.txt", " ".join(spoken[x] for x in body_beats))
     shots = []
     hook_line = n.get("hook_line") or ""
+    import trade_plan
+    plan_shots = trade_plan.is_plan_topic(topic) and trade_plan.has_plan(topic.get("key"))
     for i, x in enumerate(body_beats, 1):
         t0, t1 = beat_times[x]
         head, sub = card_pair(topic, x)
         on_screen = hook_line if x == "hook" else head
-        shots.append({"shot_id": i, "start_sec": round(t0, 2), "end_sec": round(t1, 2), "visual_type": "chart",
+        if plan_shots:
+            import sync_gate
+            said = sync_gate.content_tokens(spoken.get(x) or "")
+            if said:
+                on_screen = max(said, key=len)
+        shots.append({"shot_id": i, "beat": x, "start_sec": round(t0, 2), "end_sec": round(t1, 2), "visual_type": "chart",
                       "on_screen_text": on_screen, "sub_text": sub,
                       "spoken_line": spoken[x],
                       "chart_data": {"template": topic["key"], "mode": spec.get("mode"),
@@ -5484,6 +5491,55 @@ def _reuse_proven_frames(old_scenes, beat_times, order):
     return fresh, paced
 
 
+_HARD_NOTE_MARKS = (
+    "numbers with no source",
+    "leaked",
+    "instruction",
+    "transcription failed",
+    "narration does not match",
+    "forbidden",
+    "placeholder left",
+    "spoken number is not",
+    "duration outside",
+    "safe area",
+    "outside the frame",
+)
+
+
+def _hard_pre_render_block(review):
+    """Numbers, leaks, sync, duration, and a crash stay HOLD. Craft does not.
+
+    Soft notes (vague matlab/karein, a still hook, trend, visual) are a review
+    flag. They must not stop Gemini on a plan topic.
+    """
+    if not isinstance(review, dict):
+        return True
+    if review.get("narration_fallback"):
+        return True
+    parts = review.get("parts") or {}
+    for name in ("accuracy", "sync"):
+        raw = parts.get(name)
+        if raw is None:
+            continue
+        try:
+            score = float(raw)
+        except (TypeError, ValueError):
+            return True
+        if score < self_review.PART_BAR:
+            return True
+    blob = " ".join(str(item) for item in (review.get("notes") or []))
+    blob = (blob + " " + str(review.get("summary") or "")).lower()
+    return any(mark in blob for mark in _HARD_NOTE_MARKS)
+
+
+def _continue_plan_review(review):
+    review["review_flag"] = True
+    review["verdict"] = "REVIEW"
+    review["public_ok"] = False
+    review["passed"] = False
+    return review
+
+
 def _pay_and_remux(topic, n, c, spec, source, proven):
     """The upload voice, then mux it and review the file that would upload.
 
@@ -5580,8 +5636,13 @@ def _pay_and_remux(topic, n, c, spec, source, proven):
     review_path = RUN / "self_review.json"
     review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
     if not review.get("public_ok"):
+        import trade_plan
         if review.get("review_flag") and approved_publish():
             print("[REVIEW] approved=true; " + str(review.get("summary") or ""), flush=True)
+        elif trade_plan.is_plan_topic(topic) and not _hard_pre_render_block(review):
+            _continue_plan_review(review)
+            review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
+            print("[REVIEW] " + str(review.get("summary") or ""), flush=True)
         else:
             kind = "REVIEW" if review.get("review_flag") else "HOLD"
             _spent_hold(
@@ -5632,6 +5693,12 @@ def prove_full_render(topic, n, c, spec, source="llm", beat_pngs=None, free="edg
         if review.get("public_ok"):
             return proven
         summary = str(review.get("summary") or "no passing self-review")
+        import trade_plan
+        if trade_plan.is_plan_topic(topic) and not _hard_pre_render_block(review):
+            _continue_plan_review(review)
+            review_path.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
+            print("[REVIEW] " + summary, flush=True)
+            return proven
         if review.get("review_flag"):
             if os.environ.get("DRY_RUN", "").strip() == "1":
                 print("[REVIEW] " + summary, flush=True)

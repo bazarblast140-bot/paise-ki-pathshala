@@ -13,10 +13,12 @@ bottom band.
 
 Taken from top Shorts (2.1M / 2.1M / 451K views).
 
-1. **Hook.** The finished red/green RR box is visible at 0 ms, and a big
-   Hindi question title is in by 300 ms. The open is never an empty chart.
-2. **Candle pacing.** Context candles arrive in fast bursts, about 150 ms
-   each. The 2–3 key candles slow to one candle per beat.
+1. **Hook.** The finished red/green RR box is visible from 0 to 2 s, then
+   fades out. A big Hindi question title is in by 300 ms. The open is never
+   an empty chart. Context candles keep building through about 5 s.
+2. **Candle pacing.** The first context candle is finished at t=0. The rest
+   are staggered across the hook, each drawing in about 150 ms, so the hook
+   does not sit still. The 2–3 key candles slow to one candle per beat.
 3. **Rhythm.** One new element every 2–3 s. Each element animates in over
    250–400 ms with ease-out cubic. After the hook the chart is one continuous
    canvas: no hard cut between beats, and overlays accumulate.
@@ -28,15 +30,16 @@ Taken from top Shorts (2.1M / 2.1M / 451K views).
    by a curved dashed arrow.
 6. **RR box.** A tall green reward box over a short red risk box,
    semi-transparent (alpha about 0.30), anchored at the key candle, with
-   `RR 1:x` text.
+   `RR 1:x` text. It is on screen for the first 2 s, fades out before
+   pehchan, and is drawn again on the target beat. It does not cover the
+   hammer through pehchan and context.
 7. **Key candle.** Other candles dim to 35% opacity. The key candle gets a
    yellow `#F5C518` outline and pushes in from 1.0× to 1.35× over 600 ms
    (ease-in-out), then eases back before the next beat.
 8. **Look.** Flat background `#161616`. Bull `#22B53C`, bear `#F01E32`.
-   Yellow is only for attention. Price and RR counters are bold, 64–80 px,
-   and count up over about 500 ms. Captions sit in the bottom 35% at 64–72 px,
-   with the keyword in yellow. The chart-top 60–65% layout stays. A soft
-   whoosh sits about −20 dB under the voice, at most 4 per video, and only on
+   Yellow is only for attention. Captions are one block, at most two shaped
+   lines, in the bottom band. The disclaimer is at least 36 px. The chart
+   fills the top 60–65%. A soft whoosh sits about −20 dB under the voice, at most 4 per video, and only on
    major reveals: the RR box, ENTRY, TARGET, and the key-candle zoom. The
    video ends on what kills the trade: price breaks the SL and the SL line
    flashes red.
@@ -53,9 +56,10 @@ t = trade_plan._scene_time(topic, "entry", 0, 0.4)
 state = motion_lib.draw_plan(img, plan, shown, t, clock)
 ```
 
-`clock["rr"]` ends at t=0, so the box is finished on the first frame.
-`clock["title"]` is `(0, 0.30)`. `state["counter"]["shown"]` equals
-`plan.target` once the target cue has finished. `state["rr"]` carries
+`clock["rr_hook"]` shows the finished box from 0 to 2 s, fades it, then
+redraws it when the target beat starts. `clock["title"]` is `(0, 0.30)`.
+`state["counter"]["shown"]` equals `plan.target` once the target cue has
+finished, and that counter is not painted on the chart. `state["rr"]` carries
 `plan.risk`, `plan.reward`, and `plan.rr_text`.
 
 `motion_geometry` uses one price scale for the whole video, so a new beat
@@ -64,8 +68,9 @@ encoder does not wipe between them.
 
 ## Candles
 
-Context candles finish their first body at t=0. Later context candles step
-every 150 ms. Each key candle waits for pehchan, context, or entry.
+The first context candle finishes at t=0. Later context candles are spread
+across the hook and each still draws in 150 ms. Each key candle waits for
+pehchan, context, or entry.
 
 ```python
 context, key = motion_lib.candle_roles(plan)

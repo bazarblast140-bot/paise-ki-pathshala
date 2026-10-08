@@ -12,6 +12,7 @@ BEATS = (
 )
 REQUIRED = ("context", "entry", "sl", "target", "invalidation")
 DISCLAIMER = "Sirf seekhne ke liye, financial advice nahi."
+DISCLAIMER_PX = 40
 # The topic the owner asked for is 40–50s. A take up to 55s is a review, not a block.
 VOICE_SECONDS = (40.0, 50.0)
 VOICE_REVIEW_MAX = 55.0
@@ -106,24 +107,57 @@ def _target_short(entry, sl, other=None):
     return entry - 2 * risk
 
 
+# The stop sits a small buffer past the candle extreme. SL = the low is not "below the low".
+STOP_BUFFER = 2.0
+
+
+def _buffered_stop(side, level, focus_extreme):
+    """Keep a stop that is already beyond the focus candle. Otherwise step past it."""
+    level = float(level)
+    extreme = float(focus_extreme)
+    if side == "long":
+        if level < extreme - 1e-9:
+            return level
+        return min(level, extreme) - STOP_BUFFER
+    if level > extreme + 1e-9:
+        return level
+    return max(level, extreme) + STOP_BUFFER
+
+
+def _priced(side, entry, sl, other=None):
+    """2× risk, unless `other` still pays at least 1.5 after the stop buffer."""
+    if side == "long":
+        target = _target_long(entry, sl, other)
+    else:
+        target = _target_short(entry, sl, other)
+    kept = other is not None and abs(float(target) - float(other)) < 1e-6
+    return target, kept
+
+
 def _hammer():
     ohlc = (
-        (132, 134, 122, 124),
-        (124, 126, 114, 116),
-        (116, 118, 108, 110),
+        (150, 152, 140, 142),
+        (142, 144, 132, 134),
+        (134, 136, 124, 126),
+        (126, 128, 116, 118),
+        (118, 120, 108, 110),
         (114, 118, 100, 116),
         (116, 124, 114, 122),
-        (122, 156, 120, 154),
+        (122, 136, 120, 134),
+        (134, 148, 132, 146),
+        (146, 162, 144, 158),
     )
-    o, h, l, c = ohlc[3]
+    focus = 5
+    o, h, l, c = ohlc[focus]
     body = abs(c - o)
     lower = min(o, c) - l
     upper = h - max(o, c)
     if body <= 0 or lower < body * 2 or upper > body:
         raise ValueError("hammer shape")
-    entry, sl = h, l
+    entry = h
+    sl = _buffered_stop("long", l, l)
     return Plan(
-        "pat_hammer", "long", ohlc, entry, sl, _target_long(entry, sl), sl, "SUPPORT", 3,
+        "pat_hammer", "long", ohlc, entry, sl, _target_long(entry, sl), l, "SUPPORT", focus,
         {"mult": 2, "body": body, "wick": lower, "high": h, "low": l},
     )
 
@@ -139,9 +173,10 @@ def _doji():
     o, h, l, c = ohlc[2]
     if o != c:
         raise ValueError("doji open and close")
-    entry, sl = h, l
+    entry = h
+    sl = _buffered_stop("long", l, l)
     return Plan(
-        "pat_doji", "long", ohlc, entry, sl, _target_long(entry, sl), sl, "SUPPORT", 2,
+        "pat_doji", "long", ohlc, entry, sl, _target_long(entry, sl), l, "SUPPORT", 2,
         {"open": o, "high": h, "low": l},
     )
 
@@ -160,9 +195,10 @@ def _engulf():
         raise ValueError("engulf colours")
     if max(green[0], green[3]) <= max(red[0], red[3]) or min(green[0], green[3]) >= min(red[0], red[3]):
         raise ValueError("engulf body")
-    entry, sl = green[1], green[2]
+    entry, level = green[1], green[2]
+    sl = _buffered_stop("long", level, level)
     return Plan(
-        "pat_bull_engulf", "long", ohlc, entry, sl, _target_long(entry, sl), sl, "SUPPORT", 3,
+        "pat_bull_engulf", "long", ohlc, entry, sl, _target_long(entry, sl), level, "SUPPORT", 3,
         {"red_open": red[0], "red_close": red[3], "green_open": green[0], "green_close": green[3]},
     )
 
@@ -179,9 +215,11 @@ def _morning():
     mid = (first[0] + first[3]) / 2
     if not (first[3] < first[0] and third[3] > mid and star[1] - star[2] < first[0] - first[3]):
         raise ValueError("morning star")
-    entry, sl = third[1], min(star[2], third[2])
+    entry = third[1]
+    level = min(star[2], third[2])
+    sl = _buffered_stop("long", level, third[2])
     return Plan(
-        "pat_morning_star", "long", ohlc, entry, sl, _target_long(entry, sl), sl, "SUPPORT", 2,
+        "pat_morning_star", "long", ohlc, entry, sl, _target_long(entry, sl), level, "SUPPORT", 2,
         {"mid": mid, "star_low": star[2]},
     )
 
@@ -200,9 +238,10 @@ def _crows():
     if closes != sorted(closes, reverse=True) or len(set(closes)) != 3:
         raise ValueError("black crows")
     entry = min(candle[2] for candle in crows)
-    sl = max(candle[1] for candle in crows)
+    level = max(candle[1] for candle in crows)
+    sl = _buffered_stop("short", level, ohlc[3][1])
     return Plan(
-        "pat_black_crows", "short", ohlc, entry, sl, _target_short(entry, sl), sl, "RESIST", 3,
+        "pat_black_crows", "short", ohlc, entry, sl, _target_short(entry, sl), level, "RESIST", 3,
         {"close_a": closes[0], "close_b": closes[1], "close_c": closes[2]},
     )
 
@@ -218,10 +257,11 @@ def _double():
     if ohlc[0][1] != ohlc[2][1]:
         raise ValueError("double top")
     entry = ohlc[1][2]
-    sl = ohlc[0][1]
+    top = ohlc[0][1]
+    sl = _buffered_stop("short", top, ohlc[2][1])
     return Plan(
-        "pat_double", "short", ohlc, entry, sl, _target_short(entry, sl), sl, "RESIST", 2,
-        {"top": sl, "neck": entry},
+        "pat_double", "short", ohlc, entry, sl, _target_short(entry, sl), top, "RESIST", 2,
+        {"top": top, "neck": entry},
     )
 
 
@@ -239,12 +279,16 @@ def _shoulders():
         raise ValueError("head and shoulders")
     neck = ohlc[1][2]
     entry = neck
-    sl = ohlc[4][1]
+    shoulder = ohlc[4][1]
     head = ohlc[2][1]
     height = head - neck
+    sl = _buffered_stop("short", shoulder, head)
+    target, kept = _priced("short", entry, sl, entry - height)
+    extras = {"head": head, "neck": neck, "shoulder": shoulder}
+    if kept:
+        extras["rule"] = "पैटर्न हाइट"
     return Plan(
-        "pat_head_shoulders", "short", ohlc, entry, sl, entry - height, head, "RESIST", 2,
-        {"head": head, "neck": neck, "shoulder": sl, "rule": "पैटर्न हाइट"},
+        "pat_head_shoulders", "short", ohlc, entry, sl, target, head, "RESIST", 2, extras,
     )
 
 
@@ -262,11 +306,15 @@ def _cup():
     rim = max(ohlc[0][1], ohlc[4][1])
     cup_low = min(candle[2] for candle in ohlc[:5])
     handle = ohlc[5][2]
-    entry, sl = rim, handle
+    entry = rim
+    sl = _buffered_stop("long", handle, ohlc[5][2])
     height = rim - cup_low
+    target, kept = _priced("long", entry, sl, entry + height)
+    extras = {"rim": rim, "cup": cup_low, "handle": handle}
+    if kept:
+        extras["rule"] = "कप की हाइट"
     return Plan(
-        "pat_cup_handle", "long", ohlc, entry, sl, entry + height, sl, "SUPPORT", 5,
-        {"rim": rim, "cup": cup_low, "handle": handle, "rule": "कप की हाइट"},
+        "pat_cup_handle", "long", ohlc, entry, sl, target, handle, "SUPPORT", 5, extras,
     )
 
 
@@ -283,11 +331,15 @@ def _triangle():
     lows = [candle[2] for candle in ohlc[:4]]
     if highs != sorted(highs, reverse=True) or lows != sorted(lows):
         raise ValueError("triangle")
-    entry, sl = ohlc[3][1], ohlc[3][2]
+    entry, level = ohlc[3][1], ohlc[3][2]
+    sl = _buffered_stop("long", level, level)
     height = ohlc[0][1] - ohlc[0][2]
+    target, kept = _priced("long", entry, sl, entry + height)
+    extras = {"high": ohlc[0][1], "low": ohlc[0][2]}
+    if kept:
+        extras["rule"] = "ट्रायंगल हाइट"
     return Plan(
-        "pat_triangle", "long", ohlc, entry, sl, entry + height, sl, "SUPPORT", 3,
-        {"high": ohlc[0][1], "low": ohlc[0][2], "rule": "ट्रायंगल हाइट"},
+        "pat_triangle", "long", ohlc, entry, sl, target, level, "SUPPORT", 3, extras,
     )
 
 
@@ -302,11 +354,15 @@ def _flag():
         (134, 162, 132, 160),
     )
     entry = max(ohlc[3][1], ohlc[4][1])
-    sl = min(ohlc[3][2], ohlc[4][2])
+    level = min(ohlc[3][2], ohlc[4][2])
+    sl = _buffered_stop("long", level, ohlc[4][2])
     pole = entry - ohlc[0][0]
+    target, kept = _priced("long", entry, sl, entry + pole)
+    extras = {"pole": pole, "flag": level}
+    if kept:
+        extras["rule"] = "पोल की हाइट"
     return Plan(
-        "pat_flag", "long", ohlc, entry, sl, entry + pole, sl, "SUPPORT", 4,
-        {"pole": pole, "flag": sl, "rule": "पोल की हाइट"},
+        "pat_flag", "long", ohlc, entry, sl, target, level, "SUPPORT", 4, extras,
     )
 
 
@@ -320,10 +376,11 @@ def _breakout():
         (113, 132, 112, 130),
     )
     entry = max(candle[1] for candle in ohlc[:3])
-    sl = min(candle[2] for candle in ohlc[:3])
+    level = min(candle[2] for candle in ohlc[:3])
+    sl = _buffered_stop("long", level, ohlc[3][2])
     return Plan(
-        "pat_breakout", "long", ohlc, entry, sl, _target_long(entry, sl), sl, "SUPPORT", 3,
-        {"range_high": entry, "range_low": sl},
+        "pat_breakout", "long", ohlc, entry, sl, _target_long(entry, sl), level, "SUPPORT", 3,
+        {"range_high": entry, "range_low": level},
     )
 
 
@@ -335,9 +392,10 @@ def _rsi():
         (116, 136, 114, 134),
     )
     series = (48, 28, 36, 52)
-    entry, sl = ohlc[1][1], ohlc[1][2]
+    entry, level = ohlc[1][1], ohlc[1][2]
+    sl = _buffered_stop("long", level, level)
     return Plan(
-        "pat_rsi", "long", ohlc, entry, sl, _target_long(entry, sl), sl, "SUPPORT", 1,
+        "pat_rsi", "long", ohlc, entry, sl, _target_long(entry, sl), level, "SUPPORT", 1,
         {"os": 30, "ob": 70, "rsi_low": min(series)}, rsi=series,
     )
 
@@ -353,10 +411,13 @@ def _support():
     support = ohlc[2][2]
     resist = ohlc[0][1]
     entry = ohlc[2][1]
-    sl = support
+    sl = _buffered_stop("long", support, support)
+    target, kept = _priced("long", entry, sl, resist)
+    extras = {"resist": resist}
+    if kept:
+        extras["rule"] = "पिछला रेसिस्टेंस"
     return Plan(
-        "pat_support", "long", ohlc, entry, sl, _target_long(entry, sl, resist), support, "SUPPORT", 2,
-        {"resist": resist, "rule": "पिछला रेसिस्टेंस"},
+        "pat_support", "long", ohlc, entry, sl, target, support, "SUPPORT", 2, extras,
     )
 
 
@@ -371,7 +432,8 @@ def _gap():
     gap = ohlc[1]
     if gap[0] <= prior:
         raise ValueError("gap")
-    entry, sl = gap[1], gap[2]
+    entry, level = gap[1], gap[2]
+    sl = _buffered_stop("long", level, level)
     return Plan(
         "pat_gap_up", "long", ohlc, entry, sl, _target_long(entry, sl), prior, "SUPPORT", 1,
         {"prior": prior, "gap_open": gap[0]},
@@ -386,10 +448,11 @@ def _stop():
         (112, 128, 111, 124),
         (124, 142, 122, 136),
     )
-    entry, sl = ohlc[1][1], ohlc[1][2]
+    entry, level = ohlc[1][1], ohlc[1][2]
+    sl = _buffered_stop("long", level, level)
     return Plan(
-        "pat_stop_loss", "long", ohlc, entry, sl, _target_long(entry, sl), sl, "SUPPORT", 1,
-        {"swing": sl},
+        "pat_stop_loss", "long", ohlc, entry, sl, _target_long(entry, sl), level, "SUPPORT", 1,
+        {"swing": level},
     )
 
 
@@ -406,7 +469,8 @@ def _piercing():
     mid = (red[0] + red[3]) / 2.0
     if green[0] >= red[3] or green[3] <= mid:
         raise ValueError("piercing")
-    entry, sl = green[1], green[2]
+    entry, level = green[1], green[2]
+    sl = _buffered_stop("long", level, level)
     return Plan(
         "piercing", "long", ohlc, entry, sl, _target_long(entry, sl), red[2], "SUPPORT", 3,
         {"mid": mid, "red_open": red[0], "red_close": red[3], "green_open": green[0], "green_close": green[3]},
@@ -420,13 +484,21 @@ def _daily():
         (206, 242, 204, 240),
     )
     capital, pct = 100000, 2
-    entry, sl = ohlc[0][1], ohlc[0][2]
+    entry, low = ohlc[0][1], ohlc[0][2]
     limit = capital * pct / 100.0
-    qty = limit / (entry - sl)
-    if abs(qty - round(qty)) > 1e-6:
+    sl = qty = None
+    for risk in range(int(STOP_BUFFER), 80):
+        candidate = entry - risk
+        if candidate >= low:
+            continue
+        share = limit / risk
+        if abs(share - round(share)) <= 1e-6:
+            sl, qty = candidate, share
+            break
+    if sl is None:
         raise ValueError("daily quantity")
     return Plan(
-        "risk_daily_loss_limit", "long", ohlc, entry, sl, _target_long(entry, sl), sl, "SUPPORT", 0,
+        "risk_daily_loss_limit", "long", ohlc, entry, sl, _target_long(entry, sl), low, "SUPPORT", 0,
         {"capital": capital, "pct": pct, "limit": limit, "qty": qty},
     )
 
@@ -568,17 +640,25 @@ def _trigger_time(words, overlay, plan, beat_times):
         "rsi_os": ("आरएसआई", fmt(plan.extras["os"]) if "os" in plan.extras else ""),
         "rsi_ob": ("आरएसआई", fmt(plan.extras["ob"]) if "ob" in plan.extras else ""),
     }.get(overlay["kind"], ())
+    home = overlay["beat"]
+    span = (beat_times or {}).get(home)
+    lo = hi = None
+    if span and len(span) >= 2:
+        lo = float(span[0]) - 0.05
+        hi = float(span[1]) + 0.05
     best = None
     for row in words or []:
         word = str(row.get("word") or "")
-        if any(tok and tok in word for tok in tokens):
-            start = float(row.get("start") or 0)
-            if best is None or start < best:
-                best = start
+        if not any(tok and tok in word for tok in tokens):
+            continue
+        start = float(row.get("start") or 0)
+        # A later beat's "एंट्री" must not pull the entry line forward.
+        if lo is not None and not (lo - 1e-9 <= start <= hi + 1e-9):
+            continue
+        if best is None or start < best:
+            best = start
     if best is not None:
         return best
-    home = overlay["beat"]
-    span = (beat_times or {}).get(home)
     if span:
         return float(span[0])
     return 0.0
@@ -869,6 +949,51 @@ def _scene_time(topic, beat, index, local):
     return start + (end - start) * local
 
 
+def _caption_text(topic, beat, spoken, plan):
+    """One caption for this beat. The context line is the support sentence."""
+    if beat == "context" and str(getattr(plan, "key", "") or "") == "pat_hammer":
+        return f"सपोर्ट {fmt(plan.sr)} पर वैलिड, साइडवेज में कमजोर"
+    text = str(spoken or "")
+    text = text.replace(DISCLAIMER, " ")
+    return " ".join(text.split())
+
+
+def _paint_caption_block(img, text, size):
+    """One caption block, at most two shaped lines. Pieces of one word do not stack."""
+    import board_scenes
+    import scene_frames
+    import safe_area
+    lines = board_scenes._caption_lines(text, width=900, size=int(size), max_lines=2)
+    y = safe_area.SUBTITLE_TOP + 8
+    drawn = []
+    for line in lines:
+        if y >= safe_area.SUBTITLE_LIMIT - 8:
+            break
+        scene_frames._text(
+            img=img, x=540, y=y, text=line, fill=(250, 250, 250), size=int(size),
+            anchor="mt", band=False, role="caption",
+        )
+        box = None
+        for layer in reversed(img.text_layers or []):
+            if layer.get("role") == "caption" and layer.get("box"):
+                box = layer["box"]
+                break
+        drawn.append(line)
+        if not box:
+            break
+        y = float(box[3]) + 10
+    return drawn
+
+
+def _paint_disclaimer(img):
+    import scene_frames
+    import safe_area
+    scene_frames._text(
+        img=img, x=540, y=safe_area.SOURCE_Y, text=DISCLAIMER,
+        fill=(230, 230, 230), size=DISCLAIMER_PX, anchor="mt", band=False, role="source",
+    )
+
+
 def _hook_question(topic, beat, spoken):
     if beat != "hook":
         return ""
@@ -936,11 +1061,9 @@ def _compose(topic, beat, index, n, spoken, when):
                     img, question, safe_area.SUBTITLE_TOP + 8, motion_lib.CAPTION_SIZE,
                 )
         else:
-            lines = board_scenes._caption_lines(spoken, size=motion_lib.CAPTION_SIZE)
-            y = safe_area.SUBTITLE_TOP + 8
-            for line in lines:
-                motion_lib.paint_caption(img, line, y, motion_lib.CAPTION_SIZE)
-                y += motion_lib.CAPTION_SIZE + 8
+            _paint_caption_block(img, _caption_text(topic, beat, spoken, plan), motion_lib.CAPTION_SIZE)
+        if beat == "cta":
+            _paint_disclaimer(img)
     scene_frames._brand(img)
     caps = [
         layer["box"] for layer in (img.text_layers or [])

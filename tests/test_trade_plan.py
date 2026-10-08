@@ -67,7 +67,10 @@ class LibraryTests(unittest.TestCase):
         self.assertTrue(hammer["beats"]["cta"].startswith("आपने हैमर पर कभी स्टॉप लॉस हिट किया? कमेंट करो।"))
 
     def test_pattern_geometry_is_computed_from_the_ohlc(self):
-        hammer = trade_plan.plan_for("pat_hammer").ohlc[3]
+        hammer_plan = trade_plan.plan_for("pat_hammer")
+        self.assertGreaterEqual(len(hammer_plan.ohlc), 8)
+        self.assertLessEqual(len(hammer_plan.ohlc), 12)
+        hammer = hammer_plan.ohlc[hammer_plan.focus]
         body = abs(hammer[3] - hammer[0])
         lower = min(hammer[0], hammer[3]) - hammer[2]
         self.assertGreaterEqual(lower, body * 2)
@@ -114,8 +117,8 @@ class ChartTests(unittest.TestCase):
         target = scene_frames.frames_for(topic, "target", 1, {"mode": "schematic"})[0][0]
         self.assertNotIn("entry", hook.shown_overlays)
         self.assertIn("ENTRY 118", entry.overlay_labels)
-        self.assertIn("SL 100", target.overlay_labels)
-        self.assertIn("TARGET 154", target.overlay_labels)
+        self.assertIn("SL 98", target.overlay_labels)
+        self.assertIn("TARGET 158", target.overlay_labels)
         self.assertTrue(any(label.startswith("Entry 118") and "1:2" in label for label in target.overlay_labels))
         region = target.chart_region
         height = (region[3] - region[1]) / target.size[1]
@@ -173,9 +176,9 @@ class ChartTests(unittest.TestCase):
             "trend": (8.0, "TREND"),
             "sr": (16.0, "SUPPORT 100"),
             "entry": (24.0, "ENTRY 118"),
-            "sl": (32.0, "SL 100"),
-            "target": (40.0, "TARGET 154"),
-            "rr": (41.0, "Entry 118 · SL 100 · Target 154 = 1:2"),
+            "sl": (32.0, "SL 98"),
+            "target": (40.0, "TARGET 158"),
+            "rr": (41.0, "Entry 118 · SL 98 · Target 158 = 1:2"),
         }
         for kind, (start, label) in expected.items():
             self.assertEqual(events[kind]["label"], label, kind)
@@ -185,9 +188,9 @@ class ChartTests(unittest.TestCase):
         early = scene_frames.frames_for(topic, "entry", 1, {"mode": "schematic"})[0][0]
         self.assertIn("ENTRY 118", early.overlay_labels)
         self.assertIn("SUPPORT 100", early.overlay_labels)
-        self.assertNotIn("SL 100", early.overlay_labels)
+        self.assertNotIn("SL 98", early.overlay_labels)
         frame = scene_frames.frames_for(topic, "target", 1, {"mode": "schematic"})[0][0]
-        for label in ("ENTRY 118", "SL 100", "TARGET 154", "SUPPORT 100", "TREND"):
+        for label in ("ENTRY 118", "SL 98", "TARGET 158", "SUPPORT 100", "TREND"):
             self.assertIn(label, frame.overlay_labels)
         self.assertTrue(any("1:2" in label for label in frame.overlay_labels))
         rgb = np.asarray(frame.convert("RGB"))
@@ -199,6 +202,40 @@ class ChartTests(unittest.TestCase):
         quiet_rgb = np.asarray(quiet.convert("RGB"))
         self.assertNotEqual(tuple(int(v) for v in quiet_rgb[110, 200]), K.RED)
         self.assertNotEqual(tuple(int(v) for v in quiet_rgb[110, 700]), K.GREEN)
+
+    def test_overlay_order_follows_the_beat_and_stops_clear_the_extreme(self):
+        for key in trade_plan.KEYS:
+            plan = trade_plan.plan_for(key)
+            candle = plan.ohlc[plan.focus]
+            if plan.side == "long":
+                self.assertLess(plan.sl, candle[2], key)
+            else:
+                self.assertGreater(plan.sl, candle[1], key)
+            self.assertGreaterEqual(plan.rr, 1.5, key)
+        beats = {
+            beat: (index * 8.0, index * 8.0 + 8.0)
+            for index, beat in enumerate(trade_plan.BEATS)
+        }
+        words = [
+            {"word": "टारगेट", "start": 1.2, "end": 1.6},
+            {"word": "एंट्री", "start": 50.0, "end": 50.4},
+            {"word": "सपोर्ट", "start": 17.0, "end": 17.4},
+            {"word": "स्टॉप", "start": 33.0, "end": 33.4},
+        ]
+        events = {
+            row["kind"]: row
+            for row in trade_plan.chart_overlay_events(_topic("pat_hammer"), beats, words)
+        }
+        self.assertAlmostEqual(events["sr"]["start"], 17.0)
+        self.assertAlmostEqual(events["entry"]["start"], beats["entry"][0])
+        self.assertAlmostEqual(events["sl"]["start"], 33.0)
+        self.assertAlmostEqual(events["target"]["start"], beats["target"][0])
+        self.assertLess(events["entry"]["start"], events["sl"]["start"])
+        self.assertLess(events["sl"]["start"], events["target"]["start"])
+        for kind, beat in (("sr", "context"), ("entry", "entry"), ("sl", "sl"), ("target", "target")):
+            start = events[kind]["start"]
+            self.assertGreaterEqual(start, beats[beat][0] - 0.05, kind)
+            self.assertLessEqual(start, beats[beat][1] + 0.05, kind)
 
     @staticmethod
     def _near(rgb, color, tol=12):

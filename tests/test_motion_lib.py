@@ -64,8 +64,8 @@ def _clock_topic():
             {"kind": "trend", "start": 8.0},
             {"kind": "sr", "start": 16.0, "price": 100.0},
             {"kind": "entry", "start": 24.0, "price": 118.0},
-            {"kind": "sl", "start": 32.0, "price": 100.0},
-            {"kind": "target", "start": 40.0, "price": 154.0},
+            {"kind": "sl", "start": 32.0, "price": 98.0},
+            {"kind": "target", "start": 40.0, "price": 158.0},
         ],
     }
 
@@ -122,9 +122,14 @@ class CandleTests(unittest.TestCase):
         self.assertTrue(context)
         windows = motion_lib.candle_windows(plan, _beats())
         self.assertEqual(windows[context[0]][1], 0.0)
-        for left, right in zip(context, context[1:]):
-            self.assertAlmostEqual(windows[right][0] - windows[left][0], 0.15)
+        self.assertAlmostEqual(windows[context[0]][1] - windows[context[0]][0], 0.15)
+        rest = context[1:]
+        self.assertTrue(rest)
+        self.assertGreater(windows[rest[-1]][0], 1.0)
+        for left, right in zip(rest, rest[1:]):
+            self.assertGreater(windows[right][0], windows[left][0])
             self.assertAlmostEqual(windows[left][1] - windows[left][0], 0.15)
+        self.assertAlmostEqual(windows[rest[-1]][1] - windows[rest[-1]][0], 0.15)
         for index, beat in zip(key, ("pehchan", "context", "entry")):
             self.assertAlmostEqual(windows[index][0], _beats()[beat][0])
             self.assertAlmostEqual(windows[index][1] - windows[index][0], motion_lib.REVEAL_S)
@@ -230,8 +235,8 @@ class LevelTests(unittest.TestCase):
     def test_lines_draw_left_to_right_with_the_plan_prices(self):
         plan = _hammer()
         self.assertEqual(plan.entry, 118.0)
-        self.assertEqual(plan.sl, 100.0)
-        self.assertEqual(plan.target, 154.0)
+        self.assertEqual(plan.sl, 98.0)
+        self.assertEqual(plan.target, 158.0)
         box, lo, hi, pad = motion_lib.motion_geometry(plan)
         base = _flat()
         ax = motion_lib.candle_build(base, box, plan.ohlc, lo, hi, 1.0, pad)
@@ -294,19 +299,19 @@ class LevelTests(unittest.TestCase):
         self.assertEqual(late["progress"]["target"], 1.0)
         self.assertEqual(late["levels"]["sl"]["price"], plan.sl)
         self.assertEqual(late["levels"]["target"]["price"], plan.target)
-        self.assertIn("100", late["levels"]["sl"]["label"])
-        self.assertIn("154", late["levels"]["target"]["label"])
+        self.assertIn("98", late["levels"]["sl"]["label"])
+        self.assertIn("158", late["levels"]["target"]["label"])
 
 
 class RiskTests(unittest.TestCase):
     def test_box_uses_the_computed_risk_reward_and_ratio(self):
         plan = _hammer()
-        self.assertEqual(plan.risk, 18.0)
-        self.assertEqual(plan.reward, 36.0)
+        self.assertEqual(plan.risk, 20.0)
+        self.assertEqual(plan.reward, 40.0)
         self.assertEqual(plan.rr_text, "1:2")
         readout = motion_lib.rr_readout(plan)
-        self.assertEqual(readout["risk"], 18.0)
-        self.assertEqual(readout["reward"], 36.0)
+        self.assertEqual(readout["risk"], 20.0)
+        self.assertEqual(readout["reward"], 40.0)
         self.assertEqual(readout["rr"], "1:2")
         self.assertEqual(readout["text"], "RR 1:2")
         quiet = _flat()
@@ -403,7 +408,7 @@ class CounterTests(unittest.TestCase):
         self.assertGreater(_near(done_img, motion_lib.WHITE), 20)
         self.assertEqual(done["value"], plan.target)
         self.assertEqual(done["shown"], plan.target)
-        self.assertEqual(done["shown"], 154.0)
+        self.assertEqual(done["shown"], plan.target)
         clock = {"counter": (40.0, 40.5), "candles": (0.0, 1.0)}
         before = motion_lib.draw_plan(_flat(), plan, trade_plan.overlays(plan), 39.0, clock)
         after = motion_lib.draw_plan(_flat(), plan, trade_plan.overlays(plan), 40.5, clock)
@@ -523,6 +528,17 @@ class PlanPathTests(unittest.TestCase):
         self.assertEqual(state["title"]["progress"], 0.0)
         titled = motion_lib.draw_plan(_flat(), plan, [], 0.30, clock)
         self.assertEqual(titled["title"]["progress"], 1.0)
+        gone = motion_lib.draw_plan(_flat(), plan, [], 3.0, clock)
+        self.assertEqual(gone["progress"]["rr"], 0.0)
+        self.assertFalse(gone["rr"]["shown"])
+        redraw = motion_lib.draw_plan(_flat(), plan, [], _beats()["target"][0] + motion_lib.REVEAL_S, clock)
+        self.assertEqual(redraw["progress"]["rr"], 1.0)
+        left = _flat()
+        right = _flat()
+        motion_lib.draw_plan(left, plan, trade_plan.overlays(plan), 1.0, clock)
+        motion_lib.draw_plan(right, plan, trade_plan.overlays(plan), 5.0, clock)
+        delta = float(np.abs(np.asarray(left, dtype=np.int16) - np.asarray(right, dtype=np.int16)).mean())
+        self.assertGreaterEqual(delta, 0.8, delta)
         same_scale = motion_lib.motion_geometry(plan)
         self.assertEqual(motion_lib.motion_geometry(plan), same_scale)
         frame = trade_plan.paint_frame(topic, "hook", 0, 1, "एंट्री 118")
@@ -567,7 +583,7 @@ class PlanPathTests(unittest.TestCase):
             if beat == "entry":
                 early = frame.motion_at(0.0)
                 self.assertEqual(early.motion_state["progress"]["entry"], 0.0)
-                self.assertEqual(early.motion_state["progress"]["rr"], 1.0)
+                self.assertEqual(early.motion_state["progress"]["rr"], 0.0)
                 self.assertEqual(early.motion_state["levels"]["entry"]["price"], plan.entry)
                 self.assertEqual(done.motion_state["levels"]["entry"]["price"], 118.0)
                 self.assertEqual(done.motion_state["progress"]["entry"], 1.0)
@@ -576,14 +592,26 @@ class PlanPathTests(unittest.TestCase):
                 self.assertEqual(done.motion_state["rr"]["risk"], plan.risk)
                 self.assertEqual(done.motion_state["rr"]["reward"], plan.reward)
                 self.assertEqual(done.motion_state["rr"]["rr"], plan.rr_text)
-                self.assertEqual(done.motion_state["levels"]["sl"]["price"], 100.0)
-                self.assertEqual(done.motion_state["levels"]["target"]["price"], 154.0)
+                self.assertEqual(done.motion_state["levels"]["sl"]["price"], 98.0)
+                self.assertEqual(done.motion_state["levels"]["target"]["price"], 158.0)
             if beat == "invalidation":
                 self.assertEqual(done.motion_state["progress"]["break"], 1.0)
                 self.assertEqual(done.motion_state["break"]["price"], plan.sl)
+            if beat == "context":
+                text = " ".join(
+                    layer.get("text") or "" for layer in done.text_layers if layer.get("role") == "caption"
+                )
+                self.assertIn("सपोर्ट 100 पर वैलिड", text)
+                self.assertIn("साइडवेज", text)
+                captions = [layer for layer in done.text_layers if layer.get("role") == "caption"]
+                self.assertLessEqual(len(captions), 2)
+                self.assertFalse(any("TARGET" in (layer.get("text") or "") for layer in done.text_layers))
             if beat == "cta":
                 self.assertEqual(done.motion_state["progress"]["candles"], 1.0)
                 self.assertEqual(done.motion_state["progress"]["rr"], 1.0)
+                sources = [layer for layer in done.text_layers if layer.get("role") == "source"]
+                self.assertTrue(sources)
+                self.assertGreaterEqual(sources[0]["size"], 36)
 
     def test_every_approved_plan_settles_on_its_computed_numbers(self):
         clock = {

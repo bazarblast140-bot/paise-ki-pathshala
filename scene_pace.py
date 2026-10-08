@@ -145,9 +145,25 @@ def segment_is_concrete(text):
     return bool(hook_check.extract_numbers(raw))
 
 
-def vague_beats(beats, order=BEATS):
-    """Beat names whose spoken line has no number, level, or step."""
+_PLAN_BEATS = (
+    "hook", "pehchan", "context", "entry", "sl", "target", "invalidation", "cta",
+)
+
+
+def vague_beats(beats, order=None):
+    """Beat names whose spoken line has no number, level, or step.
+
+    A plan script has no matlab or karein key. Those names are not vague beats.
+    An explicit order still treats a missing key as vague, which is how a
+    four-beat rewrite finds the line it has to fill.
+    """
     beats = beats or {}
+    if order is None:
+        if "entry" in beats or "context" in beats:
+            order = _PLAN_BEATS
+        else:
+            order = BEATS
+        return [b for b in order if b in beats and not segment_is_concrete(beats.get(b))]
     return [b for b in order if not segment_is_concrete(beats.get(b))]
 
 

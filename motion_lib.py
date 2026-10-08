@@ -134,17 +134,30 @@ def candle_roles(plan):
 
 
 def candle_windows(plan, beats=None):
-    """Context candles burst at 150 ms. Each key candle waits for its beat.
+    """The first context candle is done at t=0. The rest keep arriving through the hook.
 
-    The first context candle finishes at t=0, so the open is never an empty chart.
+    Each candle still draws in 150 ms. Spacing them across the hook means a
+    four-second span from t=1 is not a still. Key candles wait for their beat.
     """
     beats = beats or {}
     context, key = candle_roles(plan)
     windows = [None] * len(plan.ohlc)
-    cursor = -CONTEXT_CANDLE_S
-    for index in context:
-        windows[index] = (cursor, cursor + CONTEXT_CANDLE_S)
-        cursor += CONTEXT_CANDLE_S
+    if context:
+        windows[context[0]] = (-CONTEXT_CANDLE_S, 0.0)
+        rest = context[1:]
+        hook = beats.get("hook")
+        hook_end = float(hook[1]) if hook and len(hook) >= 2 else 5.0
+        last = 4.6 if hook_end >= 5.0 else max(1.2, hook_end - CONTEXT_CANDLE_S)
+        last = min(last, max(hook_end - CONTEXT_CANDLE_S, 0.4))
+        if rest:
+            if len(rest) == 1:
+                starts = [min(0.8, last)]
+            else:
+                span = max(last - 0.4, CONTEXT_CANDLE_S)
+                step = span / (len(rest) - 1)
+                starts = [0.4 + i * step for i in range(len(rest))]
+            for index, start in zip(rest, starts):
+                windows[index] = (float(start), float(start) + CONTEXT_CANDLE_S)
     names = ("pehchan", "context", "entry")
     for nth, index in enumerate(key):
         span = beats.get(names[min(nth, len(names) - 1)])
@@ -165,7 +178,7 @@ def motion_geometry(plan):
     import board_kit as K
     prices = [candle[1] for candle in plan.ohlc] + [candle[2] for candle in plan.ohlc]
     prices.extend([float(plan.entry), float(plan.sl), float(plan.target), float(plan.sr)])
-    return K.BOARD, min(prices), max(prices), (72, 100, 72, 96)
+    return K.BOARD, min(prices), max(prices), (40, 64, 40, 48)
 
 
 def _stroke_candle(draw, ax, index, row, color, frac):
@@ -180,7 +193,7 @@ def _stroke_candle(draw, ax, index, row, color, frac):
     return cx, mid - half, mid + half
 
 
-def candle_build(img, box, ohlc, lo, hi, progress, pad, width_frac=0.62,
+def candle_build(img, box, ohlc, lo, hi, progress, pad, width_frac=0.80,
                  per_candle=None, focus=None, dim=1.0):
     """Draw candles. A float progress fills them together. A list is one value each.
 
@@ -484,8 +497,11 @@ def highlight_candle(img, ax, plan, progress, zoom=None):
     }
 
 
-def number_counter(img, value, progress, xy=(80, 1188), label="TARGET"):
-    """Count up to `value` over the caller's window. Progress 1 is exact."""
+def number_counter(img, value, progress, xy=(80, 1188), label="TARGET", paint=True):
+    """Count up to `value` over the caller's window. Progress 1 is exact.
+
+    The wired chart does not paint this. The line pill already names the target.
+    """
     import board_kit as K
 
     value = float(value)
@@ -496,7 +512,7 @@ def number_counter(img, value, progress, xy=(80, 1188), label="TARGET"):
         shown = 0.0
     else:
         shown = value * progress
-    if progress > 0.0:
+    if paint and img is not None and progress > 0.0:
         K.label(img, xy[0], xy[1], f"{label} {_fmt(shown)}", WHITE, COUNTER_SIZE)
     return {"value": value, "shown": shown}
 
@@ -520,8 +536,28 @@ def sl_break(img, ax, plan, progress, flash_on=False):
     return info
 
 
+def rr_progress(t, clock):
+    """Finished RR box for the first 2s, then a fade, then a redraw on the target beat.
+
+    A caller that passes an explicit ``rr`` window keeps that window. The hook
+    flash is only the clock_from mode.
+    """
+    if not (clock or {}).get("rr_hook"):
+        return _progress(clock, "rr", t, 0.0)
+    t = 0.0 if t is None else float(t)
+    if t <= 2.0:
+        return 1.0
+    fade_end = 2.0 + REVEAL_S
+    if t < fade_end:
+        return 1.0 - ease((t - 2.0) / REVEAL_S)
+    redraw = (clock or {}).get("rr_redraw")
+    if redraw is None:
+        return 0.0
+    return window_progress(t, float(redraw), float(redraw) + REVEAL_S)
+
+
 def clock_from(topic, plan=None):
-    """Word times for the lines. The RR box is already finished at t=0."""
+    """Word times for the lines. The RR box is finished at t=0, then leaves."""
     topic = topic or {}
     beats = topic.get("_beat_times") or {}
     by = {}
@@ -554,7 +590,8 @@ def clock_from(topic, plan=None):
         "entry": window("entry", "entry"),
         "sl": window("sl", "sl"),
         "target": window("target", "target"),
-        "rr": (-REVEAL_S, 0.0),
+        "rr_hook": True,
+        "rr_redraw": start("target", "target"),
         "highlight": None if zoom_at is None else (zoom_at, zoom_at + ZOOM_S),
         "counter": window("target", "target", COUNTER_S),
         "title": (0.0, TITLE_S),
@@ -707,7 +744,7 @@ def draw_plan(img, plan, shown, t, clock):
             "price": price, "drawn": bool(drawn["drawn"]), "label": label,
             "progress": prog, "pill": bool(drawn.get("pill")),
         }
-    rr_p = _progress(clock, "rr", t, 0.0)
+    rr_p = rr_progress(t, clock)
     rr = risk_reward_box(img, plan, rr_p, ax) if rr_p > 0.0 else rr_readout(plan)
     if rr_p <= 0.0:
         rr["shown"] = False
@@ -719,7 +756,8 @@ def draw_plan(img, plan, shown, t, clock):
         "price": float(plan.sl), "progress": 0.0, "flash": False,
     }
     counter_p = _progress(clock, "counter", t, 0.0)
-    counter = number_counter(img, plan.target, counter_p, label="TARGET")
+    # The line pill is the target label. A second big TARGET under the chart covers the caption.
+    counter = number_counter(img, plan.target, counter_p, label="TARGET", paint=False)
     title_p = _progress(clock, "title", t, 0.0)
     candles_p = sum(per) / float(len(per) or 1)
     return {
