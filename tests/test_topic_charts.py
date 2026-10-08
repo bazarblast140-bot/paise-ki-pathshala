@@ -287,7 +287,9 @@ class PiercingLevelTests(unittest.TestCase):
             [],
         )
         import scene_pace
-        self.assertEqual(scene_pace.vague_beats(narration["beats"], order=trade_plan.BEATS), [])
+        vague = scene_pace.vague_beats(narration["beats"], order=trade_plan.BEATS)
+        self.assertEqual([beat for beat in vague if beat != "cta"], [])
+        self.assertIn("?", narration["beats"]["cta"])
 
     def test_karein_draws_the_confirmation_candle_when_that_line_is_said(self):
         topic = self._topic()

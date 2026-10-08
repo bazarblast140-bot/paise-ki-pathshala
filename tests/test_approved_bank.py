@@ -16,7 +16,9 @@ import trade_plan
 IST = timezone(timedelta(hours=5, minutes=30))
 ROOT = Path(__file__).resolve().parent.parent
 ORDER = ("hook", "pehchan", "matlab", "karein")
-BANNED = ("हद", "पूँजी", "क्षमता", "तय करो", "पलटवार", "चीरती")
+BANNED = (
+    "नतीजा", "हिसाब", "बत्ती", "हद", "पूँजी", "क्षमता", "तय करो", "पलटवार", "चीरती",
+)
 NEW_KEYS = (
     "pat_hammer", "pat_doji", "pat_bull_engulf", "pat_morning_star", "pat_black_crows",
     "pat_double", "pat_head_shoulders", "pat_cup_handle", "pat_triangle", "pat_flag",
@@ -50,6 +52,19 @@ class ScriptTests(unittest.TestCase):
             self.assertGreaterEqual(total, 90, key)
             self.assertLessEqual(total, 140, key)
             self.assertLessEqual(len(narration["hook_line"].split()), 12, key)
+            raw = json.dumps(
+                {"beats": script.get("beats"), "on_screen": script.get("on_screen")},
+                ensure_ascii=False,
+            )
+            for word in BANNED:
+                self.assertNotIn(word, raw, key)
+            self.assertNotIn("कदम", raw, key)
+            screen = json.dumps(script.get("on_screen") or {}, ensure_ascii=False)
+            self.assertNotIn("जगह", screen, key)
+            self.assertNotIn("सवाल", screen, key)
+            self.assertIn("टारगेट", narration["beats"]["target"], key)
+            self.assertIn("रिस्क-रिवॉर्ड", narration["beats"]["target"], key)
+            self.assertIn(trade_plan.plan_for(key).rule, narration["beats"]["target"], key)
             blob = " ".join(narration["beats"].values())
             for word in BANNED:
                 self.assertNotIn(word, blob, key)

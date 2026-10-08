@@ -17,7 +17,9 @@ VOICE_SECONDS = (45.0, 75.0)
 TOTAL_WORDS = (90, 140)
 WORD_TARGET = (108, 122)
 WORD_TARGETS = {beat: 14 for beat in BEATS}
-BANNED = ("हद", "पूँजी", "क्षमता", "तय करो", "पलटवार", "चीरती")
+BANNED = (
+    "नतीजा", "हिसाब", "बत्ती", "हद", "पूँजी", "क्षमता", "तय करो", "पलटवार", "चीरती",
+)
 _PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 
 
@@ -33,6 +35,7 @@ class Plan:
         self.sr_name = sr_name
         self.focus = int(focus)
         self.extras = dict(extras or {})
+        named_rule = str(self.extras.pop("rule", "") or "")
         self.rsi = tuple(rsi or ())
         self.risk = abs(self.entry - self.sl)
         self.reward = abs(self.target - self.entry)
@@ -41,6 +44,7 @@ class Plan:
         self.rr = self.reward / self.risk
         self.rr_text = _rr_text(self.rr)
         self.rr_spoken = _rr_spoken(self.rr_text)
+        self.rule = named_rule or self.rr_text
         if self.rr < 1.5 - 1e-9:
             raise ValueError(f"{key} reward/risk {self.rr:.3f} is under 1.5")
         if side == "long" and not (self.sl < self.entry < self.target):
@@ -57,6 +61,7 @@ class Plan:
             "risk": fmt(self.risk),
             "reward": fmt(self.reward),
             "rr": self.rr_spoken,
+            "rule": self.rule,
         }
         for name, value in self.extras.items():
             values[name] = fmt(value) if isinstance(value, (int, float)) else str(value)
@@ -237,7 +242,7 @@ def _shoulders():
     height = head - neck
     return Plan(
         "pat_head_shoulders", "short", ohlc, entry, sl, entry - height, head, "RESIST", 2,
-        {"head": head, "neck": neck, "shoulder": sl},
+        {"head": head, "neck": neck, "shoulder": sl, "rule": "पैटर्न हाइट"},
     )
 
 
@@ -259,7 +264,7 @@ def _cup():
     height = rim - cup_low
     return Plan(
         "pat_cup_handle", "long", ohlc, entry, sl, entry + height, sl, "SUPPORT", 5,
-        {"rim": rim, "cup": cup_low, "handle": handle},
+        {"rim": rim, "cup": cup_low, "handle": handle, "rule": "कप की हाइट"},
     )
 
 
@@ -280,7 +285,7 @@ def _triangle():
     height = ohlc[0][1] - ohlc[0][2]
     return Plan(
         "pat_triangle", "long", ohlc, entry, sl, entry + height, sl, "SUPPORT", 3,
-        {"high": ohlc[0][1], "low": ohlc[0][2]},
+        {"high": ohlc[0][1], "low": ohlc[0][2], "rule": "ट्रायंगल हाइट"},
     )
 
 
@@ -299,7 +304,7 @@ def _flag():
     pole = entry - ohlc[0][0]
     return Plan(
         "pat_flag", "long", ohlc, entry, sl, entry + pole, sl, "SUPPORT", 4,
-        {"pole": pole, "flag": sl},
+        {"pole": pole, "flag": sl, "rule": "पोल की हाइट"},
     )
 
 
@@ -349,7 +354,7 @@ def _support():
     sl = support
     return Plan(
         "pat_support", "long", ohlc, entry, sl, _target_long(entry, sl, resist), support, "SUPPORT", 2,
-        {"resist": resist},
+        {"resist": resist, "rule": "पिछला रेसिस्टेंस"},
     )
 
 
@@ -529,7 +534,7 @@ def _trigger_time(words, overlay, plan, beat_times):
         "sr": ("सपोर्ट", "रेसिस्टेंस", fmt(plan.sr)),
         "entry": ("एंट्री", fmt(plan.entry)),
         "sl": ("स्टॉप", fmt(plan.sl)),
-        "target": ("नतीजा", fmt(plan.target)),
+        "target": ("टारगेट", fmt(plan.target)),
         "rr": ("रिस्क", "बटा"),
         "rsi_os": ("आरएसआई", fmt(plan.extras["os"]) if "os" in plan.extras else ""),
         "rsi_ob": ("आरएसआई", fmt(plan.extras["ob"]) if "ob" in plan.extras else ""),
@@ -548,6 +553,26 @@ def _trigger_time(words, overlay, plan, beat_times):
     if span:
         return float(span[0])
     return 0.0
+
+
+def chart_overlay_events(topic, beat_times, words):
+    """ENTRY, SL, TARGET, support, trend, and the RR box, timed to the words."""
+    plan = plan_for((topic or {}).get("key"))
+    last = 0.0
+    for span in (beat_times or {}).values():
+        if span and len(span) >= 2:
+            last = max(last, float(span[1]))
+    events = []
+    for row in overlays(plan):
+        start = _trigger_time(words, row, plan, beat_times)
+        events.append({
+            "kind": row["kind"],
+            "label": row["label"],
+            "beat": row["beat"],
+            "start": start,
+            "end": max(last, start),
+        })
+    return events
 
 
 def _scene_end(topic, beat, index):
@@ -599,7 +624,11 @@ def script_fails(narration, topic):
             fails.append(f"banned word {word}")
     import board_short
     low = text.lower()
-    bad = [word for word in board_short.FORBIDDEN if word.lower() in low]
+    # टारगेट is the trader word for this plan. Generated scripts still ban it.
+    bad = [
+        word for word in board_short.FORBIDDEN
+        if word != "टारगेट" and word.lower() in low
+    ]
     if bad:
         fails.append(f"forbidden {bad}")
     body = text.replace(" ", "")
@@ -633,6 +662,8 @@ def script_fails(narration, topic):
             fails.append(f"spoken script omits {name}")
     if plan.rr_spoken not in text:
         fails.append("spoken script omits the reward to risk")
+    if plan.rule not in str(beats.get("target") or ""):
+        fails.append("target beat omits the rule")
     rows = overlays(plan)
     kinds = {row["kind"] for row in rows}
     for kind in ("entry", "sl", "target", "rr"):

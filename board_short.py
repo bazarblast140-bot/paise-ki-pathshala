@@ -2246,6 +2246,8 @@ def narration(topic, c, spec=None):
         topic["facts"] = list(n.get("facts") or topic.get("facts") or [])
         fails = check_narration(n, topic)
         vague = scene_pace.vague_beats(n.get("beats"), order=_lesson(topic)[0])
+        if n.get("plan"):
+            vague = [beat for beat in vague if beat != "cta"]
         if vague:
             fails.append("vague explanation (no number, level or step): " + ", ".join(vague))
         if fails:
@@ -3906,6 +3908,11 @@ def _install_scene_cards(topic, spoken, beat_times, scenes, audio_words=None):
         }
         for scene in (scenes or [])
     ]
+    import trade_plan
+    if trade_plan.is_plan_topic(topic):
+        topic["_chart_overlays"] = trade_plan.chart_overlay_events(
+            topic, topic["_beat_times"], topic.get("_audio_words") or [],
+        )
 
 
 def _gemini_word_timings(beat_times):

@@ -28,6 +28,17 @@ class LibraryTests(unittest.TestCase):
             self.assertIn(key, trade_plan.KEYS, key)
             self.assertEqual(trade_plan.raw_digit_faults(script), [], key)
             self.assertTrue(script["beats"]["cta"].endswith(trade_plan.DISCLAIMER), key)
+            raw = json.dumps(
+                {"beats": script.get("beats"), "on_screen": script.get("on_screen")},
+                ensure_ascii=False,
+            )
+            for word in trade_plan.BANNED:
+                self.assertNotIn(word, raw, key)
+            self.assertNotIn("कदम", raw, key)
+            screen = json.dumps(script.get("on_screen") or {}, ensure_ascii=False)
+            self.assertNotIn("सवाल", screen, key)
+            self.assertNotIn("जगह", screen, key)
+            self.assertIn("कहाँ वैलिड", screen, key)
             if key.startswith("pat_"):
                 self.assertIs(script.get("owner_approved"), False, key)
                 self.assertIs(script.get("reusable"), False, key)
@@ -37,16 +48,23 @@ class LibraryTests(unittest.TestCase):
             narration = approved_bank.narration_from(script)
             self.assertEqual(board_short.check_narration(narration, topic), [], key)
             plan = trade_plan.plan_for(key)
+            target = narration["beats"]["target"]
+            self.assertIn("टारगेट", target, key)
+            self.assertIn("रिस्क-रिवॉर्ड", target, key)
+            self.assertIn(plan.rule, target, key)
             self.assertGreaterEqual(plan.rr, 1.5, key)
             if plan.side == "long":
                 self.assertLess(plan.sl, plan.entry, key)
             else:
                 self.assertGreater(plan.sl, plan.entry, key)
+            self.assertIn("?", narration["beats"]["cta"].split(trade_plan.DISCLAIMER)[0], key)
             labels = " ".join(row["label"] for row in trade_plan.overlays(plan))
             for mark in ("ENTRY", "SL", "TARGET", "="):
                 self.assertIn(mark, labels, key)
-            seen.append(key)
-        self.assertEqual(sorted(seen), sorted(trade_plan.KEYS))
+            seen.append(narration["beats"]["cta"].split(trade_plan.DISCLAIMER)[0].strip())
+        self.assertEqual(len(set(seen)), len(trade_plan.KEYS))
+        hammer = json.loads((ROOT / "approved" / "pat_hammer.json").read_text(encoding="utf-8"))
+        self.assertTrue(hammer["beats"]["cta"].startswith("आपने हैमर पर कभी स्टॉप लॉस हिट किया? कमेंट करो।"))
 
     def test_pattern_geometry_is_computed_from_the_ohlc(self):
         hammer = trade_plan.plan_for("pat_hammer").ohlc[3]
@@ -108,7 +126,7 @@ class ChartTests(unittest.TestCase):
             {"word": "सपोर्ट", "start": 16.0, "end": 16.4},
             {"word": "एंट्री", "start": 24.0, "end": 24.4},
             {"word": "स्टॉप", "start": 32.0, "end": 32.4},
-            {"word": "नतीजा", "start": 40.0, "end": 40.4},
+            {"word": "टारगेट", "start": 40.0, "end": 40.4},
             {"word": "रिस्क", "start": 41.0, "end": 41.4},
         ]
         topic["_audio_words"] = words
@@ -124,9 +142,69 @@ class ChartTests(unittest.TestCase):
         topic["_scene_plan"] = [{
             "beat": "target", "start": 40.0, "end": 48.0, "index": 0,
         }]
-        late = trade_plan.paint_frame(topic, "target", 0, 1, "नतीजा")
+        late = trade_plan.paint_frame(topic, "target", 0, 1, "टारगेट")
         self.assertIn("rr", late.shown_overlays)
         self.assertIn("target", late.shown_overlays)
+
+    def test_board_short_times_the_labelled_lines_and_draws_them(self):
+        import numpy as np
+        import board_kit as K
+        topic = _topic("pat_hammer")
+        words = [
+            {"word": "ट्रेंड", "start": 8.0, "end": 8.4},
+            {"word": "सपोर्ट", "start": 16.0, "end": 16.4},
+            {"word": "एंट्री", "start": 24.0, "end": 24.4},
+            {"word": "स्टॉप", "start": 32.0, "end": 32.4},
+            {"word": "टारगेट", "start": 40.0, "end": 40.4},
+            {"word": "रिस्क", "start": 41.0, "end": 41.4},
+        ]
+        beat_times = {
+            beat: (index * 8.0, index * 8.0 + 8.0) for index, beat in enumerate(trade_plan.BEATS)
+        }
+        scenes = [
+            {"beat": "hook", "start": 0.0, "end": 8.0, "index": 0},
+            {"beat": "entry", "start": 24.0, "end": 30.0, "index": 0},
+            {"beat": "target", "start": 40.0, "end": 48.0, "index": 0},
+        ]
+        spoken = approved_bank.narration_for(topic)["beats"]
+        board_short._install_scene_cards(topic, spoken, beat_times, scenes, words)
+        events = {row["kind"]: row for row in topic["_chart_overlays"]}
+        expected = {
+            "trend": (8.0, "TREND"),
+            "sr": (16.0, "SUPPORT 100"),
+            "entry": (24.0, "ENTRY 118"),
+            "sl": (32.0, "SL 100"),
+            "target": (40.0, "TARGET 154"),
+            "rr": (41.0, "Entry 118 · SL 100 · Target 154 = 1:2"),
+        }
+        for kind, (start, label) in expected.items():
+            self.assertEqual(events[kind]["label"], label, kind)
+            self.assertAlmostEqual(events[kind]["start"], start, places=2, msg=kind)
+            self.assertAlmostEqual(events[kind]["end"], 64.0, places=2, msg=kind)
+            self.assertGreater(events[kind]["end"], events[kind]["start"], kind)
+        early = scene_frames.frames_for(topic, "entry", 1, {"mode": "schematic"})[0][0]
+        self.assertIn("ENTRY 118", early.overlay_labels)
+        self.assertIn("SUPPORT 100", early.overlay_labels)
+        self.assertNotIn("SL 100", early.overlay_labels)
+        frame = scene_frames.frames_for(topic, "target", 1, {"mode": "schematic"})[0][0]
+        for label in ("ENTRY 118", "SL 100", "TARGET 154", "SUPPORT 100", "TREND"):
+            self.assertIn(label, frame.overlay_labels)
+        self.assertTrue(any("1:2" in label for label in frame.overlay_labels))
+        rgb = np.asarray(frame.convert("RGB"))
+        self.assertGreater(self._near(rgb, K.YELLOW), 400)
+        self.assertGreater(self._near(rgb, K.BLUE), 80)
+        self.assertEqual(tuple(int(v) for v in rgb[110, 200]), K.RED)
+        self.assertEqual(tuple(int(v) for v in rgb[110, 700]), K.GREEN)
+        quiet = scene_frames.frames_for(_topic("pat_hammer"), "hook", 1, {"mode": "schematic"})[0][0]
+        quiet_rgb = np.asarray(quiet.convert("RGB"))
+        self.assertNotEqual(tuple(int(v) for v in quiet_rgb[110, 200]), K.RED)
+        self.assertNotEqual(tuple(int(v) for v in quiet_rgb[110, 700]), K.GREEN)
+
+    @staticmethod
+    def _near(rgb, color, tol=12):
+        import numpy as np
+        delta = np.abs(rgb.astype(np.int16) - np.array(color, dtype=np.int16)).sum(axis=2)
+        return int((delta <= tol).sum())
 
 
 class VoiceTests(unittest.TestCase):
