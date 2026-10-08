@@ -397,7 +397,8 @@ def live_voice_bounds(topic):
         return (45.0, 59.0)
     import trade_plan
     if trade_plan.is_plan_topic(topic):
-        return trade_plan.VOICE_SECONDS
+        # 40–50s is the target. Up to 55s is a review flag, not a block.
+        return trade_plan.hard_voice_seconds()
     if _approved_narration(None, topic):
         return APPROVED_VOICE_SECONDS
     if four_live(topic):
@@ -621,6 +622,9 @@ _TRADER_FILLER = re.compile(r"ट्रेडर्स\s+(?:\S+\s+){0,4}चे�
 # Phrases first, so "daily limit" becomes the lesson words and not "डेली लिमिट",
 # and "revenge trading" is one phrase rather than two leftover words.
 _ROMAN_PHRASES = (
+    ("sirf seekhne ke liye, financial advice nahi.", "सिर्फ सीखने के लिए, फाइनेंशियल एडवाइस नहीं।"),
+    ("sirf seekhne ke liye", "सिर्फ सीखने के लिए"),
+    ("financial advice", "फाइनेंशियल एडवाइस"),
     ("revenge trading", "रिवेंज ट्रेडिंग"),
     ("daily loss limit", "दिन की नुकसान हद"),
     ("daily limit", "दिन की हद"),
@@ -710,6 +714,13 @@ _ROMAN_FOLD = {
     "karein": "करें",
     "udaharan": "उदाहरण",
     "galti": "गलती",
+    "sirf": "सिर्फ",
+    "seekhne": "सीखने",
+    "liye": "लिए",
+    "ke": "के",
+    "financial": "फाइनेंशियल",
+    "advice": "एडवाइस",
+    "nahi": "नहीं",
 }
 
 
@@ -2946,18 +2957,8 @@ def _drop_gemini_audio(beats):
 
 
 def _fold_voice_line(text):
-    """Fold Latin, but keep the exact English disclaimer the owner asked for."""
-    import trade_plan
-    mark = trade_plan.DISCLAIMER
-    raw = str(text or "")
-    if mark not in raw:
-        return fold_roman_words(raw)
-    head, _, tail = raw.partition(mark)
-    folded = fold_roman_words(head).rstrip()
-    rest = fold_roman_words(tail).strip()
-    if rest:
-        return f"{folded} {mark} {rest}".strip()
-    return f"{folded} {mark}".strip()
+    """Roman Hinglish, including the disclaimer, becomes Devanagari before TTS."""
+    return fold_roman_words(text)
 
 
 def _gemini_script(spoken, beats):
@@ -3014,7 +3015,7 @@ def _restore_run_files(saved):
 
 
 def _gemini_pace_window(topic):
-    """34-65s for a four-beat Gemini take. Topic plans stay 45-75s."""
+    """34-65s for a four-beat Gemini take. Topic plans accept 40-50s."""
     import trade_plan
     if trade_plan.is_plan_topic(topic):
         return trade_plan.VOICE_SECONDS
@@ -3027,14 +3028,58 @@ def _gemini_pace_window(topic):
     return None
 
 
-def _better_gemini_take(new, old):
-    """Prefer a take that reaches 45s. Otherwise keep the longer one."""
+def gemini_accepts(total, window):
+    """'target' inside the window, 'review' in a plan's 50–55s band, else 'miss'."""
+    if not window:
+        return "target"
+    try:
+        total = float(total)
+        lo, hi = float(window[0]), float(window[1])
+    except (TypeError, ValueError):
+        return "miss"
+    import trade_plan
+    hard = hi
+    if (lo, hi) == trade_plan.VOICE_SECONDS:
+        hard = float(trade_plan.VOICE_REVIEW_MAX)
+    if lo <= total <= hi:
+        return "target"
+    if hi < total <= hard + 1e-9:
+        return "review"
+    return "miss"
+
+
+def _better_gemini_take(new, old, window=None):
+    """Prefer a take inside the window. A plan review beat a miss, not a 40–50s take."""
+    import trade_plan
+    if window == trade_plan.VOICE_SECONDS:
+        rank = {"target": 0, "review": 1, "miss": 2}
+        left = gemini_accepts(new, window)
+        right = gemini_accepts(old, window)
+        if rank[left] != rank[right]:
+            return rank[left] < rank[right]
+        return abs(float(new) - 45.0) < abs(float(old) - 45.0)
     import gemini_voice
     if new >= gemini_voice.GEMINI_RETRY_UNDER and old < gemini_voice.GEMINI_RETRY_UNDER:
         return True
     if old >= gemini_voice.GEMINI_RETRY_UNDER and new < gemini_voice.GEMINI_RETRY_UNDER:
         return False
     return new > old
+
+
+def _gemini_stop(total, window, attempt):
+    """True when another Charon take would not help."""
+    if window is None:
+        return True
+    import trade_plan
+    status = gemini_accepts(total, window)
+    if window == trade_plan.VOICE_SECONDS:
+        if status in ("target", "review"):
+            return True
+        if attempt == 1 or float(total) > float(trade_plan.VOICE_REVIEW_MAX):
+            return True
+        return False
+    import gemini_voice
+    return float(total) >= gemini_voice.GEMINI_RETRY_UNDER or attempt == 1
 
 
 def _one_gemini_take(spoken, c, beats, folded, script, style, durations, attempt, topic, window):
@@ -3095,23 +3140,26 @@ def _speak_gemini(spoken, c, beats, topic):
         if window is None:
             kept = (total, None)
             break
-        lo, hi = window
-        if lo <= total <= hi:
+        if gemini_accepts(total, window) in ("target", "review"):
             snap = _snapshot_run_files(_gemini_take_names(beats))
-            if kept is None or _better_gemini_take(total, kept[0]):
+            if kept is None or _better_gemini_take(total, kept[0], window):
                 kept = (total, snap)
-        if total >= gemini_voice.GEMINI_RETRY_UNDER or attempt == 1:
+        if _gemini_stop(total, window, attempt):
             break
     if kept is not None and kept[1] is not None:
         _restore_run_files(kept[1])
+    import trade_plan
     if kept is None:
         if last_error is not None and (window is None or not durations):
             raise last_error
         shown = ", ".join(f"{item:.1f}s" for item in durations) or "none"
         lo, hi = window or (gemini_voice.GEMINI_MIN_SECONDS, gemini_voice.GEMINI_MAX_SECONDS)
+        if window == trade_plan.VOICE_SECONDS:
+            hi = trade_plan.VOICE_REVIEW_MAX
         raise gemini_voice.GeminiFallback(f"no take in {lo:.0f}-{hi:.0f}s ({shown})")
     shown = ", ".join(f"{item:.1f}s" for item in durations)
     print(f"[gemini] takes: {shown}; voice_engine=gemini", flush=True)
+    trade_plan.note_duration(kept[0], topic)
     for beat in beats:
         (RUN / f"tts_{beat}.engine").write_text("gemini", encoding="utf-8")
     ENGINES.append("gemini")
@@ -3970,12 +4018,15 @@ def _word_timings(beat_audio, beat_times):
     if stored:
         return stored
     import sync_gate
+    order = timed_beats(beat_times)
     sources = {}
-    for beat in timed_beats(beat_times):
+    for beat in order:
         source = _beat_tts_path(beat)
         if source is not None:
             sources[beat] = source
-    return sync_gate.transcribe_beats(beat_audio, beat_times, sources=sources or None)
+    return sync_gate.transcribe_beats(
+        beat_audio, beat_times, beats=order, sources=sources or None,
+    )
 
 
 def _scene_at(scenes, t):
@@ -4059,8 +4110,28 @@ def cue_faults(cues):
     return notes
 
 
+def closing_span(beat_times):
+    """Disclaimer window. Plan topics end on cta. Four-beat topics end on karein.
+
+    A missing name is the last beat on the clock. It is never a KeyError.
+    """
+    times = beat_times or {}
+    for name in ("karein", "cta"):
+        span = times.get(name)
+        if span and len(span) >= 2:
+            return (float(span[0]), float(span[1]))
+    last = None
+    for span in times.values():
+        if not span or len(span) < 2:
+            continue
+        start, end = float(span[0]), float(span[1])
+        if last is None or end > last[1]:
+            last = (start, end)
+    return last
+
+
 def on_screen_boxes(topic, beat_times, spoken, hook_line, cta, t, audio_words=None):
-    """Boxes for the one spoken cue at t, plus the grey disclaimer during karein.
+    """Boxes for the one spoken cue at t, plus the grey disclaimer on the last beat.
 
     The poll stays on the recap card. Headlines and key lines are not burned.
     """
@@ -4071,8 +4142,8 @@ def on_screen_boxes(topic, beat_times, spoken, hook_line, cta, t, audio_words=No
     for cue in cues_at(plan_cues(spoken, beat_times, audio_words), t):
         boxes.extend(row[1] for row in _cue_rows(cue["text"]))
         break
-    t0, t1 = beat_times["karein"]
-    if t0 - 1e-6 <= t <= t1 + 1e-6:
+    span = closing_span(beat_times)
+    if span and span[0] - 1e-6 <= t <= span[1] + 1e-6:
         boxes.append(_top_box(DISCLAIMER, 540, safe_area.SOURCE_Y, DISCLAIMER_SIZE))
     return boxes
 
@@ -4199,9 +4270,11 @@ def build_ass(topic, beat_times, spoken, hook_line, cta, audio_words=None):
     # burned. plan_cues still times those lines for the number check. Sync
     # reads the audio, not this track.
     ev = []
-    t0, t1 = beat_times["karein"]
-    # Grey disclaimer sits in the brand band, under the fixed subtitle box.
-    ev.append(K.ass_text(t0, t1, 540, safe_area.SOURCE_Y, DISCLAIMER_SIZE, "&H00B8A394&", DISCLAIMER, 8))
+    span = closing_span(beat_times)
+    if span:
+        t0, t1 = span
+        # Grey disclaimer sits in the brand band, under the fixed subtitle box.
+        ev.append(K.ass_text(t0, t1, 540, safe_area.SOURCE_Y, DISCLAIMER_SIZE, "&H00B8A394&", DISCLAIMER, 8))
     return K.ASS_HEAD + "\n".join(ev) + "\n"
 
 
@@ -5167,6 +5240,7 @@ def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
     if t < 45.0 and not topic.get("_live_short"):
         print(f"[duration] natural speech is {t:.1f}s; no slow-motion stretching")
     ok(f"voice: trimmed speech {raw_total:.1f}s -> final {t:.1f}s ({source}) engine: {', '.join(sorted(set(ENGINES)))}")
+    trade_plan.note_duration(t, topic)
     switch = {b: cue_frac(topic["key"], spoken[b]) for b in order if len((beat_pngs or {}).get(b) or ()) == 3}
     if switch:
         ok("3rd picture at " + ", ".join(f"{b} {f:.0%}" for b, f in switch.items()))
@@ -5426,6 +5500,8 @@ def _pay_and_remux(topic, n, c, spec, source, proven):
     raw = _trim_rendered(order)
     beat_times, total = _timeline(raw, order)
     lo, hi = _output_bounds(topic)
+    import trade_plan
+    trade_plan.note_duration(total, topic)
     if total < lo or total > hi:
         _spent_hold(
             f"paid voice duration outside {lo:.0f}-{hi:.0f}s; refusing the slot: {total:.1f}s"

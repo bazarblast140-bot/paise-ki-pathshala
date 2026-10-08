@@ -55,13 +55,17 @@ def overlay_plan(topic, beat_times, hook_line, cta=None):
                 "role": "key", "beat": beat, "text": sub,
                 "start": start, "end": float(t1),
             })
-    t0, t1 = beat_times["karein"]
+    span = (beat_times or {}).get("karein") or (beat_times or {}).get("cta")
+    if not span or len(span) < 2:
+        return events
+    t0, t1 = span
     events.append({
-        "role": "cta", "beat": "karein", "text": cta,
+        "role": "cta", "beat": "karein" if "karein" in (beat_times or {}) else "cta",
+        "text": cta,
         "start": max(float(t0), float(t1) - 2.8), "end": float(t1),
     })
     events.append({
-        "role": "disclaimer", "beat": "karein",
+        "role": "disclaimer", "beat": "karein" if "karein" in (beat_times or {}) else "cta",
         "text": "सिर्फ़ जानकारी, निवेश सलाह नहीं।",
         "start": float(t0), "end": float(t1),
     })
@@ -94,7 +98,10 @@ def _plan_overlay(topic, beat_times, hook_line, cta):
                 "role": "key", "beat": beat, "text": sub,
                 "start": float(t0), "end": float(t1),
             })
-    t0, t1 = beat_times["cta"]
+    span = (beat_times or {}).get("cta") or (beat_times or {}).get("karein")
+    if not span or len(span) < 2:
+        return events
+    t0, t1 = span
     events.append({
         "role": "cta", "beat": "cta", "text": cta,
         "start": max(float(t0), float(t1) - 2.8), "end": float(t1),

@@ -208,16 +208,33 @@ class ChartTests(unittest.TestCase):
 
 
 class VoiceTests(unittest.TestCase):
-    def test_topic_videos_accept_45_to_75_and_four_beat_gemini_keeps_34(self):
+    def test_topic_videos_accept_40_to_50_and_55_is_only_a_review(self):
         topic = _topic("pat_hammer")
-        self.assertEqual(board_short.live_voice_bounds(topic), (45.0, 75.0))
-        self.assertEqual(board_short._output_bounds(topic, engine="gemini"), (45.0, 75.0))
-        self.assertEqual(board_short._output_bounds(topic, engine="edge"), (45.0, 75.0))
-        self.assertEqual(board_short._gemini_pace_window(topic), (45.0, 75.0))
+        self.assertEqual(trade_plan.VOICE_SECONDS, (40.0, 50.0))
+        self.assertEqual(trade_plan.VOICE_REVIEW_MAX, 55.0)
+        self.assertEqual(board_short.live_voice_bounds(topic), (40.0, 55.0))
+        self.assertEqual(board_short._output_bounds(topic, engine="gemini"), (40.0, 55.0))
+        self.assertEqual(board_short._output_bounds(topic, engine="edge"), (40.0, 55.0))
+        self.assertEqual(board_short._gemini_pace_window(topic), (40.0, 50.0))
+        self.assertEqual(board_short.gemini_accepts(46.0, trade_plan.VOICE_SECONDS), "target")
+        self.assertEqual(board_short.gemini_accepts(52.0, trade_plan.VOICE_SECONDS), "review")
+        self.assertEqual(board_short.gemini_accepts(56.0, trade_plan.VOICE_SECONDS), "miss")
+        self.assertTrue(board_short._gemini_stop(52.0, trade_plan.VOICE_SECONDS, 0))
+        self.assertFalse(board_short._gemini_stop(36.0, trade_plan.VOICE_SECONDS, 0))
+        self.assertFalse(trade_plan.duration_blocks(52.0))
+        self.assertTrue(trade_plan.duration_is_review(52.0))
+        self.assertTrue(trade_plan.duration_blocks(56.0))
+        self.assertTrue(trade_plan.duration_blocks(39.0))
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.assertTrue(trade_plan.note_duration(52.4, topic))
+            self.assertFalse(trade_plan.note_duration(46.0, topic))
+        self.assertIn("[REVIEW] duration 52.4s", buf.getvalue())
         four = {"_live_short": True, "_live_beats": "four", "key": "plain"}
         self.assertEqual(board_short._output_bounds(four, engine="gemini"), (34.0, 65.0))
         self.assertEqual(board_short._gemini_pace_window(four), (34.0, 65.0))
         self.assertEqual(board_short._output_bounds(four, engine="edge"), (45.0, 65.0))
+        self.assertFalse(board_short._gemini_stop(37.0, (34.0, 65.0), 0))
         nifty = {"key": "aaj_ka_nifty", "_live_short": True, "_live_beats": "four"}
         self.assertEqual(board_short.live_voice_bounds(nifty), (45.0, 59.0))
         with tempfile.TemporaryDirectory() as tmp:
@@ -229,9 +246,9 @@ class VoiceTests(unittest.TestCase):
             import quality_check
             import auto_agent
             with mock.patch.object(quality_check, "RUN", run):
-                self.assertEqual(quality_check.short_duration_bounds(), (45.0, 75.0, "45-75s"))
+                self.assertEqual(quality_check.short_duration_bounds(), (40.0, 55.0, "40-55s"))
             with mock.patch.object(auto_agent, "RUN", run):
-                self.assertEqual(auto_agent.short_duration_window(), (45.0, 75.0, "45-75s"))
+                self.assertEqual(auto_agent.short_duration_window(), (40.0, 55.0, "40-55s"))
 
     def test_a_fallback_voice_is_a_review_flag(self):
         topic = _topic("pat_doji")

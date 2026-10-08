@@ -12,10 +12,12 @@ BEATS = (
 )
 REQUIRED = ("context", "entry", "sl", "target", "invalidation")
 DISCLAIMER = "Sirf seekhne ke liye, financial advice nahi."
-VOICE_SECONDS = (45.0, 75.0)
-# 45s at 1.9 words/s is 86 words. 75s is 142. The scripts aim near 60s.
-TOTAL_WORDS = (90, 140)
-WORD_TARGET = (108, 122)
+# The topic the owner asked for is 40–50s. A take up to 55s is a review, not a block.
+VOICE_SECONDS = (40.0, 50.0)
+VOICE_REVIEW_MAX = 55.0
+# 40s at 1.9 words/s is 76 words. 50s is 95. 55s is 104. Scripts aim inside 40–50s.
+TOTAL_WORDS = (84, 100)
+WORD_TARGET = (88, 96)
 WORD_TARGETS = {beat: 14 for beat in BEATS}
 BANNED = (
     "नतीजा", "हिसाब", "बत्ती", "हद", "पूँजी", "क्षमता", "तय करो", "पलटवार", "चीरती",
@@ -462,6 +464,31 @@ def plan_for(key):
     return builder()
 
 
+def hard_voice_seconds():
+    """Seconds that stop a render. 50–55s is inside this and only raises a review."""
+    return (float(VOICE_SECONDS[0]), float(VOICE_REVIEW_MAX))
+
+
+def duration_is_review(seconds):
+    """True when the voice is over the 50s target and still within 55s."""
+    try:
+        seconds = float(seconds)
+    except (TypeError, ValueError):
+        return False
+    _lo, hi = VOICE_SECONDS
+    return hi < seconds <= float(VOICE_REVIEW_MAX) + 1e-9
+
+
+def duration_blocks(seconds):
+    """True outside 40–55s. The review band does not block."""
+    try:
+        seconds = float(seconds)
+    except (TypeError, ValueError):
+        return True
+    lo, hi = hard_voice_seconds()
+    return seconds < lo - 1e-9 or seconds > hi + 1e-9
+
+
 def is_plan_topic(topic):
     if not isinstance(topic, dict):
         return False
@@ -483,9 +510,8 @@ def fill(text, plan):
 
     def repl(match):
         name = match.group(1)
-        if name not in values:
-            raise KeyError(name)
-        return values[name]
+        # A missing token stays as {name}. The gate reports it. It is not a crash.
+        return values.get(name, match.group(0))
 
     return _PLACEHOLDER.sub(repl, str(text or ""))
 
@@ -704,6 +730,18 @@ def voice_review(engine, topic):
     if name == "gemini":
         return False
     print(f"[REVIEW] voice_engine={name or 'unknown'}; primary voice is gemini", flush=True)
+    return True
+
+
+def note_duration(seconds, topic):
+    """50–55s prints a review and returns True. It does not stop the render."""
+    if not is_plan_topic(topic) or not duration_is_review(seconds):
+        return False
+    print(
+        f"[REVIEW] duration {float(seconds):.1f}s is over {VOICE_SECONDS[1]:.0f}s "
+        f"and within {VOICE_REVIEW_MAX:.0f}s",
+        flush=True,
+    )
     return True
 
 
