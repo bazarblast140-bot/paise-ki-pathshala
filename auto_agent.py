@@ -76,6 +76,13 @@ def external_publish_failure(log_text):
     return False
 
 
+def _read_voice_engine():
+    try:
+        return (RUN / "voice_engine.txt").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
 def short_duration_window():
     """Four-beat live Shorts are 45-65s. Six-beat stays 70-95s. Buffer QA stays 45-70s."""
     lo, hi, label = 45.0, 70.0, "45-70s"
@@ -83,10 +90,14 @@ def short_duration_window():
         data = json.loads((RUN / "narration.json").read_text(encoding="utf-8"))
         if str(data.get("source") or "") == "approved":
             import board_short
-            lo, hi = board_short.APPROVED_VOICE_SECONDS
+            lo, hi = board_short.apply_gemini_floor(
+                *board_short.APPROVED_VOICE_SECONDS, _read_voice_engine(),
+            )
             return lo, hi, f"{lo:.0f}-{hi:.0f}s"
         if str(data.get("live_beats") or "") == "four":
-            return 45.0, 65.0, "45-65s"
+            import board_short
+            lo, hi = board_short.apply_gemini_floor(45.0, 65.0, _read_voice_engine())
+            return lo, hi, f"{lo:.0f}-{hi:.0f}s"
         beats = data.get("beats") or {}
         if str(beats.get("udaharan") or "").strip() and str(beats.get("galti") or "").strip():
             return 70.0, 95.0, "70-95s"
