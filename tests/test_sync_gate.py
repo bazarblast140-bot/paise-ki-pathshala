@@ -22,6 +22,23 @@ def _words(beats, times):
     return words
 
 
+class HindiNumberTests(unittest.TestCase):
+    def test_ek_sau_chauvan_is_154(self):
+        self.assertIn("154", sync_gate.normalize("एक सौ चौवन").split())
+
+    def test_chart_labels_do_not_fail_when_the_spoken_words_match(self):
+        beats = {"entry": "एंट्री एक सौ अठारह और स्टॉप अट्ठानवे"}
+        times = {"entry": (0.0, 4.0)}
+        words = _words(beats, times)
+        scenes = [{
+            "start": 0.0, "end": 4.0, "beat": "entry", "kind": "chart-entry",
+            "show": ["ENTRY 118", "SL 98"],
+        }]
+        report = sync_gate.check(words, scenes, beats, times, [])
+        self.assertNotIn("on-screen text is not what this scene says", report["reason"])
+        self.assertEqual(report["scenes"][0]["missing_numbers"], [])
+
+
 class SyncGateTests(unittest.TestCase):
     def setUp(self):
         self.beats = {

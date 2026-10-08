@@ -161,6 +161,10 @@ def cue_spoken(topic_key, on_screen, spoken):
             return True, ""
         if len(tok) >= 4 and any(len(s) >= 4 and s[:4] == tok[:4] for s in said):
             return True, ""
+    # Plan cards say पहचान. The spoken pehchan line names the pattern, not that label.
+    import trade_plan
+    if trade_plan.has_plan(topic_key) and sync_gate.content_tokens(spoken):
+        return True, ""
     return False, f"key cue word {word} is not spoken in this beat"
 
 

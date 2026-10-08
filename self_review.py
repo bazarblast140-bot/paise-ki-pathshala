@@ -99,9 +99,24 @@ def _themes(trends):
     return found
 
 
+def _with_plan_numbers(topic, allowed):
+    """Entry, stop, target, and the other computed plan figures count as sourced."""
+    import trade_plan
+    allowed = set(allowed or ())
+    if not isinstance(topic, dict) or not trade_plan.has_plan(topic.get("key")):
+        return allowed
+    if not (trade_plan.is_plan_topic(topic) or topic.get("_approved_bank")):
+        return allowed
+    try:
+        allowed |= set(trade_plan.number_strings(trade_plan.plan_for(topic.get("key"))))
+    except KeyError:
+        return allowed
+    return allowed
+
+
 def score_hook(narration, topic):
     line = str((narration or {}).get("hook_line") or "")
-    allowed = hook_check.allowed_numbers(topic or {})
+    allowed = _with_plan_numbers(topic, hook_check.allowed_numbers(topic or {}))
     fails = hook_check.check_hook_line(
         line, allowed, max_words=hook_check.hook_word_limit(topic))
     if fails:
@@ -111,7 +126,7 @@ def score_hook(narration, topic):
 
 def score_accuracy(narration, topic, spec=None):
     """Every spoken and on-screen number must trace to the topic or the fetch."""
-    allowed = set(hook_check.allowed_numbers(topic or {}))
+    allowed = _with_plan_numbers(topic, hook_check.allowed_numbers(topic or {}))
     for series in (spec or {}).get("series") or []:
         for point in series.get("points") or []:
             close = point.get("close")

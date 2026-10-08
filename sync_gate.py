@@ -29,8 +29,18 @@ _ONES = {
     "अथ": 8, "नौ": 9, "नो": 9, "दस": 10, "चौदह": 14, "चोद": 14, "चोदा": 14,
     "पंद्रह": 15, "उन्नीस": 19, "उनीस": 19, "बीस": 20, "तेइस": 23,
     "तेईस": 23, "साठ": 60, "सत्तर": 70, "बहत्तर": 72, "नब्बे": 90,
-    "पचानवे": 95, "साथ": 7, "बहध्तर": 72,
+    "पचानवे": 95, "साथ": 7,     "बहध्तर": 72,
 }
+
+
+def _absorb_hindi_ones():
+    """चौवन and the rest of the Hindi table, so एक सौ चौवन is 154."""
+    import hook_check
+    for word, value in hook_check._HINDI_ONES.items():
+        _ONES.setdefault(word, value)
+
+
+_absorb_hindi_ones()
 _HUNDRED = {"सौ", "सो"}
 _SCALE = {"हजार": 1000, "लाख": 100000, "करोड़": 10000000, "करोड": 10000000}
 _FRACTION = {"ढाई": 2.5, "ढाइ": 2.5, "डेढ़": 1.5, "डेढ": 1.5, "डेड": 1.5}
@@ -700,7 +710,10 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
                 f"{row['kind'] or beat} {row['start']:.1f}-{row['end']:.1f}s "
                 f"shows {', '.join(missing_numbers)} before it is said"
             )
-        if show.strip() and not shared:
+        kind = str(row["kind"] or "")
+        # Chart labels (ENTRY, SL) share no tokens with the Hindi line.
+        # The gate is coverage of the beat's spoken words, which `covered` is.
+        if show.strip() and not shared and not kind.startswith("chart-"):
             reasons.append(
                 f"{row['kind'] or beat} {row['start']:.1f}-{row['end']:.1f}s "
                 "on-screen text is not what this scene says"

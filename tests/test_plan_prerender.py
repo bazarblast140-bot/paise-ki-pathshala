@@ -124,6 +124,61 @@ class PreRenderTests(unittest.TestCase):
         self.assertEqual(seen["during"], "edge")
         self.assertIsNone(seen["after"])
 
+    def test_soft_plan_review_does_not_block_gemini(self):
+        import io
+        from contextlib import redirect_stderr, redirect_stdout
+
+        topic = {"key": "pat_hammer", "_live_beats": "plan"}
+        soft = {
+            "public_ok": False,
+            "review_flag": False,
+            "verdict": "HOLD",
+            "overall": 48.3,
+            "parts": {
+                "hook": 100, "visual": 80, "accuracy": 100,
+                "trend": 100, "craft": 0, "sync": 100,
+            },
+            "summary": "overall 48.3 vague explanation: matlab, karein; no visual change across 4.0s",
+            "notes": [
+                "vague explanation (no number, level or step): matlab, karein",
+                "no visual change across 4.0s (1.0-5.0, delta 0.10)",
+            ],
+        }
+        holder = {"review": soft}
+
+        def render(*_args, **_kwargs):
+            (board_short.RUN / "final.mp4").write_bytes(b"mp4")
+            (board_short.RUN / "self_review.json").write_text(
+                json.dumps(holder["review"]), encoding="utf-8",
+            )
+            return {"final_dur": 46.0}
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(board_short, "_render_short", side_effect=render), \
+             mock.patch.object(board_short, "_eleven_spent", return_value=0), \
+             mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("APPROVED", None)
+            os.environ.pop("DRY_RUN", None)
+            out = io.StringIO()
+            with redirect_stdout(out):
+                proven = board_short.prove_full_render(topic, {}, {}, {})
+            self.assertEqual(proven["final_dur"], 46.0)
+            self.assertIn("[REVIEW]", out.getvalue())
+            saved = json.loads((Path(tmp) / "self_review.json").read_text(encoding="utf-8"))
+            self.assertTrue(saved["review_flag"])
+            self.assertFalse(saved["public_ok"])
+            holder["review"] = {
+                **soft,
+                "parts": {**soft["parts"], "accuracy": 0},
+                "notes": ["numbers with no source: ['100', '118']"],
+                "summary": "numbers with no source: ['100', '118']",
+            }
+            err = io.StringIO()
+            with redirect_stderr(err), self.assertRaises(SystemExit):
+                board_short.prove_full_render(topic, {}, {}, {})
+            self.assertIn("pre-render HOLD", err.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
