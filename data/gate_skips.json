@@ -44,6 +44,7 @@
   "intraday_trend_range",
   "intraday_vwap",
   "intraday_volume",
-  "opt_sebi_fy25_study"
+  "opt_sebi_fy25_study",
+  "aaj_ka_nifty"
  ]
 }
