@@ -2536,6 +2536,7 @@ ENGINES = []
 ELEVEN_EXHAUSTED = False
 ELEVEN_REMAINING = None
 VOICE_FALLBACK_REASON = ""
+_VOICE_TOPIC = None
 
 
 def _reset_voice_state():
@@ -2555,9 +2556,9 @@ def _switch_to_edge(reason):
         eleven_voice.log_fallback(VOICE_FALLBACK_REASON)
 
 
-def _note_edge_engine():
+def _note_voice_engine(engine):
     """The Actions job summary names the engine the slot actually spoke."""
-    line = "voice_engine=edge"
+    line = f"voice_engine={engine}"
     print(line, flush=True)
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not path:
@@ -2566,18 +2567,23 @@ def _note_edge_engine():
         handle.write(line + "\n")
 
 
-def _write_spoken_engine(engine):
+def _note_edge_engine():
+    _note_voice_engine("edge")
+
+
+def _write_spoken_engine(engine, elevenlabs_attempted=None):
     """voice_meta is what the ledger copies into voice_engine."""
     key_set = bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
+    if elevenlabs_attempted is None:
+        elevenlabs_attempted = key_set and eleven_voice.paid_voice_allowed()
     eleven_voice.write_voice_meta(
         RUN,
         engine,
         VOICE_FALLBACK_REASON,
-        elevenlabs_attempted=key_set and eleven_voice.paid_voice_allowed(),
+        elevenlabs_attempted=elevenlabs_attempted,
     )
     credit_log.set_tts_engine(engine, VOICE_FALLBACK_REASON)
-    if engine == "edge" and VOICE_FALLBACK_REASON:
-        _note_edge_engine()
+    _note_voice_engine(engine)
     ok(f"voice engine: {engine}" + (f" ({VOICE_FALLBACK_REASON})" if VOICE_FALLBACK_REASON else ""))
     return engine
 
@@ -2855,19 +2861,122 @@ def tts(text, path, c):
     die(f"TTS fail: {path.name}")
 
 
-def synthesize_short_voices(spoken, c, beats=None):
-    """Speak the requested beats. A live quota or credit shortfall uses Edge."""
-    global ENGINES
+def _beat_tts_path(beat):
+    """Gemini writes a wav. ElevenLabs and Edge still write an mp3."""
+    wav = RUN / f"tts_{beat}.wav"
+    if wav.exists():
+        return wav
+    mp3 = RUN / f"tts_{beat}.mp3"
+    if mp3.exists():
+        return mp3
+    return None
+
+
+def _drop_gemini_audio(beats):
+    """A failed Gemini take must not be trimmed or captioned later."""
+    for name in ("gemini_voice.wav", "gemini_words.json", "words.json"):
+        (RUN / name).unlink(missing_ok=True)
+    for beat in beats:
+        for name in (
+            f"tts_{beat}.wav", f"tts_{beat}.engine", f"tts_{beat}.textid",
+            f"voice_clean_{beat}.wav",
+        ):
+            (RUN / name).unlink(missing_ok=True)
+
+
+def _gemini_script(spoken, beats):
+    """One speakable script. Folding stays on a copy until Gemini is kept."""
+    import approved_script
+    folded = {}
+    parts = []
+    for beat in beats:
+        text = spoken.get(beat) or ""
+        if not approved_script.active():
+            text = fold_roman_words(text)
+        folded[beat] = text
+        voice = _voice_text(text).strip()
+        approved_script.refuse_paid_mismatch(voice)
+        if voice:
+            parts.append(voice)
+    return folded, " ".join(parts)
+
+
+def _expected_voice_seconds(spoken, beats, c):
+    words = sum(len(_voice_text(spoken.get(beat) or "").split()) for beat in beats)
+    voice = (c or {}).get("voice") or {}
+    try:
+        wps = float(voice.get("words_per_second") or 1.9)
+    except (TypeError, ValueError):
+        wps = 1.9
+    if wps <= 0:
+        wps = 1.9
+    return (words / wps) if words else 0.0
+
+
+def _speak_gemini(spoken, c, beats, topic):
+    """One Charon request, then beat files timed from whisper word ends."""
+    import gemini_voice
+    folded, script = _gemini_script(spoken, beats)
+    if not script:
+        raise gemini_voice.GeminiFallback("Gemini TTS script was empty")
+    dest = RUN / "gemini_voice.wav"
+    gemini_voice.write_speech(script, dest)
+    seconds = gemini_voice.wav_seconds(dest)
+    expected = _expected_voice_seconds(folded, beats, c)
+    if gemini_voice.duration_far(seconds, expected):
+        raise gemini_voice.GeminiFallback(
+            f"duration {seconds:.1f}s is far from expected {expected:.1f}s"
+        )
+    for beat in beats:
+        spoken[beat] = folded[beat]
+    gemini_voice.split_into_beats(dest, spoken, beats, RUN)
+    try:
+        raw = _trim_rendered(beats)
+    except SystemExit as exc:
+        raise gemini_voice.GeminiFallback(str(exc))
+    _total = sum(raw.values())
+    if topic is not None:
+        lo, hi = _output_bounds(topic)
+        # Seams add a few hundredths after this trim. Stay inside the same gate.
+        if _total < lo or _total > hi:
+            raise gemini_voice.GeminiFallback(
+                f"duration {_total:.1f}s is outside {lo:.0f}-{hi:.0f}s"
+            )
+    for beat in beats:
+        (RUN / f"tts_{beat}.engine").write_text("gemini", encoding="utf-8")
+    ENGINES.append("gemini")
+    return _total
+
+
+def synthesize_short_voices(spoken, c, beats=None, topic=None):
+    """Gemini Charon once, then Rudra when credits cover it, then Edge Madhur."""
+    global ENGINES, VOICE_FALLBACK_REASON
+    if topic is None:
+        topic = _VOICE_TOPIC
     beats = tuple(beats) if beats else tuple(b for b in BEATS if b in (spoken or {}))
     if (RUN / "narration_block.json").exists():
         die("narration blocked; refusing TTS")
     _reset_voice_state()
     proof_audio = os.environ.get("PROOF_FREE_AUDIO", "").strip().lower()
+    gemini_note = ""
+    if proof_audio not in ("edge", "silence") and os.environ.get("GEMINI_API_KEY", "").strip():
+        import gemini_voice
+        try:
+            _speak_gemini(spoken, c, beats, topic)
+            return _write_spoken_engine("gemini", elevenlabs_attempted=False)
+        except gemini_voice.GeminiFallback as exc:
+            gemini_note = gemini_voice.redact(exc.reason)
+            print(f"[warn] Gemini TTS failed ({gemini_note}). Falling back.", flush=True)
+            _drop_gemini_audio(beats)
     wants_paid = (
         proof_audio not in ("edge", "silence")
         and eleven_voice.paid_voice_allowed()
         and str(((c or {}).get("voice") or {}).get("engine") or "elevenlabs").lower() == "elevenlabs"
     )
+    # The paid switch still blocks a surprise ElevenLabs call. After Gemini
+    # has already failed, Edge speaks instead of ending the slot.
+    if gemini_note and not eleven_voice.paid_tts_enabled():
+        wants_paid = False
     if wants_paid:
         eleven_voice.require_paid_tts()
         eleven_voice.ensure_library_voice(c)
@@ -2889,7 +2998,9 @@ def synthesize_short_voices(spoken, c, beats=None):
         _switch_to_edge(exc.reason)
         once()
     engine = "edge" if "edge" in ENGINES else "elevenlabs"
-    # Word timestamps and every later gate run on this audio, Edge or ElevenLabs.
+    if gemini_note and not VOICE_FALLBACK_REASON:
+        VOICE_FALLBACK_REASON = gemini_note
+    # Word timestamps and every later gate run on this audio.
     return _write_spoken_engine(engine)
 
 
@@ -3635,14 +3746,60 @@ def _install_scene_cards(topic, spoken, beat_times, scenes, audio_words=None):
     ]
 
 
+def _gemini_word_timings(beat_times):
+    """Words from the one Gemini file, shifted onto each trimmed beat."""
+    path = RUN / "gemini_words.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    per_beat = data.get("beats") if isinstance(data, dict) else None
+    if not isinstance(per_beat, dict):
+        return None
+    import sync_gate
+    words = []
+    for beat in timed_beats(beat_times):
+        rows = per_beat.get(beat)
+        if not rows:
+            return None
+        source = _beat_tts_path(beat)
+        offset = 0.0
+        if source is not None:
+            try:
+                offset = sync_gate.speech_offset(sync_gate.pcm(source))
+            except Exception:  # noqa: BLE001 — the stored clock is still usable
+                offset = 0.0
+        t0 = float(beat_times[beat][0]) - offset
+        for row in rows:
+            text = str(row.get("word") or "").strip()
+            if not text:
+                continue
+            start = float(row.get("start") or 0) + t0
+            end = float(row.get("end") or 0) + t0
+            if end <= float(beat_times[beat][0]) - 0.05:
+                continue
+            words.append({"word": text, "start": start, "end": end})
+    return words or None
+
+
 def _word_timings(beat_audio, beat_times):
-    """Whisper words for the caption windows. None when transcription fails."""
+    """Whisper words for the caption windows. None when transcription fails.
+
+    A Gemini Short already has one faster-whisper pass on the whole file.
+    Those timestamps time the captions and the chart cues. Other engines
+    transcribe each beat, which is the same gate.
+    """
+    stored = _gemini_word_timings(beat_times)
+    if stored:
+        return stored
     import sync_gate
     sources = {}
     for beat in timed_beats(beat_times):
-        mp3 = RUN / f"tts_{beat}.mp3"
-        if mp3.exists():
-            sources[beat] = mp3
+        source = _beat_tts_path(beat)
+        if source is not None:
+            sources[beat] = source
     return sync_gate.transcribe_beats(beat_audio, beat_times, sources=sources or None)
 
 
@@ -4172,10 +4329,12 @@ def load_topic():
 def _trim_rendered(beats):
     raw = {}
     for beat in beats:
-        mp3 = RUN / f"tts_{beat}.mp3"
+        src = _beat_tts_path(beat)
+        if src is None:
+            die(f"TTS beat {beat} has no audio file")
         clean = RUN / f"voice_clean_{beat}.wav"
         subprocess.run([
-            "ffmpeg", "-v", "error", "-y", "-i", str(mp3),
+            "ffmpeg", "-v", "error", "-y", "-i", str(src),
             "-af",
             "silenceremove=start_periods=1:start_duration=0.10:start_threshold=-55dB,"
             "areverse,silenceremove=start_periods=1:start_duration=0.10:start_threshold=-55dB,areverse",
@@ -4405,7 +4564,24 @@ def fit_estimated_duration(narration, topic, c, spec):
 
 
 def _rerender_beats(spoken, c, beats):
-    """Speak only the beats whose words changed. Leave the others on disk."""
+    """Speak only the beats whose words changed. Leave the others on disk.
+
+    Gemini is one request for the whole Short. A later duration repair does
+    not call it again, and it does not leave some beats on Charon.
+    """
+    gemini = []
+    for beat in list(beats) + list(BEATS):
+        engine_file = RUN / f"tts_{beat}.engine"
+        try:
+            if engine_file.exists() and engine_file.read_text(encoding="utf-8").strip() == "gemini":
+                if beat not in gemini:
+                    gemini.append(beat)
+        except OSError:
+            pass
+    if gemini:
+        beats = tuple(dict.fromkeys([*gemini, *beats]))
+        print("[voice] Gemini audio missed the duration gate; re-voicing every beat on the fallback")
+        _drop_gemini_audio(beats)
     need = sum(len(_voice_text(str(spoken.get(beat) or ""))) for beat in beats)
     floor = eleven_voice.LIVE_CREDIT_FLOOR
     switched = False
@@ -4420,7 +4596,10 @@ def _rerender_beats(spoken, c, beats):
         )
         switched = True
     for beat in beats:
-        for name in (f"tts_{beat}.mp3", f"tts_{beat}.engine", f"tts_{beat}.textid", f"voice_clean_{beat}.wav"):
+        for name in (
+            f"tts_{beat}.mp3", f"tts_{beat}.wav", f"tts_{beat}.engine",
+            f"tts_{beat}.textid", f"voice_clean_{beat}.wav",
+        ):
             (RUN / name).unlink(missing_ok=True)
         try:
             tts(spoken[beat], RUN / f"tts_{beat}.mp3", c)
@@ -4617,7 +4796,12 @@ def prepare_spoken(spoken, narration, topic, c, spec):
         spoken = {beat: narration["beats"][beat] for beat in order}
     (RUN / "tts_text.txt").unlink(missing_ok=True)
     before = dict(spoken)
-    synthesize_short_voices(spoken, c, beats=order)
+    global _VOICE_TOPIC
+    _VOICE_TOPIC = topic
+    try:
+        synthesize_short_voices(spoken, c, beats=order)
+    finally:
+        _VOICE_TOPIC = None
     raw = _trim_rendered(order)
     beat_times, total = _timeline(raw, order)
     if not topic.get("_live_short"):
@@ -5015,15 +5199,25 @@ def _reuse_proven_frames(old_scenes, beat_times, order):
 
 
 def _pay_and_remux(topic, n, c, spec, source, proven):
-    """ElevenLabs, then mux that voice and review the file that would upload."""
-    eleven_voice.require_paid_tts()
+    """The upload voice, then mux it and review the file that would upload.
+
+    Gemini is not an ElevenLabs spend. The paid switch is checked only when
+    that one request fails and Rudra would be next.
+    """
+    if not os.environ.get("GEMINI_API_KEY", "").strip():
+        eleven_voice.require_paid_tts()
     spoken = proven["spoken"]
     n = proven.get("narration") or n
     order = tuple(proven["order"])
     hook_line = proven.get("hook_line") or n.get("hook_line") or ""
     cta = proven.get("cta") or ""
     (RUN / "tts_text.txt").unlink(missing_ok=True)
-    synthesize_short_voices(spoken, c, beats=order)
+    global _VOICE_TOPIC
+    _VOICE_TOPIC = topic
+    try:
+        synthesize_short_voices(spoken, c, beats=order)
+    finally:
+        _VOICE_TOPIC = None
     raw = _trim_rendered(order)
     beat_times, total = _timeline(raw, order)
     lo, hi = _output_bounds(topic)
