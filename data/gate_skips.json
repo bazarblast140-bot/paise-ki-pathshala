@@ -41,6 +41,7 @@
   "opt_bear_put_spread",
   "opt_straddle",
   "intraday_orb",
-  "intraday_trend_range"
+  "intraday_trend_range",
+  "intraday_vwap"
  ]
 }
