@@ -5,7 +5,7 @@ import os
 import tempfile
 import unittest
 import wave
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -150,7 +150,7 @@ class GateTests(unittest.TestCase):
             self.assertTrue(any("2026" in reason for reason in claimed["reasons"]))
             (root / "claim" / "market_freshness.json").write_text(
                 json.dumps({
-                    "as_of": "2026-10-02",
+                    "as_of": date.today().isoformat(),
                     "on_screen": True,
                     "note": "आज market closed 2026",
                 }),

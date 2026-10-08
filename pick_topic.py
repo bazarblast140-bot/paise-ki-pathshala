@@ -150,6 +150,7 @@ def _pick_fresh(bank, flag, avoid_cats, research, fmt, now=None, skips=None):
     unused = [t for t in bank["topics"]
               if not t.get(flag) and t.get("key") not in blocked
               and t.get("key") not in skipped
+              and not t.get("data_short")
               and not _is_competitor_duplicate(t) and not is_placeholder_topic(t)]
     if not unused:
         return None

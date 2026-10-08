@@ -2147,6 +2147,7 @@ SCENES = {
     "titan_vs_yes_2015": lambda: compare_lines("TITAN", "YES BANK", 2015),
     "circuit": circuit, "bse_1875": bse_timeline, "nifty_base": nifty_base, "preopen": preopen,
     "muhurat": muhurat, "depository": depository,
+    "aaj_ka_nifty": lambda: (lambda _beat, img: (img, img)),
 }
 
 
@@ -3092,6 +3093,9 @@ def _paint_topic_scene(topic, beat, index=0, n=1):
     import scene_frames
     key = str((topic or {}).get("key") or "").strip()
     spoken = scene_frames._scene_card_text(topic, beat, index, n)
+    if key == "aaj_ka_nifty":
+        import nifty_day
+        return nifty_day.paint_frame(topic, beat, index, n, spoken)
     if candle_levels(topic, key):
         return _paint_level_scene(topic, beat, index, n, spoken)
     img = K.background()
