@@ -11,6 +11,7 @@ import approved_bank
 import board_short
 import hook_check
 import pattern_charts
+import trade_plan
 
 IST = timezone(timedelta(hours=5, minutes=30))
 ROOT = Path(__file__).resolve().parent.parent
@@ -42,24 +43,20 @@ class ScriptTests(unittest.TestCase):
             narration = approved_bank.narration_from(script)
             fails = board_short.check_narration(narration, topic)
             self.assertEqual(fails, [], (key, fails))
-            counts = {beat: len(narration["beats"][beat].split()) for beat in ORDER}
-            total = sum(counts.values())
-            self.assertGreaterEqual(counts["hook"], 18, key)
-            self.assertLessEqual(counts["hook"], 23, key)
-            self.assertGreaterEqual(counts["pehchan"], 23, key)
-            self.assertLessEqual(counts["matlab"], 42, key)
-            self.assertGreaterEqual(counts["matlab"], 29, key)
-            self.assertGreaterEqual(counts["karein"], 26, key)
-            self.assertGreaterEqual(total, 100, key)
-            self.assertLessEqual(total, 108, key)
-            self.assertLessEqual(len(narration["hook_line"].split()), 11, key)
+            self.assertEqual(tuple(narration["beats"]), trade_plan.BEATS)
+            self.assertTrue(narration["beats"]["cta"].endswith(trade_plan.DISCLAIMER), key)
+            self.assertEqual(trade_plan.raw_digit_faults(script), [], key)
+            total = sum(len(narration["beats"][beat].split()) for beat in trade_plan.BEATS)
+            self.assertGreaterEqual(total, 90, key)
+            self.assertLessEqual(total, 140, key)
+            self.assertLessEqual(len(narration["hook_line"].split()), 12, key)
             blob = " ".join(narration["beats"].values())
             for word in BANNED:
                 self.assertNotIn(word, blob, key)
             spoken = hook_check.extract_numbers(blob)
-            chart = pattern_charts.prices_of(pattern_charts.PATTERNS[key]) | {"1", "2", "3"}
+            chart = trade_plan.number_strings(trade_plan.plan_for(key))
             self.assertFalse(spoken - chart, (key, spoken - chart))
-            for beat in ORDER:
+            for beat in trade_plan.BEATS:
                 frame = scene_frames.frames_for(topic, beat, 1, {"mode": "schematic"})[0][0]
                 region = frame.chart_region
                 height = (region[3] - region[1]) / frame.size[1]

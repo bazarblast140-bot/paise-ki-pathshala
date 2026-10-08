@@ -273,17 +273,21 @@ class PiercingLevelTests(unittest.TestCase):
         import json
         from pathlib import Path
         stored = json.loads((Path(__file__).resolve().parents[1] / "approved" / "piercing.json").read_text())
-        self.assertEqual(stored["hook_line"], PIERCING_SCRIPT["hook_line"])
+        self.assertEqual(stored["hook_line"], "पियर्सिंग लाइन पर खरीद कब करें?")
         self.assertLessEqual(len(stored["hook_line"].split()), 12)
-        topic = self._topic()
+        self.assertNotIn("owner_approved", stored)
+        import trade_plan
+        narration = trade_plan.narration_from({**stored, "key": "piercing"})
+        plan_topic = {"key": "piercing", "_live_beats": "plan", "_approved_bank": True}
+        self.assertEqual(trade_plan.script_fails(narration, plan_topic), [])
         self.assertEqual(
             hook_check.check_hook_line(
-                stored["hook_line"], hook_check.allowed_numbers(topic), max_words=12,
+                stored["hook_line"], trade_plan.number_strings(trade_plan.plan_for("piercing")), max_words=12,
             ),
             [],
         )
         import scene_pace
-        self.assertEqual(scene_pace.vague_beats(stored["beats"]), [])
+        self.assertEqual(scene_pace.vague_beats(narration["beats"], order=trade_plan.BEATS), [])
 
     def test_karein_draws_the_confirmation_candle_when_that_line_is_said(self):
         topic = self._topic()

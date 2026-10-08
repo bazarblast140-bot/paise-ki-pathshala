@@ -3199,6 +3199,12 @@ def _paint_topic_cover(topic):
 
 def paint_chart_board(topic, beat, index=0, n=1):
     """One Chart Board frame. The spec is this scene's line, or the render fails."""
+    import trade_plan
+    key = str((topic or {}).get("key") or "").strip()
+    if trade_plan.is_plan_topic(topic) and trade_plan.has_plan(key):
+        import scene_frames
+        spoken = scene_frames._scene_card_text(topic, beat, index, n)
+        return trade_plan.paint_frame(topic, beat, index, n, spoken)
     reason = topic_chart_block(topic)
     if reason:
         raise ChartVoiceError(reason)

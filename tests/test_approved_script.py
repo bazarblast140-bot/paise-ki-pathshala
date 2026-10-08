@@ -174,12 +174,9 @@ class ApprovedScriptTests(unittest.TestCase):
         approved = json.loads(
             (ROOT / "approved" / "risk_daily_loss_limit.json").read_text(encoding="utf-8")
         )
-        total = sum(len(approved["beats"][beat]) for beat in ORDER)
-        self.assertEqual(
-            [len(approved["beats"][beat]) for beat in ORDER],
-            [96, 182, 189, 186],
-        )
-        self.assertEqual(total, 653)
+        import trade_plan
+        self.assertEqual(tuple(approved["beats"]), trade_plan.BEATS)
+        self.assertTrue(approved["beats"]["cta"].endswith(trade_plan.DISCLAIMER))
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "tts_risk_daily_loss_limit.txt").write_text(_lines(), encoding="utf-8")
@@ -196,7 +193,8 @@ class ApprovedScriptTests(unittest.TestCase):
             script["approved_hashes"]["pehchan"],
             approved_script.beat_digest(approved["beats"]["pehchan"]),
         )
-        self.assertEqual(script["beats"]["karein"], approved["beats"]["karein"])
+        self.assertEqual(script["beats"]["entry"], approved["beats"]["entry"])
+        self.assertEqual(script["approved_hashes"]["entry"], approved_script.beat_digest(approved["beats"]["entry"]))
         out = io.StringIO()
         with redirect_stdout(out):
             # Relative date: a hardcoded day goes stale and breaks Preflight

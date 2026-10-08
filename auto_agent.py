@@ -88,6 +88,8 @@ def short_duration_window():
     lo, hi, label = 45.0, 70.0, "45-70s"
     try:
         data = json.loads((RUN / "narration.json").read_text(encoding="utf-8"))
+        if data.get("plan"):
+            return 45.0, 75.0, "45-75s"
         if str(data.get("source") or "") == "approved":
             import board_short
             lo, hi = board_short.apply_gemini_floor(

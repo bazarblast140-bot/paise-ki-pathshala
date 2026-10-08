@@ -272,6 +272,8 @@ def _live_lesson(c):
 def resolve_live_beats(topic=None):
     """four or six. Topic flag, then LIVE_BEATS, then config.json. Default four."""
     raw = str((topic or {}).get("_live_beats") or "").strip().lower()
+    if raw == "plan":
+        return "plan"
     if raw in ("four", "six"):
         return raw
     raw = os.environ.get("LIVE_BEATS", "").strip().lower()
@@ -290,6 +292,8 @@ def resolve_live_beats(topic=None):
 
 def four_live(topic):
     """The default live Short: four beats, ~55s, not the six-beat lesson."""
+    if resolve_live_beats(topic) == "plan":
+        return False
     return (
         bool((topic or {}).get("_live_short"))
         and not (topic or {}).get("_atr")
@@ -385,6 +389,9 @@ def live_voice_bounds(topic):
     """
     if str((topic or {}).get("key") or "") == "aaj_ka_nifty":
         return (45.0, 59.0)
+    import trade_plan
+    if trade_plan.is_plan_topic(topic):
+        return trade_plan.VOICE_SECONDS
     if _approved_narration(None, topic):
         return APPROVED_VOICE_SECONDS
     if four_live(topic):
@@ -398,6 +405,9 @@ def _topic_voice(topic):
 
 def _lesson(topic):
     """Beat order, per-beat targets, accept window, and the prompt's target band."""
+    import trade_plan
+    if trade_plan.is_plan_topic(topic):
+        return trade_plan.BEATS, trade_plan.WORD_TARGETS, trade_plan.TOTAL_WORDS, trade_plan.WORD_TARGET
     if (topic or {}).get("_live_short") and not (topic or {}).get("_atr"):
         wps = voice_wps(_topic_voice(topic))
         if resolve_live_beats(topic) == "six":
@@ -408,6 +418,9 @@ def _lesson(topic):
 
 
 def timed_beats(beat_times):
+    import trade_plan
+    if beat_times and "entry" in beat_times and "cta" in beat_times:
+        return tuple(beat for beat in trade_plan.BEATS if beat in beat_times)
     found = tuple(b for b in LIVE_ORDER if b in (beat_times or {}))
     return found or BEATS
 
@@ -462,6 +475,13 @@ def _teaching_beat_ranges():
 
 
 def check_narration(n, topic):
+    import trade_plan
+    if trade_plan.is_plan_topic(topic) or (n or {}).get("plan"):
+        checked = dict(topic or {})
+        if (n or {}).get("plan"):
+            checked["_live_beats"] = "plan"
+            checked["key"] = checked.get("key") or n.get("key")
+        return trade_plan.script_fails(n, checked)
     fails = []
     beats = n.get("beats") or {}
     if topic.get("_atr") or not topic.get("_live_short"):
@@ -2220,7 +2240,7 @@ def narration(topic, c, spec=None):
             die(f"approved script missing; refusing a DeepSeek script: {exc}")
         topic["_approved_bank"] = True
         topic["_live_short"] = True
-        topic["_live_beats"] = "four"
+        topic["_live_beats"] = "plan" if n.get("plan") else "four"
         topic["_voice"] = {"words_per_second": 1.9}
         topic["_spoken_beats"] = dict(n["beats"])
         topic["facts"] = list(n.get("facts") or topic.get("facts") or [])
@@ -2608,6 +2628,15 @@ def _write_spoken_engine(engine, elevenlabs_attempted=None):
     )
     credit_log.set_tts_engine(engine, VOICE_FALLBACK_REASON)
     _note_voice_engine(engine)
+    import trade_plan
+    if trade_plan.voice_review(engine, _VOICE_TOPIC):
+        try:
+            meta_path = RUN / "voice_meta.json"
+            data = json.loads(meta_path.read_text(encoding="utf-8"))
+            data["review"] = True
+            meta_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        except (OSError, ValueError):
+            pass
     ok(f"voice engine: {engine}" + (f" ({VOICE_FALLBACK_REASON})" if VOICE_FALLBACK_REASON else ""))
     return engine
 
@@ -2908,6 +2937,21 @@ def _drop_gemini_audio(beats):
             (RUN / name).unlink(missing_ok=True)
 
 
+def _fold_voice_line(text):
+    """Fold Latin, but keep the exact English disclaimer the owner asked for."""
+    import trade_plan
+    mark = trade_plan.DISCLAIMER
+    raw = str(text or "")
+    if mark not in raw:
+        return fold_roman_words(raw)
+    head, _, tail = raw.partition(mark)
+    folded = fold_roman_words(head).rstrip()
+    rest = fold_roman_words(tail).strip()
+    if rest:
+        return f"{folded} {mark} {rest}".strip()
+    return f"{folded} {mark}".strip()
+
+
 def _gemini_script(spoken, beats):
     """One speakable script. Folding stays on a copy until Gemini is kept."""
     import approved_script
@@ -2916,7 +2960,7 @@ def _gemini_script(spoken, beats):
     for beat in beats:
         text = spoken.get(beat) or ""
         if not approved_script.active():
-            text = fold_roman_words(text)
+            text = _fold_voice_line(text)
         folded[beat] = text
         voice = _voice_text(text).strip()
         approved_script.refuse_paid_mismatch(voice)
@@ -2962,7 +3006,10 @@ def _restore_run_files(saved):
 
 
 def _gemini_pace_window(topic):
-    """34-65s for the four-beat gate. Other windows stay as they are."""
+    """34-65s for a four-beat Gemini take. Topic plans stay 45-75s."""
+    import trade_plan
+    if trade_plan.is_plan_topic(topic):
+        return trade_plan.VOICE_SECONDS
     if topic is None or not four_live(topic):
         return None
     lo, hi = _output_bounds(topic, engine="")
@@ -5080,6 +5127,9 @@ def main():
 
 def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
     """Picture, free or paid audio, and final.mp4. Callers decide which voice."""
+    import trade_plan
+    if trade_plan.is_plan_topic(topic):
+        trade_plan.require(topic, n)
     if topic.get("_live_short") and not topic.get("_atr"):
         n["live_beats"] = resolve_live_beats(topic)
     # CTA/disclaimer stay on-screen; do not spend TTS credits speaking them.
