@@ -352,6 +352,7 @@ class SpeakTests(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as tmp, \
                      mock.patch.object(board_short, "RUN", Path(tmp)), \
                      mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+                     mock.patch.object(gemini_voice, "RETRY_WAIT_S", 0), \
                      mock.patch.dict(os.environ, self._env(PAID_TTS_ENABLED="false")), \
                      mock.patch("requests.post", post), \
                      mock.patch.object(board_short, "_edge", edge), \
@@ -360,7 +361,8 @@ class SpeakTests(unittest.TestCase):
                         _spoken("एक दो तीन चार " * 8), VOICE)
                     meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
                 text = buf.getvalue()
-                self.assertEqual(posts["n"], 1)
+                expect_posts = 2 if name in ("429", "500") else 1
+                self.assertEqual(posts["n"], expect_posts)
                 self.assertEqual(engine, "edge")
                 self.assertEqual(meta["engine"], "edge")
                 self.assertFalse(meta["elevenlabs_attempted"])
@@ -403,6 +405,7 @@ class SpeakTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, \
              mock.patch.object(board_short, "RUN", Path(tmp)), \
              mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.object(gemini_voice, "RETRY_WAIT_S", 0), \
              mock.patch.dict(os.environ, {**self._env(), "ELEVENLABS_API_KEY": "eleven-key"}), \
              mock.patch("requests.post", post), \
              mock.patch("requests.get", get), \
@@ -414,7 +417,7 @@ class SpeakTests(unittest.TestCase):
         self.assertEqual(engine, "elevenlabs")
         self.assertTrue(meta["elevenlabs_attempted"])
         self.assertIn("HTTP 429", meta["fallback_reason"])
-        self.assertEqual(sum("generativelanguage" in url for url in posts["urls"]), 1)
+        self.assertEqual(sum("generativelanguage" in url for url in posts["urls"]), 2)
         self.assertEqual(sum("elevenlabs" in url for url in posts["urls"]), len(ORDER))
         self.assertNotIn(SECRET, buf.getvalue())
 
@@ -437,19 +440,27 @@ class SpeakTests(unittest.TestCase):
             path.write_bytes(b"e" * 2000)
 
         edge.calls = []
+        ensured = []
+
+        def ensure(_c):
+            ensured.append("voice")
+            return "ypnkIsDASPgHZuanrF0q"
+
         with tempfile.TemporaryDirectory() as tmp, \
              mock.patch.object(board_short, "RUN", Path(tmp)), \
              mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.object(gemini_voice, "RETRY_WAIT_S", 0), \
              mock.patch.dict(os.environ, {**self._env(), "ELEVENLABS_API_KEY": "eleven-key",
                                           "GITHUB_STEP_SUMMARY": str(Path(tmp) / "summary.txt")}), \
              mock.patch("requests.post", post), \
              mock.patch("requests.get", get), \
-             mock.patch.object(board_short.eleven_voice, "ensure_library_voice", return_value="ypnkIsDASPgHZuanrF0q"), \
+             mock.patch.object(board_short.eleven_voice, "ensure_library_voice", side_effect=ensure), \
              mock.patch.object(board_short, "_edge", edge), \
              redirect_stdout(io.StringIO()):
             engine = board_short.synthesize_short_voices(_spoken(), VOICE)
             summary = (Path(tmp) / "summary.txt").read_text(encoding="utf-8")
             meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
+        self.assertEqual(ensured, [])
         self.assertEqual(engine, "edge")
         self.assertIn("1000", meta["fallback_reason"])
         self.assertIn("voice_engine=edge", summary)

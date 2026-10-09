@@ -3100,7 +3100,10 @@ def _one_gemini_take(spoken, c, beats, folded, script, style, durations, attempt
     try:
         raw = _trim_rendered(beats)
     except SystemExit as exc:
-        raise gemini_voice.GeminiFallback(str(exc))
+        reason = getattr(exc, "reason", None) or str(exc)
+        if str(reason).strip() in {"", "1", "None"}:
+            reason = f"Gemini audio trim failed (exit {getattr(exc, 'code', 1)})"
+        raise gemini_voice.GeminiFallback(str(reason))
     total = sum(raw.values())
     durations.append(total)
     print(f"[gemini] take {attempt + 1}: {total:.1f}s", flush=True)
@@ -3197,8 +3200,12 @@ def synthesize_short_voices(spoken, c, beats=None, topic=None):
         wants_paid = False
     if wants_paid:
         eleven_voice.require_paid_tts()
-        eleven_voice.ensure_library_voice(c)
+        # The floor is a subscription read. It runs before the voice lookup
+        # and before any TTS request. Below 1000 characters, ElevenLabs is
+        # not called at all.
         preflight_eleven_credits([spoken[b] for b in beats])
+        if not ELEVEN_EXHAUSTED:
+            eleven_voice.ensure_library_voice(c)
 
     def once():
         global ENGINES
@@ -4052,12 +4059,79 @@ def _frame_lesson_text(frame):
     return lines
 
 
+def _plan_screen_spans(topic):
+    """Overlay events plus the hook RR box, pills, and the target counter.
+
+    Each row is (start, end, text). A computed plan value counts when one of
+    these is on screen within 1.5s of the spoken word. Hook numbers use the
+    hook RR box and the ENTRY/SL/TARGET pills for the whole hook beat.
+    """
+    spans = []
+    if not topic:
+        return spans, set()
+    import trade_plan
+    if not trade_plan.is_plan_topic(topic):
+        return spans, set()
+    try:
+        plan = trade_plan.plan_for(topic.get("key"))
+    except KeyError:
+        return spans, set()
+    values = set(trade_plan.number_strings(plan))
+    last = 0.0
+    beats = topic.get("_beat_times") or {}
+    for span in beats.values():
+        if span and len(span) >= 2:
+            last = max(last, float(span[1]))
+    for event in topic.get("_chart_overlays") or []:
+        start = float(event.get("start") or 0)
+        end = float(event.get("end") or start)
+        spans.append((start, max(end, start), str(event.get("label") or "")))
+    target = beats.get("target")
+    if target and len(target) >= 1:
+        spans.append((
+            float(target[0]), max(last, float(target[0])),
+            f"TARGET {trade_plan.fmt(plan.target)}",
+        ))
+    hook = beats.get("hook")
+    if hook and len(hook) >= 2:
+        import motion_lib
+        end = max(float(hook[1]), float(motion_lib.hook_hold_until(topic)))
+        for text in (
+            f"ENTRY {trade_plan.fmt(plan.entry)}",
+            f"SL {trade_plan.fmt(plan.sl)}",
+            f"TARGET {trade_plan.fmt(plan.target)}",
+            f"RR {plan.rr_text}",
+            f"{plan.sr_name} {trade_plan.fmt(plan.sr)}",
+            trade_plan.fmt(plan.risk),
+            trade_plan.fmt(plan.reward),
+        ):
+            spans.append((float(hook[0]), end, text))
+    return spans, values
+
+
+def _near_plan_numbers(spans, values, t, radius=1.5):
+    """Plan values drawn anywhere in the ±radius window around t."""
+    if not values:
+        return set()
+    import sync_gate
+    lo, hi = float(t) - float(radius), float(t) + float(radius)
+    found = set()
+    for start, end, text in spans:
+        if float(end) < lo or float(start) > hi:
+            continue
+        found.update(sync_gate.numbers_in(text))
+    return found & set(values)
+
+
 def number_faults_for(scenes, spoken, beat_times, audio_words=None, topic=None):
     """Sample each second. Caption and spoken numbers must be on that frame.
 
     A figure already visible on an earlier card of the same beat counts, so
     a later card does not have to repeat it. The 0.85s window stops at the
     scene end, so the next scene's figure is not demanded early.
+
+    A plan video also accepts a computed value that the final overlay
+    timeline, a pill, the RR box, or the counter draws within 1.5s.
     """
     # A labelled उदाहरण still has to be the figure drawn on that frame.
     ignore = set()
@@ -4067,6 +4141,7 @@ def number_faults_for(scenes, spoken, beat_times, audio_words=None, topic=None):
     durations = [float(s["end"]) - float(s["start"]) for s in scenes]
     total = sum(durations)
     cues = plan_cues(spoken, beat_times, audio_words)
+    spans, plan_values = _plan_screen_spans(topic)
     notes = []
     seen = set()
     earlier = {}
@@ -4080,6 +4155,9 @@ def number_faults_for(scenes, spoken, beat_times, audio_words=None, topic=None):
         on_screen = list(texts)
         if prior:
             on_screen.append(prior)
+        near = _near_plan_numbers(spans, plan_values, t)
+        if near:
+            on_screen.append(" ".join(sorted(near, key=lambda item: (len(item), item))))
         caption = " ".join(cue.get("text") or "" for cue in cues_at(cues, t))
         said = _script_near(
             spoken, beat_times, audio_words, t, scene_end=float(scene["end"]),

@@ -126,19 +126,38 @@ def is_withdrawn(entry):
     return str((entry or {}).get("status") or "").strip().lower() == "withdrawn"
 
 
+def is_premarked_skip(entry):
+    """An early 'no owner_approved script' row is not a filled slot.
+
+    The buffer build and an empty ahead-of-slot run can write that note
+    hours before 21:00. At slot time the buffer is checked again. A real
+    video id or a hold on the same clock still occupies it.
+    """
+    if not isinstance(entry, dict):
+        return False
+    if str(entry.get("video_id") or "").strip():
+        return False
+    platform = str(entry.get("platform") or "").strip().lower()
+    if platform != "skip":
+        return False
+    note = " ".join(str(entry.get("slot_skipped") or entry.get("note") or "").split())
+    return note.startswith("no owner_approved script")
+
+
 def find_entry(entries, date_ist, slot):
     """First row that still occupies this slot.
 
     Withdrawn rows stay in the ledger so that video id is not republished,
-    but they leave the clock slot open for a new gated upload. A later real
-    row or a hold still occupies the slot.
+    but they leave the clock slot open for a new gated upload. A pre-marked
+    owner-approved skip does the same: 08:30 and 21:00 re-check the buffer.
+    A later real row or a hold still occupies the slot.
     """
     for entry in entries:
         if not isinstance(entry, dict):
             continue
         if entry.get("date_ist") != date_ist or entry.get("slot") != slot:
             continue
-        if is_withdrawn(entry):
+        if is_withdrawn(entry) or is_premarked_skip(entry):
             continue
         return entry
     return None
