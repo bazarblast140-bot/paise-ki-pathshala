@@ -153,6 +153,13 @@ class DecodeTests(unittest.TestCase):
 
 
 class SpeakTests(unittest.TestCase):
+    def setUp(self):
+        self._cache_off = mock.patch.dict(os.environ, {"GEMINI_CACHE": "0"})
+        self._cache_off.start()
+
+    def tearDown(self):
+        self._cache_off.stop()
+
     def _env(self, **extra):
         env = {
             "GEMINI_API_KEY": SECRET,
@@ -276,23 +283,23 @@ class SpeakTests(unittest.TestCase):
 
         engine, styles, text, wav, _edge_calls = run([37.3, 52.5])
         self.assertEqual(engine, "gemini")
-        self.assertEqual(len(styles), 2)
+        self.assertEqual(len(styles), 1)
         self.assertIn("calm, clear teacher pace with short natural pauses between sentences", styles[0])
-        self.assertIn("slow, deliberate pace, pause after every sentence", styles[1])
+        self.assertIn("one-second silence between paragraphs", styles[0])
         self.assertIn("[gemini] take 1:", text)
-        self.assertIn("[gemini] take 2:", text)
+        self.assertNotIn("[gemini] take 2:", text)
         self.assertIn("voice_engine=gemini", text)
-        self.assertAlmostEqual(wav, 52.5, delta=0.2)
+        self.assertAlmostEqual(wav, 37.3, delta=0.2)
 
         engine, styles, text, wav, _edge_calls = run([37.3, 36.0])
         self.assertEqual(engine, "gemini")
-        self.assertEqual(len(styles), 2)
+        self.assertEqual(len(styles), 1)
         self.assertIn("voice_engine=gemini", text)
         self.assertAlmostEqual(wav, 37.3, delta=0.2)
 
         engine, styles, text, wav, edge_calls = run([32.0, 33.0])
         self.assertEqual(engine, "edge")
-        self.assertEqual(len(styles), 2)
+        self.assertEqual(len(styles), 1)
         self.assertIn("no take in 34-65s", text)
         self.assertIn("voice_engine=edge", text)
         self.assertEqual(len(edge_calls), len(ORDER))
@@ -361,7 +368,7 @@ class SpeakTests(unittest.TestCase):
                         _spoken("एक दो तीन चार " * 8), VOICE)
                     meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
                 text = buf.getvalue()
-                expect_posts = 2 if name in ("429", "500") else 1
+                expect_posts = 2 if name == "500" else 1
                 self.assertEqual(posts["n"], expect_posts)
                 self.assertEqual(engine, "edge")
                 self.assertEqual(meta["engine"], "edge")
@@ -373,6 +380,8 @@ class SpeakTests(unittest.TestCase):
                 self.assertIn("Gemini TTS failed", text)
                 if name == "429":
                     self.assertIn("HTTP 429", meta["fallback_reason"])
+                    self.assertIn("gemini_quota", meta["fallback_reason"])
+                    self.assertIn("gemini_quota", text)
                 if name == "500":
                     self.assertIn("HTTP 500", meta["fallback_reason"])
                 if name == "timeout":
@@ -417,7 +426,7 @@ class SpeakTests(unittest.TestCase):
         self.assertEqual(engine, "elevenlabs")
         self.assertTrue(meta["elevenlabs_attempted"])
         self.assertIn("HTTP 429", meta["fallback_reason"])
-        self.assertEqual(sum("generativelanguage" in url for url in posts["urls"]), 2)
+        self.assertEqual(sum("generativelanguage" in url for url in posts["urls"]), 1)
         self.assertEqual(sum("elevenlabs" in url for url in posts["urls"]), len(ORDER))
         self.assertNotIn(SECRET, buf.getvalue())
 
@@ -544,6 +553,42 @@ class SpeakTests(unittest.TestCase):
             engine = board_short.synthesize_short_voices(_spoken(), VOICE)
         self.assertEqual(engine, "edge")
         self.assertEqual(len(edge.calls), len(ORDER))
+
+    def test_cached_charon_audio_is_not_requested_again(self):
+        import board_short
+        import credit_log
+
+        posts = {"n": 0}
+
+        def post(_url, **_kwargs):
+            posts["n"] += 1
+            return FakeResp(200, {
+                "output": [{"content": [{"type": "audio", "data": _b64_audio(8.0)}]}],
+            })
+
+        async def edge(*_args, **_kwargs):
+            raise AssertionError("cache hit must not fall back")
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp) / "run"), \
+             mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.dict(os.environ, {
+                 **self._env(),
+                 "GEMINI_CACHE": "1",
+                 "GEMINI_CACHE_DIR": str(Path(tmp) / "cache"),
+             }), \
+             mock.patch("requests.post", post), \
+             mock.patch("sync_gate.transcribe_file", return_value=_words(16, 8.0)), \
+             mock.patch.object(board_short, "_edge", edge), \
+             redirect_stdout(io.StringIO()):
+            (Path(tmp) / "run").mkdir()
+            first = board_short.synthesize_short_voices(_spoken(), VOICE)
+            second = board_short.synthesize_short_voices(_spoken(), VOICE)
+            cached = list((Path(tmp) / "cache").glob("*.wav"))
+        self.assertEqual(first, "gemini")
+        self.assertEqual(second, "gemini")
+        self.assertEqual(posts["n"], 1)
+        self.assertTrue(cached)
 
     def test_workflow_passes_the_key_as_an_env_var(self):
         text = (ROOT / ".github" / "workflows" / "paise-ki-pathshala.yml").read_text(encoding="utf-8")

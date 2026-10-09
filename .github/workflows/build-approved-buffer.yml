@@ -15,6 +15,12 @@ on:
   schedule:
     - cron: "40 21 * * *"   # 03:10 IST
   workflow_dispatch:
+    inputs:
+      reuse_run_id:
+        description: "Actions run id whose rendered artifacts are re-scored. No Gemini and no ElevenLabs."
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -64,7 +70,7 @@ jobs:
 
   build:
     needs: plan
-    if: needs.plan.outputs.topics != '[]' && needs.plan.outputs.topics != ''
+    if: needs.plan.outputs.topics != '[]' && needs.plan.outputs.topics != '' && (github.event_name != 'workflow_dispatch' || inputs.reuse_run_id == '')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -96,6 +102,7 @@ jobs:
           PUBLISH_VISIBILITY: public
           AUTOMATIC_UPLOAD: "0"
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_CACHE: "1"
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
           PAID_TTS_ENABLED: ${{ vars.PAID_TTS_ENABLED }}
@@ -108,10 +115,14 @@ jobs:
       - name: Pack this topic
         if: always()
         run: |
-          mkdir -p buffer_out
+          mkdir -p buffer_out/run buffer_out/gemini_cache
           if [ -f run/buffer_item.json ]; then cp run/buffer_item.json buffer_out/; fi
           key="${{ matrix.topic }}"
           if [ -f "approved/${key}.json" ]; then cp "approved/${key}.json" buffer_out/; fi
+          for name in self_review.json narration.json voice_meta.json report.md verify_meta.json shots.json topic.json final.mp4 gemini_voice.wav gemini_words.json gemini_quota.txt; do
+            if [ -f "run/$name" ]; then cp "run/$name" buffer_out/run/; fi
+          done
+          if [ -d data/gemini_cache ]; then cp -a data/gemini_cache/. buffer_out/gemini_cache/; fi
       - name: Upload this topic
         if: always()
         uses: actions/upload-artifact@v4
@@ -120,9 +131,53 @@ jobs:
           path: buffer_out/
           if-no-files-found: warn
 
+  rescore:
+    needs: plan
+    if: github.event_name == 'workflow_dispatch' && inputs.reuse_run_id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Download the rendered artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p rescore-parts
+          gh run download "${{ inputs.reuse_run_id }}" -D rescore-parts
+      - name: Re-score gates without TTS
+        env:
+          GEMINI_API_KEY: ""
+          ELEVENLABS_API_KEY: ""
+          GEMINI_CACHE: "1"
+        run: python approved_buffer.py --rescore rescore-parts
+      - name: Pack the rescored manifest
+        if: always()
+        run: |
+          mkdir -p buffer_out/gemini_cache data/gemini_cache
+          cp data/approved_buffer.json buffer_out/approved_buffer.json
+          find rescore-parts -type d -name gemini_cache -exec cp -an {}/. data/gemini_cache/ \;
+          if [ -d data/gemini_cache ]; then cp -a data/gemini_cache/. buffer_out/gemini_cache/; fi
+      - name: Upload rescored manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buffer-rescore
+          path: buffer_out/
+          if-no-files-found: warn
+
   commit:
-    needs: [plan, build]
-    if: always() && needs.plan.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'failure')
+    needs: [plan, build, rescore]
+    if: >-
+      always() && needs.plan.result == 'success' &&
+      (needs.build.result == 'success' || needs.build.result == 'failure' ||
+       needs.rescore.result == 'success' || needs.rescore.result == 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -145,11 +200,19 @@ jobs:
           pattern: buffer-*
           path: buffer-parts
       - name: Merge buffer state
-        run: python approved_buffer.py --merge-parts buffer-parts
+        run: |
+          if [ -f buffer-parts/buffer-rescore/approved_buffer.json ]; then
+            cp buffer-parts/buffer-rescore/approved_buffer.json data/approved_buffer.json
+          else
+            python approved_buffer.py --merge-parts buffer-parts
+          fi
+          mkdir -p data/gemini_cache
+          find buffer-parts -type d -name gemini_cache -exec cp -an {}/. data/gemini_cache/ \;
       - name: Commit buffer state
         if: ${{ !cancelled() }}
         run: |
           git add data/approved_buffer.json approved
+          git add -f data/gemini_cache || true
           if git diff --cached --quiet; then
             echo "No buffer state to commit"
           else

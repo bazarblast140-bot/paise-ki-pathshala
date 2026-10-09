@@ -1,26 +1,33 @@
 """One Gemini TTS request for a whole Short.
 
-The free daily quota is unknown, so a Short is one POST, or two when the
-first take is under 45 seconds. The reply audio is
-raw s16le at 24 kHz mono, unless the bytes start with RIFF. Callers split
-that file into beats. This module never prints the API key.
+The free tier is 10 requests a day, so a Short is one POST. A 429 is not
+retried. A successful Charon wav is cached by topic and script hash and
+reused with no second request. The reply audio is raw s16le at 24 kHz
+mono, unless the bytes start with RIFF. Callers split that file into
+beats on silence or on the whisper clock. This module never prints the key.
 """
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import os
+import re
 import time
 import wave
+from pathlib import Path
 
 MODEL = "gemini-3.8-flash-tts"
 VOICE = "Charon"
 URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 SAMPLE_RATE = 24000
 TIMEOUT = 180
-# One retry, only for a rate limit or a server error, before Edge or Rudra.
+# One retry for a server error. A 429 is the daily cap (10/day) and is not
+# retried: the body says to wait about 20 hours, and a second POST burns
+# another request that will also fail.
 RETRY_WAIT_S = 20.0
-RETRY_STATUSES = (429, 500, 502, 503, 504)
+RETRY_STATUSES = (500, 502, 503, 504)
+CACHE_DIR = Path(__file__).resolve().parent / "data" / "gemini_cache"
 STYLE = (
     "confident deep male narrator, natural Hinglish with English words pronounced the Indian way, "
     "calm, clear teacher pace with short natural pauses between sentences"
@@ -193,6 +200,8 @@ def _post_speech(text, dest, style=None):
         detail = f"Gemini TTS HTTP {status}"
         if snippet:
             detail = f"{detail}: {snippet}"
+        if status == 429:
+            detail = f"gemini_quota: {detail}"
         raise GeminiFallback(detail, status=status)
     try:
         payload = response.json()
@@ -208,16 +217,74 @@ def _post_speech(text, dest, style=None):
     return dest
 
 
-def write_speech(text, dest, style=None):
-    """POST the whole script. A 429 or 5xx is retried once after 20s.
+def cache_id(topic_key, script):
+    """Stable id for one topic and the exact text sent to Charon."""
+    digest = hashlib.sha256(str(script or "").encode("utf-8")).hexdigest()[:20]
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "", str(topic_key or "script"))[:48] or "script"
+    return f"{safe}-{digest}"
 
-    The logged error is the HTTP status and a short redacted body. The key
-    is never printed. A second failure, a timeout, or a bad file falls back.
+
+def _cache_path(cache_key):
+    root = Path(os.environ.get("GEMINI_CACHE_DIR") or CACHE_DIR)
+    return root / f"{cache_key}.wav"
+
+
+def _cache_enabled():
+    return os.environ.get("GEMINI_CACHE", "1").strip().lower() not in ("0", "false", "no", "off")
+
+
+def load_cached_speech(cache_key, dest):
+    """Copy a stored Charon wav. True means the caller must not POST."""
+    if not cache_key or not _cache_enabled():
+        return False
+    path = _cache_path(cache_key)
+    try:
+        if not path.exists() or path.stat().st_size < 1000:
+            return False
+        data = path.read_bytes()
+    except OSError:
+        return False
+    if hasattr(dest, "write_bytes"):
+        dest.write_bytes(data)
+    else:
+        Path(dest).write_bytes(data)
+    print(f"[gemini] cache hit {cache_key}; no request", flush=True)
+    return True
+
+
+def store_cached_speech(cache_key, dest):
+    """Keep a successful take so the same script never calls Gemini again."""
+    if not cache_key or not _cache_enabled():
+        return
+    try:
+        data = dest.read_bytes() if hasattr(dest, "read_bytes") else Path(dest).read_bytes()
+    except OSError:
+        return
+    if len(data) < 1000:
+        return
+    path = _cache_path(cache_key)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    except OSError:
+        return
+
+
+def write_speech(text, dest, style=None, cache_key=None):
+    """POST the whole script once. A 429 fails immediately as gemini_quota.
+
+    A 5xx is retried once after 20s. The logged error is the HTTP status
+    and a short redacted body. The key is never printed. A cached wav for
+    this script is returned with no POST.
     """
+    if load_cached_speech(cache_key, dest):
+        return dest
     last = None
     for attempt in (0, 1):
         try:
-            return _post_speech(text, dest, style)
+            saved = _post_speech(text, dest, style)
+            store_cached_speech(cache_key, dest)
+            return saved
         except GeminiFallback as exc:
             last = exc
             if attempt == 0 and exc.status in RETRY_STATUSES:
@@ -379,6 +446,165 @@ def _skewed_bounds(bounds, order, weights, duration):
     return False
 
 
+def _heard_between(words, start, end):
+    picked = []
+    for word in words or []:
+        try:
+            w0 = float(word.get("start"))
+            w1 = float(word.get("end"))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        text = str(word.get("word") or "").strip()
+        if text and w1 > start and w0 < end:
+            picked.append(text)
+    return " ".join(picked)
+
+
+def align_short_bounds(bounds, spoken, words, duration):
+    """Widen a beat whose whisper slice misses the script, without starving the neighbour.
+
+    A cut that lands a phrase early drops that phrase from the beat. Recall
+    on the short window is then under 0.5 even though the words were said
+    just outside it. The neighbour keeps a 0.5 match and a 1.05s span.
+    """
+    import sync_gate
+
+    order = [beat for beat in (bounds or {})]
+    if len(order) < 2 or not words:
+        return bounds
+    tuned = {beat: (float(span[0]), float(span[1])) for beat, span in bounds.items()}
+
+    def score(beat, start, end):
+        return sync_gate.fuzzy_recall(
+            str((spoken or {}).get(beat) or ""), _heard_between(words, start, end),
+        )
+
+    for beat in order:
+        start, end = tuned[beat]
+        current = score(beat, start, end)
+        if current + 1e-9 >= sync_gate.MIN_RECALL:
+            continue
+        idx = order.index(beat)
+        best = (start, end, current)
+        for delta in (0.4, 0.8, 1.2, 1.6, 2.0):
+            trials = []
+            if idx > 0:
+                prev = order[idx - 1]
+                ps, pe = tuned[prev]
+                new_start = max(ps + 1.05, start - delta)
+                if new_start + 0.05 < start:
+                    trials.append((prev, ps, new_start, new_start, end))
+            if idx + 1 < len(order):
+                nxt = order[idx + 1]
+                ns, ne = tuned[nxt]
+                new_end = min(ne - 1.05, end + delta)
+                if new_end > end + 0.05:
+                    trials.append((nxt, new_end, ne, start, new_end))
+            for other, os0, oe0, ns0, ne0 in trials:
+                if ne0 - ns0 < 1.05 or oe0 - os0 < 1.05:
+                    continue
+                mine = score(beat, ns0, ne0)
+                theirs = score(other, os0, oe0)
+                if mine + 1e-9 < sync_gate.MIN_RECALL or theirs + 1e-9 < sync_gate.MIN_RECALL:
+                    continue
+                if mine <= best[2] + 0.05:
+                    continue
+                best = (ns0, ne0, mine)
+                tuned[beat] = (ns0, ne0)
+                tuned[other] = (os0, oe0)
+                start, end = ns0, ne0
+    last = order[-1]
+    tuned[order[0]] = (0.0, tuned[order[0]][1])
+    tuned[last] = (tuned[last][0], float(duration))
+    cursor = 0.0
+    fixed = {}
+    for index, beat in enumerate(order):
+        end = float(duration) if index == len(order) - 1 else tuned[beat][1]
+        end = max(cursor + 1.05, min(float(duration), end))
+        if index == len(order) - 1:
+            end = float(duration)
+        fixed[beat] = (cursor, end)
+        cursor = end
+    if abs(cursor - float(duration)) > 0.05:
+        return bounds
+    return fixed
+
+
+def silence_bounds(wav_path, order, min_gap=0.50, thresh_db=-36.0):
+    """Split on the long pauses between paragraphs. None when the gaps are not one per beat."""
+    present = [beat for beat in order or []]
+    if len(present) < 2:
+        return None
+    try:
+        with wave.open(str(wav_path), "rb") as handle:
+            rate = handle.getframerate() or 1
+            width = handle.getsampwidth()
+            channels = handle.getnchannels() or 1
+            frames = handle.readframes(handle.getnframes())
+    except (OSError, wave.Error):
+        return None
+    if width != 2 or not frames:
+        return None
+    import array
+    samples = array.array("h")
+    try:
+        samples.frombytes(frames[: len(frames) - (len(frames) % 2)])
+    except ValueError:
+        return None
+    if channels > 1:
+        samples = samples[::channels]
+    if not samples:
+        return None
+    duration = len(samples) / float(rate)
+    frame = max(1, int(rate * 0.02))
+    amp = (10 ** (float(thresh_db) / 20.0)) * 32768.0
+    gaps = []
+    gap_start = None
+    for index in range(0, len(samples), frame):
+        chunk = samples[index:index + frame]
+        if not chunk:
+            break
+        energy = (sum(sample * sample for sample in chunk) / len(chunk)) ** 0.5
+        at = index / float(rate)
+        if energy < amp:
+            if gap_start is None:
+                gap_start = at
+        elif gap_start is not None:
+            if at - gap_start >= min_gap:
+                gaps.append((gap_start, at))
+            gap_start = None
+    interior = [gap for gap in gaps if gap[0] > 0.25 and gap[1] < duration - 0.25]
+    need = len(present) - 1
+    if len(interior) < need:
+        return None
+    chosen = sorted(interior, key=lambda gap: gap[1] - gap[0], reverse=True)[:need]
+    chosen.sort()
+    cuts = [0.0]
+    for start, end in chosen:
+        cuts.append((start + end) / 2.0)
+    cuts.append(duration)
+    bounds = {}
+    for beat, start, end in zip(present, cuts, cuts[1:]):
+        if end - start < 1.05:
+            return None
+        bounds[beat] = (start, end)
+    return bounds
+
+
+def _bounds_heard_ok(bounds, spoken, words):
+    """True when each beat's slice actually says that beat."""
+    import sync_gate
+    if not words:
+        return False
+    scores = []
+    for beat, span in bounds.items():
+        heard = _heard_between(words, span[0], span[1])
+        scores.append(sync_gate.fuzzy_recall(str((spoken or {}).get(beat) or ""), heard))
+    if not scores:
+        return False
+    return min(scores) + 1e-9 >= sync_gate.MIN_RECALL
+
+
 def beat_bounds(spoken, order, words, duration):
     """Beat spans on the whole-file clock. Whisper ends the cuts; word count is the fallback."""
     present, weights = _weights(spoken, order)
@@ -395,19 +621,32 @@ def beat_bounds(spoken, order, words, duration):
         text = str(word.get("word") or "").strip()
         if text and end > start:
             usable.append({"word": text, "start": start, "end": end})
+
+    def _tuned(bounds):
+        if not bounds or not usable:
+            return bounds
+        tuned = align_short_bounds(bounds, spoken, usable, duration)
+        if (
+            tuned
+            and all(end - start >= 1.05 for start, end in tuned.values())
+            and not _skewed_bounds(tuned, present, weights, duration)
+        ):
+            return tuned
+        return bounds
+
     if usable:
         last = max(word["end"] for word in usable)
         if last >= 0.5 * duration:
             content = _content_bounds(present, spoken, usable, duration)
             if content and not _skewed_bounds(content, present, weights, duration):
-                return content
+                return _tuned(content)
             bounds = _from_words(present, weights, usable, duration)
             if (
                 bounds
                 and all(end - start >= 1.05 for start, end in bounds.values())
                 and not _skewed_bounds(bounds, present, weights, duration)
             ):
-                return bounds
+                return _tuned(bounds)
     return _proportional(present, weights, duration)
 
 
@@ -465,6 +704,10 @@ def split_into_beats(wav_path, spoken, order, dest_dir, transcribe=None):
         print(f"[align] whisper unavailable ({type(exc).__name__}); splitting by script length")
         words = []
     bounds = beat_bounds(spoken, order, words, duration)
+    silence = silence_bounds(wav_path, list(bounds) or list(order))
+    if silence and words and _bounds_heard_ok(silence, spoken, words):
+        if not _skewed_bounds(silence, list(silence), [1] * len(silence), duration):
+            bounds = silence
     per_beat = {}
     for beat, (start, end) in bounds.items():
         _slice_wav(wav_path, dest_dir / f"tts_{beat}.wav", start, end)

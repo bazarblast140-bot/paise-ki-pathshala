@@ -2995,7 +2995,9 @@ def _gemini_script(spoken, beats):
         approved_script.refuse_paid_mismatch(voice)
         if voice:
             parts.append(voice)
-    return folded, " ".join(parts)
+    # A blank line is the beat marker. Charon is asked to pause there so the
+    # one file can be split on that silence instead of a mid-sentence cut.
+    return folded, "\n\n".join(parts)
 
 
 def _expected_voice_seconds(spoken, beats, c):
@@ -3048,6 +3050,11 @@ def _gemini_pace_window(topic):
     return None
 
 
+# A plan take from 38s is padded up to 40s. Rejecting 39.3s burned a Gemini
+# request and then held the Edge fallback.
+PLAN_TAKE_FLOOR = 38.0
+
+
 def gemini_accepts(total, window):
     """'target' inside the window, 'review' in a plan's 50–55s band, else 'miss'."""
     if not window:
@@ -3061,6 +3068,8 @@ def gemini_accepts(total, window):
     hard = hi
     if (lo, hi) == trade_plan.VOICE_SECONDS:
         hard = float(trade_plan.VOICE_REVIEW_MAX)
+        if PLAN_TAKE_FLOOR - 1e-9 <= total < lo:
+            return "target"
     if lo <= total <= hi:
         return "target"
     if hi < total <= hard + 1e-9:
@@ -3104,8 +3113,12 @@ def _gemini_stop(total, window, attempt):
 
 def _one_gemini_take(spoken, c, beats, folded, script, style, durations, attempt, topic, window):
     import gemini_voice
+    import trade_plan
     dest = RUN / "gemini_voice.wav"
-    gemini_voice.write_speech(script, dest, style=style)
+    key = str((topic or {}).get("key") or "script")
+    gemini_voice.write_speech(
+        script, dest, style=style, cache_key=gemini_voice.cache_id(key, script),
+    )
     seconds = gemini_voice.wav_seconds(dest)
     expected = _expected_voice_seconds(folded, beats, c)
     if gemini_voice.duration_far(seconds, expected):
@@ -3125,6 +3138,9 @@ def _one_gemini_take(spoken, c, beats, folded, script, style, durations, attempt
             reason = f"Gemini audio trim failed (exit {getattr(exc, 'code', 1)})"
         raise gemini_voice.GeminiFallback(str(reason))
     total = sum(raw.values())
+    if window == trade_plan.VOICE_SECONDS and PLAN_TAKE_FLOOR - 1e-9 <= total < trade_plan.VOICE_SECONDS[0]:
+        raw = _pad_take_to(beats, raw, trade_plan.VOICE_SECONDS[0])
+        total = sum(raw.values())
     durations.append(total)
     print(f"[gemini] take {attempt + 1}: {total:.1f}s", flush=True)
     if window is None and topic is not None:
@@ -3137,7 +3153,7 @@ def _one_gemini_take(spoken, c, beats, folded, script, style, durations, attempt
 
 
 def _speak_gemini(spoken, c, beats, topic):
-    """Charon, then one slower retry when the take is under 45s. At most two calls."""
+    """One Charon request for the whole script. A 429 is not a second request."""
     import gemini_voice
     folded, script = _gemini_script(spoken, beats)
     if not script:
@@ -3146,7 +3162,10 @@ def _speak_gemini(spoken, c, beats, topic):
     durations = []
     kept = None
     last_error = None
-    styles = (gemini_voice.STYLE, gemini_voice.SLOW_STYLE)
+    # The daily cap is 10 requests. A slower second take, and a 429 retry,
+    # used the whole budget on one video.
+    pause = " Leave a one-second silence between paragraphs."
+    styles = (gemini_voice.STYLE + pause,)
     for attempt, style in enumerate(styles):
         if attempt:
             _drop_gemini_audio(beats)
@@ -3182,6 +3201,7 @@ def _speak_gemini(spoken, c, beats, topic):
         raise gemini_voice.GeminiFallback(f"no take in {lo:.0f}-{hi:.0f}s ({shown})")
     shown = ", ".join(f"{item:.1f}s" for item in durations)
     print(f"[gemini] takes: {shown}; voice_engine=gemini", flush=True)
+    (RUN / "gemini_quota.txt").unlink(missing_ok=True)
     trade_plan.note_duration(kept[0], topic)
     for beat in beats:
         (RUN / f"tts_{beat}.engine").write_text("gemini", encoding="utf-8")
@@ -3213,6 +3233,8 @@ def synthesize_short_voices(spoken, c, beats=None, topic=None):
         except gemini_voice.GeminiFallback as exc:
             gemini_note = gemini_voice.redact(exc.reason)
             print(f"[warn] Gemini TTS failed ({gemini_note}). Falling back.", flush=True)
+            if getattr(exc, "status", None) == 429 or "gemini_quota" in gemini_note:
+                (RUN / "gemini_quota.txt").write_text(gemini_note + "\n", encoding="utf-8")
             _drop_gemini_audio(beats)
     wants_paid = (
         proof_audio not in ("edge", "silence")
@@ -4006,10 +4028,12 @@ def _install_scene_cards(topic, spoken, beat_times, scenes, audio_words=None):
 
 
 def _gemini_word_timings(beat_times):
-    """Words from the one Gemini file, shifted onto each trimmed beat.
+    """Words from the one Gemini file, placed inside each trimmed beat.
 
     An Edge proof keeps its own transcript. The previous topic's
-    gemini_words.json is a different lesson.
+    gemini_words.json is a different lesson. Subtracting the untrimmed
+    file's silence offset pushed the phrase before the beat and the gate
+    then scored that beat 0. The slice's own words stay inside the beat.
     """
     engines = {_beat_engine(beat) for beat in timed_beats(beat_times)}
     engines.discard("")
@@ -4025,29 +4049,45 @@ def _gemini_word_timings(beat_times):
     per_beat = data.get("beats") if isinstance(data, dict) else None
     if not isinstance(per_beat, dict):
         return None
-    import sync_gate
     words = []
     for beat in timed_beats(beat_times):
         rows = per_beat.get(beat)
         if not rows:
             return None
-        source = _beat_tts_path(beat)
-        offset = 0.0
-        if source is not None:
-            try:
-                offset = sync_gate.speech_offset(sync_gate.pcm(source))
-            except Exception:  # noqa: BLE001 — the stored clock is still usable
-                offset = 0.0
-        t0 = float(beat_times[beat][0]) - offset
+        usable = []
         for row in rows:
             text = str(row.get("word") or "").strip()
             if not text:
                 continue
-            start = float(row.get("start") or 0) + t0
-            end = float(row.get("end") or 0) + t0
-            if end <= float(beat_times[beat][0]) - 0.05:
+            try:
+                start = float(row.get("start"))
+                end = float(row.get("end"))
+            except (TypeError, ValueError):
                 continue
-            words.append({"word": text, "start": start, "end": end})
+            if end <= start:
+                continue
+            usable.append((text, start, end))
+        if not usable:
+            return None
+        t0 = float(beat_times[beat][0])
+        t1 = float(beat_times[beat][1])
+        lead = min(start for _text, start, _end in usable)
+        last = max(end for _text, _start, end in usable)
+        span = max(0.05, last - lead)
+        beat_len = max(0.05, t1 - t0)
+        scale = min(1.0, (beat_len - 0.02) / span) if span > beat_len else 1.0
+        for text, start, end in usable:
+            placed_start = t0 + (start - lead) * scale
+            placed_end = t0 + max(0.05, (end - lead) * scale)
+            if placed_end > t1:
+                placed_end = t1
+            if placed_start >= t1:
+                placed_start = max(t0, t1 - 0.05)
+            words.append({
+                "word": text,
+                "start": round(placed_start, 3),
+                "end": round(max(placed_start + 0.02, placed_end), 3),
+            })
     return words or None
 
 
@@ -4722,6 +4762,33 @@ def load_topic():
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+def _pad_wav(path, seconds):
+    """Append silence so a trimmed beat still has a picture to sit on."""
+    dest = path.with_name(path.stem + ".pad.wav")
+    subprocess.run([
+        "ffmpeg", "-v", "error", "-y", "-i", str(path),
+        "-af", f"apad=pad_dur={max(0.0, float(seconds)):.3f}",
+        "-ar", "44100", "-ac", "2", str(dest),
+    ], check=True)
+    dest.replace(path)
+
+
+def _pad_take_to(beats, raw, floor):
+    """Spread the missing seconds across the beats. The take is then inside 40–55s."""
+    total = sum(raw.values())
+    need = float(floor) - float(total)
+    if need <= 0.02 or not beats:
+        return raw
+    share = need / len(beats)
+    for beat in beats:
+        clean = RUN / f"voice_clean_{beat}.wav"
+        if not clean.exists():
+            continue
+        _pad_wav(clean, share)
+        raw[beat] = duration(clean)
+    return raw
+
+
 def _trim_rendered(beats):
     raw = {}
     for beat in beats:
@@ -4737,6 +4804,13 @@ def _trim_rendered(beats):
             "-ar", "44100", "-ac", "2", str(clean),
         ], check=True)
         seconds = duration(clean)
+        if seconds < 1.0:
+            _pad_wav(clean, 1.05 - seconds)
+            seconds = duration(clean)
+            print(
+                f"[warn] padded TTS beat {beat} to {seconds:.2f}s after silence trim",
+                flush=True,
+            )
         if seconds < 1.0:
             die(f"TTS beat {beat} became too short after silence trim: {seconds:.2f}s")
         raw[beat] = seconds

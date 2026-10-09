@@ -178,19 +178,106 @@ def _voice(run_dir):
     return str(meta.get("engine") or "").strip().lower()
 
 
+# Soft craft and a missing trend are review notes on an approved-topic item.
+# Numbers, sync, duration, leaks, safe area, a crash, and Edge stay holds.
+_SOFT_PARTS = {"hook", "visual", "craft", "trend"}
+_HARD_REASON_BITS = (
+    "sync", "leak", "safe area", "duration", "narration blocked",
+    "narration missing", "spoken number", "math", "voice_engine=",
+    "gemini_quota", "before it is said", "accuracy", "crash",
+    "rr ", "sl is not", "disclaimer", "banned", "placeholder",
+    "forbidden", "hindi", "title 8-90", "beat '", "trade plan",
+    "hard gate", "render rc=", "store failed",
+)
+
+
+def _review_note(reason):
+    """True when this line must not hold an approved-topic buffer item."""
+    text = " ".join(str(reason or "").lower().split())
+    if not text:
+        return False
+    if any(bit in text for bit in _HARD_REASON_BITS):
+        return False
+    soft_bits = (
+        "trend", "craft", "hook", "visual", "public-review",
+        "unverified", "fact ledger", "compliance", "report.md",
+        "verify_meta", "public_ready", "self-review overall",
+        "existing public-review",
+    )
+    return any(bit in text for bit in soft_bits)
+
+
+def public_review_details(run_dir):
+    """The line the public-review gate collapsed into one sentence."""
+    import review_gate
+
+    run_dir = Path(run_dir)
+    details = []
+    report = run_dir / "report.md"
+    meta = _load_json(run_dir / "verify_meta.json") or {}
+    if not report.exists():
+        details.append("public-review: report.md missing")
+    else:
+        text = report.read_text(encoding="utf-8")
+        verdict = review_gate.parse_report_verdict(text)
+        if verdict != "READY":
+            details.append(f"public-review: report verdict {verdict or 'missing'}")
+        for line in text.splitlines():
+            low = line.lower()
+            if any(bit in low for bit in ("unverified", "fact ledger", "compliance", "needs fix")):
+                details.append("public-review: " + " ".join(line.split())[:180])
+                break
+    if not meta:
+        details.append("public-review: verify_meta missing")
+    else:
+        if meta.get("verdict") not in (None, "READY"):
+            details.append(f"public-review: verify_meta verdict {meta.get('verdict')}")
+        if not meta.get("public_ready"):
+            details.append("public-review: verify_meta public_ready is false")
+    seen = []
+    for item in details:
+        if item not in seen:
+            seen.append(item)
+    return seen or ["public-review: no sub-reason"]
+
+
 def judge(run_dir, key):
-    """Reasons this render must be held. Empty means it may be stored."""
+    """Hard reasons this render must be held. Empty means it may be stored.
+
+    Review notes (missing trend, soft craft, a fact-ledger field the
+    compliance pass invented) are kept on `judge.last_notes` and logged.
+    They do not hold the item. Sync, numbers, duration, and Edge still do.
+    """
     import publish_gates
     import trade_plan
 
     run_dir = Path(run_dir)
     reasons = []
+    notes = []
     try:
         verdict = publish_gates.evaluate(run_dir)
     except Exception as exc:  # noqa: BLE001 — a broken run is held, not published
         verdict = {"passed": False, "reasons": [f"hard gate crashed: {type(exc).__name__}"]}
-    if not verdict.get("passed"):
-        reasons.extend(verdict.get("reasons") or ["hard gate failed"])
+    raw = list(verdict.get("reasons") or []) if not verdict.get("passed") else []
+    if not verdict.get("passed") and not raw:
+        raw = ["hard gate failed"]
+    details = []
+    if any(item == "existing public-review gate did not pass" for item in raw):
+        details = public_review_details(run_dir)
+        for detail in details:
+            print(f"[public-review] {key}: {detail}", flush=True)
+    for item in raw:
+        if item == "existing public-review gate did not pass":
+            for detail in details:
+                if _review_note(detail):
+                    notes.append(detail)
+                else:
+                    reasons.append(detail)
+            continue
+        if _review_note(item):
+            notes.append(item)
+        else:
+            reasons.append(item)
     reasons.extend(plan_gate_reasons(key))
     narration = _load_json(run_dir / "narration.json")
     if not isinstance(narration, dict):
@@ -204,24 +291,45 @@ def judge(run_dir, key):
         overall = float(review.get("overall"))
     except (TypeError, ValueError):
         overall = None
-    if overall is None or overall < REVIEW_MIN:
-        reasons.append(f"self-review {overall} is under {REVIEW_MIN:.0f}")
     parts = review.get("parts") if isinstance(review.get("parts"), dict) else {}
     for name in PARTS:
         if name not in parts:
-            reasons.append(f"{name} score missing")
+            line = f"{name} score missing"
+            if name == "trend":
+                notes.append(line)
+            else:
+                reasons.append(line)
             continue
-        raw = parts.get(name)
+        raw_part = parts.get(name)
         # Trend is None on an evergreen lesson. That skip is not a miss.
-        if raw is None:
+        if raw_part is None:
+            if name == "trend":
+                notes.append("trend skipped")
             continue
         try:
-            score = float(raw)
+            score = float(raw_part)
         except (TypeError, ValueError):
-            reasons.append(f"{name} score missing")
+            line = f"{name} score missing"
+            if name == "trend":
+                notes.append(line)
+            else:
+                reasons.append(line)
             continue
         if score < PART_MIN:
-            reasons.append(f"{name} {score:.0f} is below {PART_MIN:.0f}")
+            line = f"{name} {score:.0f} is below {PART_MIN:.0f}"
+            if name in _SOFT_PARTS:
+                notes.append(line)
+            else:
+                reasons.append(line)
+    if overall is None or overall < REVIEW_MIN:
+        line = f"self-review {overall} is under {REVIEW_MIN:.0f}"
+        hard_part = any(
+            "sync" in item or "accuracy" in item for item in reasons
+        )
+        if hard_part:
+            reasons.append(line)
+        else:
+            notes.append(line)
     sync = review.get("sync") if isinstance(review.get("sync"), dict) else None
     if sync is None or sync.get("ok") is not True:
         if not any("sync" in item for item in reasons):
@@ -234,11 +342,23 @@ def judge(run_dir, key):
     engine = _voice(run_dir)
     if engine not in ACCEPTED_ENGINES:
         reasons.append(f"voice_engine={engine or 'missing'} is held")
+    if (run_dir / "gemini_quota.txt").exists():
+        reasons.append("gemini_quota")
     seen = []
     for item in reasons:
         if item not in seen:
             seen.append(item)
+    seen_notes = []
+    for item in notes:
+        if item not in seen_notes and item not in seen:
+            seen_notes.append(item)
+    judge.last_notes = seen_notes
+    for note in seen_notes:
+        print(f"[REVIEW] {key}: {note}", flush=True)
     return seen
+
+
+judge.last_notes = []
 
 
 def _title_for(run_dir, key):
@@ -631,6 +751,122 @@ def publish_slot(*, now=None, manifest_path=None, store=None, uploader=None, cro
     return 0
 
 
+def _key_near(path):
+    path = Path(path)
+    item = _load_json(path / "buffer_item.json") if path.is_dir() else None
+    if isinstance(item, dict) and item.get("topic_key"):
+        return str(item["topic_key"])
+    topic = _load_json(path / "topic.json") if path.is_dir() else None
+    if isinstance(topic, dict) and topic.get("key"):
+        return str(topic["key"])
+    narration = _load_json(path / "narration.json") if path.is_dir() else None
+    if isinstance(narration, dict) and narration.get("key"):
+        return str(narration["key"])
+    return ""
+
+
+def rescore(directory, manifest_path=None, now=None):
+    """Re-run the gates on a downloaded run. No Gemini and no ElevenLabs.
+
+    A folder with self_review.json is judged as a render. A folder that only
+    has buffer_item.json is reclassified from the stored reason. A pass
+    still needs final.mp4 before it can be stored as ready.
+    """
+    os.environ.pop("GEMINI_API_KEY", None)
+    os.environ.pop("ELEVENLABS_API_KEY", None)
+    directory = Path(directory)
+    now = now or _now()
+    manifest_path = Path(manifest_path) if manifest_path else MANIFEST
+    manifest = load_manifest(manifest_path)
+    reviewed = 0
+    for review_path in sorted(directory.glob("**/self_review.json")):
+        run_dir = review_path.parent
+        key = _key_near(run_dir) or _key_near(run_dir.parent)
+        if not key:
+            print(f"[HOLD] {review_path}: topic key missing", flush=True)
+            continue
+        reviewed += 1
+        reasons = judge(run_dir, key)
+        engine = _voice(run_dir)
+        seconds = __import__("publish_gates")._duration_s(run_dir)
+        if reasons:
+            item = _hold(manifest, key, reasons, now, engine, seconds)
+            item["review_notes"] = list(judge.last_notes)
+            _export_copy(run_dir, item)
+            print(f"[HOLD] {key}: {'; '.join(reasons)}", flush=True)
+            continue
+        if not (run_dir / "final.mp4").exists():
+            item = _hold(
+                manifest, key, ["render artifact has no final.mp4"], now, engine, seconds,
+            )
+            item["review_notes"] = list(judge.last_notes)
+            _export_copy(run_dir, item)
+            print(f"[HOLD] {key}: render artifact has no final.mp4", flush=True)
+            continue
+        try:
+            item = _store_ready(manifest, run_dir, key, _github_store(), now)
+        except Exception as exc:  # noqa: BLE001
+            item = _hold(manifest, key, [f"store failed: {exc}"], now, engine, seconds)
+            _export_copy(run_dir, item)
+            print(f"[HOLD] {key}: store failed: {exc}", flush=True)
+            continue
+        mark_owner_approved(key)
+        _export_copy(run_dir, item)
+        print(f"[READY] {key} {item['id']} voice={item.get('voice_engine')}", flush=True)
+    if reviewed:
+        save_manifest(manifest, manifest_path)
+        return 0
+    for item_path in sorted(directory.glob("**/buffer_item.json")):
+        try:
+            item = json.loads(item_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(item, dict) or not item.get("topic_key"):
+            continue
+        key = str(item["topic_key"])
+        stored = [part.strip() for part in str(item.get("reason") or "").split(";") if part.strip()]
+        reasons, notes = [], []
+        for part in stored:
+            if _review_note(part):
+                notes.append(part)
+            else:
+                reasons.append(part)
+        if (item_path.parent / "gemini_quota.txt").exists() and "gemini_quota" not in reasons:
+            reasons.append("gemini_quota")
+        engine = str(item.get("voice_engine") or "")
+        if engine and engine not in ACCEPTED_ENGINES and not any("voice_engine=" in r for r in reasons):
+            reasons.append(f"voice_engine={engine} is held")
+        for note in notes:
+            print(f"[REVIEW] {key}: {note}", flush=True)
+        if reasons:
+            print(f"[HOLD] {key}: {'; '.join(reasons)}", flush=True)
+        else:
+            print(
+                f"[HOLD] {key}: render artifact has no final.mp4"
+                + (f" (review: {'; '.join(notes)})" if notes else ""),
+                flush=True,
+            )
+            reasons = ["render artifact has no final.mp4"]
+        held = _hold(manifest, key, reasons, now, engine, item.get("duration_s"))
+        held["review_notes"] = notes
+        reviewed += 1
+    save_manifest(manifest, manifest_path)
+    if not reviewed:
+        print("[rescore] no run files and no buffer items", flush=True)
+    return 0
+
+
+def _export_copy(run_dir, item):
+    """Write the row next to the run and into run/ for the commit job."""
+    _export_item(item)
+    try:
+        (Path(run_dir) / "buffer_item.json").write_text(
+            json.dumps(item, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
+        )
+    except OSError:
+        return
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if "--publish" in argv:
@@ -639,6 +875,9 @@ def main(argv=None):
         folder = argv[argv.index("--merge-parts") + 1]
         merge_parts(folder)
         return 0
+    if "--rescore" in argv:
+        folder = argv[argv.index("--rescore") + 1]
+        return rescore(folder)
     if "--build" in argv:
         limit = MAX_PER_RUN
         if "--max" in argv:
@@ -648,7 +887,8 @@ def main(argv=None):
             only = argv[argv.index("--key") + 1]
         return build(max_n=limit, only=only)
     print(
-        "usage: approved_buffer.py --build [--max 6] [--key TOPIC] | --publish | --merge-parts DIR",
+        "usage: approved_buffer.py --build [--max 6] [--key TOPIC] "
+        "| --rescore DIR | --publish | --merge-parts DIR",
         file=sys.stderr,
     )
     return 2
