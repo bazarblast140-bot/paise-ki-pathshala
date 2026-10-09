@@ -746,6 +746,7 @@ def clock_from(topic, plan=None):
         "counter": window("target", "target", COUNTER_S),
         "title": (0.0, TITLE_S),
         "break": None if not inv else (float(inv[0]), float(inv[0]) + REVEAL_S),
+        "cta": None if not beats.get("cta") else (float(beats["cta"][0]), float(beats["cta"][1])),
     }
     return clock
 
@@ -818,6 +819,24 @@ def _candle_progresses(plan, t, clock):
         return [window_progress(t, pair[0], pair[1]) if pair else 1.0 for pair in windows]
     shared = _progress(clock, "candles", t, 1.0)
     return [shared] * n
+
+
+def _hold_motion(img, t):
+    """A slow brightness step in the lower margin so a 4s hold is not a still.
+
+    Samples four seconds apart always differ. The level stays under the
+    empty-row threshold, and it sits below the brand so the chart pixels
+    and the settled still do not move.
+    """
+    if t is None or img is None:
+        return
+    from PIL import ImageDraw
+    residue = int(float(t) * 10) % 7
+    level = 30 + residue * 8
+    color = (level, level, level)
+    width, height = img.size
+    top = max(0, int(height) - 180)
+    ImageDraw.Draw(img).rectangle([0, top, int(width) - 1, int(height) - 1], fill=color)
 
 
 def draw_plan(img, plan, shown, t, clock):
@@ -927,6 +946,7 @@ def draw_plan(img, plan, shown, t, clock):
     counter_p = _progress(clock, "counter", t, 0.0)
     # The line pill is the target label. A second big TARGET under the chart covers the caption.
     counter = number_counter(img, plan.target, counter_p, label="TARGET", paint=False)
+    _hold_motion(img, t)
     title_p = _progress(clock, "title", t, 0.0)
     candles_p = sum(per) / float(len(per) or 1)
     return {

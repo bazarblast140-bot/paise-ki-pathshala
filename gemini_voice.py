@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import io
 import os
+import time
 import wave
 
 MODEL = "gemini-3.8-flash-tts"
@@ -17,6 +18,9 @@ VOICE = "Charon"
 URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 SAMPLE_RATE = 24000
 TIMEOUT = 180
+# One retry, only for a rate limit or a server error, before Edge or Rudra.
+RETRY_WAIT_S = 20.0
+RETRY_STATUSES = (429, 500, 502, 503, 504)
 STYLE = (
     "confident deep male narrator, natural Hinglish with English words pronounced the Indian way, "
     "calm, clear teacher pace with short natural pauses between sentences"
@@ -37,7 +41,8 @@ FAR_HI = 1.50
 class GeminiFallback(Exception):
     """Gemini did not return usable audio. The slot speaks the next engine."""
 
-    def __init__(self, reason):
+    def __init__(self, reason, status=None):
+        self.status = int(status) if status else None
         self.reason = redact(reason)
         super().__init__(self.reason)
 
@@ -156,8 +161,16 @@ def duration_far(actual, expected):
     return ratio < FAR_LO or ratio > FAR_HI
 
 
-def write_speech(text, dest, style=None):
-    """POST the whole script once. Write a wav. Never log the key or the body."""
+def _response_snippet(response):
+    try:
+        raw = getattr(response, "text", "") or ""
+    except Exception:  # noqa: BLE001 — the status is still the error
+        raw = ""
+    return redact(" ".join(str(raw).split()))[:180]
+
+
+def _post_speech(text, dest, style=None):
+    """One POST. The error text is the HTTP status plus a short redacted body."""
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not key:
         raise GeminiFallback("GEMINI_API_KEY is not set")
@@ -172,10 +185,15 @@ def write_speech(text, dest, style=None):
     except requests.Timeout:
         raise GeminiFallback("Gemini TTS timed out after 180s")
     except requests.RequestException as exc:
-        raise GeminiFallback(f"Gemini TTS request failed ({type(exc).__name__})")
+        detail = redact(str(exc))[:180]
+        raise GeminiFallback(f"Gemini TTS request failed ({type(exc).__name__}: {detail})")
     status = int(getattr(response, "status_code", 0) or 0)
     if status != 200:
-        raise GeminiFallback(f"Gemini TTS HTTP {status}")
+        snippet = _response_snippet(response)
+        detail = f"Gemini TTS HTTP {status}"
+        if snippet:
+            detail = f"{detail}: {snippet}"
+        raise GeminiFallback(detail, status=status)
     try:
         payload = response.json()
     except Exception:  # noqa: BLE001 — a non-JSON body has no audio
@@ -188,6 +206,31 @@ def write_speech(text, dest, style=None):
     if wav_seconds(dest) <= 0:
         raise GeminiFallback("Gemini TTS audio was empty")
     return dest
+
+
+def write_speech(text, dest, style=None):
+    """POST the whole script. A 429 or 5xx is retried once after 20s.
+
+    The logged error is the HTTP status and a short redacted body. The key
+    is never printed. A second failure, a timeout, or a bad file falls back.
+    """
+    last = None
+    for attempt in (0, 1):
+        try:
+            return _post_speech(text, dest, style)
+        except GeminiFallback as exc:
+            last = exc
+            if attempt == 0 and exc.status in RETRY_STATUSES:
+                wait = float(RETRY_WAIT_S)
+                print(
+                    f"[warn] {exc.reason}. Retrying Gemini once in {wait:.0f}s.",
+                    flush=True,
+                )
+                if wait > 0:
+                    time.sleep(wait)
+                continue
+            raise
+    raise last
 
 
 def _weights(spoken, order):

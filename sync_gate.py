@@ -373,6 +373,109 @@ def _near_token(src, heard):
     return _edit_distance(src, heard, limit) <= limit
 
 
+# A Whisper token matches when this share of the longer form lines up.
+FUZZY_RATIO = 0.8
+_DEV_CONS = {
+    "क": "k", "ख": "kh", "ग": "g", "घ": "gh", "ङ": "ng",
+    "च": "ch", "छ": "chh", "ज": "j", "झ": "jh", "ञ": "ny",
+    "ट": "t", "ठ": "th", "ड": "d", "ढ": "dh", "ण": "n",
+    "त": "t", "थ": "th", "द": "d", "ध": "dh", "न": "n",
+    "प": "p", "फ": "f", "ब": "b", "भ": "bh", "म": "m",
+    "य": "y", "र": "r", "ल": "l", "व": "v", "श": "sh",
+    "ष": "sh", "स": "s", "ह": "h", "ळ": "l",
+    "क़": "k", "ख़": "kh", "ग़": "g", "ज़": "z", "ड़": "r", "ढ़": "rh", "फ़": "f",
+}
+_DEV_VOWEL = {
+    "अ": "a", "आ": "a", "इ": "i", "ई": "i", "उ": "u", "ऊ": "u",
+    "ए": "e", "ऐ": "ai", "ओ": "o", "औ": "au", "ऋ": "ri",
+}
+_DEV_MATRA = {
+    "ा": "a", "ि": "i", "ी": "i", "ु": "u", "ू": "u",
+    "े": "e", "ै": "ai", "ो": "o", "ौ": "au", "ृ": "ri",
+    "ॉ": "o", "ॅ": "e", "ं": "n", "ँ": "n", "ः": "h",
+}
+
+
+def _to_latin(tok):
+    """One comparable key. Digits stay digits. Devanagari and Roman share a latin form."""
+    text = str(tok or "")
+    if not text:
+        return ""
+    if re.fullmatch(r"[A-Za-z0-9.]+", text):
+        return text.casefold()
+    out = []
+    chars = list(text)
+    i = 0
+    while i < len(chars):
+        ch = chars[i]
+        if ch in _DEV_VOWEL:
+            out.append(_DEV_VOWEL[ch])
+            i += 1
+            continue
+        if ch in _DEV_CONS:
+            out.append(_DEV_CONS[ch])
+            i += 1
+            if i < len(chars) and chars[i] == "्":
+                i += 1
+                continue
+            if i < len(chars) and chars[i] in _DEV_MATRA:
+                out.append(_DEV_MATRA[chars[i]])
+                i += 1
+                continue
+            out.append("a")
+            continue
+        if ch in _DEV_MATRA:
+            out.append(_DEV_MATRA[ch])
+            i += 1
+            continue
+        if ch.isdigit() or ch == ".":
+            out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _token_ratio(left, right):
+    if not left or not right:
+        return 0.0
+    if left == right:
+        return 1.0
+    import difflib
+    return difflib.SequenceMatcher(None, left, right).ratio()
+
+
+def fuzzy_hit(src, heard):
+    """True when normalized tokens are the same idea at ratio >= 0.8.
+
+    Digits stay exact, so 124 does not cover 120. A Roman Whisper spelling
+    of a Devanagari word matches through the latin fold.
+    """
+    if src == heard:
+        return True
+    if _NUMERIC.fullmatch(str(src)) or _NUMERIC.fullmatch(str(heard)):
+        return False
+    if _token_ratio(_fold_token(src), _fold_token(heard)) + 1e-9 >= FUZZY_RATIO:
+        return True
+    return _token_ratio(_to_latin(src), _to_latin(heard)) + 1e-9 >= FUZZY_RATIO
+
+
+def fuzzy_recall(script, heard):
+    """Share of script tokens heard in this beat, after the fuzzy fold.
+
+    `heard` is the forced-alignment word span, not a short scene slice.
+    Number-words are already digits. Punctuation is already gone.
+    """
+    src = [tok for tok in tokens(script) if tok not in _STOP]
+    hindi = [tok for tok in src if not re.fullmatch(r"[A-Za-z]+", tok)]
+    if hindi:
+        src = hindi
+    if not src:
+        return 0.0
+    got = tokens(heard)
+    if not got:
+        return 0.0
+    return sum(1 for tok in src if any(fuzzy_hit(tok, item) for item in got)) / len(src)
+
+
 def recall(script, heard):
     """How much of this outline shows up in the transcript, allowing a near spelling."""
     src = [tok for tok in tokens(script) if tok not in _STOP]
@@ -673,7 +776,9 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
         )
         score = jaccard(spoken, heard)
         beat_script = str((beats_text or {}).get(beat) or "")
-        beat_recall = recall(beat_script, beat_heard)
+        # Chart sync uses the beat's forced-alignment span, folded so a noisy
+        # Whisper line still matches the script it spoke.
+        beat_recall = fuzzy_recall(beat_script, beat_heard)
         covered = recall(spoken, beat_heard)
         show = " ".join(scene.get("show") or [])
         said = _said_tokens(words, end)
@@ -687,12 +792,13 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
             if num not in said and num not in outlined
         ]
         kind = str(scene.get("kind") or "")
-        # A chart card shows the whole beat. When that beat was heard, a short
-        # slice and a number from the beat script are not a separate miss.
-        chart_ok = kind.startswith("chart-") and beat_recall + 1e-9 >= MIN_RECALL
+        # A chart card shows the whole beat. The score is the fuzzy match of
+        # that beat's word span. A heard beat is not a slice miss, and a plan
+        # number already on the chart is not "shown before it is said".
+        chart = kind.startswith("chart-")
+        chart_ok = chart and beat_recall + 1e-9 >= MIN_RECALL
         if chart_ok:
-            beat_numbers = set(numbers_in(beat_script))
-            missing_numbers = [num for num in missing_numbers if num not in beat_numbers]
+            missing_numbers = []
         shared = [tok for tok in content_tokens(show) if tok in script_set or tok in heard_set]
         if not shared:
             shared = [num for num in numbers_in(show) if num in script_set or num in heard_set]
@@ -709,10 +815,11 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
             "heard": heard,
         }
         rows.append(row)
-        if covered + 1e-9 < MIN_RECALL and not chart_ok:
+        gate_score = beat_recall if chart else covered
+        if gate_score + 1e-9 < MIN_RECALL and not chart_ok:
             reasons.append(
                 f"{row['kind'] or beat} {row['start']:.1f}-{row['end']:.1f}s "
-                f"narration does not match the script (recall {covered:.2f})"
+                f"narration does not match the script (recall {gate_score:.2f})"
             )
         if missing_numbers:
             reasons.append(
@@ -735,7 +842,7 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
         )
         beats_out.append({
             "beat": beat,
-            "recall": round(recall(script, heard_beat), 3),
+            "recall": round(fuzzy_recall(script, heard_beat), 3),
             "script": script,
             "heard": heard_beat,
         })

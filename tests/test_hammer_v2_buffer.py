@@ -296,6 +296,180 @@ class BufferGateTests(unittest.TestCase):
         self.assertIn("approved_buffer.py --publish", pipeline)
         self.assertIn("APPROVED_BANK=1 SKIP_DATA_SLOT=1 python slot_guard.py --next", pipeline)
         self.assertIn("buffer_shorts.py --fill-scheduled", pipeline)
+        self.assertIn("max-parallel: 3", text)
+        self.assertIn("--key", text)
+
+
+class CheckerFixTests(unittest.TestCase):
+    def test_plan_value_counts_when_the_overlay_is_within_1_5s(self):
+        plan = trade_plan.plan_for("pat_hammer")
+        img = Image.new("RGB", (8, 8))
+        img.text_layers = []
+        img.motion_state = {}
+        scenes = [{"start": 0.0, "end": 30.0, "beat": "target", "frame": img}]
+        entry, stop, target = int(plan.entry), int(plan.sl), int(plan.target)
+        spoken = {
+            "hook": f"एंट्री {entry} स्टॉप {stop}",
+            "entry": f"एंट्री {entry}",
+            "target": f"टारगेट {target}",
+            "cta": "कमेंट करो",
+        }
+        times = {
+            "hook": (0.0, 8.0),
+            "entry": (8.0, 16.0),
+            "target": (20.0, 28.0),
+            "cta": (28.0, 30.0),
+        }
+        words = [
+            {"word": "एंट्री", "start": 1.0, "end": 1.4},
+            {"word": str(entry), "start": 4.0, "end": 4.4},
+            {"word": "टारगेट", "start": 22.0, "end": 22.4},
+            {"word": str(target), "start": 23.0, "end": 23.4},
+        ]
+        topic = {
+            "key": "pat_hammer",
+            "_live_beats": "plan",
+            "_beat_times": times,
+            "_chart_overlays": [
+                {"kind": "entry", "label": f"ENTRY {entry}", "start": 8.2, "end": 30.0},
+                {"kind": "target", "label": f"TARGET {target}", "start": 24.2, "end": 30.0},
+            ],
+        }
+        notes = board_short.number_faults_for(scenes, spoken, times, words, topic=topic)
+        self.assertFalse(any(str(target) in note for note in notes), notes)
+        self.assertFalse(any(str(entry) in note for note in notes), notes)
+        spoken = dict(spoken)
+        spoken["target"] = spoken["target"] + " 777"
+        words = list(words) + [{"word": "777", "start": 25.0, "end": 25.4}]
+        missed = board_short.number_faults_for(scenes, spoken, times, words, topic=topic)
+        self.assertTrue(any("777" in note for note in missed), missed)
+
+    def test_noisy_whisper_chart_beat_scores_from_the_word_span(self):
+        script = "अल्फा बीटा गामा टारगेट 158 रिस्क 20 रिवॉर्ड 40 यानी प्लान सही है यहाँ"
+        noisy = "alpha beta gamma target 158 risk 20 reward 40 yani plan sahi yahan"
+        strict = sync_gate.recall(script, noisy)
+        fuzzy = sync_gate.fuzzy_recall(script, noisy)
+        self.assertLess(strict, sync_gate.MIN_RECALL, strict)
+        self.assertGreaterEqual(fuzzy, sync_gate.MIN_RECALL, fuzzy)
+        words = []
+        clock = 14.0
+        for word in noisy.split():
+            words.append({"word": word, "start": clock, "end": clock + 0.35})
+            clock += 0.35
+        # Words outside the beat must not be what the score uses.
+        words.insert(0, {"word": "अल्फा", "start": 1.0, "end": 1.3})
+        scene = {
+            "start": 14.0, "end": 16.0, "beat": "target", "kind": "chart-target",
+            "show": ["टारगेट 158"],
+        }
+        report = sync_gate.check(
+            words, [scene], {"target": script}, {"target": (14.0, clock)}, [],
+        )
+        self.assertTrue(report["ok"], report["reason"])
+        self.assertGreaterEqual(report["beats"][0]["recall"], sync_gate.MIN_RECALL)
+        score, _notes = self_review.score_sync(report)
+        self.assertEqual(score, 100)
+        wrong = sync_gate.check(
+            [{"word": "गुप्तकथा", "start": 14.2, "end": 14.6},
+             {"word": "अदृश्यपाठ", "start": 15.0, "end": 15.4}],
+            [scene], {"target": script}, {"target": (14.0, 20.0)}, [],
+        )
+        self.assertFalse(wrong["ok"])
+
+    def test_cta_margin_moves_across_four_seconds(self):
+        plan = trade_plan.plan_for("pat_hammer")
+        beats = {
+            beat: (index * 8.0, index * 8.0 + 8.0)
+            for index, beat in enumerate(trade_plan.BEATS)
+        }
+        topic = {"key": "pat_hammer", "_beat_times": beats, "_chart_overlays": []}
+        clock = motion_lib.clock_from(topic, plan)
+        start = beats["cta"][0] + 1.0
+        left = Image.new("RGB", (1080, 1920), motion_lib.BG)
+        right = Image.new("RGB", (1080, 1920), motion_lib.BG)
+        motion_lib.draw_plan(left, plan, [], start, clock)
+        motion_lib.draw_plan(right, plan, [], start + 4.0, clock)
+        import numpy as np
+        delta = float(np.abs(np.asarray(left, dtype=np.int16) - np.asarray(right, dtype=np.int16)).mean())
+        self.assertGreaterEqual(delta, scene_pace.VISUAL_MIN_DELTA, delta)
+        self.assertLessEqual(scene_pace.empty_row_fraction(left), scene_pace.EMPTY_MAX_FRAC)
+
+    def test_premarked_skip_leaves_21_00_open(self):
+        import slot_guard
+        skip = {
+            "date_ist": "2026-10-09",
+            "slot": "21:00",
+            "video_id": None,
+            "platform": "skip",
+            "note": "no owner_approved script left in approved/",
+            "slot_skipped": "no owner_approved script left in approved/",
+        }
+        self.assertTrue(slot_guard.is_premarked_skip(skip))
+        self.assertIsNone(slot_guard.find_entry([skip], "2026-10-09", "21:00"))
+        self.assertEqual(
+            slot_guard.row_state(slot_guard.find_entry([skip], "2026-10-09", "21:00")),
+            "open",
+        )
+        uploaded = {
+            "date_ist": "2026-10-09", "slot": "21:00", "video_id": "abc123",
+            "platform": "youtube",
+        }
+        self.assertEqual(
+            slot_guard.find_entry([skip, uploaded], "2026-10-09", "21:00")["video_id"],
+            "abc123",
+        )
+        hold = {"date_ist": "2026-10-09", "slot": "21:00", "platform": "hold", "video_id": None}
+        self.assertEqual(
+            slot_guard.row_state(slot_guard.find_entry([hold], "2026-10-09", "21:00")),
+            "held",
+        )
+
+    def test_merge_parts_keeps_each_topic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            held = root / "buffer-a"
+            ready = root / "buffer-b"
+            held.mkdir()
+            ready.mkdir()
+            (held / "buffer_item.json").write_text(json.dumps({
+                "id": "hold-a", "state": "held", "topic_key": "pat_a",
+            }), encoding="utf-8")
+            (ready / "buffer_item.json").write_text(json.dumps({
+                "id": "ap-b", "state": "ready", "topic_key": "pat_b", "owner_approved": True,
+            }), encoding="utf-8")
+            (ready / "pat_b.json").write_text(
+                json.dumps({"key": "pat_b", "owner_approved": True}), encoding="utf-8",
+            )
+            manifest = root / "manifest.json"
+            manifest.write_text('{"tag": "approved-topic-buffer", "items": []}\n', encoding="utf-8")
+            approved = root / "approved"
+            approved.mkdir()
+            approved_buffer.merge_parts(root, manifest_path=manifest, approved_dir=approved)
+            keys = {item["topic_key"] for item in json.loads(manifest.read_text())["items"]}
+            self.assertEqual(keys, {"pat_a", "pat_b"})
+            self.assertIs(
+                json.loads((approved / "pat_b.json").read_text(encoding="utf-8"))["owner_approved"],
+                True,
+            )
+
+    def test_trim_exit_keeps_the_sentence(self):
+        import common
+
+        def trim(_beats):
+            common.die("TTS beat hook became too short after silence trim: 0.20s")
+
+        spoken = {"hook": "एक"}
+        with mock.patch.object(gemini_voice, "write_speech", return_value=None), \
+             mock.patch.object(gemini_voice, "wav_seconds", return_value=40.0), \
+             mock.patch.object(gemini_voice, "duration_far", return_value=False), \
+             mock.patch.object(gemini_voice, "split_into_beats", return_value=None), \
+             mock.patch.object(board_short, "_trim_rendered", side_effect=trim):
+            with self.assertRaises(gemini_voice.GeminiFallback) as caught:
+                board_short._one_gemini_take(
+                    spoken, {}, ("hook",), spoken, "एक", gemini_voice.STYLE, [], 0, None, None,
+                )
+        self.assertIn("too short", str(caught.exception))
+        self.assertNotEqual(str(caught.exception).strip(), "1")
 
 
 if __name__ == "__main__":

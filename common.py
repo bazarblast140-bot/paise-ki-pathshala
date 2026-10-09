@@ -58,7 +58,10 @@ def need(key):
 
 def die(msg, code=1):
     print(f"[FAIL] {msg}", file=sys.stderr)
-    sys.exit(code)
+    err = SystemExit(code)
+    # Callers that turn SystemExit into a fallback need the sentence, not "1".
+    err.reason = str(msg)
+    raise err
 
 
 class TruncatedResponse(RuntimeError):

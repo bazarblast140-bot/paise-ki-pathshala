@@ -36,6 +36,8 @@ Taken from top Shorts (2.1M / 2.1M / 451K views).
    `RR 1:x` text. It stays through the hook sentence, fades out, and is
    drawn again on the target beat. It does not cover the hammer through
    pehchan and context. The disclaimer sits at least 24 px below the caption.
+   The lower margin keeps a slow brightness pulse, including through the CTA,
+   so a four-second hold is not a still frame.
 7. **Key candle.** Other candles dim to 35% opacity. The key candle gets a
    yellow `#F5C518` outline and pushes in from 1.0× to 1.35× over 600 ms
    (ease-in-out), then eases back before the next beat.

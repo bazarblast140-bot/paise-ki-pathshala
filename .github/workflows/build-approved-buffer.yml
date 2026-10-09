@@ -4,6 +4,7 @@ name: Build approved topic buffer
 # not already buffered and were not published in the last 14 days. A video is
 # stored, and the topic marked owner_approved, only when every gate passes.
 # A miss is logged and held. Nothing here is published.
+# Up to six topics, three at a time, so the run finishes in about two waves.
 on:
   schedule:
     - cron: "40 21 * * *"   # 03:10 IST
@@ -17,9 +18,54 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 15
+    outputs:
+      topics: ${{ steps.list.outputs.topics }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Re-read the buffer and the ledger
+        run: |
+          branch="${GITHUB_REF_NAME:-main}"
+          git fetch origin "$branch"
+          git checkout "origin/$branch" -- data/published.json data/approved_buffer.json || true
+      - name: List up to six topics
+        id: list
+        run: |
+          python - <<'PY'
+          import json, os
+          from datetime import datetime
+          import approved_buffer
+          import slot_guard
+          keys = approved_buffer.candidate_keys(
+              slot_guard._read(),
+              approved_buffer.load_manifest(),
+              datetime.now(slot_guard.IST),
+              limit=approved_buffer.MAX_PER_RUN,
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+              handle.write("topics=" + json.dumps(keys) + "\n")
+          print("topics", keys)
+          PY
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.topics != '[]' && needs.plan.outputs.topics != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        topic: ${{ fromJson(needs.plan.outputs.topics) }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -36,7 +82,7 @@ jobs:
           branch="${GITHUB_REF_NAME:-main}"
           git fetch origin "$branch"
           git checkout "origin/$branch" -- data/published.json data/approved_buffer.json || true
-      - name: Render up to six Hammer v2 topics
+      - name: Render one Hammer v2 topic
         env:
           VIDEO_FORMAT: short
           APPROVED_BANK: "1"
@@ -52,7 +98,48 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: python approved_buffer.py --build --max 6
+        run: python approved_buffer.py --build --max 6 --key ${{ matrix.topic }}
+      - name: Pack this topic
+        if: always()
+        run: |
+          mkdir -p buffer_out
+          if [ -f run/buffer_item.json ]; then cp run/buffer_item.json buffer_out/; fi
+          key="${{ matrix.topic }}"
+          if [ -f "approved/${key}.json" ]; then cp "approved/${key}.json" buffer_out/; fi
+      - name: Upload this topic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buffer-${{ matrix.topic }}
+          path: buffer_out/
+          if-no-files-found: warn
+
+  commit:
+    needs: [plan, build]
+    if: always() && needs.plan.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Re-read the buffer and the ledger
+        run: |
+          branch="${GITHUB_REF_NAME:-main}"
+          git fetch origin "$branch"
+          git checkout "origin/$branch" -- data/published.json data/approved_buffer.json approved || true
+      - name: Download topic artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: buffer-*
+          path: buffer-parts
+      - name: Merge buffer state
+        run: python approved_buffer.py --merge-parts buffer-parts
       - name: Commit buffer state
         if: ${{ !cancelled() }}
         run: |

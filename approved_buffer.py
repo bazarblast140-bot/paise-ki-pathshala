@@ -374,14 +374,77 @@ def default_runner(key):
     ).returncode
 
 
-def build(*, max_n=MAX_PER_RUN, runner=None, store=None, now=None, manifest_path=None):
-    """Render up to `max_n` topics. Passes are stored. Failures are held."""
+def _export_item(item):
+    """One topic's buffer row, for a matrix job to hand to the commit step."""
+    if not item:
+        return
+    path = RUN / "buffer_item.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(item, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _upsert(manifest, item):
+    items = manifest.setdefault("items", [])
+    for index, row in enumerate(items):
+        same_id = item.get("id") and row.get("id") == item.get("id")
+        same_hold = (
+            row.get("topic_key") == item.get("topic_key")
+            and row.get("state") == "held"
+            and item.get("state") == "held"
+        )
+        if same_id or same_hold:
+            items[index] = item
+            return
+    items.append(item)
+
+
+def merge_parts(directory, manifest_path=None, approved_dir=None):
+    """Fold per-topic artifacts into the manifest. A passing JSON is copied."""
+    directory = Path(directory)
+    manifest_path = Path(manifest_path) if manifest_path else MANIFEST
+    manifest = load_manifest(manifest_path)
+    if approved_dir is None:
+        import approved_bank
+        approved_dir = approved_bank.DIR
+    approved_dir = Path(approved_dir)
+    for item_path in sorted(directory.glob("**/buffer_item.json")):
+        try:
+            item = json.loads(item_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(item, dict) or not item.get("topic_key"):
+            continue
+        _upsert(manifest, item)
+        key = str(item.get("topic_key"))
+        src = item_path.parent / f"{key}.json"
+        if not src.exists():
+            continue
+        try:
+            data = json.loads(src.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if data.get("owner_approved") is True:
+            dest = approved_dir / f"{key}.json"
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    save_manifest(manifest, manifest_path)
+    return manifest
+
+
+def build(*, max_n=MAX_PER_RUN, runner=None, store=None, now=None, manifest_path=None, only=None):
+    """Render up to `max_n` topics. Passes are stored. Failures are held.
+
+    `only` renders that one key. The buffer workflow uses it as a matrix.
+    """
     import slot_guard
 
     now = now or _now()
     manifest_path = Path(manifest_path) if manifest_path else MANIFEST
     manifest = load_manifest(manifest_path)
     keys = candidate_keys(slot_guard._read(), manifest, now, limit=max_n)
+    if only:
+        only = str(only).strip()
+        keys = [only] if only in keys else []
     if not keys:
         print("[buffer] no approved topic left to render", flush=True)
         save_manifest(manifest, manifest_path)
@@ -400,19 +463,22 @@ def build(*, max_n=MAX_PER_RUN, runner=None, store=None, now=None, manifest_path
         engine = _voice(RUN)
         seconds = __import__("publish_gates")._duration_s(RUN)
         if reasons:
-            _hold(manifest, key, reasons, now, engine, seconds)
+            item = _hold(manifest, key, reasons, now, engine, seconds)
             save_manifest(manifest, manifest_path)
+            _export_item(item)
             print(f"[HOLD] {key}: {'; '.join(reasons)}", flush=True)
             continue
         try:
             item = _store_ready(manifest, RUN, key, store or _github_store(), now)
         except Exception as exc:  # noqa: BLE001 — a video we cannot store is not ready
-            _hold(manifest, key, [f"store failed: {exc}"], now, engine, seconds)
+            item = _hold(manifest, key, [f"store failed: {exc}"], now, engine, seconds)
             save_manifest(manifest, manifest_path)
+            _export_item(item)
             print(f"[HOLD] {key}: store failed: {exc}", flush=True)
             continue
         mark_owner_approved(key)
         save_manifest(manifest, manifest_path)
+        _export_item(item)
         print(f"[READY] {key} {item['id']} voice={item.get('voice_engine')}", flush=True)
     return 0
 
@@ -562,12 +628,22 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if "--publish" in argv:
         return publish_slot()
+    if "--merge-parts" in argv:
+        folder = argv[argv.index("--merge-parts") + 1]
+        merge_parts(folder)
+        return 0
     if "--build" in argv:
         limit = MAX_PER_RUN
         if "--max" in argv:
             limit = int(argv[argv.index("--max") + 1])
-        return build(max_n=limit)
-    print("usage: approved_buffer.py --build [--max 6] | --publish", file=sys.stderr)
+        only = None
+        if "--key" in argv:
+            only = argv[argv.index("--key") + 1]
+        return build(max_n=limit, only=only)
+    print(
+        "usage: approved_buffer.py --build [--max 6] [--key TOPIC] | --publish | --merge-parts DIR",
+        file=sys.stderr,
+    )
     return 2
 
 
