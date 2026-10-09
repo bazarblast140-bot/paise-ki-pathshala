@@ -3225,8 +3225,8 @@ def synthesize_short_voices(spoken, c, beats=None, topic=None):
     if proof_audio in ("edge", "silence"):
         _drop_gemini_audio(beats)
     gemini_note = ""
-    if proof_audio not in ("edge", "silence") and os.environ.get("GEMINI_API_KEY", "").strip():
-        import gemini_voice
+    import gemini_voice
+    if proof_audio not in ("edge", "silence") and gemini_voice.configured():
         try:
             _speak_gemini(spoken, c, beats, topic)
             return _write_spoken_engine("gemini", elevenlabs_attempted=False)
@@ -5768,7 +5768,8 @@ def _pay_and_remux(topic, n, c, spec, source, proven):
     Gemini is not an ElevenLabs spend. The paid switch is checked only when
     that one request fails and Rudra would be next.
     """
-    if not os.environ.get("GEMINI_API_KEY", "").strip():
+    import gemini_voice
+    if not gemini_voice.configured():
         eleven_voice.require_paid_tts()
     spoken = proven["spoken"]
     n = proven.get("narration") or n

@@ -101,6 +101,7 @@ jobs:
           branch="${GITHUB_REF_NAME:-main}"
           git fetch origin "$branch"
           git checkout "origin/$branch" -- data/published.json
+          git checkout "origin/$branch" -- data/gemini_budget.json || true
       - name: Format decide karo
         id: fmt
         env:
@@ -231,6 +232,9 @@ jobs:
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
           EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+          GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
+          GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           PAID_TTS_ENABLED: ${{ vars.PAID_TTS_ENABLED }}
           ELEVENLABS_VOICE_ID: ${{ inputs.narration_from_run && 'ypnkIsDASPgHZuanrF0q' || secrets.ELEVENLABS_VOICE_ID }}
@@ -318,7 +322,7 @@ jobs:
         if: ${{ !cancelled() && steps.guard.outputs.taken != 'true' && (steps.uploaded.outputs.youtube_uploaded == 'true' || success() || steps.buffer.outcome == 'success' || steps.pipeline.outcome == 'failure') }}
         run: |
           FILES=""
-          for f in topic_bank.json data/published.json data/buffer_manifest.json data/gate_skips.json data/competitor_insights.json \
+          for f in topic_bank.json data/published.json data/gemini_budget.json data/buffer_manifest.json data/gate_skips.json data/competitor_insights.json \
                    data/competitor_performance.json data/own_topic_performance.json; do
             [ -e "$f" ] && FILES="$FILES $f"
           done

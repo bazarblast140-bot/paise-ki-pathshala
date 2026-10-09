@@ -17,6 +17,9 @@ import ledger
 
 ROOT = Path(__file__).resolve().parent.parent
 SECRET = "gemini-super-secret-key-DO-NOT-LEAK-9999"
+SECRET_2 = "gemini-second-key-ALSO-DO-NOT-LEAK-2222"
+SECRET_3 = "gemini-third-key-ALSO-DO-NOT-LEAK-3333"
+SECRET_4 = "gemini-fourth-key-ALSO-DO-NOT-LEAK-4444"
 ORDER = ("hook", "pehchan", "matlab", "karein")
 VOICE = {
     "voice": {
@@ -163,6 +166,9 @@ class SpeakTests(unittest.TestCase):
     def _env(self, **extra):
         env = {
             "GEMINI_API_KEY": SECRET,
+            "GEMINI_API_KEY_2": "",
+            "GEMINI_API_KEY_3": "",
+            "GEMINI_API_KEY_4": "",
             "SUPPRESS_GHA_COMMANDS": "1",
             "PUBLISH_VISIBILITY": "public",
             "PAID_TTS_ENABLED": "true",
@@ -593,7 +599,195 @@ class SpeakTests(unittest.TestCase):
     def test_workflow_passes_the_key_as_an_env_var(self):
         text = (ROOT / ".github" / "workflows" / "paise-ki-pathshala.yml").read_text(encoding="utf-8")
         self.assertIn("GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}", text)
+        for name in ("GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEY_4"):
+            self.assertIn(f"{name}: ${{{{ secrets.{name} }}}}", text)
         self.assertNotIn("print(os.environ", text)
+        buffer = (ROOT / ".github" / "workflows" / "build-approved-buffer.yml").read_text(encoding="utf-8")
+        sample = (ROOT / ".github" / "workflows" / "render-topic-sample.yml").read_text(encoding="utf-8")
+        for name in ("GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEY_4"):
+            line = f"{name}: ${{{{ secrets.{name} }}}}"
+            self.assertIn(line, buffer)
+            self.assertIn(line, sample)
+        self.assertIn('GEMINI_API_KEY_3: ""', buffer)
+        self.assertIn('GEMINI_API_KEY_4: ""', buffer)
+
+
+class KeyRotationTests(unittest.TestCase):
+    def test_429_on_the_first_key_uses_the_second_key_once(self):
+        dest = Path(tempfile.mkdtemp()) / "voice.wav"
+        calls = []
+
+        def post(_url, **kwargs):
+            calls.append(kwargs["headers"]["x-goog-api-key"])
+            if len(calls) == 1:
+                return FakeResp(429, {"error": {"message": SECRET}})
+            return FakeResp(200, {
+                "output": [{"content": [{"type": "audio", "data": _b64_audio(8.0)}]}],
+            })
+
+        buf = io.StringIO()
+        env = {
+            "GEMINI_API_KEY": SECRET,
+            "GEMINI_API_KEY_2": SECRET_2,
+            "GEMINI_API_KEY_3": "",
+            "GEMINI_API_KEY_4": "",
+            "GEMINI_CACHE": "0",
+            "GEMINI_BUDGET": "0",
+        }
+        with mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch("requests.post", post), \
+             redirect_stdout(buf):
+            gemini_voice.write_speech("नमस्ते", dest)
+        text = buf.getvalue()
+        self.assertEqual(calls, [SECRET, SECRET_2])
+        self.assertNotIn(SECRET, text)
+        self.assertNotIn(SECRET_2, text)
+        self.assertIn("key 1 returned 429", text)
+        self.assertGreater(dest.stat().st_size, 1000)
+
+    def test_429_on_every_key_holds_with_gemini_quota_and_hides_both_keys(self):
+        dest = Path(tempfile.mkdtemp()) / "voice.wav"
+        calls = []
+
+        def post(_url, **kwargs):
+            calls.append(kwargs["headers"]["x-goog-api-key"])
+            return FakeResp(429, {"error": {"message": kwargs["headers"]["x-goog-api-key"]}})
+
+        buf = io.StringIO()
+        env = {
+            "GEMINI_API_KEY": SECRET,
+            "GEMINI_API_KEY_2": SECRET_2,
+            "GEMINI_API_KEY_3": "",
+            "GEMINI_API_KEY_4": "",
+            "GEMINI_CACHE": "0",
+            "GEMINI_BUDGET": "0",
+        }
+        with mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch("requests.post", post), \
+             redirect_stdout(buf):
+            with self.assertRaises(gemini_voice.GeminiFallback) as caught:
+                gemini_voice.write_speech("नमस्ते", dest)
+        text = buf.getvalue() + " " + str(caught.exception)
+        self.assertEqual(calls, [SECRET, SECRET_2])
+        self.assertEqual(caught.exception.status, 429)
+        self.assertIn("gemini_quota", str(caught.exception))
+        self.assertNotIn(SECRET, text)
+        self.assertNotIn(SECRET_2, text)
+
+    def test_each_key_has_its_own_daily_ten_and_a_429_closes_that_key(self):
+        import gemini_budget
+        from datetime import datetime
+        now = datetime(2026, 10, 9, 12, 0, tzinfo=gemini_budget.IST)
+        with tempfile.TemporaryDirectory() as tmp:
+            budget = Path(tmp) / "budget.json"
+            env = {
+                "GEMINI_BUDGET_PATH": str(budget),
+                "GEMINI_BUDGET": "1",
+                "GEMINI_API_KEY": SECRET,
+                "GEMINI_API_KEY_2": SECRET_2,
+                "GEMINI_API_KEY_3": SECRET_3,
+                "GEMINI_API_KEY_4": SECRET_4,
+                "GEMINI_CHARGE_PATH": str(Path(tmp) / "charges.json"),
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                for _ in range(8):
+                    self.assertTrue(gemini_budget.allow("other", "1", now))
+                    gemini_budget.note("other", "1", now)
+                # Two requests stay reserved for the reel and the Nifty Short.
+                self.assertFalse(gemini_budget.allow("other", "1", now))
+                self.assertTrue(gemini_budget.allow("realchart", "1", now))
+                self.assertTrue(gemini_budget.allow("other", "2", now))
+                gemini_budget.exhaust("1", now)
+                self.assertFalse(gemini_budget.allow("realchart", "1", now))
+                self.assertTrue(gemini_budget.allow("nifty", "2", now))
+                self.assertTrue(gemini_budget.allow("other", "3", now))
+                self.assertTrue(gemini_budget.allow("other", "4", now))
+                self.assertEqual(gemini_budget.buffer_topic_limit(6, now), 3)
+                self.assertEqual(gemini_budget.active_key_ids(), ["1", "2", "3", "4"])
+                saved = json.loads(budget.read_text(encoding="utf-8"))
+        blob = json.dumps(saved)
+        self.assertNotIn(SECRET, blob)
+        self.assertNotIn(SECRET_2, blob)
+        self.assertNotIn(SECRET_3, blob)
+        self.assertNotIn(SECRET_4, blob)
+        self.assertEqual(saved["days"]["2026-10-09"]["keys"]["1"]["other"], 8)
+        self.assertTrue(saved["days"]["2026-10-09"]["keys"]["1"]["exhausted"])
+
+    def test_429_walks_key_three_and_stops_when_every_key_is_429(self):
+        dest = Path(tempfile.mkdtemp()) / "voice.wav"
+        calls = []
+
+        def post(_url, **kwargs):
+            calls.append(kwargs["headers"]["x-goog-api-key"])
+            if kwargs["headers"]["x-goog-api-key"] == SECRET_3:
+                return FakeResp(200, {
+                    "output": [{"content": [{"type": "audio", "data": _b64_audio(8.0)}]}],
+                })
+            return FakeResp(429, {"error": {"message": kwargs["headers"]["x-goog-api-key"]}})
+
+        buf = io.StringIO()
+        env = {
+            "GEMINI_API_KEY": SECRET,
+            "GEMINI_API_KEY_2": SECRET_2,
+            "GEMINI_API_KEY_3": SECRET_3,
+            "GEMINI_API_KEY_4": "",
+            "GEMINI_CACHE": "0",
+            "GEMINI_BUDGET": "0",
+        }
+        with mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch("requests.post", post), \
+             redirect_stdout(buf):
+            gemini_voice.write_speech("नमस्ते", dest)
+        text = buf.getvalue()
+        self.assertEqual(calls, [SECRET, SECRET_2, SECRET_3])
+        self.assertIn("key 1 returned 429", text)
+        self.assertIn("key 2 returned 429", text)
+        for secret in (SECRET, SECRET_2, SECRET_3, SECRET_4):
+            self.assertNotIn(secret, text)
+
+        calls.clear()
+        held = Path(tempfile.mkdtemp()) / "held.wav"
+        env["GEMINI_API_KEY_4"] = SECRET_4
+
+        def all_limited(_url, **kwargs):
+            calls.append(kwargs["headers"]["x-goog-api-key"])
+            return FakeResp(429, {"error": {"message": kwargs["headers"]["x-goog-api-key"]}})
+
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch("requests.post", all_limited), \
+             redirect_stdout(buf):
+            with self.assertRaises(gemini_voice.GeminiFallback) as caught:
+                gemini_voice.write_speech("नमस्ते", held)
+        text = buf.getvalue() + " " + str(caught.exception)
+        self.assertEqual(calls, [SECRET, SECRET_2, SECRET_3, SECRET_4])
+        self.assertEqual(caught.exception.status, 429)
+        self.assertIn("gemini_quota", str(caught.exception))
+        for secret in (SECRET, SECRET_2, SECRET_3, SECRET_4):
+            self.assertNotIn(secret, text)
+
+    def test_a_repeated_secret_is_not_posted_twice(self):
+        dest = Path(tempfile.mkdtemp()) / "voice.wav"
+        calls = []
+
+        def post(_url, **kwargs):
+            calls.append(kwargs["headers"]["x-goog-api-key"])
+            return FakeResp(429, {"error": {"message": "quota"}})
+
+        env = {
+            "GEMINI_API_KEY": SECRET,
+            "GEMINI_API_KEY_2": SECRET,
+            "GEMINI_API_KEY_3": "",
+            "GEMINI_API_KEY_4": "",
+            "GEMINI_CACHE": "0",
+            "GEMINI_BUDGET": "0",
+        }
+        with mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch("requests.post", post), \
+             redirect_stdout(io.StringIO()):
+            with self.assertRaises(gemini_voice.GeminiFallback):
+                gemini_voice.write_speech("नमस्ते", dest)
+        self.assertEqual(calls, [SECRET])
 
 
 def ledger_kwargs(run):

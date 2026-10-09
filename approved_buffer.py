@@ -576,6 +576,15 @@ def build(*, max_n=MAX_PER_RUN, runner=None, store=None, now=None, manifest_path
         print("[buffer] no approved topic left to render", flush=True)
         save_manifest(manifest, manifest_path)
         return 0
+    import gemini_budget
+    room = gemini_budget.buffer_topic_limit(len(keys), now)
+    if room < len(keys):
+        print(f"[buffer] daily Gemini cap keeps {room} of {len(keys)} new topics", flush=True)
+        keys = keys[:room]
+    if not keys:
+        print("[buffer] daily Gemini cap reached; no new topic", flush=True)
+        save_manifest(manifest, manifest_path)
+        return 0
     runner = runner or default_runner
     for key in keys:
         print(f"[buffer] rendering {key}", flush=True)
@@ -772,8 +781,14 @@ def rescore(directory, manifest_path=None, now=None):
     has buffer_item.json is reclassified from the stored reason. A pass
     still needs final.mp4 before it can be stored as ready.
     """
-    os.environ.pop("GEMINI_API_KEY", None)
     os.environ.pop("ELEVENLABS_API_KEY", None)
+    for _name in (
+        "GEMINI_API_KEY",
+        "GEMINI_API_KEY_2",
+        "GEMINI_API_KEY_3",
+        "GEMINI_API_KEY_4",
+    ):
+        os.environ.pop(_name, None)
     directory = Path(directory)
     now = now or _now()
     manifest_path = Path(manifest_path) if manifest_path else MANIFEST
