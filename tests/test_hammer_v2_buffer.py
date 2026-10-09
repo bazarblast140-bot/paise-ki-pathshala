@@ -285,8 +285,9 @@ class BufferGateTests(unittest.TestCase):
                 "sync": {"ok": True},
             }), encoding="utf-8")
             low = approved_buffer.judge(run, "pat_hammer")
-            self.assertTrue(any("under 75" in item for item in low))
-            self.assertTrue(any("craft" in item for item in low))
+            self.assertFalse(any("craft" in item for item in low), low)
+            self.assertTrue(any("craft" in item for item in approved_buffer.judge.last_notes))
+            self.assertTrue(any("under 75" in item for item in approved_buffer.judge.last_notes))
 
     def test_skipped_trend_does_not_hold_a_passing_plan(self):
         """Evergreen lessons skip trend. Two of those can be ready together."""
@@ -440,6 +441,8 @@ class BufferGateTests(unittest.TestCase):
         self.assertIn("buffer_shorts.py --fill-scheduled", pipeline)
         self.assertIn("max-parallel: 3", text)
         self.assertIn("--key", text)
+        self.assertIn("reuse_run_id", text)
+        self.assertIn("approved_buffer.py --rescore", text)
 
 
 class CheckerFixTests(unittest.TestCase):
@@ -612,6 +615,129 @@ class CheckerFixTests(unittest.TestCase):
                 )
         self.assertIn("too short", str(caught.exception))
         self.assertNotEqual(str(caught.exception).strip(), "1")
+
+    def test_missing_trend_and_soft_public_review_are_notes(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch("publish_gates.evaluate", return_value={
+                 "passed": False,
+                 "reasons": ["existing public-review gate did not pass"],
+             }):
+            run = BufferGateTests()._run(tmp)
+            review = {
+                "overall": 98.0,
+                "parts": {
+                    "hook": 100, "visual": 90, "accuracy": 100, "craft": 100, "sync": 100,
+                },
+                "sync": {"ok": True, "reason": ""},
+            }
+            (run / "self_review.json").write_text(json.dumps(review), encoding="utf-8")
+            (run / "report.md").write_text(
+                "VERDICT: [NEEDS FIX — unverified figure]\n"
+                "FACT LEDGER mein sirf पूरा ट्रेड प्लान likha hai\n",
+                encoding="utf-8",
+            )
+            reasons = approved_buffer.judge(run, "pat_hammer")
+            self.assertEqual(reasons, [], reasons)
+            notes = " ".join(approved_buffer.judge.last_notes)
+            self.assertIn("trend score missing", notes)
+            self.assertIn("public-review", notes)
+            self.assertIn("unverified", notes.lower())
+
+    def test_sync_still_holds_and_edge_stays_held(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch("publish_gates.evaluate", return_value={"passed": True, "reasons": []}):
+            run = BufferGateTests()._run(tmp, engine="gemini", sync_ok=False)
+            review = json.loads((run / "self_review.json").read_text(encoding="utf-8"))
+            review["parts"]["sync"] = 0
+            review["parts"]["trend"] = None
+            review["overall"] = 78
+            (run / "self_review.json").write_text(json.dumps(review), encoding="utf-8")
+            reasons = approved_buffer.judge(run, "pat_hammer")
+            self.assertTrue(any("sync" in item for item in reasons), reasons)
+            self.assertFalse(any("trend" in item for item in reasons), reasons)
+            (run / "voice_meta.json").write_text(json.dumps({"engine": "edge"}), encoding="utf-8")
+            (run / "gemini_quota.txt").write_text("gemini_quota: HTTP 429\n", encoding="utf-8")
+            held = approved_buffer.judge(run, "pat_hammer")
+            self.assertTrue(any("voice_engine=edge" in item for item in held), held)
+            self.assertIn("gemini_quota", held)
+
+    def test_a_39_second_plan_take_is_padded_not_rejected(self):
+        self.assertEqual(board_short.gemini_accepts(39.3, trade_plan.VOICE_SECONDS), "target")
+        self.assertEqual(board_short.gemini_accepts(37.9, trade_plan.VOICE_SECONDS), "miss")
+        self.assertEqual(board_short.gemini_accepts(55.0, trade_plan.VOICE_SECONDS), "review")
+
+    def test_short_silence_trim_is_padded(self):
+        import struct
+        import wave
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            with mock.patch.object(board_short, "RUN", run):
+                path = run / "tts_pehchan.wav"
+                with wave.open(str(path), "wb") as handle:
+                    handle.setnchannels(1)
+                    handle.setsampwidth(2)
+                    handle.setframerate(24000)
+                    handle.writeframes(struct.pack("<h", 8000) * int(0.82 * 24000))
+                (run / "tts_pehchan.engine").write_text("gemini", encoding="utf-8")
+                raw = board_short._trim_rendered(("pehchan",))
+        self.assertGreaterEqual(raw["pehchan"], 1.0)
+
+    def test_gemini_clock_keeps_slice_words_inside_the_beat(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            with mock.patch.object(board_short, "RUN", run):
+                for beat in ("entry", "target", "cta"):
+                    (run / f"tts_{beat}.wav").write_bytes(b"RIFFgemini")
+                    (run / f"tts_{beat}.engine").write_text("gemini", encoding="utf-8")
+                (run / "gemini_words.json").write_text(json.dumps({
+                    "beats": {
+                        "entry": [{"word": "एंट्री", "start": 0.1, "end": 0.4}],
+                        "target": [
+                            {"word": "टारगेट", "start": 0.4, "end": 0.8},
+                            {"word": "158", "start": 0.9, "end": 1.4},
+                        ],
+                        "cta": [{"word": "कमेंट", "start": 0.1, "end": 0.4}],
+                    },
+                }), encoding="utf-8")
+                words = board_short._gemini_word_timings({
+                    "entry": (0.0, 4.0),
+                    "target": (10.0, 12.0),
+                    "cta": (12.0, 16.0),
+                })
+                words = [row for row in words if row["word"] in ("टारगेट", "158")]
+        self.assertEqual([row["word"] for row in words], ["टारगेट", "158"])
+        self.assertGreaterEqual(words[0]["start"], 10.0)
+        self.assertLessEqual(words[-1]["end"], 12.0 + 0.05)
+
+    def test_rescore_of_a_hold_row_drops_the_soft_reasons(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            part = root / "buffer-pat_gap_up"
+            part.mkdir()
+            (part / "buffer_item.json").write_text(json.dumps({
+                "id": "hold-pat_gap_up",
+                "state": "held",
+                "topic_key": "pat_gap_up",
+                "reason": "existing public-review gate did not pass; trend score missing",
+                "voice_engine": "gemini",
+                "duration_s": 40.47,
+            }), encoding="utf-8")
+            manifest = root / "manifest.json"
+            manifest.write_text('{"tag": "approved-topic-buffer", "items": []}\n', encoding="utf-8")
+            buf = __import__("io").StringIO()
+            with mock.patch.dict("os.environ", {"GEMINI_API_KEY": "should-be-cleared"}, clear=False):
+                from contextlib import redirect_stdout
+                with redirect_stdout(buf):
+                    approved_buffer.rescore(root, manifest_path=manifest)
+            text = buf.getvalue()
+            self.assertIn("[REVIEW] pat_gap_up:", text)
+            self.assertIn("trend score missing", text)
+            self.assertIn("render artifact has no final.mp4", text)
+            saved = json.loads(manifest.read_text(encoding="utf-8"))
+            self.assertEqual(saved["items"][0]["state"], "held")
+            self.assertIn("final.mp4", saved["items"][0]["reason"])
+            self.assertNotIn("trend score missing", saved["items"][0]["reason"])
 
 
 if __name__ == "__main__":
