@@ -8,7 +8,7 @@ name: Slot watch
 on:
   schedule:
     - cron: "19 3 * * *"     # 08:49 IST -> 08:30 slot (03:19 UTC, outside the midnight crush)
-    - cron: "51 10 * * 1-5"  # 16:21 IST -> 16:00 slot, weekdays, if the 15:51 Nifty cron dropped
+    - cron: "51 10 * * 1-5"  # 16:21 IST -> 16:00 slot, weekdays. The close Reel replaced the Nifty Short.
     - cron: "19 11 * * *"    # 16:49 IST -> 16:00 slot
     - cron: "19 16 * * *"    # 21:49 IST -> 21:00 slot
   workflow_dispatch:
@@ -204,19 +204,14 @@ jobs:
       topic_key: aaj_ka_nifty
     secrets: inherit
 
-  # 15:51 IST cron dropped. After 16:20 IST on a trading day, start Aaj ka
-  # Nifty once. The check job already skipped this when today's Short is
-  # uploaded or a run is in progress. No second publish concurrency group:
-  # aaj-ka-nifty.yml takes the publish group itself.
+  # The close Reel replaced the 16:00 Aaj ka Nifty Short. This job stays so
+  # the watch still notices an empty 16:00, and it does not start that Short.
   nifty-catchup:
     needs: check
     if: needs.check.outputs.nifty_dispatch == 'true' && (github.event_name == 'schedule' || inputs.fill == true)
     permissions:
-      actions: write
       contents: read
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch Aaj ka Nifty
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run aaj-ka-nifty.yml --ref "${GITHUB_REF_NAME:-main}"
+      - name: Close Reel replaced this Short
+        run: echo "16:00 Aaj ka Nifty Short is replaced by the close Reel in daily-reels.yml. Not starting it."

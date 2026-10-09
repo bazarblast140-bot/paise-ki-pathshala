@@ -171,7 +171,7 @@ def main():
     # dispatch owns the catch-up so the two jobs do not both publish.
     nifty_fill = trading and not nifty_dispatch and not busy
     if nifty_dispatch:
-        print(f"[nifty] {date} {slot} IST is still empty after 16:20; dispatching aaj-ka-nifty.yml")
+        print(f"[nifty] {date} {slot} IST is still empty after 16:20; the close Reel replaced that Short")
     elif busy and trading:
         print(f"[nifty] {date} {slot} IST catch-up skipped; a run is already in progress")
     elif nifty_fill:

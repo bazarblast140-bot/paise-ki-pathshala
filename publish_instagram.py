@@ -807,6 +807,58 @@ def confirm_media(media_id: str) -> bool:
     return False
 
 
+def publish_story(video_url: str) -> str:
+    """Post the same mp4 as an Instagram Story. Stories have no caption."""
+    ig_user = env("IG_USER_ID")
+    if not ig_user or not env("IG_ACCESS_TOKEN"):
+        die("IG_USER_ID and IG_ACCESS_TOKEN required")
+    container = ig_call(
+        f"{ig_user}/media",
+        method="POST",
+        params={"media_type": "STORIES", "video_url": video_url},
+    )
+    container_id = container.get("id")
+    if not container_id:
+        die(f"No story container id: {container}")
+    print(f"  story container: {container_id}")
+    finished = False
+    for _i in range(60):
+        st = ig_call(container_id, params={"fields": "status_code,status"})
+        code = st.get("status_code")
+        print(f"  story processing: {code}")
+        if code == "FINISHED":
+            finished = True
+            break
+        if code in ("ERROR", "EXPIRED"):
+            die(f"Instagram rejected story: {st}")
+        time.sleep(5)
+    if not finished:
+        die("Timed out waiting for Instagram story processing")
+    pub = ig_call(
+        f"{ig_user}/media_publish",
+        method="POST",
+        params={"creation_id": container_id},
+    )
+    media_id = pub.get("id") or ""
+    if not media_id:
+        die(f"Story publish failed: {pub}")
+    return str(media_id)
+
+
+def maybe_publish_story(video_url: str) -> None:
+    """Story follows the Reel when IG_STORY is on. A logged story is not posted twice."""
+    if env("IG_STORY") not in ("1", "true", "yes", "on"):
+        return
+    path = RUN / "ig_story.txt"
+    if path.is_file() and path.read_text(encoding="utf-8").strip():
+        print(f"[ig] story already logged: {path.read_text(encoding='utf-8').strip()}")
+        return
+    print("\n=== Instagram Story ===")
+    media_id = publish_story(video_url)
+    path.write_text(media_id + "\n", encoding="utf-8")
+    print(f"[ig] story published: {media_id}")
+
+
 def publish_reel(video_url: str, caption: str, cover_url: str = "", ident: dict | None = None) -> str:
     ig_user = env("IG_USER_ID")
     if not ig_user or not env("IG_ACCESS_TOKEN"):
@@ -953,6 +1005,8 @@ def main() -> None:
         die(f"live Instagram check failed ({exc}); not posting")
     if already:
         (RUN / "ig_reel.txt").write_text(already, encoding="utf-8")
+        if env("IG_STORY") in ("1", "true", "yes", "on"):
+            maybe_publish_story(host_mp4(mp4))
         skip(f"already published as Instagram media {already}")
 
     print("\n=== Instagram Reel cross-post ===")
@@ -972,6 +1026,7 @@ def main() -> None:
     print(f"  caption ({len(caption)} chars): {caption[:80]}…")
     media_id = publish_reel(url, caption, cover_url, ident=ident)
     (RUN / "ig_reel.txt").write_text(media_id, encoding="utf-8")
+    maybe_publish_story(url)
     ok(f"IG Reel published: {media_id}")
 
 
