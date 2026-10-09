@@ -424,7 +424,7 @@ class BufferGateTests(unittest.TestCase):
         text = (ROOT / ".github" / "workflows" / "build-approved-buffer.yml").read_text(encoding="utf-8")
         self.assertIn("Build approved topic buffer", text)
         self.assertIn("workflow_dispatch", text)
-        self.assertIn('"40 21 * * *"', text)
+        self.assertIn('"50 0 * * *"', text)
         self.assertIn("approved_buffer.py --build --max 6", text)
         self.assertIn("group: approved-topic-buffer", text)
         self.assertNotIn("paise-ki-pathshala-publish", text)

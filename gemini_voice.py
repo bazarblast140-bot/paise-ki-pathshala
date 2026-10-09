@@ -1,8 +1,9 @@
 """One Gemini TTS request for a whole Short.
 
-The free tier is 10 requests a day, so a Short is one POST. A 429 is not
-retried. A successful Charon wav is cached by topic and script hash and
-reused with no second request. The reply audio is raw s16le at 24 kHz
+The free tier is 10 requests a day on each key, so a Short is one POST
+per key it has to try. A 429 is not retried on that key. A successful
+Charon wav is cached by topic and script hash and reused with no second
+request. The reply audio is raw s16le at 24 kHz
 mono, unless the bytes start with RIFF. Callers split that file into
 beats on silence or on the whisper clock. This module never prints the key.
 """
@@ -22,9 +23,9 @@ VOICE = "Charon"
 URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 SAMPLE_RATE = 24000
 TIMEOUT = 180
-# One retry for a server error. A 429 is the daily cap (10/day) and is not
-# retried: the body says to wait about 20 hours, and a second POST burns
-# another request that will also fail.
+# One retry for a server error, on the same key. A 429 is that key's daily
+# cap (10/day) and is not retried on it: the body says to wait about 20
+# hours. The next configured key is tried instead.
 RETRY_WAIT_S = 20.0
 RETRY_STATUSES = (500, 502, 503, 504)
 CACHE_DIR = Path(__file__).resolve().parent / "data" / "gemini_cache"
@@ -54,11 +55,37 @@ class GeminiFallback(Exception):
         super().__init__(self.reason)
 
 
+def api_keys():
+    """(slot, secret) in try order. The secret is never logged.
+
+    Slot ``1`` is ``GEMINI_API_KEY``. Slots ``2`` through ``4`` are
+    ``GEMINI_API_KEY_2`` through ``GEMINI_API_KEY_4``, and only when that
+    env var is set. A later key is used after the earlier one answers
+    HTTP 429 or its own daily counter is full. The same secret is not
+    tried twice.
+    """
+    import gemini_budget
+    seen = set()
+    pairs = []
+    for slot, name in gemini_budget.KEY_ENV:
+        secret = os.environ.get(name, "").strip()
+        if not secret or secret in seen:
+            continue
+        seen.add(secret)
+        pairs.append((slot, secret))
+    return pairs
+
+
+def configured():
+    """True when at least one Charon key is in the environment."""
+    return bool(api_keys())
+
+
 def redact(text):
-    """Drop the key if a library exception includes it."""
+    """Drop every configured key if a library exception includes one."""
     raw = " ".join(str(text or "").split())
-    key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if key and key in raw:
+    keys = [secret for _slot, secret in api_keys() if secret]
+    for key in sorted(set(keys), key=len, reverse=True):
         raw = raw.replace(key, "***")
     return raw
 
@@ -176,9 +203,9 @@ def _response_snippet(response):
     return redact(" ".join(str(raw).split()))[:180]
 
 
-def _post_speech(text, dest, style=None):
+def _post_speech(text, dest, style=None, api_key=None):
     """One POST. The error text is the HTTP status plus a short redacted body."""
-    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    key = (api_key if api_key is not None else os.environ.get("GEMINI_API_KEY", "")).strip()
     if not key:
         raise GeminiFallback("GEMINI_API_KEY is not set")
     import requests
@@ -271,32 +298,61 @@ def store_cached_speech(cache_key, dest):
 
 
 def write_speech(text, dest, style=None, cache_key=None):
-    """POST the whole script once. A 429 fails immediately as gemini_quota.
+    """POST the whole script once per key. A 429 tries the next key.
 
-    A 5xx is retried once after 20s. The logged error is the HTTP status
-    and a short redacted body. The key is never printed. A cached wav for
-    this script is returned with no POST.
+    ``GEMINI_API_KEY`` goes first, then ``_2``, ``_3``, and ``_4`` when
+    those env vars are set. A later key is used only when the earlier one
+    returns HTTP 429 or its own daily counter is full. A 5xx is retried
+    once on the same key. The logged error is the HTTP status and a short
+    redacted body. No key is printed. A cached wav for this script is
+    returned with no POST. When every configured key is exhausted, the
+    error is gemini_quota.
     """
     if load_cached_speech(cache_key, dest):
         return dest
+    pairs = api_keys()
+    if not pairs:
+        raise GeminiFallback("GEMINI_API_KEY is not set")
+    import gemini_budget
+    caller = gemini_budget.caller_from_env()
     last = None
-    for attempt in (0, 1):
-        try:
-            saved = _post_speech(text, dest, style)
-            store_cached_speech(cache_key, dest)
-            return saved
-        except GeminiFallback as exc:
-            last = exc
-            if attempt == 0 and exc.status in RETRY_STATUSES:
-                wait = float(RETRY_WAIT_S)
-                print(
-                    f"[warn] {exc.reason}. Retrying Gemini once in {wait:.0f}s.",
-                    flush=True,
-                )
-                if wait > 0:
-                    time.sleep(wait)
-                continue
-            raise
+    for key_id, secret in pairs:
+        if not gemini_budget.allow(caller, key_id):
+            continue
+        for attempt in (0, 1):
+            if not gemini_budget.allow(caller, key_id):
+                break
+            try:
+                # Count the POST even when the server answers 429. A cache
+                # hit returned above and is not counted. A 5xx retry is a
+                # second POST on this same key.
+                gemini_budget.note(caller, key_id)
+                saved = _post_speech(text, dest, style, api_key=secret)
+                store_cached_speech(cache_key, dest)
+                return saved
+            except GeminiFallback as exc:
+                last = exc
+                if exc.status == 429:
+                    gemini_budget.exhaust(key_id)
+                    print(f"[gemini] key {key_id} returned 429", flush=True)
+                    break
+                if attempt == 0 and exc.status in RETRY_STATUSES:
+                    wait = float(RETRY_WAIT_S)
+                    print(
+                        f"[warn] {exc.reason}. Retrying Gemini once in {wait:.0f}s.",
+                        flush=True,
+                    )
+                    if wait > 0:
+                        time.sleep(wait)
+                    continue
+                raise
+    if last is not None and last.status == 429:
+        raise last
+    if last is None:
+        raise GeminiFallback(
+            f"gemini_quota: daily budget has no request left for {caller}",
+            status=429,
+        )
     raise last
 
 
