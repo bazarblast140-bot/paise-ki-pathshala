@@ -506,6 +506,18 @@ def hashtags_for(topic: dict) -> list[str]:
     return list(dict.fromkeys(tags))
 
 
+def overridden_title() -> str:
+    """Title from run/publish_meta.json, when a release meta file was downloaded."""
+    path = RUN / "publish_meta.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    return re.sub(r"\s+", " ", str(data.get("title") or "")).strip()
+
+
 def build_caption() -> str:
     """Reel caption. The first ~125 characters show before "more" and Instagram
     search reads caption words, so the keyword title goes first, then the hook,
@@ -515,7 +527,7 @@ def build_caption() -> str:
     sec = script_sections(script)
     topic = load_topic()
     one = lambda s: re.sub(r"\s+", " ", s or "").strip()  # noqa: E731
-    title = one((sec.get("TITLE") or "").splitlines()[0] if sec.get("TITLE") else "")
+    title = overridden_title() or one((sec.get("TITLE") or "").splitlines()[0] if sec.get("TITLE") else "")
     title = title or one((topic.get("thumb") or [""])[0])
     hook = one(sec.get("HOOK"))
     parts = []
@@ -613,7 +625,7 @@ def video_identity(mp4: Path) -> dict:
     script = (RUN / "script.txt").read_text(encoding="utf-8") if (RUN / "script.txt").exists() else ""
     sec = script_sections(script)
     one = lambda s: re.sub(r"\s+", " ", s or "").strip()  # noqa: E731
-    title = one((sec.get("TITLE") or "").splitlines()[0] if sec.get("TITLE") else "")
+    title = overridden_title() or one((sec.get("TITLE") or "").splitlines()[0] if sec.get("TITLE") else "")
     if not title:
         thumbs = topic.get("thumb") or [""]
         title = one(str(thumbs[0] if thumbs else ""))
