@@ -6,9 +6,10 @@ on:
   workflow_dispatch:
     inputs:
       source_run_id:
-        description: "Actions run id whose final.mp4 to upload as a new video"
-        required: true
+        description: "Actions run id whose final.mp4 to upload as a new video. Leave empty when override_mp4_url, override_thumb_url and override_script_url are all set."
+        required: false
         type: string
+        default: ""
       privacy:
         description: "public schedules publishAt. now is immediate public. unlisted stays unlisted."
         required: true
@@ -52,6 +53,16 @@ on:
         required: false
         type: string
         default: ""
+      override_script_url:
+        description: "Optional. Replace run/script.txt (title, description, IG caption). Only https://github.com/bazarblast140-bot/paise-ki-pathshala/releases/download/<tag>/<file>.txt. When set, the ±1s length check against the source run is skipped."
+        required: false
+        type: string
+        default: ""
+      override_meta_url:
+        description: "Optional. JSON release asset with title, description, and tags. Only https://github.com/bazarblast140-bot/paise-ki-pathshala/releases/download/<tag>/<file>.json"
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: paise-ki-pathshala-publish
@@ -80,6 +91,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y ffmpeg
           pip install -r requirements.txt
       - name: Download source artifact
+        if: inputs.source_run_id != ''
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_RUN: ${{ inputs.source_run_id }}
@@ -97,18 +109,40 @@ jobs:
           test -s run/final.mp4
           test -s run/script.txt
           test -s run/thumbnail.jpg
-      - name: Replace final.mp4 from a release asset
-        if: inputs.override_mp4_url != ''
+      - name: Download the release bundle
+        if: inputs.source_run_id == ''
         env:
           OVERRIDE_MP4_URL: ${{ inputs.override_mp4_url }}
+          OVERRIDE_THUMB_URL: ${{ inputs.override_thumb_url }}
+          OVERRIDE_SCRIPT_URL: ${{ inputs.override_script_url }}
+          OVERRIDE_META_URL: ${{ inputs.override_meta_url }}
+          GH_TOKEN: ${{ github.token }}
+        run: python override_mp4.py --bundle
+      - name: Replace final.mp4 from a release asset
+        if: inputs.override_mp4_url != '' && inputs.source_run_id != ''
+        env:
+          OVERRIDE_MP4_URL: ${{ inputs.override_mp4_url }}
+          SKIP_DURATION_CHECK: ${{ inputs.override_script_url != '' && '1' || '0' }}
           GH_TOKEN: ${{ github.token }}
         run: python override_mp4.py
       - name: Replace thumbnail.jpg from a release asset
-        if: inputs.override_thumb_url != ''
+        if: inputs.override_thumb_url != '' && inputs.source_run_id != ''
         env:
           OVERRIDE_THUMB_URL: ${{ inputs.override_thumb_url }}
           GH_TOKEN: ${{ github.token }}
         run: python override_mp4.py --thumb
+      - name: Replace script.txt from a release asset
+        if: inputs.override_script_url != '' && inputs.source_run_id != ''
+        env:
+          OVERRIDE_SCRIPT_URL: ${{ inputs.override_script_url }}
+          GH_TOKEN: ${{ github.token }}
+        run: python override_mp4.py --script
+      - name: Replace publish meta from a release asset
+        if: inputs.override_meta_url != '' && inputs.source_run_id != ''
+        env:
+          OVERRIDE_META_URL: ${{ inputs.override_meta_url }}
+          GH_TOKEN: ${{ github.token }}
+        run: python override_mp4.py --meta
       - name: Schedule publishAt
         id: when
         if: inputs.ig_only != 'true'

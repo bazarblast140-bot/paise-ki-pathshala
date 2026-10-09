@@ -2,7 +2,10 @@
 
 The URL has to be a release on this repo. Duration stays within a second of
 the artifact, and the picture stays 1080x1920 h264, so a hand remix cannot
-swap in a different video. YouTube and the Reel both read the replaced file.
+swap in a different video. A box Reel that also replaces script.txt skips
+that duration check, and a dispatch with no source run downloads the mp4,
+thumbnail, and script straight from the release. YouTube and the Reel both
+read the replaced files.
 """
 import json
 import os
@@ -46,6 +49,16 @@ def release_url_ok(url, suffix=".mp4"):
 def thumb_url_ok(url):
     """True only for a .jpg on this repo's release downloads."""
     return release_url_ok(url, suffix=".jpg")
+
+
+def script_url_ok(url):
+    """True only for a .txt on this repo's release downloads."""
+    return release_url_ok(url, suffix=".txt")
+
+
+def meta_url_ok(url):
+    """True only for a .json on this repo's release downloads."""
+    return release_url_ok(url, suffix=".json")
 
 
 def probe(path):
@@ -164,16 +177,22 @@ def _download(url, dest, min_bytes=1000, label="override mp4"):
     dest.write_bytes(blob)
 
 
-def apply(url, artifact, dest=None):
-    """Download url over artifact only when the picture and duration match."""
+def apply(url, artifact, dest=None, check_duration=True):
+    """Download url over artifact when the picture matches.
+
+    Duration stays within 1s of the source artifact unless check_duration
+    is false. A box Reel sets that false because its length is its own.
+    """
     url = str(url or "").strip()
     if not release_url_ok(url):
         die("override_mp4_url must be https://github.com/bazarblast140-bot/paise-ki-pathshala/releases/download/<tag>/<file>.mp4")
     artifact = Path(artifact)
     dest = Path(dest or artifact)
-    if not artifact.is_file() or artifact.stat().st_size < 1000:
-        die(f"artifact mp4 missing: {artifact}")
-    original = probe(artifact)
+    original = None
+    if check_duration:
+        if not artifact.is_file() or artifact.stat().st_size < 1000:
+            die(f"artifact mp4 missing: {artifact}")
+        original = probe(artifact)
     tmp = dest.with_name(dest.name + ".override.part")
     try:
         _download(url, tmp)
@@ -182,9 +201,10 @@ def apply(url, artifact, dest=None):
             die(f"override video is {got['codec'] or 'unknown'}, want h264")
         if (got["width"], got["height"]) != (1080, 1920):
             die(f"override video is {got['width']}x{got['height']}, want 1080x1920")
-        delta = abs(got["duration"] - original["duration"])
-        if delta > 1.0:
-            die(f"override duration {got['duration']:.2f}s is {delta:.2f}s off the artifact {original['duration']:.2f}s")
+        if check_duration:
+            delta = abs(got["duration"] - original["duration"])
+            if delta > 1.0:
+                die(f"override duration {got['duration']:.2f}s is {delta:.2f}s off the artifact {original['duration']:.2f}s")
         tmp.replace(dest)
     finally:
         if tmp.exists():
@@ -213,7 +233,120 @@ def apply_thumb(url, dest):
     return dest
 
 
+def _has_title(text):
+    for line in str(text or "").splitlines():
+        head = line.strip().upper()
+        if head == "TITLE" or head.startswith("TITLE:") or head.startswith("TITLE "):
+            return True
+    return False
+
+
+def apply_script(url, dest):
+    """Download a release script.txt. Title, description, and the IG caption read it."""
+    url = str(url or "").strip()
+    if not script_url_ok(url):
+        die("script url must be a .txt release asset on this repo")
+    dest = Path(dest)
+    tmp = dest.with_name(dest.name + ".override.part")
+    try:
+        _download(url, tmp, min_bytes=50, label="script.txt")
+        try:
+            text = tmp.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            die("script.txt is not utf-8")
+        if not _has_title(text):
+            die("script.txt has no TITLE heading")
+        tmp.replace(dest)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    print(f"[override] replaced {dest.name} from {url}")
+    return dest
+
+
+def apply_meta(url, dest):
+    """Download optional JSON: title, description, and tags."""
+    url = str(url or "").strip()
+    if not meta_url_ok(url):
+        die("meta url must be a .json release asset on this repo")
+    dest = Path(dest)
+    tmp = dest.with_name(dest.name + ".override.part")
+    try:
+        _download(url, tmp, min_bytes=2, label="publish meta")
+        try:
+            data = json.loads(tmp.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            die("publish meta is not JSON")
+        if not isinstance(data, dict):
+            die("publish meta must be a JSON object")
+        clean = {}
+        if "title" in data:
+            title = data.get("title")
+            if not isinstance(title, str) or not title.strip():
+                die("meta title must be a non-empty string")
+            clean["title"] = title.strip()
+        if "description" in data:
+            description = data.get("description")
+            if not isinstance(description, str) or not description.strip():
+                die("meta description must be a non-empty string")
+            clean["description"] = description
+        if "tags" in data:
+            tags = data.get("tags")
+            if not isinstance(tags, list) or not tags or not all(isinstance(item, str) and item.strip() for item in tags):
+                die("meta tags must be a list of strings")
+            clean["tags"] = [item.strip() for item in tags]
+        if not clean:
+            die("publish meta needs title, description, or tags")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(json.dumps(clean, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    print(f"[override] replaced {dest.name} from {url}")
+    return dest
+
+
+def bundle(dest=None):
+    """Place a release mp4, thumbnail, and script when there is no source run.
+
+    override_meta_url is optional. Duration is not compared to another video.
+    """
+    dest = Path(dest or RUN)
+    mp4 = (os.environ.get("OVERRIDE_MP4_URL") or "").strip()
+    thumb = (os.environ.get("OVERRIDE_THUMB_URL") or "").strip()
+    script = (os.environ.get("OVERRIDE_SCRIPT_URL") or "").strip()
+    meta = (os.environ.get("OVERRIDE_META_URL") or "").strip()
+    if not mp4 or not thumb or not script:
+        die("source_run_id is empty; set override_mp4_url, override_thumb_url and override_script_url")
+    dest.mkdir(parents=True, exist_ok=True)
+    apply(mp4, dest / "final.mp4", check_duration=False)
+    apply_thumb(thumb, dest / "thumbnail.jpg")
+    apply_script(script, dest / "script.txt")
+    if meta:
+        apply_meta(meta, dest / "publish_meta.json")
+    return dest
+
+
+def _skip_duration():
+    return (os.environ.get("SKIP_DURATION_CHECK") or "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def main():
+    if "--bundle" in sys.argv:
+        bundle(RUN)
+        return
+    if "--script" in sys.argv:
+        url = (os.environ.get("OVERRIDE_SCRIPT_URL") or "").strip()
+        if not url:
+            return
+        apply_script(url, RUN / "script.txt")
+        return
+    if "--meta" in sys.argv:
+        url = (os.environ.get("OVERRIDE_META_URL") or "").strip()
+        if not url:
+            return
+        apply_meta(url, RUN / "publish_meta.json")
+        return
     if "--thumb" in sys.argv:
         url = (os.environ.get("OVERRIDE_THUMB_URL") or "").strip()
         if not url:
@@ -223,7 +356,7 @@ def main():
     url = (os.environ.get("OVERRIDE_MP4_URL") or "").strip()
     if not url:
         return
-    apply(url, RUN / "final.mp4")
+    apply(url, RUN / "final.mp4", check_duration=not _skip_duration())
 
 
 if __name__ == "__main__":

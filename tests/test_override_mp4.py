@@ -249,3 +249,146 @@ class ReplaceTests(unittest.TestCase):
         self.assertEqual(hops[1][0], "/file")
         self.assertIsNone(hops[1][1])
         self.assertEqual(hops[1][2], "application/octet-stream")
+
+
+SCRIPT_URL = GOOD.replace("final.mp4", "script.txt")
+THUMB_URL = GOOD.replace("final.mp4", "thumbnail.jpg")
+META_URL = GOOD.replace("final.mp4", "meta.json")
+SCRIPT_TEXT = (
+    "TITLE\nNifty support test\n\n"
+    "HOOK\nKal ka low support par tha.\n\n"
+    "CTA\nFollow karo.\n\n"
+    "DISCLAIMER LINE\nSirf seekhne ke liye.\n\n"
+    "FACT LEDGER\n- NSE close\n"
+)
+
+
+class ReleaseBundleTests(unittest.TestCase):
+    def test_urls_and_workflow_accept_script_and_meta_without_a_source_run(self):
+        self.assertTrue(override_mp4.script_url_ok(SCRIPT_URL))
+        self.assertTrue(override_mp4.meta_url_ok(META_URL))
+        self.assertFalse(override_mp4.script_url_ok(GOOD))
+        self.assertFalse(override_mp4.meta_url_ok(SCRIPT_URL + "?token=1"))
+        workflow = (ROOT / ".github" / "workflows" / "publish-artifact.yml").read_text(encoding="utf-8")
+        source = workflow.split("source_run_id:", 1)[1].split("privacy:", 1)[0]
+        self.assertIn("required: false", source)
+        self.assertIn('default: ""', source)
+        self.assertIn("override_script_url:", workflow)
+        self.assertIn("override_meta_url:", workflow)
+        self.assertIn("if: inputs.source_run_id != ''", workflow)
+        self.assertIn("if: inputs.source_run_id == ''", workflow)
+        self.assertIn("python override_mp4.py --bundle", workflow)
+        self.assertIn("python override_mp4.py --script", workflow)
+        self.assertIn("python override_mp4.py --meta", workflow)
+        self.assertIn("SKIP_DURATION_CHECK:", workflow)
+        self.assertLess(workflow.index("python override_mp4.py --script"), workflow.index("python publish.py"))
+        self.assertLess(workflow.index("python publish.py"), workflow.index("python publish_instagram.py"))
+        self.assertIn("test -s run/thumbnail.jpg", workflow)
+
+    def test_script_override_skips_the_one_second_duration_check(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root / "final.mp4"
+            long = root / "long.mp4"
+            _mp4(artifact, 1.0)
+            _mp4(long, 4.0)
+
+            class Body:
+                def __init__(self, blob):
+                    self._blob = blob
+
+                def read(self, n=-1):
+                    return self._blob if n is None or n < 0 else self._blob[:n]
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *_args):
+                    return False
+
+            with mock.patch.object(override_mp4.urllib.request, "urlopen", return_value=Body(long.read_bytes())):
+                override_mp4.apply(GOOD, artifact, check_duration=False)
+            self.assertGreater(override_mp4.probe(artifact)["duration"], 3.0)
+
+    def test_bundle_places_mp4_script_thumb_and_meta_with_no_source_video(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            video = root / "reel.mp4"
+            _mp4(video, 4.0)
+            thumb = b"\xff\xd8\xff" + b"j" * 120
+            meta = json.dumps({
+                "title": "Nifty support test",
+                "description": "Box reel <description>",
+                "tags": ["nifty support", "real chart"],
+            }).encode()
+            blobs = {
+                GOOD: video.read_bytes(),
+                THUMB_URL: thumb,
+                SCRIPT_URL: SCRIPT_TEXT.encode(),
+                META_URL: meta,
+            }
+
+            class Body:
+                def __init__(self, blob):
+                    self._blob = blob
+
+                def read(self, n=-1):
+                    return self._blob if n is None or n < 0 else self._blob[:n]
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *_args):
+                    return False
+
+            def open_asset(req, timeout=0):
+                return Body(blobs[req.full_url])
+
+            dest = root / "run"
+            env = {
+                "OVERRIDE_MP4_URL": GOOD,
+                "OVERRIDE_THUMB_URL": THUMB_URL,
+                "OVERRIDE_SCRIPT_URL": SCRIPT_URL,
+                "OVERRIDE_META_URL": META_URL,
+                "GH_TOKEN": "",
+                "GITHUB_TOKEN": "",
+            }
+            with mock.patch.object(override_mp4.urllib.request, "urlopen", side_effect=open_asset), \
+                 mock.patch.dict("os.environ", env, clear=False):
+                override_mp4.bundle(dest)
+            self.assertGreater(override_mp4.probe(dest / "final.mp4")["duration"], 3.0)
+            self.assertTrue((dest / "script.txt").read_text(encoding="utf-8").startswith("TITLE"))
+            self.assertTrue((dest / "thumbnail.jpg").read_bytes().startswith(b"\xff\xd8"))
+            saved = json.loads((dest / "publish_meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["title"], "Nifty support test")
+            self.assertEqual(saved["tags"], ["nifty support", "real chart"])
+
+            env.pop("OVERRIDE_SCRIPT_URL")
+            with mock.patch.dict("os.environ", env, clear=False):
+                with self.assertRaises(SystemExit):
+                    override_mp4.bundle(dest)
+
+    def test_meta_json_replaces_youtube_fields_and_the_ig_title(self):
+        import publish
+        import publish_instagram as IG
+        sec = {"TITLE": "Old title", "HOOK": "hook line", "DISCLAIMER LINE": "disc"}
+        cfg = {"channel": {"name": "Paise Ki Pathshala", "tagline": "t"}}
+        meta = {
+            "title": "Nifty support test",
+            "description": "Box reel description",
+            "tags": ["nifty support", "real chart"],
+        }
+        with mock.patch.object(publish, "load_topic", return_value={}), \
+             mock.patch.dict("os.environ", {"VIDEO_FORMAT": "short"}):
+            title, description, tags = publish.metadata_for(sec, cfg, meta)
+        self.assertEqual(title, "Nifty support test")
+        self.assertEqual(description, "Box reel description")
+        self.assertEqual(tags, ["nifty support", "real chart"])
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            (run / "script.txt").write_text(SCRIPT_TEXT, encoding="utf-8")
+            (run / "publish_meta.json").write_text(json.dumps(meta), encoding="utf-8")
+            (run / "final.mp4").write_bytes(b"x" * 32)
+            with mock.patch.object(IG, "RUN", run):
+                self.assertTrue(IG.build_caption().startswith("Nifty support test"))
+                self.assertEqual(IG.video_identity(run / "final.mp4")["title_norm"], "nifty support test")

@@ -292,6 +292,60 @@ def build_tags(title, c):
     return kept or ["stock market hindi", "trading hindi", "paise ki pathshala"]
 
 
+def publish_meta(directory=None):
+    """Optional run/publish_meta.json from override_meta_url. Missing file is {}."""
+    path = Path(directory or RUN) / "publish_meta.json"
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        die("run/publish_meta.json is not JSON")
+    if not isinstance(data, dict):
+        die("run/publish_meta.json must be an object")
+    return data
+
+
+def _meta_tags(raw):
+    """Keep an operator tag list, including Hindi, and drop what YouTube rejects."""
+    tags, seen, total = [], set(), 0
+    for item in raw:
+        text = re.sub(r"[<>]", "", str(item))
+        text = re.sub(r"\s+", " ", text).strip()
+        if not text or len(text) > 60:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        if len(tags) >= 15 or total + len(text) + 1 > 400:
+            break
+        seen.add(key)
+        tags.append(text)
+        total += len(text) + 1
+    return tags or ["stock market hindi", "trading hindi", "paise ki pathshala"]
+
+
+def metadata_for(sec, c, meta=None):
+    """Title, description, and tags. A release meta JSON wins over script.txt."""
+    meta = publish_meta() if meta is None else meta
+    title = build_title(sec)
+    raw_title = str(meta.get("title") or "").strip()
+    if raw_title:
+        title = raw_title.replace("->", "→").replace("<", "").replace(">", "")
+        if len(title) > MAX_TITLE:
+            title = title[:MAX_TITLE].rsplit(" ", 1)[0] or title[:MAX_TITLE]
+    description = build_description(sec, c)
+    raw_desc = meta.get("description")
+    if isinstance(raw_desc, str) and raw_desc.strip():
+        description = raw_desc.replace("->", "→").replace("<", "").replace(">", "").replace("SOURCE", "स्रोत")
+        description = description[:MAX_DESC]
+    tags = build_tags(title, c)
+    raw_tags = meta.get("tags")
+    if isinstance(raw_tags, list) and raw_tags:
+        tags = _meta_tags(raw_tags)
+    return title, description, tags
+
+
 def require_channel(yt):
     """Refuse the upload unless the token is the finance channel."""
     expected = os.environ.get("EXPECTED_CHANNEL_ID", "").strip()
@@ -346,9 +400,7 @@ def main():
         die("No final.mp4 to upload.")
 
     sec = sections(read("script.txt"))
-    title = build_title(sec)
-    description = build_description(sec, c)
-    tags = build_tags(title, c)
+    title, description, tags = metadata_for(sec, c)
     visibility = os.environ.get("PUBLISH_VISIBILITY") or c["pipeline"]["publish_visibility"]
     publish_at = None
     slot = os.environ.get("PUBLISH_SLOT_IST", "").strip()

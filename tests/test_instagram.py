@@ -65,6 +65,12 @@ class CaptionTests(unittest.TestCase):
     def test_disclaimer_fact_not_repeated_as_bullet(self):
         self.assertNotIn("• यह educational framework", IG.build_caption())
 
+    def test_release_meta_title_leads_the_caption(self):
+        (self.run / "publish_meta.json").write_text(
+            json.dumps({"title": "Nifty support test"}), encoding="utf-8",
+        )
+        self.assertTrue(IG.build_caption().startswith("Nifty support test"))
+
 
 class VerdictGateTests(unittest.TestCase):
     """A failed-review video must never become a Reel, even with IG_CROSSPOST_FORCE."""
