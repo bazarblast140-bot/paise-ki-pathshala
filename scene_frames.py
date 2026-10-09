@@ -1944,6 +1944,8 @@ def _attach_live_motion(image):
             if hasattr(base, name):
                 setattr(frame, name, getattr(base, name))
         frame.text_layers = layers
+        if hasattr(base, "motion_state"):
+            frame.motion_state = base.motion_state
         return frame
 
     image.animate = animate

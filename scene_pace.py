@@ -163,8 +163,13 @@ def vague_beats(beats, order=None):
             order = _PLAN_BEATS
         else:
             order = BEATS
-        return [b for b in order if b in beats and not segment_is_concrete(beats.get(b))]
-    return [b for b in order if not segment_is_concrete(beats.get(b))]
+        return [
+            b for b in order
+            if b in beats and b != "cta" and not segment_is_concrete(beats.get(b))
+        ]
+    # The CTA question has no digit. It is not a vague beat. A missing key in
+    # an explicit order is still vague, except cta.
+    return [b for b in order if b != "cta" and not segment_is_concrete(beats.get(b))]
 
 
 def beat_times_from_overlays(overlays):

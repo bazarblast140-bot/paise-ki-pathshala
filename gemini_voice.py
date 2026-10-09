@@ -247,6 +247,73 @@ def _from_words(order, weights, words, duration):
     return fixed
 
 
+def _content_bounds(present, spoken, words, duration):
+    """Cut on the whisper tokens that match each beat, skipping early garbage.
+
+    Word-count proportion treats hallucinated tokens as the hook and hands the
+    next beat the tail of the previous sentence. A weak match returns None so
+    the caller keeps the proportional cut.
+    """
+    import sync_gate
+    flat = []
+    for index, word in enumerate(words):
+        for tok in sync_gate.tokens(str(word.get("word") or "")):
+            if tok in sync_gate._STOP:
+                continue
+            flat.append((index, tok))
+    if len(flat) < 2:
+        return None
+    cursor = 0
+    spans = []
+    matched = 0
+    wanted = 0
+    for beat in present:
+        want = [
+            tok for tok in sync_gate.tokens(str((spoken or {}).get(beat) or ""))
+            if tok not in sync_gate._STOP
+        ]
+        wanted += len(want)
+        first = last = None
+        scan = cursor
+        hit = 0
+        window = max(8, len(want) * 4)
+        for tok in want:
+            found = None
+            for j in range(scan, min(len(flat), scan + window)):
+                if sync_gate._near_token(tok, flat[j][1]):
+                    found = j
+                    break
+            if found is None:
+                continue
+            hit += 1
+            word_index = flat[found][0]
+            if first is None:
+                first = word_index
+            last = word_index
+            scan = found + 1
+        matched += hit
+        if not want or first is None or hit < max(1, int(round(len(want) * 0.34))):
+            return None
+        spans.append((first, last))
+        cursor = scan
+    if wanted == 0 or matched / float(wanted) < 0.45:
+        return None
+    bounds = {}
+    prev = 0.0
+    for index, beat in enumerate(present):
+        if index == len(present) - 1:
+            end = float(duration)
+        else:
+            next_first = spans[index + 1][0]
+            end = float(words[next_first].get("start") or prev)
+            end = min(float(duration), max(prev, end))
+        if end - prev < 1.05:
+            return None
+        bounds[beat] = (prev, end)
+        prev = end
+    return bounds
+
+
 def beat_bounds(spoken, order, words, duration):
     """Beat spans on the whole-file clock. Whisper ends the cuts; word count is the fallback."""
     present, weights = _weights(spoken, order)
@@ -266,6 +333,9 @@ def beat_bounds(spoken, order, words, duration):
     if usable:
         last = max(word["end"] for word in usable)
         if last >= 0.5 * duration:
+            content = _content_bounds(present, spoken, usable, duration)
+            if content:
+                return content
             bounds = _from_words(present, weights, usable, duration)
             if bounds and all(end - start >= 1.05 for start, end in bounds.values()):
                 return bounds

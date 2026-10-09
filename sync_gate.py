@@ -672,6 +672,8 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
             words, float(span[0]) - WINDOW_PAD, float(span[1]) + WINDOW_PAD,
         )
         score = jaccard(spoken, heard)
+        beat_script = str((beats_text or {}).get(beat) or "")
+        beat_recall = recall(beat_script, beat_heard)
         covered = recall(spoken, beat_heard)
         show = " ".join(scene.get("show") or [])
         said = _said_tokens(words, end)
@@ -684,6 +686,13 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
             num for num in numbers_in(show)
             if num not in said and num not in outlined
         ]
+        kind = str(scene.get("kind") or "")
+        # A chart card shows the whole beat. When that beat was heard, a short
+        # slice and a number from the beat script are not a separate miss.
+        chart_ok = kind.startswith("chart-") and beat_recall + 1e-9 >= MIN_RECALL
+        if chart_ok:
+            beat_numbers = set(numbers_in(beat_script))
+            missing_numbers = [num for num in missing_numbers if num not in beat_numbers]
         shared = [tok for tok in content_tokens(show) if tok in script_set or tok in heard_set]
         if not shared:
             shared = [num for num in numbers_in(show) if num in script_set or num in heard_set]
@@ -700,7 +709,7 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
             "heard": heard,
         }
         rows.append(row)
-        if covered + 1e-9 < MIN_RECALL:
+        if covered + 1e-9 < MIN_RECALL and not chart_ok:
             reasons.append(
                 f"{row['kind'] or beat} {row['start']:.1f}-{row['end']:.1f}s "
                 f"narration does not match the script (recall {covered:.2f})"

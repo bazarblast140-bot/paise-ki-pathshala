@@ -13,11 +13,12 @@ bottom band.
 
 Taken from top Shorts (2.1M / 2.1M / 451K views).
 
-1. **Hook.** The finished red/green RR box is visible from 0 to 2 s, with
-   solid ENTRY, SL, and TARGET ghost lines, then both fade out. A big Hindi
-   question title is in by 300 ms. The open is never an empty chart. Context
-   candles keep building through about 5 s. The price plot is about 60% of
-   the frame height.
+1. **Hook.** The finished red/green RR box and the ENTRY, SL, and TARGET
+   pills stay up until the hook sentence ends on the Whisper clock, then
+   both fade out. A big Hindi question title is in by 300 ms. The open is
+   never an empty chart. Context candles keep building through about 5 s.
+   The price plot is about 60% of the frame height. Pills that would sit
+   within 60 px of each other stack vertically.
 2. **Candle pacing.** The first context candle is finished at t=0. The rest
    are staggered across the hook, each drawing in about 150 ms, so the hook
    does not sit still. The 2–3 key candles slow to one candle per beat.
@@ -32,9 +33,9 @@ Taken from top Shorts (2.1M / 2.1M / 451K views).
    by a curved dashed arrow.
 6. **RR box.** A tall green reward box over a short red risk box,
    semi-transparent (alpha about 0.30), anchored at the key candle, with
-   `RR 1:x` text. It is on screen for the first 2 s, fades out before
-   pehchan, and is drawn again on the target beat. It does not cover the
-   hammer through pehchan and context.
+   `RR 1:x` text. It stays through the hook sentence, fades out, and is
+   drawn again on the target beat. It does not cover the hammer through
+   pehchan and context. The disclaimer sits at least 24 px below the caption.
 7. **Key candle.** Other candles dim to 35% opacity. The key candle gets a
    yellow `#F5C518` outline and pushes in from 1.0× to 1.35× over 600 ms
    (ease-in-out), then eases back before the next beat.
