@@ -208,8 +208,15 @@ def judge(run_dir, key):
         reasons.append(f"self-review {overall} is under {REVIEW_MIN:.0f}")
     parts = review.get("parts") if isinstance(review.get("parts"), dict) else {}
     for name in PARTS:
+        if name not in parts:
+            reasons.append(f"{name} score missing")
+            continue
+        raw = parts.get(name)
+        # Trend is None on an evergreen lesson. That skip is not a miss.
+        if raw is None:
+            continue
         try:
-            score = float(parts.get(name))
+            score = float(raw)
         except (TypeError, ValueError):
             reasons.append(f"{name} score missing")
             continue

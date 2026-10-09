@@ -90,6 +90,10 @@ _ALIAS = (
     # before tokenization so "दो प्रतिशत" still counts as said.
     # Traders say परसेंट; the number parser looks for प्रतिशत.
     # This Edge voice says "दो परसेंट" as "तो पर्ष्ट" and "दो लाख रुपये" as "तो लाक्रुपै".
+    # Glued सौ: "एकसो दो" is 102, not the token एकसो plus the digit 2.
+    ("एकसो", "एक सौ"),
+    ("चोरानवे", "चौरानवे"),
+    ("चोबीस", "चौबीस"),
     ("तो लाक्रुपै", "दो लाख रुपये"),
     ("तो पर्ष्ट", "दो प्रतिशत"),
     ("दोपरसेंट", "दो प्रतिशत"),
@@ -599,13 +603,31 @@ def opening_text(beats_text):
     return " ".join(str(beats_text.get(beat) or "") for beat in order)
 
 
+_PLAN_CLOCK = (
+    "hook", "pehchan", "context", "entry", "sl", "target", "invalidation", "cta",
+)
+_FOUR_CLOCK = ("hook", "pehchan", "matlab", "udaharan", "galti", "karein")
+
+
+def _clock_beats(beat_times):
+    """Beats in spoken order. A plan clock is not the four-beat lesson.
+
+    The old list only keeps hook and pehchan when those names exist, so a
+    target price never counts as said. The sync gate then scores the chart 0.
+    """
+    times = beat_times or {}
+    if any(name in times for name in ("entry", "target", "cta", "context", "invalidation")):
+        ordered = tuple(name for name in _PLAN_CLOCK if name in times)
+        if ordered:
+            return ordered
+    ordered = tuple(name for name in _FOUR_CLOCK if name in times)
+    return ordered or _FOUR_CLOCK
+
+
 def outline_until(beats_text, beat_times, end, beats=None, words=None):
     """Outline words spoken at or before `end`. Whisper spelling is separate."""
     if beats is None:
-        beats = tuple(
-            b for b in ("hook", "pehchan", "matlab", "udaharan", "galti", "karein")
-            if b in (beat_times or {})
-        ) or ("hook", "pehchan", "matlab", "karein")
+        beats = _clock_beats(beat_times)
     parts = []
     limit = float(end) + SAID_PAD
     for beat in beats:

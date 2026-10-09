@@ -2933,12 +2933,32 @@ def tts(text, path, c):
     die(f"TTS fail: {path.name}")
 
 
+def _beat_engine(beat):
+    path = RUN / f"tts_{beat}.engine"
+    try:
+        if path.exists():
+            return path.read_text(encoding="utf-8").strip().lower()
+    except OSError:
+        return ""
+    return ""
+
+
 def _beat_tts_path(beat):
-    """Gemini writes a wav. ElevenLabs and Edge still write an mp3."""
+    """Gemini writes a wav. ElevenLabs and Edge still write an mp3.
+
+    A leftover wav from the previous topic must not win over this topic's
+    Edge mp3. Run 37863543254 scored each Edge proof against the prior
+    Gemini file, so sync and craft came back as 0.
+    """
     wav = RUN / f"tts_{beat}.wav"
+    mp3 = RUN / f"tts_{beat}.mp3"
+    engine = _beat_engine(beat)
+    if engine == "gemini" and wav.exists():
+        return wav
+    if engine in ("edge", "elevenlabs") and mp3.exists():
+        return mp3
     if wav.exists():
         return wav
-    mp3 = RUN / f"tts_{beat}.mp3"
     if mp3.exists():
         return mp3
     return None
@@ -3179,6 +3199,11 @@ def synthesize_short_voices(spoken, c, beats=None, topic=None):
         die("narration blocked; refusing TTS")
     _reset_voice_state()
     proof_audio = os.environ.get("PROOF_FREE_AUDIO", "").strip().lower()
+    # The Edge proof runs before Charon, in the same run/ directory. The
+    # previous topic's wav and word clock are still on disk until this drops
+    # them. Leaving them makes the proof transcribe the wrong lesson.
+    if proof_audio in ("edge", "silence"):
+        _drop_gemini_audio(beats)
     gemini_note = ""
     if proof_audio not in ("edge", "silence") and os.environ.get("GEMINI_API_KEY", "").strip():
         import gemini_voice
@@ -3724,6 +3749,10 @@ def _script_near(spoken, beat_times, audio_words, t, radius=0.85, scene_end=None
         if beat not in (beat_times or {}):
             continue
         t0, t1 = (float(v) for v in beat_times[beat])
+        # The next beat can start inside the 0.85s lookahead when whisper
+        # places its first word a little early. That figure is not this card's.
+        if scene_end is not None and t0 >= float(scene_end) - 1e-3:
+            continue
         words = str((spoken or {}).get(beat) or "").split()
         if not words:
             continue
@@ -3977,7 +4006,15 @@ def _install_scene_cards(topic, spoken, beat_times, scenes, audio_words=None):
 
 
 def _gemini_word_timings(beat_times):
-    """Words from the one Gemini file, shifted onto each trimmed beat."""
+    """Words from the one Gemini file, shifted onto each trimmed beat.
+
+    An Edge proof keeps its own transcript. The previous topic's
+    gemini_words.json is a different lesson.
+    """
+    engines = {_beat_engine(beat) for beat in timed_beats(beat_times)}
+    engines.discard("")
+    if engines and "gemini" not in engines:
+        return None
     path = RUN / "gemini_words.json"
     if not path.exists():
         return None
