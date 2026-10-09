@@ -121,6 +121,111 @@ class ReviewRegressionTests(unittest.TestCase):
         missed = sync_gate.check(words, [card], {"target": script}, beats, [])
         self.assertFalse(missed["ok"])
 
+    def test_plan_clock_counts_a_target_price_as_said(self):
+        """Run 37863543254 scored sync 0 because outline_until stopped at pehchan.
+
+        A chart whose beat was heard is already exempt. This card is not a
+        chart, so the price counts only because the plan clock has reached
+        the target beat. Whisper heard the word and not the digit.
+        """
+        script = "टारगेट 124 रिस्क 10 रिवॉर्ड 22 यानी रिस्क रिवॉर्ड एक बटा दो पूरा प्लान यही है"
+        words = [
+            {"word": "टारगेट", "start": 20.1, "end": 20.4},
+            {"word": "रिस्क", "start": 20.5, "end": 20.8},
+            {"word": "रिवॉर्ड", "start": 20.9, "end": 21.2},
+        ]
+        scene = {
+            "start": 20.0,
+            "end": 24.0,
+            "beat": "target",
+            "kind": "card",
+            "show": ["टारगेट 124"],
+        }
+        beats = {
+            "hook": (0.0, 6.0),
+            "pehchan": (6.0, 12.0),
+            "target": (20.0, 32.0),
+        }
+        text = {
+            "hook": "एंट्री 102 और स्टॉप 92",
+            "pehchan": "रिम 102",
+            "target": script,
+        }
+        outlined = sync_gate.outline_until(text, beats, 24.0, words=words)
+        self.assertIn("124", sync_gate.numbers_in(outlined))
+        report = sync_gate.check(words, [scene], text, beats, [])
+        self.assertNotIn("before it is said", report["reason"])
+        self.assertTrue(report["ok"], report["reason"])
+        score, notes = self_review.score_sync(report)
+        self.assertEqual(score, 100, notes)
+        self.assertGreater(score, 0)
+
+    def test_glued_ek_sau_counts_as_the_plan_number(self):
+        heard = "अन्टरी एकसो दो और स्टोप बानवे"
+        script = "एंट्री 102 और स्टॉप 92"
+        self.assertGreaterEqual(sync_gate.recall(script, heard), 0.5)
+        self.assertIn("102", sync_gate.tokens(heard))
+
+    def test_next_beat_figure_does_not_fail_the_card_on_screen(self):
+        spoken = {
+            "hook": "खरीद कब करें",
+            "entry": "एंट्री 102",
+            "sl": "स्टॉप 92 लो के नीचे",
+            "target": "टारगेट 124 रिस्क 10",
+            "cta": "कमेंट करो",
+        }
+        times = {
+            "hook": (0.0, 4.0),
+            "entry": (8.0, 12.0),
+            "sl": (18.0, 23.5),
+            "target": (23.5, 30.0),
+            "cta": (30.0, 36.0),
+        }
+        words = [
+            {"word": "स्टॉप", "start": 22.0, "end": 22.4},
+            {"word": "92", "start": 23.0, "end": 23.3},
+            {"word": "टारगेट", "start": 23.35, "end": 23.48},
+            {"word": "124", "start": 23.45, "end": 23.7},
+        ]
+        said = board_short._script_near(spoken, times, words, 22.8, scene_end=23.5)
+        self.assertNotIn("124", said)
+        self.assertIn("92", said)
+        notes = board_short.number_format_notes(["SL 92"], spoken=said, caption="स्टॉप 92")
+        self.assertEqual(notes, [])
+
+    def test_hallucinated_tail_does_not_stretch_one_beat(self):
+        """A slow whisper tail must not hand one beat the rest of the file.
+
+        Word-index cuts do that. The scorer falls back to the script share,
+        which stays under 12s. Run 37863543254 stretched invalidation to ~24s,
+        so later scenes scored recall 0 and sat still for the craft sample.
+        """
+        order = ("hook", "pehchan", "context", "entry", "sl", "target", "invalidation", "cta")
+        spoken = {beat: " ".join(f"शब्द{i}" for i in range(8)) for beat in order}
+        words = []
+        clock = 0.0
+        for i in range(50):
+            words.append({
+                "word": f"गलत{i}",
+                "start": round(clock, 3),
+                "end": round(clock + 0.12, 3),
+            })
+            clock += 0.15
+        for i, start in enumerate((10.0, 14.0, 18.0, 22.0, 26.0, 32.0)):
+            words.append({
+                "word": f"गड़बड़{i}",
+                "start": start,
+                "end": round(start + 0.4, 3),
+            })
+        clock = 32.4
+        present, weights = gemini_voice._weights(spoken, order)
+        raw = gemini_voice._from_words(present, weights, words, clock)
+        raw_longest = max(end - start for start, end in raw.values())
+        self.assertGreater(raw_longest, 12.0, raw)
+        bounds = gemini_voice.beat_bounds(spoken, order, words, clock)
+        longest = max(end - start for start, end in bounds.values())
+        self.assertLess(longest, 12.0, bounds)
+
 
 class PillAndCaptionTests(unittest.TestCase):
     def test_close_pills_stack_by_at_least_60px(self):
@@ -182,6 +287,43 @@ class BufferGateTests(unittest.TestCase):
             low = approved_buffer.judge(run, "pat_hammer")
             self.assertTrue(any("under 75" in item for item in low))
             self.assertTrue(any("craft" in item for item in low))
+
+    def test_skipped_trend_does_not_hold_a_passing_plan(self):
+        """Evergreen lessons skip trend. Two of those can be ready together."""
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch("publish_gates.evaluate", return_value={"passed": True, "reasons": []}):
+            run = self._run(tmp)
+            review = {
+                "overall": 98.0,
+                "parts": {
+                    "hook": 100, "visual": 90, "accuracy": 100,
+                    "trend": None, "craft": 100, "sync": 100,
+                },
+                "sync": {"ok": True, "reason": ""},
+            }
+            (run / "self_review.json").write_text(json.dumps(review), encoding="utf-8")
+            import approved_bank
+            for key in ("pat_doji", "pat_cup_handle"):
+                narration = trade_plan.narration_from(approved_bank.by_key(key))
+                (run / "narration.json").write_text(json.dumps(narration), encoding="utf-8")
+                self.assertEqual(approved_buffer.judge(run, key), [], key)
+
+    def test_edge_proof_ignores_the_previous_gemini_clock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            with mock.patch.object(board_short, "RUN", run):
+                (run / "tts_hook.wav").write_bytes(b"old-gemini-wav")
+                (run / "tts_hook.mp3").write_bytes(b"new-edge-mp3!!")
+                (run / "tts_hook.engine").write_text("edge", encoding="utf-8")
+                (run / "gemini_words.json").write_text(json.dumps({
+                    "beats": {"hook": [{"word": "पुराना", "start": 0.1, "end": 0.5}]},
+                }), encoding="utf-8")
+                self.assertEqual(board_short._beat_tts_path("hook").suffix, ".mp3")
+                self.assertIsNone(board_short._gemini_word_timings({"hook": (0.0, 3.0)}))
+                board_short._drop_gemini_audio(("hook",))
+                self.assertFalse((run / "tts_hook.wav").exists())
+                self.assertFalse((run / "gemini_words.json").exists())
+                self.assertTrue((run / "tts_hook.mp3").exists())
 
     def test_repeat_window_skips_the_oldest_ready_item(self):
         now = datetime(2026, 10, 9, 8, 0, tzinfo=IST)

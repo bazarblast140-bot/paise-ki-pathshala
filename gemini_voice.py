@@ -357,6 +357,28 @@ def _content_bounds(present, spoken, words, duration):
     return bounds
 
 
+def _skewed_bounds(bounds, order, weights, duration):
+    """True when one beat owns a stretch the script did not speak.
+
+    A hallucinated tail makes word-index cuts hand 20s to one beat. Recall
+    on that window is 0 even though the lesson was said earlier.
+    """
+    total = float(sum(weights)) or 1.0
+    duration = max(float(duration), 0.01)
+    weight_of = dict(zip(order, weights))
+    for beat, span in (bounds or {}).items():
+        weight = weight_of.get(beat)
+        if not weight or not span or len(span) < 2:
+            continue
+        share = duration * float(weight) / total
+        width = float(span[1]) - float(span[0])
+        if share >= 2.0 and width > max(12.0, share * 2.5):
+            return True
+        if share >= 3.0 and width + 1e-6 < share * 0.45:
+            return True
+    return False
+
+
 def beat_bounds(spoken, order, words, duration):
     """Beat spans on the whole-file clock. Whisper ends the cuts; word count is the fallback."""
     present, weights = _weights(spoken, order)
@@ -377,10 +399,14 @@ def beat_bounds(spoken, order, words, duration):
         last = max(word["end"] for word in usable)
         if last >= 0.5 * duration:
             content = _content_bounds(present, spoken, usable, duration)
-            if content:
+            if content and not _skewed_bounds(content, present, weights, duration):
                 return content
             bounds = _from_words(present, weights, usable, duration)
-            if bounds and all(end - start >= 1.05 for start, end in bounds.values()):
+            if (
+                bounds
+                and all(end - start >= 1.05 for start, end in bounds.values())
+                and not _skewed_bounds(bounds, present, weights, duration)
+            ):
                 return bounds
     return _proportional(present, weights, duration)
 

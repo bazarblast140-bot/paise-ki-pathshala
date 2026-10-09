@@ -5,6 +5,12 @@ name: Build approved topic buffer
 # stored, and the topic marked owner_approved, only when every gate passes.
 # A miss is logged and held. Nothing here is published.
 # Up to six topics, three at a time, so the run finishes in about two waves.
+#
+# Re-run after a scoring fix merges to main (this does not upload):
+#   Actions → Build approved topic buffer → Run workflow → branch main.
+# Wait until the previous build has finished. The concurrency group
+# approved-topic-buffer will not cancel it, so a second click queues.
+# 08:30 and 21:00 IST then publish the oldest ready item. Held rows stay held.
 on:
   schedule:
     - cron: "40 21 * * *"   # 03:10 IST
