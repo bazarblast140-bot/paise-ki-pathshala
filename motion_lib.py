@@ -288,6 +288,45 @@ def _blend_rect(img, rect, color, alpha):
     img.paste(merged, (0, 0))
 
 
+PILL_GAP = 60
+
+
+def _shift_pill(rect, placed, bounds):
+    """Stack a pill when another one sits within PILL_GAP px. Used for every topic."""
+    x0, y0, x1, y1 = (float(v) for v in rect)
+    height = max(1.0, y1 - y0)
+    floor = float(bounds[1]) + 8.0
+    ceil = float(bounds[3]) - 8.0
+
+    def gap_of(other):
+        if x1 <= other[0] or other[2] <= x0:
+            return PILL_GAP
+        if y1 > other[1] and y0 < other[3]:
+            return 0.0
+        if y0 >= other[3]:
+            return y0 - other[3]
+        return other[1] - y1
+
+    for _ in range(12):
+        blocker = None
+        for other in placed:
+            if gap_of(other) < PILL_GAP:
+                blocker = other
+                break
+        if blocker is None:
+            break
+        below = float(blocker[3]) + PILL_GAP
+        above = float(blocker[1]) - PILL_GAP - height
+        if below + height <= ceil:
+            y0 = below
+        elif above >= floor:
+            y0 = above
+        else:
+            y0 = min(max(floor, below), max(floor, ceil - height))
+        y1 = y0 + height
+    return [x0, y0, x1, y1]
+
+
 def _pill(img, x, y, text, size=LABEL_SIZE):
     import board_kit as K
     from PIL import ImageDraw
@@ -295,9 +334,14 @@ def _pill(img, x, y, text, size=LABEL_SIZE):
     font = K.font(int(size))
     tw = draw.textlength(str(text), font=font)
     th = int(size)
-    rect = [x, y, x + tw + 28, y + th + 16]
+    rect = [float(x), float(y), float(x) + tw + 28, float(y) + th + 16]
+    placed = getattr(img, "_placed_pills", None)
+    if placed is not None:
+        bounds = getattr(img, "_pill_bounds", None) or (0, 0, img.size[0], img.size[1])
+        rect = _shift_pill(rect, placed, bounds)
+        placed.append(rect)
     draw.rounded_rectangle(rect, 12, fill=PILL)
-    draw.text((x + 14, y + 6), str(text), font=font, fill=WHITE)
+    draw.text((rect[0] + 14, rect[1] + 6), str(text), font=font, fill=WHITE)
     return rect
 
 
@@ -613,20 +657,48 @@ def sl_break(img, ax, plan, progress, flash_on=False):
     return info
 
 
+def hook_hold_until(topic):
+    """When the hook narration ends. Whisper wins; the beat end is the fallback.
+
+    A word that starts on the next beat is not part of the hook sentence.
+    """
+    beats = (topic or {}).get("_beat_times") or {}
+    span = beats.get("hook")
+    if not span or len(span) < 2:
+        return 2.0
+    t0, t1 = float(span[0]), float(span[1])
+    last = None
+    for word in (topic or {}).get("_audio_words") or []:
+        try:
+            start = float(word.get("start"))
+            end = float(word.get("end") if word.get("end") is not None else start)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if start < t0 - 0.05 or start >= t1 - 0.05:
+            continue
+        if end > (last or 0.0):
+            last = end
+    if last is None:
+        return t1
+    return max(t0, min(t1, last))
+
+
 def rr_progress(t, clock):
-    """Finished RR box for the first 2s, then a fade, then a redraw on the target beat.
+    """Finished RR box until the hook sentence ends, then a fade, then the target beat.
 
     A caller that passes an explicit ``rr`` window keeps that window. The hook
-    flash is only the clock_from mode.
+    flash is only the clock_from mode. ``rr_hook_until`` is the whisper end.
     """
     if not (clock or {}).get("rr_hook"):
         return _progress(clock, "rr", t, 0.0)
     t = 0.0 if t is None else float(t)
-    if t <= 2.0:
+    hold = (clock or {}).get("rr_hook_until")
+    hold = 2.0 if hold is None else float(hold)
+    if t <= hold:
         return 1.0
-    fade_end = 2.0 + REVEAL_S
+    fade_end = hold + REVEAL_S
     if t < fade_end:
-        return 1.0 - ease((t - 2.0) / REVEAL_S)
+        return 1.0 - ease((t - hold) / REVEAL_S)
     redraw = (clock or {}).get("rr_redraw")
     if redraw is None:
         return 0.0
@@ -668,6 +740,7 @@ def clock_from(topic, plan=None):
         "sl": window("sl", "sl"),
         "target": window("target", "target"),
         "rr_hook": True,
+        "rr_hook_until": hook_hold_until(topic),
         "rr_redraw": start("target", "target"),
         "highlight": None if zoom_at is None else (zoom_at, zoom_at + ZOOM_S),
         "counter": window("target", "target", COUNTER_S),
@@ -753,6 +826,8 @@ def draw_plan(img, plan, shown, t, clock):
 
     shown = list(shown or [])
     box, lo, hi, pad = motion_geometry(plan)
+    img._placed_pills = []
+    img._pill_bounds = box
     per = _candle_progresses(plan, t, clock)
     zoom_start = None
     highlight_window = (clock or {}).get("highlight")
@@ -799,9 +874,10 @@ def draw_plan(img, plan, shown, t, clock):
     anchor = None
     if 0 <= focus < len(plan.ohlc):
         anchor = (ax.x(focus), ax.y(plan.ohlc[focus][3]))
-    # Finished ENTRY/SL/TARGET ghosts share the hook RR window, then fade.
+    # Finished ENTRY/SL/TARGET pills share the hook sentence, then fade.
     # They are not the spoken lines: those still wait for their own beat.
     ghost = rr_progress(t, clock) if (clock or {}).get("rr_hook") else 0.0
+    on_screen = []
     for kind in _LEVELS:
         row = labels.get(kind)
         price = float(row["price"]) if row and row.get("price") is not None else {
@@ -821,7 +897,16 @@ def draw_plan(img, plan, shown, t, clock):
                 anchor=anchor if kind != "sr" else None,
             )
         elif ghost > 0.0 and kind in ("entry", "sl", "target"):
-            _fade_hline(img, box[0] + 24, box[2] - 24, ax.y(price), colors[kind], ghost, width=6)
+            if ghost >= 0.85:
+                level_line(
+                    img, box, ax.y(price), colors[kind], label, sides[kind], 1.0,
+                    pill=1.0, dashed=False, width=6, anchor=None,
+                )
+            else:
+                _fade_hline(img, box[0] + 24, box[2] - 24, ax.y(price), colors[kind], ghost, width=6)
+            on_screen.append(label)
+        if drawn.get("price_label"):
+            on_screen.append(drawn["price_label"])
         levels[kind] = {
             "price": price, "drawn": bool(drawn["drawn"]), "label": label,
             "progress": prog, "pill": bool(drawn.get("pill")),
@@ -830,6 +915,8 @@ def draw_plan(img, plan, shown, t, clock):
     rr = risk_reward_box(img, plan, rr_p, ax) if rr_p > 0.0 else rr_readout(plan)
     if rr_p <= 0.0:
         rr["shown"] = False
+    elif rr.get("text"):
+        on_screen.append(rr["text"])
     if plan.rsi and any(row.get("kind") == "rsi_os" for row in shown) and trend_p >= 1.0:
         trade_plan._rsi_strip(img, plan)
     break_p = _progress(clock, "break", t, 0.0)
@@ -863,6 +950,7 @@ def draw_plan(img, plan, shown, t, clock):
         "title": {"progress": title_p, "shown": title_p >= 1.0, "text": ""},
         "break": broken,
         "candles": per,
+        "on_screen_text": on_screen,
     }
 
 

@@ -1,0 +1,68 @@
+name: Build approved topic buffer
+
+# Owner approved the Hammer v2 format. This renders approved topics that are
+# not already buffered and were not published in the last 14 days. A video is
+# stored, and the topic marked owner_approved, only when every gate passes.
+# A miss is logged and held. Nothing here is published.
+on:
+  schedule:
+    - cron: "40 21 * * *"   # 03:10 IST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: approved-topic-buffer
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install FFmpeg and fonts
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-noto-core libraqm0
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Re-read the buffer and the ledger
+        run: |
+          branch="${GITHUB_REF_NAME:-main}"
+          git fetch origin "$branch"
+          git checkout "origin/$branch" -- data/published.json data/approved_buffer.json || true
+      - name: Render up to six Hammer v2 topics
+        env:
+          VIDEO_FORMAT: short
+          APPROVED_BANK: "1"
+          LIVE_BEATS: plan
+          PUBLISH_VISIBILITY: public
+          AUTOMATIC_UPLOAD: "0"
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+          PAID_TTS_ENABLED: ${{ vars.PAID_TTS_ENABLED }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python approved_buffer.py --build --max 6
+      - name: Commit buffer state
+        if: ${{ !cancelled() }}
+        run: |
+          git add data/approved_buffer.json approved
+          if git diff --cached --quiet; then
+            echo "No buffer state to commit"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore: approved topic buffer [skip ci]"
+            git pull --rebase --autostash || true
+            git push
+          fi

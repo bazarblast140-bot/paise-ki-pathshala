@@ -38,6 +38,10 @@ on:
         description: "16:00 IST Aaj ka Nifty data Short"
         type: boolean
         default: false
+      from_buffer:
+        description: "08:30 and 21:00 publish the oldest gated topic buffer item"
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       format:
@@ -185,10 +189,31 @@ jobs:
           APPROVED_SCRIPT_DIR: run/approved_script
           TOPIC_KEY: ${{ inputs.topic_key }}
         run: python -c "import os, approved_script; approved_script.install_repo_beats(os.environ['APPROVED_SCRIPT_DIR'], os.environ['TOPIC_KEY'])"
+      - name: Publish the oldest gated topic buffer
+        id: topicbuf
+        if: steps.guard.outputs.taken != 'true' && inputs.data_short != true && (github.event_name == 'schedule' || inputs.from_buffer == true)
+        env:
+          PUBLISH_SLOT_IST: ${{ steps.fmt.outputs.slot }}
+          PUBLISH_DATE_IST: ${{ steps.fmt.outputs.date_ist }}
+          PUBLISH_AT_UTC: ${{ steps.fmt.outputs.publish_at }}
+          PUBLISH_VISIBILITY: public
+          AUTOMATIC_UPLOAD: ${{ github.event_name == 'workflow_dispatch' && '0' || '1' }}
+          REQUIRE_QA_APPROVAL: ${{ vars.REQUIRE_QA_APPROVAL || 'true' }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YT_FIN_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YT_FIN_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YT_FIN_REFRESH_TOKEN }}
+          EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
+          IG_CROSSPOST: ${{ steps.fmt.outputs.visibility == 'public' && '1' || '0' }}
+          IG_USER_ID: ${{ vars.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_SURFACE: ${{ vars.IG_SURFACE || 'facebook' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python approved_buffer.py --publish
       - name: Run Pipeline (+ publish if READY)
         id: pipeline
         continue-on-error: true
-        if: steps.guard.outputs.taken != 'true'
+        if: steps.guard.outputs.taken != 'true' && steps.topicbuf.outputs.handled != 'true'
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
@@ -252,7 +277,7 @@ jobs:
           fi
       - name: Buffer fill if this slot is still empty
         id: buffer
-        if: always() && steps.guard.outputs.taken != 'true' && steps.fmt.outputs.render_only != 'true' && inputs.data_short != true
+        if: always() && steps.guard.outputs.taken != 'true' && steps.fmt.outputs.render_only != 'true' && inputs.data_short != true && steps.topicbuf.outputs.handled != 'true'
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           YOUTUBE_CLIENT_ID: ${{ secrets.YT_FIN_CLIENT_ID }}

@@ -969,7 +969,8 @@ def _paint_caption_block(img, text, size):
     y = safe_area.SUBTITLE_TOP + 8
     drawn = []
     for line in lines:
-        if y >= safe_area.SUBTITLE_LIMIT - 8:
+        # Leave the disclaimer at least 24 px under the caption block.
+        if y >= safe_area.SUBTITLE_LIMIT - 8 or y + int(size) + 24 > safe_area.SOURCE_Y:
             break
         scene_frames._text(
             img=img, x=540, y=y, text=line, fill=(250, 250, 250), size=int(size),
@@ -990,8 +991,15 @@ def _paint_caption_block(img, text, size):
 def _paint_disclaimer(img):
     import scene_frames
     import safe_area
+    caption_bottom = None
+    for layer in img.text_layers or []:
+        if layer.get("role") == "caption" and layer.get("box"):
+            caption_bottom = max(caption_bottom or 0.0, float(layer["box"][3]))
+    y = float(safe_area.SOURCE_Y)
+    if caption_bottom is not None:
+        y = max(y, caption_bottom + 24.0)
     scene_frames._text(
-        img=img, x=540, y=safe_area.SOURCE_Y, text=ON_SCREEN_DISCLAIMER,
+        img=img, x=540, y=y, text=ON_SCREEN_DISCLAIMER,
         fill=(230, 230, 230), size=DISCLAIMER_PX, anchor="mt", band=False, role="source",
     )
 

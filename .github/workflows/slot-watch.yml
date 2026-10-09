@@ -111,7 +111,16 @@ jobs:
           IG_SURFACE: ${{ vars.IG_SURFACE || 'facebook' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: python buffer_shorts.py --fill-last-chance
+        run: |
+          case "$BUFFER_SLOT" in
+            08:30|21:00)
+              PUBLISH_SLOT_IST="$BUFFER_SLOT" PUBLISH_DATE_IST="$BUFFER_DATE" \
+                python approved_buffer.py --publish
+              ;;
+            *)
+              python buffer_shorts.py --fill-last-chance
+              ;;
+          esac
       - name: YouTube upload recorded
         id: uploaded
         if: ${{ !cancelled() }}
@@ -178,6 +187,7 @@ jobs:
     with:
       format: short
       privacy: public
+      from_buffer: true
     secrets: inherit
 
   # Dropped 15:51 IST cron, before 16:20: the missed 16:00 slot is still today's Nifty bar.

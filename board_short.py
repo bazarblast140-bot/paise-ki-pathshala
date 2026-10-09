@@ -4040,11 +4040,16 @@ def _scene_at(scenes, t):
 
 
 def _frame_lesson_text(frame):
-    return [
+    lines = [
         layer.get("text") or ""
         for layer in (getattr(frame, "text_layers", None) or [])
         if layer.get("text") and not layer.get("faint")
     ]
+    state = getattr(frame, "motion_state", None) or {}
+    for text in state.get("on_screen_text") or []:
+        if text:
+            lines.append(str(text))
+    return lines
 
 
 def number_faults_for(scenes, spoken, beat_times, audio_words=None, topic=None):
