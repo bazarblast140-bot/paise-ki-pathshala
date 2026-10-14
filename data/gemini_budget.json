@@ -1,4 +1,23 @@
 {
-  "days": {},
-  "charges": []
+  "days": {
+    "2026-10-14": {
+      "keys": {
+        "1": {
+          "realchart": 0,
+          "nifty": 0,
+          "buffer": 0,
+          "other": 1,
+          "exhausted": false
+        }
+      }
+    }
+  },
+  "charges": [
+    {
+      "id": "39059fcc307a482289f514352acb9b49",
+      "date": "2026-10-14",
+      "caller": "other",
+      "key": "1"
+    }
+  ]
 }
