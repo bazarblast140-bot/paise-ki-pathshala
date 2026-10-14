@@ -407,5 +407,17 @@
   "platform": "skip",
   "note": "no owner_approved script left in approved/",
   "slot_skipped": "no owner_approved script left in approved/"
+ },
+ {
+  "date_ist": "2026-10-14",
+  "slot": "20:07",
+  "video_id": "jCD-f8EE0E8",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null
  }
 ]
