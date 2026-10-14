@@ -729,7 +729,13 @@ class HealthAndWorkflowTests(unittest.TestCase):
         self.assertIn('cron: "41 6 * * *"', refill)
         self.assertIn('DEEPSEEK_MAX_CALLS: "6"', refill)
         self.assertIn("BUFFER_FILL: \"0\"", refill)
+        self.assertIn("GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}", refill)
+        self.assertIn("GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}", refill)
+        self.assertNotIn("PIPELINE_MODE:", refill)
+        self.assertIn("PUBLISH_VISIBILITY: public", refill)
+        self.assertIn('AUTOMATIC_UPLOAD: "0"', refill)
         self.assertNotIn("ELEVENLABS_API_KEY", refill)
+        self.assertIn("edge-tts>=7.3.1", (ROOT / "requirements.txt").read_text(encoding="utf-8"))
         self.assertNotIn("ELEVENLABS_VOICE_ID", refill)
         self.assertNotIn("--publish", refill)
         self.assertNotIn("publish.py", refill)
@@ -741,6 +747,29 @@ class HealthAndWorkflowTests(unittest.TestCase):
         self.assertNotIn("41 6 * * *", taken)
         self.assertIn("buffer", health.lower())
         self.assertNotIn("publish.py", health)
+
+    def test_empty_buffer_date_uses_today_ist(self):
+        now = datetime(2026, 10, 14, 9, 0, tzinfo=IST)
+        with mock.patch.object(
+            buffer_shorts, "perform_fill",
+            return_value={"action": "skip", "reason": "empty", "filled": False},
+        ) as perform, mock.patch.dict(os.environ, {
+            "BUFFER_DATE": "",
+            "BUFFER_SLOT": "",
+            "PUBLISH_DATE_IST": "",
+            "PUBLISH_SLOT_IST": "21:00",
+            "PUBLISH_VISIBILITY": "public",
+            "BUFFER_FILL": "1",
+        }, clear=False):
+            result = buffer_shorts.fill_from_env(
+                False, now=now, alert=lambda *_a, **_k: None,
+                uploader=lambda *_a, **_k: None,
+                crosspost=lambda *_a, **_k: None,
+                store=object(), schedule=lambda: [],
+            )
+        self.assertFalse(result["filled"])
+        self.assertEqual(perform.call_args.kwargs["date_ist"], "2026-10-14")
+        self.assertEqual(perform.call_args.kwargs["slot"], "21:00")
 
 
 class AgentHookTests(unittest.TestCase):

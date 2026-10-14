@@ -509,8 +509,8 @@ def release_plan(slot, date_ist, now=None):
         now = now.replace(tzinfo=slot_guard.IST)
     now = now.astimezone(slot_guard.IST)
     slot = str(slot or "").strip()
-    date_ist = str(date_ist or "").strip()
-    if slot not in slot_guard.SLOTS or not date_ist:
+    date_ist = str(date_ist or "").strip() or slot_guard.today_ist(now)
+    if slot not in slot_guard.SLOTS:
         return {"action": "skip", "reason": "no slot to schedule"}
     when = slot_guard._at(date_ist, slot)
     if when <= now:

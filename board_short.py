@@ -3335,12 +3335,30 @@ def synthesize_short_voices(spoken, c, beats=None, topic=None):
                 spoken[beat] = fold_roman_words(spoken[beat])
             tts(spoken[beat], RUN / f"tts_{beat}.mp3", c)
 
+    def edge_then_paid():
+        try:
+            once()
+        except eleven_voice.QuotaFallback as exc:
+            # One engine for the whole slot. Paid files from earlier beats are not reused.
+            _switch_to_edge(exc.reason)
+            once()
+
     try:
-        once()
-    except eleven_voice.QuotaFallback as exc:
-        # One engine for the whole slot. Paid files from earlier beats are not reused.
-        _switch_to_edge(exc.reason)
-        once()
+        edge_then_paid()
+    except SystemExit as exc:
+        # A preview Edge 403 used to die() here and run_pipeline printed
+        # [STOP] Chart Board, so Charon never started. Posting paths still
+        # hold before Edge is called.
+        reason = str(getattr(exc, "reason", "") or "")
+        if "TTS fail" not in reason or not gemini_voice.configured():
+            raise
+        print(f"[warn] Edge TTS failed ({reason}). Charon still runs.", flush=True)
+        os.environ.pop("PROOF_FREE_AUDIO", None)
+        _drop_gemini_audio(beats)
+        for beat in beats:
+            (RUN / f"tts_{beat}.mp3").unlink(missing_ok=True)
+        _speak_gemini(spoken, c, beats, topic)
+        return _write_spoken_engine("gemini", elevenlabs_attempted=False)
     engine = "edge" if "edge" in ENGINES else "elevenlabs"
     if gemini_note and not VOICE_FALLBACK_REASON:
         VOICE_FALLBACK_REASON = gemini_note

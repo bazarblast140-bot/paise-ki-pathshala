@@ -33,6 +33,11 @@ permissions:
 
 jobs:
   check:
+    # workflow_busy lists Actions runs. The default token is not in the
+    # step environment, and actions:read cannot satisfy a later dispatch.
+    permissions:
+      contents: read
+      actions: write
     # Wait until an in-flight publish (including its ledger commit) has finished.
     # The fill job calls paise-ki-pathshala.yml, which uses this same group, so
     # the group stays on this job only — the called workflow takes it next.
@@ -57,6 +62,8 @@ jobs:
       - name: Slot check
         id: check
         env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SLOT_CHECK: ${{ inputs.slot }}

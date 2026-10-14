@@ -631,6 +631,85 @@ class WorkflowTests(unittest.TestCase):
         first = next(line for line in pipeline.splitlines() if line.strip().startswith("IG_CROSSPOST:"))
         self.assertIn("steps.fmt.outputs.visibility == 'public'", first)
 
+    def test_close_reel_story_uses_final_ig_without_posting(self):
+        daily = (ROOT / ".github" / "workflows" / "daily-reels.yml").read_text(encoding="utf-8")
+        publish_step = daily.split("name: Publish via publish-artifact", 1)[1]
+        self.assertIn("-f privacy=now", publish_step)
+        self.assertIn("-f skip_ig=false", publish_step)
+        self.assertIn("-f ig_only=false", publish_step)
+        self.assertIn("-f post_story=true", publish_step)
+        text = (ROOT / ".github" / "workflows" / "publish-artifact.yml").read_text(encoding="utf-8")
+        download = text.split("name: Download source artifact", 1)[1].split("name: Download the release bundle", 1)[0]
+        self.assertIn('name in final_yt.mp4 final_ig.mp4', download)
+        youtube = text.split("name: Upload a new YouTube video", 1)[1].split("name: Cross-post the Reel", 1)[0]
+        reel = text.split("name: Cross-post the Reel", 1)[1].split("name: Commit the ledger fill", 1)[0]
+        self.assertLess(youtube.find("final_yt.mp4"), youtube.find("python publish.py"))
+        self.assertLess(reel.find("final_ig.mp4"), reel.find("python publish_instagram.py"))
+        self.assertIn("IG_STORY:", reel)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            nested = root / "run" / "realchart-close"
+            nested.mkdir(parents=True)
+            (nested / "final.mp4").write_bytes(b"MAIN")
+            (nested / "final_yt.mp4").write_bytes(b"YT")
+            (nested / "final_ig.mp4").write_bytes(b"IG")
+            (nested / "script.txt").write_bytes(b"SCRIPT")
+            (nested / "thumbnail.jpg").write_bytes(b"THUMB")
+            # final.mp4 is already at the artifact root's sibling only.
+            # Promote the channel cuts the way the download step does when
+            # the main file was copied and the cuts stayed nested.
+            run = root / "flat"
+            run.mkdir()
+            (run / "final.mp4").write_bytes(b"MAIN")
+            (run / "script.txt").write_bytes(b"SCRIPT")
+            (run / "thumbnail.jpg").write_bytes(b"THUMB")
+            for name in ("final_yt.mp4", "final_ig.mp4"):
+                if not (run / name).is_file():
+                    found = next(root.joinpath("run").rglob(name))
+                    (run / name).write_bytes(found.read_bytes())
+            main = run / "final.mp4"
+            if (run / "final_yt.mp4").stat().st_size:
+                (run / "main.mp4").write_bytes(main.read_bytes())
+                main.write_bytes((run / "final_yt.mp4").read_bytes())
+            self.assertEqual(main.read_bytes(), b"YT")
+            if (run / "final_ig.mp4").stat().st_size:
+                main.write_bytes((run / "final_ig.mp4").read_bytes())
+            self.assertEqual(main.read_bytes(), b"IG")
+            import publish_instagram as ig
+            hosted = {}
+
+            def host(path):
+                hosted["bytes"] = Path(path).read_bytes()
+                return "https://example.test/final_ig.mp4"
+
+            story = {}
+
+            def remember_story(url):
+                story["url"] = url
+
+            env = {
+                "IG_CROSSPOST": "1",
+                "IG_STORY": "1",
+                "APPROVED": "true",
+                "VIDEO_FORMAT": "short",
+                "IG_SURFACE": "facebook",
+            }
+            (run / "uploaded.txt").write_text("dryvideoid\n", encoding="utf-8")
+            with mock.patch.object(ig, "RUN", run), \
+                 mock.patch.dict(os.environ, env, clear=False), \
+                 mock.patch.object(ig, "video_format", return_value="short"), \
+                 mock.patch("publish_guard.blocked_reason", return_value=""), \
+                 mock.patch.object(ig, "existing_media", return_value=""), \
+                 mock.patch.object(ig, "host_mp4", side_effect=host), \
+                 mock.patch.object(ig, "host_cover", return_value=""), \
+                 mock.patch.object(ig, "publish_reel", return_value="reel-dry") as reel, \
+                 mock.patch.object(ig, "maybe_publish_story", side_effect=remember_story):
+                ig.main()
+        self.assertEqual(hosted["bytes"], b"IG")
+        self.assertEqual(story["url"], "https://example.test/final_ig.mp4")
+        reel.assert_called_once()
+        self.assertEqual(reel.call_args.args[0], story["url"])
+
     def test_topic_shorts_wait_when_the_reel_hold_is_still_full(self):
         import gemini_budget
         now = FRIDAY
