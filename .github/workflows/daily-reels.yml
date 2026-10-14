@@ -1,0 +1,170 @@
+name: Daily Reels
+
+# News, close, TA and Saturday recap. Build and publish are separate crons.
+# A dry_run does not call Gemini and does not publish.
+# Live runs start Mon 12 Oct 2026 (recap Sat 10 Oct). A hard gate is a HOLD.
+on:
+  schedule:
+    - cron: "50 2 * * 1-5"   # news build 08:20 IST Mon-Fri
+    - cron: "15 3 * * 1-5"   # news publish 08:45 IST Mon-Fri
+    - cron: "20 10 * * 1-5"  # close build 15:50 IST Mon-Fri
+    - cron: "45 10 * * 1-5"  # close publish 16:15 IST Mon-Fri
+    - cron: "35 12 * * 1-5"  # ta build 18:05 IST Mon-Fri
+    - cron: "0 13 * * 1-5"   # ta publish 18:30 IST Mon-Fri
+    - cron: "35 5 * * 6"     # recap build 11:05 IST Saturday
+    - cron: "0 6 * * 6"      # recap publish 11:30 IST Saturday
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: "Which Reel to build or publish"
+        required: true
+        type: choice
+        options: [news, close, ta, recap]
+      dry_run:
+        description: "true = silence, no Gemini, no upload"
+        required: false
+        type: boolean
+        default: true
+      phase:
+        description: "build uploads the artifact. publish sends it. both does both."
+        required: false
+        type: choice
+        options: [build, publish, both]
+        default: build
+
+run-name: daily-reel ${{ github.event_name == 'workflow_dispatch' && inputs.kind || github.event.schedule }} ${{ github.event_name == 'workflow_dispatch' && inputs.phase || 'cron' }}
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+jobs:
+  reel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ffmpeg, fonts and Playwright
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-core
+          pip install -r requirements.txt playwright
+          playwright install chromium --with-deps
+      - name: Resolve kind and phase
+        id: plan
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            KIND="${{ inputs.kind }}"
+            PHASE="${{ inputs.phase }}"
+            if [ "${{ inputs.dry_run }}" = "true" ]; then DRY=1; else DRY=0; fi
+          else
+            DRY=0
+            case "${{ github.event.schedule }}" in
+              "50 2 * * 1-5") KIND=news; PHASE=build ;;
+              "15 3 * * 1-5") KIND=news; PHASE=publish ;;
+              "20 10 * * 1-5") KIND=close; PHASE=build ;;
+              "45 10 * * 1-5") KIND=close; PHASE=publish ;;
+              "35 12 * * 1-5") KIND=ta; PHASE=build ;;
+              "0 13 * * 1-5") KIND=ta; PHASE=publish ;;
+              "35 5 * * 6") KIND=recap; PHASE=build ;;
+              "0 6 * * 6") KIND=recap; PHASE=publish ;;
+              *) echo "Unknown schedule"; exit 1 ;;
+            esac
+          fi
+          echo "kind=$KIND" >> "$GITHUB_OUTPUT"
+          echo "phase=$PHASE" >> "$GITHUB_OUTPUT"
+          echo "dry=$DRY" >> "$GITHUB_OUTPUT"
+          echo "[realchart] kind=$KIND phase=$PHASE dry=$DRY"
+      - name: Build the Reel
+        id: build
+        if: steps.plan.outputs.phase != 'publish'
+        env:
+          REALCHART_NO_ALERT: ${{ steps.plan.outputs.dry == '1' && '1' || '0' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GEMINI_API_KEY: ${{ steps.plan.outputs.dry == '1' && '' || secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2: ${{ steps.plan.outputs.dry == '1' && '' || secrets.GEMINI_API_KEY_2 }}
+          GEMINI_API_KEY_3: ${{ steps.plan.outputs.dry == '1' && '' || secrets.GEMINI_API_KEY_3 }}
+          GEMINI_API_KEY_4: ${{ steps.plan.outputs.dry == '1' && '' || secrets.GEMINI_API_KEY_4 }}
+        run: |
+          set +e
+          if [ "${{ steps.plan.outputs.dry }}" = "1" ]; then
+            python -m realchart run --kind "${{ steps.plan.outputs.kind }}" --dry-run --out run
+          else
+            python -m realchart run --kind "${{ steps.plan.outputs.kind }}" --out run
+          fi
+          code=$?
+          set -e
+          echo "exit=$code" >> "$GITHUB_OUTPUT"
+          if [ -s run/qa.json ]; then
+            echo "[realchart] qa.json:"
+            cat run/qa.json
+          fi
+          if [ -s run/source.md ]; then
+            echo "[realchart] source.md:"
+            cat run/source.md
+          fi
+          if [ "${{ steps.plan.outputs.dry }}" = "1" ]; then
+            if [ -s run/final.mp4 ]; then echo "code=0" >> "$GITHUB_OUTPUT"; else echo "code=skip" >> "$GITHUB_OUTPUT"; fi
+            exit 0
+          fi
+          if [ "$code" != "0" ]; then
+            echo "code=$code" >> "$GITHUB_OUTPUT"
+            exit "$code"
+          fi
+          if [ ! -s run/final.mp4 ]; then
+            echo "code=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "code=0" >> "$GITHUB_OUTPUT"
+      - name: Upload the Reel artifact
+        if: always() && steps.plan.outputs.phase != 'publish'
+        uses: actions/upload-artifact@v4
+        with:
+          name: realchart-${{ steps.plan.outputs.kind }}
+          if-no-files-found: warn
+          path: |
+            run/final.mp4
+            run/script.txt
+            run/thumbnail.jpg
+            run/source.md
+            run/qa.json
+            run/levels.json
+            run/HOLD
+            run/SKIP
+      - name: Publish via publish-artifact
+        if: steps.plan.outputs.dry != '1' && steps.plan.outputs.phase != 'build' && (steps.plan.outputs.phase == 'publish' || steps.build.outputs.code == '0')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KIND: ${{ steps.plan.outputs.kind }}
+          PHASE: ${{ steps.plan.outputs.phase }}
+        run: |
+          if [ "$PHASE" = "both" ]; then
+            SOURCE="$GITHUB_RUN_ID"
+          else
+            case "$KIND" in
+              news) CRON="50 2 \\* \\* 1-5" ;;
+              close) CRON="20 10 \\* \\* 1-5" ;;
+              ta) CRON="35 12 \\* \\* 1-5" ;;
+              recap) CRON="35 5 \\* \\* 6" ;;
+            esac
+            SOURCE="$(gh run list --workflow daily-reels.yml --limit 40 --json databaseId,displayTitle,conclusion \
+              --jq "[.[] | select(.conclusion==\"success\") | select(.displayTitle | test(\"daily-reel \" + \"$KIND\" + \" build\") or test(\"$CRON\"))] | .[0].databaseId")"
+          fi
+          if [ -z "$SOURCE" ] || [ "$SOURCE" = "null" ]; then
+            echo "No successful $KIND build to publish"
+            exit 1
+          fi
+          echo "Publishing run $SOURCE as $KIND (privacy=now, story on)"
+          gh workflow run publish-artifact.yml --ref "${GITHUB_REF_NAME:-main}" \
+            -f "source_run_id=$SOURCE" \
+            -f privacy=now \
+            -f skip_ig=false \
+            -f ig_only=false \
+            -f post_story=true

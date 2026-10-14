@@ -63,6 +63,12 @@ on:
         required: false
         type: string
         default: ""
+      post_story:
+        description: "true = also post the same mp4 as an Instagram Story after the Reel."
+        required: false
+        type: choice
+        options: ["false", "true"]
+        default: "false"
 
 concurrency:
   group: paise-ki-pathshala-publish
@@ -180,6 +186,7 @@ jobs:
           IG_CROSSPOST: "1"
           APPROVED: "true"
           IG_ONLY: ${{ inputs.ig_only }}
+          IG_STORY: ${{ inputs.post_story == 'true' && '1' || '0' }}
           YOUTUBE_VIDEO_ID: ${{ inputs.youtube_video_id }}
           IG_USER_ID: ${{ vars.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}

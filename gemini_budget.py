@@ -4,10 +4,10 @@ Each API key has its own free-tier cap of 10 requests a day. The file
 ``data/gemini_budget.json`` is keyed by the IST date and then by key
 slot (``1`` is ``GEMINI_API_KEY``, then ``GEMINI_API_KEY_2`` through
 ``GEMINI_API_KEY_4``). The secret itself is never stored. A cache hit
-does not count. One request on each key stays reserved for the
-real-chart Reel and one for the 16:00 Nifty Short, so the morning
-topic-buffer build cannot spend them. That build is also capped at
-three new topics a day across every configured key.
+does not count. Weekdays hold three requests on each key for the news, close, and TA
+Reels. Saturday holds one for the weekly recap. Topic Shorts and the
+morning buffer may spend a request only when that hold is already
+covered. The buffer is also capped at three new topics a day.
 """
 from __future__ import annotations
 
@@ -21,8 +21,9 @@ from pathlib import Path
 IST = timezone(timedelta(hours=5, minutes=30))
 LIMIT = 10
 BUFFER_CAP = 3
-RESERVES = {"realchart": 1, "nifty": 1}
-CALLERS = ("realchart", "nifty", "buffer", "other")
+# Reels are spent first. These callers may use the held requests.
+REEL_CALLERS = ("realchart", "news", "close", "ta", "recap")
+CALLERS = ("realchart", "nifty", "buffer", "other", "news", "close", "ta", "recap")
 # Slot id, then the env var. Later slots are used only when present.
 KEY_ENV = (
     ("1", "GEMINI_API_KEY"),
@@ -66,6 +67,9 @@ def caller_from_env():
     explicit = os.environ.get("GEMINI_BUDGET_CALLER", "").strip().lower()
     if explicit in CALLERS:
         return explicit
+    kind = os.environ.get("REALCHART_KIND", "").strip().lower()
+    if kind in ("news", "close", "ta", "recap"):
+        return kind
     if os.environ.get("REALCHART_REEL", "").strip().lower() in ("1", "true", "yes", "on"):
         return "realchart"
     topic = os.environ.get("TOPIC_KEY", "").strip()
@@ -150,14 +154,29 @@ def used(bucket):
     return sum(int(bucket.get(name) or 0) for name in CALLERS)
 
 
-def owed(bucket, caller):
-    """Requests still held back on this key for the other reserved callers."""
-    total = 0
-    for name, count in RESERVES.items():
-        if name == caller:
-            continue
-        total += max(0, int(count) - int(bucket.get(name) or 0))
-    return total
+def reel_need(now=None):
+    """How many Charon requests today's Reels still need on each key.
+
+    Monday–Friday is the news, close, and TA Reels. Saturday is the
+    weekly recap. Sunday has none.
+    """
+    now = now or datetime.now(IST)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=IST)
+    weekday = now.astimezone(IST).weekday()
+    if weekday == 6:
+        return 0
+    if weekday == 5:
+        return 1
+    return 3
+
+
+def owed(bucket, caller, now=None):
+    """Requests this key still holds for Reels that have not run yet."""
+    if caller in REEL_CALLERS:
+        return 0
+    spent = sum(int(bucket.get(name) or 0) for name in REEL_CALLERS)
+    return max(0, reel_need(now) - spent)
 
 
 def _buffer_total(data, day):
@@ -182,7 +201,14 @@ def allow(caller, key_id="1", now=None):
     if bucket.get("exhausted"):
         return False
     remaining = LIMIT - used(bucket)
-    return remaining - owed(bucket, caller) >= 1
+    return remaining - owed(bucket, caller, now) >= 1
+
+
+def topic_short_allowed(now=None):
+    """True when an 08:30 or 21:00 topic Short can spend one request."""
+    if not enforced():
+        return True
+    return any(allow("other", key_id, now) for key_id in active_key_ids())
 
 
 def buffer_topic_limit(requested, now=None):
@@ -201,7 +227,7 @@ def buffer_topic_limit(requested, now=None):
         bucket = _bucket(data, day, key_id)
         if bucket.get("exhausted"):
             continue
-        spendable += max(0, LIMIT - used(bucket) - owed(bucket, "buffer"))
+        spendable += max(0, LIMIT - used(bucket) - owed(bucket, "buffer", now))
     return min(requested, room, spendable)
 
 

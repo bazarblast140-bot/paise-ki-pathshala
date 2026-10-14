@@ -683,10 +683,10 @@ class KeyRotationTests(unittest.TestCase):
                 "GEMINI_CHARGE_PATH": str(Path(tmp) / "charges.json"),
             }
             with mock.patch.dict(os.environ, env, clear=False):
-                for _ in range(8):
+                for _ in range(7):
                     self.assertTrue(gemini_budget.allow("other", "1", now))
                     gemini_budget.note("other", "1", now)
-                # Two requests stay reserved for the reel and the Nifty Short.
+                # Friday holds three requests on this key for news, close, and TA.
                 self.assertFalse(gemini_budget.allow("other", "1", now))
                 self.assertTrue(gemini_budget.allow("realchart", "1", now))
                 self.assertTrue(gemini_budget.allow("other", "2", now))
@@ -703,7 +703,8 @@ class KeyRotationTests(unittest.TestCase):
         self.assertNotIn(SECRET_2, blob)
         self.assertNotIn(SECRET_3, blob)
         self.assertNotIn(SECRET_4, blob)
-        self.assertEqual(saved["days"]["2026-10-09"]["keys"]["1"]["other"], 8)
+        self.assertEqual(saved["days"]["2026-10-09"]["keys"]["1"]["other"], 7)
+        self.assertEqual(gemini_budget.reel_need(now), 3)
         self.assertTrue(saved["days"]["2026-10-09"]["keys"]["1"]["exhausted"])
 
     def test_429_walks_key_three_and_stops_when_every_key_is_429(self):

@@ -245,6 +245,7 @@ jobs:
           APPROVED_BANK: ${{ steps.fmt.outputs.visibility == 'public' && inputs.data_short != true && '1' || '0' }}
           TOPIC_KEY: ${{ inputs.data_short && 'aaj_ka_nifty' || inputs.topic_key }}
           DATA_SHORT: ${{ inputs.data_short && '1' || '0' }}
+          TOPIC_SLOT_FORMAT: ${{ steps.fmt.outputs.format }}
           SKIP_DATA_SLOT: ${{ inputs.data_short && '0' || '1' }}
           LIVE_BEATS: ${{ inputs.beats }}
           PUBLISH_SLOT_IST: ${{ steps.fmt.outputs.slot }}
@@ -264,6 +265,22 @@ jobs:
           NARRATION_FROM_RUN: ${{ inputs.narration_from_run }}
           APPROVED_SCRIPT_DIR: run/approved_script
         run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import gemini_budget
+          slot = os.environ.get("PUBLISH_SLOT_IST", "")
+          data = os.environ.get("DATA_SHORT", "")
+          fmt = os.environ.get("TOPIC_SLOT_FORMAT", "")
+          if data != "1" and fmt == "short" and slot in ("08:30", "21:00"):
+              if not gemini_budget.topic_short_allowed():
+                  pathlib.Path("run").mkdir(exist_ok=True)
+                  pathlib.Path("run/topic_budget_skip.txt").write_text("reel hold\n", encoding="utf-8")
+                  print("[budget] topic Short skipped; Reels hold the remaining Charon requests")
+          PY
+          if [ -s run/topic_budget_skip.txt ]; then
+            exit 0
+          fi
           if [ "${{ steps.fmt.outputs.render_only }}" = "true" ]; then
             python auto_agent.py --format ${{ steps.fmt.outputs.format }}
           else
