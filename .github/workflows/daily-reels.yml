@@ -135,6 +135,8 @@ jobs:
           if-no-files-found: warn
           path: |
             run/final.mp4
+            run/final_yt.mp4
+            run/final_ig.mp4
             run/script.txt
             run/thumbnail.jpg
             run/source.md
@@ -142,6 +144,10 @@ jobs:
             run/levels.json
             run/chart-capture.png
             run/chart-capture.txt
+            run/chart-5m-capture.png
+            run/chart-5m-capture.txt
+            run/chart-15m-capture.png
+            run/chart-15m-capture.txt
             run/HOLD
             run/SKIP
       - name: Publish via publish-artifact

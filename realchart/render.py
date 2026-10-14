@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 from realchart.capture import FALLBACK_LABEL, _font
+from realchart.ends import ENCODE
 
 
 def _card(title, lines, footer, chart=None, highlight=None, zones=None):
@@ -84,7 +85,87 @@ def _zone_chips(image, levels):
     draw.text((556, 1576), f"Target {target[0]}–{target[1]}"[:28], fill=(12, 70, 36), font=_font(28))
 
 
-def frames(out, kind, levels, rows, chart_path, article=None):
+def _price_span(bars, levels):
+    highs = [float(row["h"]) for row in bars] if bars else []
+    lows = [float(row["l"]) for row in bars] if bars else []
+    if not highs:
+        highs = [float(levels.get("high") or levels.get("close") or 1)]
+        lows = [float(levels.get("low") or levels.get("close") or 0)]
+    return max(highs), min(lows)
+
+
+def _y_of(price, top, height, price_high, price_low):
+    span = max(float(price_high) - float(price_low), 1e-6)
+    return top + (float(price_high) - float(price)) / span * height
+
+
+def paint_level_overlays(image, levels, plot=None, bars=None):
+    """Lines and zones on top of the intraday chart. Candle pixels outside a line stay as captured."""
+    from PIL import Image, ImageDraw
+    width, height = image.size
+    if plot:
+        left, top = int(plot["left"]), int(plot["top"])
+        plot_w, plot_h = int(plot["width"]), int(plot["height"])
+        price_high, price_low = _price_span(bars, levels)
+    else:
+        left = int(width * 0.06)
+        top = int(height * 0.14)
+        plot_w = int(width * 0.82)
+        plot_h = int(height * 0.70)
+        price_high, price_low = _price_span(bars, levels)
+        pad = max(1.0, (price_high - price_low) * 0.08)
+        price_high += pad
+        price_low -= pad
+    overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    font = _font(28)
+
+    def band(zone, color):
+        if not zone or len(zone) < 2 or None in zone:
+            return
+        y_a = _y_of(zone[0], top, plot_h, price_high, price_low)
+        y_b = _y_of(zone[1], top, plot_h, price_high, price_low)
+        lo, hi = sorted((y_a, y_b))
+        if hi < top or lo > top + plot_h:
+            return
+        draw.rectangle((left, max(top, lo), left + plot_w, min(top + plot_h, hi)), fill=color)
+
+    band(levels.get("sl_zone"), (255, 80, 90, 70))
+    band(levels.get("target_zone"), (40, 200, 120, 70))
+    labels = []
+    specs = (
+        ("P", levels.get("pivot"), (255, 214, 10, 230)),
+        ("R1", levels.get("r1"), (80, 220, 140, 230)),
+        ("R2", levels.get("r2"), (40, 180, 110, 230)),
+        ("S1", levels.get("s1"), (255, 120, 130, 230)),
+        ("S2", levels.get("s2"), (220, 70, 80, 230)),
+        ("Call OI", levels.get("call_oi"), (255, 170, 60, 230)),
+        ("Call OI next", levels.get("call_oi_next"), (255, 140, 40, 230)),
+        ("Put OI", levels.get("put_oi"), (120, 170, 255, 230)),
+        ("Put OI next", levels.get("put_oi_next"), (80, 130, 230, 230)),
+    )
+    for name, price, color in specs:
+        if price is None:
+            continue
+        y = _y_of(price, top, plot_h, price_high, price_low)
+        if y < top or y > top + plot_h:
+            labels.append(f"{name} off-scale")
+            continue
+        draw.line((left, y, left + plot_w, y), fill=color, width=3)
+        draw.text((left + 8, y - 30), name, fill=color, font=font)
+        labels.append(name)
+    chip = str(levels.get("levels_chip") or "")
+    if chip:
+        draw.rectangle((16, 16, width - 16, 110), fill=(14, 16, 20, 210))
+        draw.text((28, 28), chip[:70], fill=(255, 214, 10, 255), font=font)
+        if len(chip) > 70:
+            draw.text((28, 64), chip[70:140], fill=(255, 214, 10, 255), font=font)
+        labels.append("chip")
+    image.paste(Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB"))
+    return labels
+
+
+def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     symbol = str(levels.get("symbol") or "")
@@ -101,15 +182,36 @@ def frames(out, kind, levels, rows, chart_path, article=None):
         ], "CHART · DATA", chart_path, None, None),
         ("view", [
             "HAMARA VIEW · OPINION (scenario)",
-            f"EMA20 {float(levels.get('ema20') or 0):.2f}",
-            f"EMA50 {float(levels.get('ema50') or 0):.2f}",
-            f"RSI14 {float(levels.get('rsi14') or 0):.2f}",
+            str(levels.get("levels_chip") or "")[:70],
+            f"P {float(levels.get('pivot') or 0):.2f}  R1 {float(levels.get('r1') or 0):.2f}  S1 {float(levels.get('s1') or 0):.2f}",
+            f"R2 {float(levels.get('r2') or 0):.2f}  S2 {float(levels.get('s2') or 0):.2f}",
         ], "OPINION", chart_path, None, levels),
         ("cta", [rows[-1]["d"][:80]], "CTA", None, None, None),
     ]
+    if intraday and kind in ("close", "ta") and intraday.get("path"):
+        from PIL import Image
+        with Image.open(intraday["path"]) as opened:
+            shot = opened.convert("RGB")
+        paint_level_overlays(shot, levels, intraday.get("plot"), intraday.get("scale_bars") or [])
+        overlaid = out / "intraday-overlay.png"
+        shot.save(overlaid)
+        interval = str(intraday.get("interval") or "5")
+        specs.insert(2, (
+            "intraday",
+            [
+                f"{symbol} {interval}m",
+                str(intraday.get("label") or ""),
+                str(levels.get("levels_chip") or "")[:70],
+            ],
+            "INTRADAY · DATA",
+            overlaid,
+            None,
+            None,
+        ))
     if article:
         published = str(article.get("published") or "")
-        specs.insert(2, (
+        news_at = 3 if intraday and kind in ("close", "ta") else 2
+        specs.insert(news_at, (
             "news",
             [
                 str(article.get("title") or "")[:70],
@@ -156,7 +258,7 @@ def assemble(frame_paths, voice, dest, seconds=45.0):
     cmd += [
         "-t", str(seconds),
         "-vf", "scale=1080:1920,fps=30,format=yuv420p",
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+        *ENCODE,
         "-af", "loudnorm=I=-15:TP=-1.5:LRA=11",
         str(dest),
     ]

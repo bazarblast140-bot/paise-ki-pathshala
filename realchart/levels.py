@@ -170,3 +170,230 @@ def datetime_date(text):
     from datetime import date
     year, month, day = [int(part) for part in str(text)[:10].split("-")]
     return date(year, month, day)
+
+
+INDEX_SYMBOLS = {"NIFTY", "BANKNIFTY", "FINNIFTY", "NIFTYNXT50"}
+NSE_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-IN,en;q=0.9",
+    "Referer": "https://www.nseindia.com/option-chain",
+}
+
+
+def floor_pivots(bar):
+    """Classic floor pivot from one day's OHLC. The prior day is the caller's job."""
+    high = float(bar["h"])
+    low = float(bar["l"])
+    close = float(bar["c"])
+    pivot = (high + low + close) / 3.0
+    span = high - low
+    return {
+        "pivot": pivot,
+        "r1": 2.0 * pivot - low,
+        "s1": 2.0 * pivot - high,
+        "r2": pivot + span,
+        "s2": pivot - span,
+        "pivot_date": str(bar.get("date") or ""),
+    }
+
+
+def option_chain_url(symbol):
+    name = str(symbol or "").split(":")[-1].upper()
+    if name in INDEX_SYMBOLS:
+        return f"https://www.nseindia.com/api/option-chain-indices?symbol={name}"
+    return f"https://www.nseindia.com/api/option-chain-equities?symbol={name}"
+
+
+def _top_strikes(rows, side):
+    ranked = []
+    for row in rows:
+        leg = row.get(side) or {}
+        oi = leg.get("openInterest")
+        strike = row.get("strikePrice", leg.get("strikePrice"))
+        if oi is None or strike is None:
+            continue
+        try:
+            ranked.append((float(oi), float(strike)))
+        except (TypeError, ValueError):
+            continue
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    seen = []
+    for _oi, strike in ranked:
+        if any(abs(strike - prev) < 0.01 for prev in seen):
+            continue
+        seen.append(strike)
+        if len(seen) == 2:
+            break
+    if not seen:
+        return None, None
+    return seen[0], (seen[1] if len(seen) > 1 else None)
+
+
+def _ist_clock(stamp):
+    text = str(stamp or "").strip()
+    parts = text.split()
+    if len(parts) >= 2 and ":" in parts[1]:
+        hour, minute = parts[1].split(":")[:2]
+        return f"{hour}:{minute} IST"
+    if not text:
+        return ""
+    return text if "IST" in text else f"{text} IST"
+
+
+def parse_option_chain(payload, on_date):
+    """Max call OI is resistance. Max put OI is support. Nothing is invented."""
+    from datetime import datetime
+    records = (payload or {}).get("records") or {}
+    expiries = []
+    for text in records.get("expiryDates") or []:
+        try:
+            expiries.append((datetime.strptime(str(text), "%d-%b-%Y").date(), str(text)))
+        except ValueError:
+            continue
+    expiries.sort()
+    chosen = next((item for item in expiries if item[0] >= on_date), None)
+    if chosen is None and expiries:
+        chosen = expiries[-1]
+    if chosen is None:
+        return {"ok": False, "reason": "NSE option chain has no expiry"}
+    _day, expiry = chosen
+    rows = [row for row in (records.get("data") or []) if str(row.get("expiryDate") or "") == expiry]
+    call, call_next = _top_strikes(rows, "CE")
+    put, put_next = _top_strikes(rows, "PE")
+    if call is None or put is None:
+        return {"ok": False, "reason": "NSE option chain has no open interest"}
+    return {
+        "ok": True,
+        "expiry": expiry,
+        "as_of": _ist_clock(records.get("timestamp")),
+        "call_oi": call,
+        "call_oi_next": call_next,
+        "put_oi": put,
+        "put_oi_next": put_next,
+    }
+
+
+def _nse_fetch(url, timeout=12):
+    import http.cookiejar
+    import urllib.request
+    jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    home = urllib.request.Request(
+        "https://www.nseindia.com/option-chain",
+        headers={**NSE_HEADERS, "Accept": "text/html,application/xhtml+xml"},
+    )
+    opener.open(home, timeout=timeout).read(2048)
+    req = urllib.request.Request(
+        url, headers={**NSE_HEADERS, "Accept": "application/json, text/plain, */*"},
+    )
+    with opener.open(req, timeout=timeout) as resp:
+        status = int(getattr(resp, "status", 200) or 200)
+        body = resp.read()
+    return status, body
+
+
+def fetch_option_chain(symbol, on_date, loader=None):
+    """NSE cookies then the option-chain API. A block holds OI; it does not invent strikes."""
+    import json
+    try:
+        if loader is None:
+            status, body = _nse_fetch(option_chain_url(symbol))
+        else:
+            status, body = loader(symbol)
+        if int(status or 0) != 200 or not body:
+            return {"ok": False, "reason": f"NSE option chain held: HTTP {status}"}
+        if isinstance(body, dict):
+            payload = body
+            text = ""
+        else:
+            text = body.decode("utf-8", "replace") if isinstance(body, (bytes, bytearray)) else str(body)
+            lowered = text.lower()
+            if text.lstrip().startswith("<") or "captcha" in lowered or "access denied" in lowered:
+                return {"ok": False, "reason": "NSE option chain held: blocked page"}
+            payload = json.loads(text)
+        parsed = parse_option_chain(payload, on_date)
+        if not parsed.get("ok"):
+            return {"ok": False, "reason": "NSE option chain held: " + str(parsed.get("reason") or "empty")}
+        return parsed
+    except Exception as exc:  # noqa: BLE001 — a blocked chain still leaves the pivots
+        return {"ok": False, "reason": f"NSE option chain held: {type(exc).__name__}"}
+
+
+def screen_zones(close, pivots, oi=None):
+    """SL and target from pivot and OI levels. RR uses the nearest stop and the first target that clears 1.5."""
+    supports = [pivots.get("s1"), pivots.get("s2")]
+    resistances = [pivots.get("r1"), pivots.get("r2")]
+    if oi and oi.get("ok"):
+        supports.extend([oi.get("put_oi"), oi.get("put_oi_next")])
+        resistances.extend([oi.get("call_oi"), oi.get("call_oi_next")])
+    below = sorted({round(float(value), 4) for value in supports if value is not None and float(value) < close})
+    above = sorted({round(float(value), 4) for value in resistances if value is not None and float(value) > close})
+    if not below or not above:
+        return None
+    stop = below[-1]
+    risk = close - stop
+    if risk <= 0:
+        return None
+    chosen = None
+    for target in above:
+        if (target - close) / risk >= 1.5:
+            chosen = target
+            break
+    if chosen is None:
+        return None
+    further = below[-2] if len(below) > 1 else stop
+    nxt = next((target for target in above if target > chosen + 0.01), chosen)
+    return {
+        "sl_zone": [min(further, stop), max(further, stop)],
+        "target_zone": [chosen, nxt],
+        "rr": (chosen - close) / risk,
+        "stop": stop,
+        "target": chosen,
+    }
+
+
+def levels_chip(chain):
+    if chain and chain.get("ok"):
+        clock = chain.get("as_of") or ""
+        return f"Levels: Pivot (prev day OHLC) + NSE option chain OI, {chain.get('expiry')}, {clock}"
+    return "Levels: Pivot (prev day OHLC) only, NSE option chain held"
+
+
+def apply_screen_levels(levels, chain):
+    """Keep the structure fields. The zones on screen come from the pivot and, when NSE answered, OI."""
+    bars = list(levels.get("bars") or [])
+    if len(bars) < 2:
+        levels["rr_ok"] = False
+        levels["oi_status"] = "held"
+        levels["levels_chip"] = levels_chip(None)
+        return False
+    pivots = floor_pivots(bars[-2])
+    levels["structure_sl_zone"] = list(levels.get("sl_zone") or [])
+    levels["structure_target_zone"] = list(levels.get("target_zone") or [])
+    levels.update(pivots)
+    oi_ok = bool(chain and chain.get("ok"))
+    if oi_ok:
+        for key in ("call_oi", "call_oi_next", "put_oi", "put_oi_next", "expiry"):
+            if chain.get(key) is not None:
+                levels[key] = chain[key]
+        levels["oi_status"] = "ok"
+        levels["oi_as_of"] = chain.get("as_of") or ""
+    else:
+        levels["oi_status"] = "held"
+        levels["oi_reason"] = (chain or {}).get("reason") or "NSE option chain held"
+        for key in ("call_oi", "call_oi_next", "put_oi", "put_oi_next", "expiry"):
+            levels.pop(key, None)
+    levels["levels_chip"] = levels_chip(chain if oi_ok else None)
+    zones = screen_zones(float(levels["close"]), pivots, chain if oi_ok else None)
+    if not zones:
+        levels["rr"] = None
+        levels["rr_ok"] = False
+        return False
+    levels["sl_zone"] = zones["sl_zone"]
+    levels["target_zone"] = zones["target_zone"]
+    levels["rr"] = zones["rr"]
+    levels["rr_ok"] = True
+    return True
