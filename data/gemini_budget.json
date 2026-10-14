@@ -1,4 +1,47 @@
 {
-  "days": {},
-  "charges": []
+  "days": {
+    "2026-10-14": {
+      "keys": {
+        "1": {
+          "realchart": 0,
+          "nifty": 0,
+          "buffer": 3,
+          "other": 2,
+          "exhausted": false
+        }
+      }
+    }
+  },
+  "charges": [
+    {
+      "id": "39059fcc307a482289f514352acb9b49",
+      "date": "2026-10-14",
+      "caller": "other",
+      "key": "1"
+    },
+    {
+      "id": "b8e914b8acb040b9915582ed02d42a2d",
+      "date": "2026-10-14",
+      "caller": "other",
+      "key": "1"
+    },
+    {
+      "id": "382e7c88059b46ed9b64354e55d4f2b7",
+      "date": "2026-10-14",
+      "caller": "buffer",
+      "key": "1"
+    },
+    {
+      "id": "07aa356bc4e44168a7b13a1ec7c91fbc",
+      "date": "2026-10-14",
+      "caller": "buffer",
+      "key": "1"
+    },
+    {
+      "id": "e116a0814ed14ea1b33a85de57fa4d2a",
+      "date": "2026-10-14",
+      "caller": "buffer",
+      "key": "1"
+    }
+  ]
 }
