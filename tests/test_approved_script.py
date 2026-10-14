@@ -205,8 +205,32 @@ class ApprovedScriptTests(unittest.TestCase):
         self.assertEqual(lines["slot"], "16:00")
         self.assertEqual(lines["date_ist"], future)
         self.assertEqual(lines["publish_at"], f"{future}T10:30:00Z")
-        with self.assertRaises(SystemExit):
+        err = io.StringIO()
+        with self.assertRaises(SystemExit), redirect_stderr(err):
             slot_guard.emit_publish_at("16:00", "2020-01-01")
+        self.assertIn("2020-01-01", err.getvalue())
+
+    def test_empty_date_ist_is_today_not_a_sentinel(self):
+        import slot_guard
+
+        class Frozen(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                base = datetime(2026, 10, 14, 9, 0)
+                return base.replace(tzinfo=tz) if tz is not None else base
+
+        out = io.StringIO()
+        with mock.patch("slot_guard.datetime", Frozen), redirect_stdout(out):
+            slot_guard.emit_publish_at("21:00", "  ")
+        lines = dict(part.split("=", 1) for part in out.getvalue().splitlines())
+        self.assertEqual(lines["date_ist"], "2026-10-14")
+        self.assertEqual(lines["slot"], "21:00")
+        self.assertEqual(lines["publish_at"], "2026-10-14T15:30:00Z")
+        publish = (ROOT / ".github" / "workflows" / "publish-artifact.yml").read_text(encoding="utf-8")
+        pipeline = (ROOT / ".github" / "workflows" / "paise-ki-pathshala.yml").read_text(encoding="utf-8")
+        self.assertIn('DATE_IST="$(TZ=Asia/Kolkata date +%Y-%m-%d)"', publish)
+        self.assertIn('TODAY_IST="$(TZ=Asia/Kolkata date +%Y-%m-%d)"', pipeline)
+        self.assertIn("date_ist=${TODAY_IST}", pipeline)
 
     def test_a_number_stays_off_the_card_and_chart_until_it_is_spoken(self):
         spoken = {

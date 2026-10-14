@@ -115,6 +115,14 @@ jobs:
           test -s run/final.mp4
           test -s run/script.txt
           test -s run/thumbnail.jpg
+          for name in final_yt.mp4 final_ig.mp4; do
+            if [ ! -s "run/$name" ]; then
+              found="$(find run -type f -name "$name" -print -quit)"
+              if [ -n "$found" ]; then
+                cp -f "$found" "run/$name"
+              fi
+            fi
+          done
       - name: Download the release bundle
         if: inputs.source_run_id == ''
         env:
@@ -163,7 +171,10 @@ jobs:
             echo "publish_at=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          python slot_guard.py --publish-at "$SLOT" ${DATE_IST:+"$DATE_IST"} >> "$GITHUB_OUTPUT"
+          if [ -z "$DATE_IST" ]; then
+            DATE_IST="$(TZ=Asia/Kolkata date +%Y-%m-%d)"
+          fi
+          python slot_guard.py --publish-at "$SLOT" "$DATE_IST" >> "$GITHUB_OUTPUT"
       - name: Upload a new YouTube video
         if: inputs.ig_only != 'true'
         env:

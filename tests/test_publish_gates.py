@@ -231,6 +231,9 @@ class GateTests(unittest.TestCase):
         self.assertEqual(inside["action"], "skip")
         self.assertIn("20 minute", inside["reason"])
         self.assertIsNotNone(soon)
+        blank = publish_gates.release_plan("21:00", "", now=NOW)
+        self.assertEqual(blank["action"], "schedule")
+        self.assertEqual(blank["publish_at"], "2026-10-02T15:30:00Z")
 
 
 class BufferAutoTests(unittest.TestCase):

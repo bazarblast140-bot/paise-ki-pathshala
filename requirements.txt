@@ -10,7 +10,7 @@ regex>=2024.5.15
 # cannot be fetched. MARKET_DATA_LIVE=1 turns the live call on.
 yfinance>=0.2.40
 # voice.engine = "edge" (default, free, no API key)
-edge-tts>=6.1.0
+edge-tts>=7.3.1
 # Hindi transcript of the finished narration, for the topic–voice–visual gate.
 faster-whisper>=1.1.0
 # only needed if you enable publishing:

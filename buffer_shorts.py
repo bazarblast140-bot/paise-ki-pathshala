@@ -614,8 +614,10 @@ def failure_should_try_fill():
     if os.environ.get("BUFFER_FILL", "1").strip().lower() in ("0", "false", "no", "off"):
         return False
     vis = os.environ.get("PUBLISH_VISIBILITY", "").strip().lower()
-    slot = os.environ.get("PUBLISH_SLOT_IST", "").strip()
-    date = os.environ.get("PUBLISH_DATE_IST", "").strip()
+    slot = (os.environ.get("BUFFER_SLOT") or os.environ.get("PUBLISH_SLOT_IST") or "").strip()
+    date = (os.environ.get("BUFFER_DATE") or os.environ.get("PUBLISH_DATE_IST") or "").strip()
+    if slot in slot_guard.SLOTS and not date:
+        date = slot_guard.today_ist()
     if vis not in ("public", "now") or slot not in slot_guard.SLOTS or not date:
         return False
     return True
@@ -892,9 +894,11 @@ def fill_from_env(last_chance, *, now=None, alert=None, uploader=None, crosspost
         return {"action": "skip", "reason": "not_scheduled", "filled": False}
     date_ist = (os.environ.get("BUFFER_DATE") or os.environ.get("PUBLISH_DATE_IST") or "").strip()
     slot = (os.environ.get("BUFFER_SLOT") or os.environ.get("PUBLISH_SLOT_IST") or "").strip()
-    if slot not in slot_guard.SLOTS or not date_ist:
-        return {"action": "skip", "reason": "no_slot", "filled": False}
     now = now or datetime.now(slot_guard.IST)
+    if slot not in slot_guard.SLOTS:
+        return {"action": "skip", "reason": "no_slot", "filled": False}
+    if not date_ist:
+        date_ist = slot_guard.today_ist(now)
     if uploader is None:
         uploader = _youtube_uploader
     if crosspost is None:

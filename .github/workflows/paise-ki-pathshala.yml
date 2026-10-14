@@ -108,6 +108,7 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
         run: |
+          TODAY_IST="$(TZ=Asia/Kolkata date +%Y-%m-%d)"
           F="${{ inputs.format }}"
           VIS="${{ inputs.privacy }}"
           if [ -z "$F" ]; then
@@ -129,7 +130,7 @@ jobs:
           echo "render_only=$RO" >> "$GITHUB_OUTPUT"
           if [ "$IMMEDIATE" = "1" ]; then
             echo "slot=" >> "$GITHUB_OUTPUT"
-            echo "date_ist=" >> "$GITHUB_OUTPUT"
+            echo "date_ist=${TODAY_IST}" >> "$GITHUB_OUTPUT"
             echo "publish_at=" >> "$GITHUB_OUTPUT"
             echo "taken=false" >> "$GITHUB_OUTPUT"
           elif [ "${{ inputs.data_short }}" = "true" ]; then
@@ -138,7 +139,7 @@ jobs:
             APPROVED_BANK=1 SKIP_DATA_SLOT=1 python slot_guard.py --next >> "$GITHUB_OUTPUT"
           else
             echo "slot=" >> "$GITHUB_OUTPUT"
-            echo "date_ist=" >> "$GITHUB_OUTPUT"
+            echo "date_ist=${TODAY_IST}" >> "$GITHUB_OUTPUT"
             echo "publish_at=" >> "$GITHUB_OUTPUT"
             echo "taken=false" >> "$GITHUB_OUTPUT"
           fi

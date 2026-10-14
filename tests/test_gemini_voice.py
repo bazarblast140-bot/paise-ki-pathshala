@@ -8,7 +8,7 @@ import struct
 import tempfile
 import unittest
 import wave
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -552,6 +552,74 @@ class SpeakTests(unittest.TestCase):
             engine = board_short.synthesize_short_voices(_spoken(), VOICE)
         self.assertEqual(engine, "edge")
         self.assertEqual(len(edge.calls), len(ORDER))
+
+    def test_edge_403_does_not_stop_charon(self):
+        import board_short
+        import credit_log
+
+        async def edge(*_args, **_kwargs):
+            raise RuntimeError("403 Invalid response status Sec-MS-GEC")
+
+        spoken_to = {"n": 0}
+
+        def charon(*_args, **_kwargs):
+            spoken_to["n"] += 1
+
+        env = self._env(
+            PROOF_FREE_AUDIO="edge",
+            PIPELINE_MODE="preview",
+            PUBLISH_VISIBILITY="unlisted",
+            PAID_TTS_ENABLED="false",
+        )
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.dict(os.environ, env, clear=False), \
+             mock.patch.object(board_short, "_edge", edge), \
+             mock.patch.object(board_short, "_speak_gemini", charon), \
+             redirect_stdout(io.StringIO()), \
+             redirect_stderr(io.StringIO()):
+            for key in (
+                "APPROVED_BANK", "DATA_SHORT", "DRY_RUN", "RENDER_SAMPLE", "SAMPLE_NO_UPLOAD",
+            ):
+                os.environ.pop(key, None)
+            os.environ["TOPIC_KEY"] = "buffer_example_risk"
+            engine = board_short.synthesize_short_voices(
+                _spoken(), VOICE, topic={"key": "buffer_example_risk"},
+            )
+        self.assertEqual(engine, "gemini")
+        self.assertEqual(spoken_to["n"], 1)
+
+    def test_posting_path_holds_and_does_not_call_edge(self):
+        import board_short
+        import credit_log
+
+        async def edge(*_args, **_kwargs):
+            raise AssertionError("posting path used Edge")
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(board_short, "RUN", Path(tmp)), \
+             mock.patch.object(credit_log, "PATH", Path(tmp) / "credits.json"), \
+             mock.patch.dict(os.environ, {
+                 "PUBLISH_VISIBILITY": "public",
+                 "PAID_TTS_ENABLED": "false",
+                 "SUPPRESS_GHA_COMMANDS": "1",
+                 "TOPIC_KEY": "buffer_example_risk",
+             }, clear=False), \
+             mock.patch.object(board_short, "_edge", edge), \
+             redirect_stdout(io.StringIO()), \
+             redirect_stderr(io.StringIO()):
+            for key in (
+                "GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEY_4",
+                "PROOF_FREE_AUDIO", "PIPELINE_MODE", "APPROVED_BANK", "DATA_SHORT",
+                "DRY_RUN", "RENDER_SAMPLE", "SAMPLE_NO_UPLOAD",
+            ):
+                os.environ.pop(key, None)
+            with self.assertRaises(SystemExit) as caught:
+                board_short.synthesize_short_voices(
+                    _spoken(), VOICE, topic={"key": "buffer_example_risk"},
+                )
+        self.assertIn("gemini_take", str(getattr(caught.exception, "reason", "")))
 
     def test_cached_charon_audio_is_not_requested_again(self):
         import board_short

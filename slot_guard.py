@@ -449,14 +449,22 @@ def _emit_next(now=None):
     print("taken=false")
 
 
+def today_ist(now=None):
+    """IST calendar day. An empty date_ist input uses this, never a sentinel."""
+    now = now or datetime.now(IST)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=IST)
+    return now.astimezone(IST).strftime("%Y-%m-%d")
+
+
 def emit_publish_at(slot, date_ist=""):
     """GitHub output for one public publishAt. A missed slot is not rolled.
 
     Prints slot=, date_ist=, and publish_at= on stdout. Exits 1 when the
-    instant is inside the 20-minute upload buffer.
+    instant is inside the 20-minute upload buffer. A blank date_ist is today IST.
     """
     slot = str(slot or "").strip()
-    date_ist = str(date_ist or "").strip() or datetime.now(IST).strftime("%Y-%m-%d")
+    date_ist = str(date_ist or "").strip() or today_ist()
     when = scheduled_publish_at(slot, date_ist=date_ist)
     if not when:
         print(

@@ -271,6 +271,11 @@ class ScheduleTests(unittest.TestCase):
         self.assertNotIn("gh workflow run aaj-ka-nifty.yml", watch)
         self.assertIn("close Reel", watch)
         self.assertEqual(watch.count("group: paise-ki-pathshala-publish"), 2)
+        check_job = watch.split("jobs:", 1)[1].split("buffer-fill:", 1)[0]
+        self.assertIn("actions: write", check_job)
+        self.assertIn("GH_TOKEN: ${{ github.token }}", check_job)
+        self.assertIn("GITHUB_TOKEN: ${{ github.token }}", check_job)
+        self.assertIn("actions: read", watch.split("jobs:", 1)[0])
         self.assertIn("needs.check.outputs.nifty_dispatch == 'true'", watch)
         nifty = watch.split("nifty-fill:", 1)[1]
         self.assertIn("data_short: true", nifty)

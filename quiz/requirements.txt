@@ -9,4 +9,4 @@ google-auth>=2.29
 google-auth-oauthlib>=1.2
 
 # Optional fallback voice (ElevenLabs down ho to)
-edge-tts>=6.1
+edge-tts>=7.3.1
