@@ -6,7 +6,7 @@
           "realchart": 0,
           "nifty": 0,
           "buffer": 0,
-          "other": 1,
+          "other": 2,
           "exhausted": false
         }
       }
@@ -15,6 +15,12 @@
   "charges": [
     {
       "id": "39059fcc307a482289f514352acb9b49",
+      "date": "2026-10-14",
+      "caller": "other",
+      "key": "1"
+    },
+    {
+      "id": "b8e914b8acb040b9915582ed02d42a2d",
       "date": "2026-10-14",
       "caller": "other",
       "key": "1"
