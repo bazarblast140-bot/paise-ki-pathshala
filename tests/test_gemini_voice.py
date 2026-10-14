@@ -303,13 +303,10 @@ class SpeakTests(unittest.TestCase):
         self.assertIn("voice_engine=gemini", text)
         self.assertAlmostEqual(wav, 37.3, delta=0.2)
 
-        engine, styles, text, wav, edge_calls = run([32.0, 33.0])
-        self.assertEqual(engine, "edge")
-        self.assertEqual(len(styles), 1)
-        self.assertIn("no take in 34-65s", text)
-        self.assertIn("voice_engine=edge", text)
-        self.assertEqual(len(edge_calls), len(ORDER))
-        self.assertIsNone(wav)
+        with self.assertRaises(SystemExit) as caught:
+            run([32.0, 33.0])
+        self.assertIn("gemini_take", caught.exception.reason)
+        self.assertIn("no take in 34-65s", caught.exception.reason)
 
         engine, styles, text, wav, _edge_calls = run([50.0])
         self.assertEqual(engine, "gemini")
@@ -370,34 +367,31 @@ class SpeakTests(unittest.TestCase):
                      mock.patch("requests.post", post), \
                      mock.patch.object(board_short, "_edge", edge), \
                      redirect_stdout(buf):
-                    engine = board_short.synthesize_short_voices(
-                        _spoken("एक दो तीन चार " * 8), VOICE)
-                    meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
+                    with self.assertRaises(SystemExit) as caught:
+                        board_short.synthesize_short_voices(
+                            _spoken("एक दो तीन चार " * 8), VOICE)
+                    hold = (Path(tmp) / "gemini_take.txt").read_text(encoding="utf-8")
                 text = buf.getvalue()
                 expect_posts = 2 if name == "500" else 1
                 self.assertEqual(posts["n"], expect_posts)
-                self.assertEqual(engine, "edge")
-                self.assertEqual(meta["engine"], "edge")
-                self.assertFalse(meta["elevenlabs_attempted"])
-                self.assertEqual(len(edge.calls), len(ORDER))
-                self.assertTrue(all(call == ("hi-IN-MadhurNeural", "+0%") for call in edge.calls))
+                self.assertIn("gemini_take", caught.exception.reason)
+                self.assertEqual(edge.calls, [])
                 self.assertNotIn(SECRET, text)
-                self.assertNotIn(SECRET, meta["fallback_reason"])
-                self.assertIn("Gemini TTS failed", text)
+                self.assertNotIn(SECRET, hold)
+                self.assertNotIn(SECRET, caught.exception.reason)
                 if name == "429":
-                    self.assertIn("HTTP 429", meta["fallback_reason"])
-                    self.assertIn("gemini_quota", meta["fallback_reason"])
-                    self.assertIn("gemini_quota", text)
+                    self.assertIn("HTTP 429", hold)
+                    self.assertIn("gemini_quota", hold)
                 if name == "500":
-                    self.assertIn("HTTP 500", meta["fallback_reason"])
+                    self.assertIn("HTTP 500", hold)
                 if name == "timeout":
-                    self.assertIn("180", meta["fallback_reason"])
+                    self.assertIn("180", hold)
                 if name == "missing":
-                    self.assertIn("no audio", meta["fallback_reason"])
+                    self.assertIn("no audio", hold)
                 if name == "short":
-                    self.assertIn("far from expected", meta["fallback_reason"])
+                    self.assertIn("far from expected", hold)
 
-    def test_after_gemini_rudra_is_used_only_above_the_floor(self):
+    def test_after_gemini_a_posting_path_holds_instead_of_rudra(self):
         import board_short
         import credit_log
         posts = {"urls": []}
@@ -427,16 +421,16 @@ class SpeakTests(unittest.TestCase):
              mock.patch.object(board_short.eleven_voice, "ensure_library_voice", return_value="ypnkIsDASPgHZuanrF0q"), \
              mock.patch.object(board_short, "_edge", edge), \
              redirect_stdout(buf):
-            engine = board_short.synthesize_short_voices(_spoken(), VOICE)
-            meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
-        self.assertEqual(engine, "elevenlabs")
-        self.assertTrue(meta["elevenlabs_attempted"])
-        self.assertIn("HTTP 429", meta["fallback_reason"])
+            with self.assertRaises(SystemExit) as caught:
+                board_short.synthesize_short_voices(_spoken(), VOICE)
+            hold = (Path(tmp) / "gemini_take.txt").read_text(encoding="utf-8")
+        self.assertIn("gemini_take", caught.exception.reason)
+        self.assertIn("HTTP 429", hold)
         self.assertEqual(sum("generativelanguage" in url for url in posts["urls"]), 1)
-        self.assertEqual(sum("elevenlabs" in url for url in posts["urls"]), len(ORDER))
+        self.assertEqual(sum("elevenlabs" in url for url in posts["urls"]), 0)
         self.assertNotIn(SECRET, buf.getvalue())
 
-    def test_rudra_below_the_floor_lands_on_edge(self):
+    def test_rudra_below_the_floor_holds_gemini_take(self):
         import board_short
         import credit_log
 
@@ -472,14 +466,13 @@ class SpeakTests(unittest.TestCase):
              mock.patch.object(board_short.eleven_voice, "ensure_library_voice", side_effect=ensure), \
              mock.patch.object(board_short, "_edge", edge), \
              redirect_stdout(io.StringIO()):
-            engine = board_short.synthesize_short_voices(_spoken(), VOICE)
-            summary = (Path(tmp) / "summary.txt").read_text(encoding="utf-8")
-            meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
+            with self.assertRaises(SystemExit) as caught:
+                board_short.synthesize_short_voices(_spoken(), VOICE)
+            hold = (Path(tmp) / "gemini_take.txt").read_text(encoding="utf-8")
         self.assertEqual(ensured, [])
-        self.assertEqual(engine, "edge")
-        self.assertIn("1000", meta["fallback_reason"])
-        self.assertIn("voice_engine=edge", summary)
-        self.assertGreaterEqual(len(edge.calls), len(ORDER))
+        self.assertIn("gemini_take", caught.exception.reason)
+        self.assertIn("gemini_take", hold)
+        self.assertEqual(edge.calls, [])
 
     def test_approved_plan_speaks_charon(self):
         import approved_bank

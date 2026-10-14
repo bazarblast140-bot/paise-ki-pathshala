@@ -472,6 +472,10 @@ def files_allow_public(run_dir, fmt):
     """True only when the files on disk agree the video may be uploaded publicly."""
     if (run_dir / "narration_block.json").exists():
         return False
+    voice = _load_json(run_dir / "voice_meta.json") or {}
+    engine = str(voice.get("engine") or "").strip().lower()
+    if voice.get("preview") is True or voice.get("upload") is False or engine == "edge":
+        return False
     report_path = run_dir / "report.md"
     meta_path = run_dir / "verify_meta.json"
     if not report_path.exists() or not meta_path.exists():

@@ -89,7 +89,7 @@ def _write_ready_run(run, topic=None):
         "source": "llm",
         "beats": {name: "example line" for name in ("hook", "pehchan", "matlab", "karein")},
     }), encoding="utf-8")
-    (run / "voice_meta.json").write_text(json.dumps({"engine": "edge"}), encoding="utf-8")
+    (run / "voice_meta.json").write_text(json.dumps({"engine": "gemini"}), encoding="utf-8")
     return topic
 
 
@@ -194,7 +194,8 @@ class GateAndFreshnessTests(unittest.TestCase):
         second = _topic()
         second["key"] = "buffer_example_next"
         manifest = {"tag": "buffer-shorts", "items": [], "skipped_topics": ["dark_cloud", first["key"]]}
-        picked = buffer_shorts.next_evergreen([first, second], [], manifest)
+        with mock.patch("board_scenes.topic_chart_block", return_value=""):
+            picked = buffer_shorts.next_evergreen([first, second], [], manifest)
         self.assertEqual(picked["key"], "buffer_example_next")
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "buffer_manifest.json"
@@ -520,7 +521,7 @@ class CreditAndRefillTests(unittest.TestCase):
                 saved = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(saved["deepseek_calls"], 6)
 
-    def test_buffer_runner_is_edge_madhur_and_strips_elevenlabs(self):
+    def test_buffer_runner_keeps_charon_and_strips_elevenlabs(self):
         import board_short
         import eleven_voice
         captured = {}
@@ -542,23 +543,19 @@ class CreditAndRefillTests(unittest.TestCase):
         env = captured["env"]
         self.assertNotIn("ELEVENLABS_API_KEY", env)
         self.assertNotIn("ELEVENLABS_VOICE_ID", env)
-        self.assertNotIn("GEMINI_API_KEY", env)
+        self.assertEqual(env["GEMINI_API_KEY"], "gemini-secret")
+        self.assertNotIn("PIPELINE_MODE", env)
         self.assertEqual(env["ELEVENLABS_OPT_IN"], "0")
-        self.assertEqual(env["PIPELINE_MODE"], "preview")
-        self.assertEqual(env["PUBLISH_VISIBILITY"], "unlisted")
+        self.assertEqual(env["AUTOMATIC_UPLOAD"], "0")
+        self.assertEqual(env["PUBLISH_VISIBILITY"], "public")
         with mock.patch.dict(os.environ, env, clear=False):
             os.environ.pop("ELEVENLABS_OPT_IN", None)
             os.environ["ELEVENLABS_OPT_IN"] = "0"
-            os.environ["PIPELINE_MODE"] = "preview"
+            os.environ.pop("PIPELINE_MODE", None)
             os.environ["PUBLISH_VISIBILITY"] = "unlisted"
             self.assertFalse(eleven_voice.paid_voice_allowed())
-            voice, rate = board_short._edge_voice_rate({
-                "voice": {"edge_voice": "hi-IN-SwaraNeural", "edge_rate": "+10%"},
-            })
-        self.assertEqual(voice, "hi-IN-MadhurNeural")
-        self.assertEqual(rate, "+0%")
 
-    def test_failed_build_is_not_stored_and_a_passed_edge_render_is(self):
+    def test_failed_build_is_not_stored_and_a_passed_charon_render_is(self):
         with tempfile.TemporaryDirectory() as tmp:
             run = Path(tmp) / "run"
             manifest_path = Path(tmp) / "manifest.json"
@@ -571,7 +568,8 @@ class CreditAndRefillTests(unittest.TestCase):
             with mock.patch.object(buffer_shorts, "RUN", run), \
                  mock.patch.object(credit_log, "PATH", credits), \
                  mock.patch.object(buffer_shorts, "_load_bank", return_value=[_topic()]), \
-                 mock.patch.object(slot_guard, "_read", return_value=[]):
+                 mock.patch.object(slot_guard, "_read", return_value=[]), \
+                 mock.patch("board_scenes.topic_chart_block", return_value=""):
                 code = buffer_shorts.refill(
                     runner=fail_preview,
                     store=MemoryStore(),
@@ -600,7 +598,8 @@ class CreditAndRefillTests(unittest.TestCase):
                  mock.patch.object(credit_log, "PATH", credits), \
                  mock.patch.object(buffer_shorts, "_load_bank", return_value=[_topic()]), \
                  mock.patch.object(buffer_shorts, "_mark_bank_used") as mark, \
-                 mock.patch.object(slot_guard, "_read", return_value=[]):
+                 mock.patch.object(slot_guard, "_read", return_value=[]), \
+                 mock.patch("board_scenes.topic_chart_block", return_value=""):
                 code = buffer_shorts.refill(
                     runner=preview_ok,
                     store=store,
@@ -615,11 +614,11 @@ class CreditAndRefillTests(unittest.TestCase):
             mark.assert_called_once_with(_topic()["key"])
             saved = json.loads(credits.read_text(encoding="utf-8"))
             self.assertEqual(saved["elevenlabs_characters_sent"], 0)
-            self.assertEqual(saved["tts_engine"], "edge")
-            self.assertIn("MadhurNeural", saved["tts_reason"])
+            self.assertEqual(saved["tts_engine"], "gemini")
+            self.assertIn("Charon", saved["tts_reason"])
             self.assertIn("ElevenLabs not called", saved["tts_reason"])
 
-    def test_non_edge_render_is_not_stored(self):
+    def test_edge_render_is_not_stored(self):
         topic = _topic()
         with tempfile.TemporaryDirectory() as tmp:
             run = Path(tmp) / "run"
@@ -630,16 +629,18 @@ class CreditAndRefillTests(unittest.TestCase):
             def paid(_key):
                 _write_ready_run(run, topic)
                 (run / "voice_meta.json").write_text(
-                    json.dumps({"engine": "elevenlabs"}), encoding="utf-8",
+                    json.dumps({"engine": "edge", "preview": True, "upload": False}),
+                    encoding="utf-8",
                 )
-                (run / "final.mp4").write_bytes(b"paid-voice-mp4")
+                (run / "final.mp4").write_bytes(b"edge-preview-mp4")
                 return 0
 
             store = MemoryStore()
             with mock.patch.object(buffer_shorts, "RUN", run), \
                  mock.patch.object(credit_log, "PATH", credits), \
                  mock.patch.object(buffer_shorts, "_load_bank", return_value=[topic]), \
-                 mock.patch.object(slot_guard, "_read", return_value=[]):
+                 mock.patch.object(slot_guard, "_read", return_value=[]), \
+                 mock.patch("board_scenes.topic_chart_block", return_value=""):
                 code = buffer_shorts.refill(
                     runner=paid,
                     store=store,

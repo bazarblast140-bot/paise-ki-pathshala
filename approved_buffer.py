@@ -1,9 +1,12 @@
 """Gated buffer of Hammer v2 topic videos.
 
-The owner approved the format. A topic is stored, and marked owner_approved,
-only when that video passes every gate. An Edge take, a short review, or a
-failed sync is held and never published. 08:30 and 21:00 publish the oldest
-ready item. 16:00 stays Aaj ka Nifty.
+A topic becomes ready on its own when the render passes every hard gate:
+code-verified numbers, sync, duration, RR at least 1.5 with the stop on the
+correct side, voice gemini/Charon, and no crash. The checked-in
+approved/*.json hand flag is not required before that pass, and it is not
+required again when a slot publishes the ready item. An Edge take, a missing
+Charon take, or a failed sync is held and never published. 08:30 and 21:00
+publish the oldest ready item. 16:00 stays Aaj ka Nifty.
 """
 from __future__ import annotations
 
@@ -187,7 +190,7 @@ _HARD_REASON_BITS = (
     "gemini_quota", "before it is said", "accuracy", "crash",
     "rr ", "sl is not", "disclaimer", "banned", "placeholder",
     "forbidden", "hindi", "title 8-90", "beat '", "trade plan",
-    "hard gate", "render rc=", "store failed",
+    "hard gate", "render rc=", "store failed", "gemini_take",
 )
 
 
@@ -344,6 +347,8 @@ def judge(run_dir, key):
         reasons.append(f"voice_engine={engine or 'missing'} is held")
     if (run_dir / "gemini_quota.txt").exists():
         reasons.append("gemini_quota")
+    if (run_dir / "gemini_take.txt").exists():
+        reasons.append("gemini_take")
     seen = []
     for item in reasons:
         if item not in seen:
@@ -636,9 +641,11 @@ def choose_item(manifest, entries, now, slot):
     """
     if slot not in TOPIC_SLOTS:
         return None, "not_topic_slot"
+    # state=ready is the gate pass. The file flag in approved/ is written
+    # afterwards for the ledger; a slot does not wait for that hand edit.
     ready = [
         item for item in (manifest.get("items") or [])
-        if item.get("state") == "ready" and item.get("owner_approved") is True
+        if item.get("state") == "ready"
     ]
     ready.sort(key=lambda item: (item.get("created_at") or "", item.get("id") or ""))
     repeated = False

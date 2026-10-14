@@ -114,7 +114,7 @@ def _pattern(key):
         pat = [(p + 0.2, p + 0.6, p - 7.6, p - 7.2), (p - 8.4, p - 2.0, p - 8.9, p - 2.6)]
         conf = [(p - 2.4, p + 2.4, p - 2.8, p + 2.0)]
         return before, pat, conf, "bull", ["BIG RED", "GREEN OPENS BELOW", "CLOSES ABOVE MIDDLE"]
-    raise KeyError(key)
+    raise ChartVoiceError(f"HOLD: {key} has no SCENES entry")
 
 
 def _zoom(img, pat, labels, direction):

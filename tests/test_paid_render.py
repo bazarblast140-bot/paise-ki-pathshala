@@ -192,8 +192,8 @@ class PaidRenderTests(unittest.TestCase):
         )
         self.assertIn("craft", posts)
         self.assertIn("encode", posts)
-        self.assertIn("eleven", posts)
-        self.assertGreater(spent, 0)
+        self.assertNotIn("eleven", posts)
+        self.assertIn("gemini_take", str(spent))
 
     def test_switch_off_never_calls_elevenlabs(self):
         for flag in (None, "false", "False", "1", "yes"):
@@ -214,11 +214,9 @@ class PaidRenderTests(unittest.TestCase):
             review=self._review(),
             env={"PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
         )
-        self.assertEqual(spent > 0, True)
-        elevens = [item for item in posts if item == "eleven"]
-        self.assertEqual(len(elevens), len(ORDER))
+        self.assertNotIn("eleven", posts)
+        self.assertIn("gemini_take", str(spent))
         self.assertLess(posts.index("craft"), posts.index("encode"))
-        self.assertLess(posts.index("encode"), posts.index("eleven"))
 
     def test_direct_eleven_request_is_refused_when_the_switch_is_off(self):
         def post(*_args, **_kwargs):
@@ -273,9 +271,8 @@ class PaidRenderTests(unittest.TestCase):
             proof_seen=proof,
         )
         self.assertEqual(proof[0], "edge")
-        self.assertIn("eleven", posts)
-        self.assertLess(posts.index("encode"), posts.index("eleven"))
-        self.assertGreater(second, 0)
+        self.assertNotIn("eleven", posts)
+        self.assertIn("gemini_take", str(second))
 
     def test_edge_sync_hold_still_reaches_the_voice(self):
         def reviewed(*_args, **kwargs):
@@ -294,8 +291,8 @@ class PaidRenderTests(unittest.TestCase):
             proof_seen=proof,
         )
         self.assertEqual(proof[0], "edge")
-        self.assertIn("eleven", posts)
-        self.assertGreater(log, 0)
+        self.assertNotIn("eleven", posts)
+        self.assertIn("gemini_take", str(log))
 
     def test_paid_timeline_hold_keeps_the_file(self):
         calls = {"n": 0}
@@ -312,9 +309,9 @@ class PaidRenderTests(unittest.TestCase):
             env={"PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
             review_fn=reviewed,
         )
-        self.assertGreaterEqual(calls["n"], 2)
-        self.assertIn("eleven", posts)
-        self.assertGreater(log, 0)
+        self.assertGreaterEqual(calls["n"], 1)
+        self.assertNotIn("eleven", posts)
+        self.assertIn("gemini_take", str(log))
 
     def test_prepare_spoken_does_not_add_a_library_voice(self):
         topic = _topic()
@@ -357,5 +354,7 @@ class PaidRenderTests(unittest.TestCase):
                 board_short.synthesize_short_voices(spoken, _cfg(), beats=ORDER)
             self.assertEqual(order, [])
             os.environ["PAID_TTS_ENABLED"] = "true"
-            board_short.synthesize_short_voices(spoken, _cfg(), beats=("hook",))
-            self.assertEqual(order, ["ensure"])
+            with self.assertRaises(SystemExit) as caught:
+                board_short.synthesize_short_voices(spoken, _cfg(), beats=("hook",))
+            self.assertIn("gemini_take", caught.exception.reason)
+            self.assertEqual(order, [])

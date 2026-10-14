@@ -968,15 +968,13 @@ def next_evergreen(bank_topics, entries, manifest):
         if topic_blocked(topic.get("key"), entries, bank_topics, manifest):
             continue
         eligible.append(topic)
-    # A topic with no scene of its own stops the build before TTS, so prefer
-    # one that can render. With none renderable, keep the first eligible topic.
+    # A topic with no SCENES entry is a HOLD, not a render. Never return it.
     try:
         import board_scenes
         renderable = [t for t in eligible if not board_scenes.topic_chart_block(t)]
     except ImportError:
         renderable = eligible
-    pool = renderable or eligible
-    return pool[0] if pool else None
+    return renderable[0] if renderable else None
 
 
 def remember_skip(manifest, topic_key):
@@ -1077,20 +1075,25 @@ def admit_run(run_dir, topic, store, manifest, *, mp4, title, description, tags,
 
 
 def default_preview_runner(topic_key):
-    """One Edge render through the normal pipeline. No publish and no ElevenLabs."""
+    """One Charon render. No publish during the build and no ElevenLabs.
+
+    The mp4 can be uploaded later, so this is a posting path: Gemini stays
+    in the environment and Edge is not selected.
+    """
     import subprocess
     env = os.environ.copy()
     env["VIDEO_FORMAT"] = "short"
-    env["PIPELINE_MODE"] = "preview"
-    env["PUBLISH_VISIBILITY"] = "unlisted"
+    env["PUBLISH_VISIBILITY"] = "public"
+    env["AUTOMATIC_UPLOAD"] = "0"
     env["TOPIC_KEY"] = topic_key
     env["DEEPSEEK_MAX_CALLS"] = str(__import__("credit_log").DEFAULT_DEEPSEEK_CALLS)
     env["BUFFER_FILL"] = "0"
     env["ELEVENLABS_OPT_IN"] = "0"
+    env.pop("PIPELINE_MODE", None)
+    env.pop("PROOF_FREE_AUDIO", None)
     for key in (
         "PUBLISH_SLOT_IST", "PUBLISH_DATE_IST", "PUBLISH_AT_UTC",
         "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "ELEVENLABS_MODEL",
-        "GEMINI_API_KEY",
     ):
         env.pop(key, None)
     return subprocess.run(
@@ -1108,9 +1111,8 @@ def _voice_engine(run_dir):
 def refill(*, runner=None, store=None, now=None, manifest_path=None):
     """Build at most one evergreen Short when fewer than 3 are ready.
 
-    The render is Edge only (hi-IN-MadhurNeural, +0%). ElevenLabs is not
-    called and the character floor does not apply. Writes run/credits.json.
-    Gates run on that Edge audio; a failed gate is not stored.
+    The render must be Gemini Charon. An Edge file is HOLD gemini_take and
+    is not stored. ElevenLabs is not called. Writes run/credits.json.
     """
     import credit_log
     manifest_path = Path(manifest_path) if manifest_path else MANIFEST
@@ -1132,7 +1134,7 @@ def refill(*, runner=None, store=None, now=None, manifest_path=None):
         if rc != 0:
             remember_skip(manifest, topic.get("key"))
             save_manifest(manifest, manifest_path)
-            print(f"[buffer] Edge build failed rc={rc}; nothing stored; skip {topic.get('key')}", flush=True)
+            print(f"[buffer] build failed rc={rc}; nothing stored; skip {topic.get('key')}", flush=True)
             return 1
         preview_gates = evaluate_gates(RUN, topic, now=now)
         if not gates_pass(preview_gates):
@@ -1152,10 +1154,10 @@ def refill(*, runner=None, store=None, now=None, manifest_path=None):
                 publish_gates.note_job_summary(f"gate: skipped — {reason}")
                 print(f"[buffer] auto gates failed; not stored; skip {topic.get('key')}", flush=True)
                 return 1
-        if _voice_engine(RUN) != "edge":
+        if _voice_engine(RUN) != "gemini":
             remember_skip(manifest, topic.get("key"))
             save_manifest(manifest, manifest_path)
-            print("[buffer] buffer items are Edge only; refusing a non-Edge render", flush=True)
+            print("[HOLD] gemini_take: buffer render is not Gemini Charon", flush=True)
             return 1
         mp4_path = RUN / "final.mp4"
         if not mp4_path.exists():
@@ -1190,8 +1192,8 @@ def refill(*, runner=None, store=None, now=None, manifest_path=None):
         save_manifest(manifest, manifest_path)
         _mark_bank_used(topic["key"])
         credit_log.set_tts_engine(
-            "edge",
-            "buffer refill uses Edge hi-IN-MadhurNeural +0%; ElevenLabs not called",
+            "gemini",
+            "buffer refill uses Gemini Charon; ElevenLabs not called",
         )
         print(f"[buffer] stored {item['id']} sha256={item['sha256'][:12]}", flush=True)
         return 0

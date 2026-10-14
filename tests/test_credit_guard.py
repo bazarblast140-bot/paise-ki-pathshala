@@ -540,19 +540,12 @@ class PreviewVoiceTests(unittest.TestCase):
         def post(*_args, **_kwargs):
             raise AssertionError("ElevenLabs TTS must not run below the floor")
 
-        engine, meta, credits, posts, calls = self._speak_with(
-            {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
-            get=low, post=post,
-        )
-        self.assertEqual(engine, "edge")
-        self.assertEqual(posts, [])
-        self.assertGreaterEqual(len(calls), 1)
-        self.assertEqual(calls[0], ("hi-IN-SwaraNeural", "+0%"))
-        self.assertEqual(meta["engine"], "edge")
-        self.assertTrue(meta["elevenlabs_attempted"])
-        self.assertIn("1000", meta["fallback_reason"])
-        self.assertEqual(credits["tts_engine"], "edge")
-        self.assertEqual(credits["elevenlabs_characters_sent"], 0)
+        with self.assertRaises(SystemExit) as caught:
+            self._speak_with(
+                {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
+                get=low, post=post,
+            )
+        self.assertIn("gemini_take", caught.exception.reason)
 
         def at_floor(_url, **_kwargs):
             return _Resp(200, {
@@ -561,14 +554,12 @@ class PreviewVoiceTests(unittest.TestCase):
                 "status": "active",
             })
 
-        engine, _meta, credits, posts, calls = self._speak_with(
-            {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
-            get=at_floor,
-        )
-        self.assertEqual(engine, "elevenlabs")
-        self.assertGreaterEqual(len(posts), 1)
-        self.assertEqual(calls, [])
-        self.assertEqual(credits["elevenlabs_characters_remaining"], 1000)
+        with self.assertRaises(SystemExit) as caught:
+            self._speak_with(
+                {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
+                get=at_floor,
+            )
+        self.assertIn("gemini_take", caught.exception.reason)
 
         def boom(_url, **_kwargs):
             raise ConnectionError("subscription down")
@@ -576,11 +567,12 @@ class PreviewVoiceTests(unittest.TestCase):
         def post_no(*_args, **_kwargs):
             raise AssertionError("an API error must stop, not place another paid call")
 
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(SystemExit) as caught:
             self._speak_with(
                 {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
                 get=boom, post=post_no,
             )
+        self.assertIn("gemini_take", caught.exception.reason)
 
     def _speak_with(self, env, get=None, post=None):
         posts = []
@@ -618,19 +610,19 @@ class PreviewVoiceTests(unittest.TestCase):
         return engine, meta, credits, posts, edge.calls
 
     def test_public_publish_and_explicit_opt_in_may_call_elevenlabs(self):
-        for env in (
-            {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"},
-            {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "unlisted", "ELEVENLABS_OPT_IN": "1", "PAID_TTS_ENABLED": "true"},
-        ):
-            with self.subTest(env=env):
-                engine, meta, credits, posts, gets, calls = self._speak(env)
-                self.assertEqual(engine, "elevenlabs")
-                self.assertGreaterEqual(len(posts), 1)
-                self.assertEqual(calls, [])
-                self.assertTrue(meta["elevenlabs_attempted"])
-                self.assertGreater(credits["elevenlabs_characters_sent"], 0)
-                self.assertEqual(credits["elevenlabs_characters_remaining"], 100000)
-                self.assertEqual(credits["tts_engine"], "elevenlabs")
+        public = {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "public", "PAID_TTS_ENABLED": "true"}
+        with self.assertRaises(SystemExit) as caught:
+            self._speak(public)
+        self.assertIn("gemini_take", caught.exception.reason)
+        opt_in = {"ELEVENLABS_API_KEY": "test-key", "PUBLISH_VISIBILITY": "unlisted", "ELEVENLABS_OPT_IN": "1", "PAID_TTS_ENABLED": "true"}
+        engine, meta, credits, posts, gets, calls = self._speak(opt_in)
+        self.assertEqual(engine, "elevenlabs")
+        self.assertGreaterEqual(len(posts), 1)
+        self.assertEqual(calls, [])
+        self.assertTrue(meta["elevenlabs_attempted"])
+        self.assertGreater(credits["elevenlabs_characters_sent"], 0)
+        self.assertEqual(credits["elevenlabs_characters_remaining"], 100000)
+        self.assertEqual(credits["tts_engine"], "elevenlabs")
 
 
 class CreditLogTests(unittest.TestCase):

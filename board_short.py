@@ -2610,9 +2610,52 @@ def _reset_voice_state():
     VOICE_FALLBACK_REASON = ""
 
 
+def posting_bound():
+    """True when this audio can be uploaded. Edge is not allowed on that path.
+
+    A dry-run preview sets PROOF_FREE_AUDIO, DRY_RUN, or PIPELINE_MODE=preview.
+    An unlisted sample with no public visibility is the same kind of preview.
+    Both are flagged and must not be uploaded. A public slot, a Nifty short,
+    and an approved-topic buffer build are posting paths even when upload is
+    deferred until the slot.
+    """
+    proof = os.environ.get("PROOF_FREE_AUDIO", "").strip().lower()
+    if proof in ("edge", "silence"):
+        return False
+    mode = os.environ.get("PIPELINE_MODE", "").strip().lower()
+    if mode in ("preview", "sample", "dry-run", "dry_run"):
+        return False
+    for key in ("DRY_RUN", "RENDER_SAMPLE", "SAMPLE_NO_UPLOAD"):
+        if os.environ.get(key, "").strip().lower() in ("1", "true", "yes", "on"):
+            return False
+    vis = os.environ.get("PUBLISH_VISIBILITY", "").strip().lower()
+    if vis in ("public", "now"):
+        return True
+    if os.environ.get("APPROVED_BANK", "").strip().lower() in ("1", "true", "yes", "on"):
+        return True
+    if os.environ.get("DATA_SHORT", "").strip().lower() in ("1", "true", "yes", "on"):
+        return True
+    if os.environ.get("TOPIC_KEY", "").strip() == "aaj_ka_nifty":
+        return True
+    return False
+
+
+def _hold_gemini_take(reason):
+    """A publish-bound build with no valid Charon take stops. It does not speak Edge."""
+    text = "gemini_take: " + " ".join(str(reason or "missing or invalid Charon take").split())
+    try:
+        (RUN / "gemini_take.txt").write_text(text + "\n", encoding="utf-8")
+    except OSError:
+        pass
+    print(f"[HOLD] {text}", flush=True)
+    die(text)
+
+
 def _switch_to_edge(reason):
-    """Speak this live slot with the configured Edge voice. Do not skip it."""
+    """Preview-only. A posting path must call _hold_gemini_take instead."""
     global ELEVEN_EXHAUSTED, VOICE_FALLBACK_REASON
+    if posting_bound():
+        _hold_gemini_take(reason)
     ELEVEN_EXHAUSTED = True
     if not VOICE_FALLBACK_REASON:
         VOICE_FALLBACK_REASON = str(reason)
@@ -2639,12 +2682,22 @@ def _write_spoken_engine(engine, elevenlabs_attempted=None):
     key_set = bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
     if elevenlabs_attempted is None:
         elevenlabs_attempted = key_set and eleven_voice.paid_voice_allowed()
-    eleven_voice.write_voice_meta(
+    record = eleven_voice.write_voice_meta(
         RUN,
         engine,
         VOICE_FALLBACK_REASON,
         elevenlabs_attempted=elevenlabs_attempted,
     )
+    if not posting_bound():
+        try:
+            meta_path = RUN / "voice_meta.json"
+            data = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else dict(record or {})
+            data["preview"] = True
+            data["upload"] = False
+            meta_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            print("[preview] Edge/silence audio is flagged and must not be uploaded", flush=True)
+        except (OSError, ValueError, TypeError):
+            pass
     credit_log.set_tts_engine(engine, VOICE_FALLBACK_REASON)
     _note_voice_engine(engine)
     import trade_plan
@@ -2697,6 +2750,8 @@ def preflight_eleven_credits(texts):
     status = getattr(response, "status_code", 0)
     kind = eleven_voice.classify(status, body)
     if kind == "quota":
+        if posting_bound():
+            _hold_gemini_take(eleven_voice.describe(status, body))
         _switch_to_edge(eleven_voice.describe(status, body))
         return
     if status != 200:
@@ -2716,14 +2771,16 @@ def preflight_eleven_credits(texts):
     # Below the floor, or not enough characters to finish the Short: Edge.
     # At or above the floor, with enough characters left, Rudra stays.
     if remaining < floor:
-        _switch_to_edge(
-            f"pre-check remaining={remaining} is below the {floor} character floor"
-        )
+        reason = f"pre-check remaining={remaining} is below the {floor} character floor"
+        if posting_bound():
+            _hold_gemini_take(reason)
+        _switch_to_edge(reason)
         return
     if need > 0 and remaining < need:
-        _switch_to_edge(
-            f"pre-check remaining={remaining} characters, this Short needs {need}"
-        )
+        reason = f"pre-check remaining={remaining} characters, this Short needs {need}"
+        if posting_bound():
+            _hold_gemini_take(reason)
+        _switch_to_edge(reason)
 
 
 def _voice_text(text):
@@ -2914,6 +2971,8 @@ def tts(text, path, c):
         engine_file.write_text("elevenlabs", encoding="utf-8")
         id_file.write_text(cache_id, encoding="utf-8")
         return
+    if posting_bound():
+        _hold_gemini_take("posting path has no Charon take")
     edge_voice, edge_rate = _edge_voice_rate(c)
     ENGINES.append("edge")
     for attempt in range(3):
@@ -3050,9 +3109,13 @@ def _gemini_pace_window(topic):
     return None
 
 
-# A plan take from 38s is padded up to 40s. Rejecting 39.3s burned a Gemini
-# request and then held the Edge fallback.
+# A Charon take from 38s through 55s is fitted to 40–50s. Rejecting 41.8s
+# used to burn the request and then speak Edge. Outside this band is HOLD.
 PLAN_TAKE_FLOOR = 38.0
+POST_TAKE_FLOOR = 38.0
+POST_TAKE_CEILING = 55.0
+POST_FIT_LO = 40.0
+POST_FIT_HI = 50.0
 
 
 def gemini_accepts(total, window):
@@ -3121,7 +3184,8 @@ def _one_gemini_take(spoken, c, beats, folded, script, style, durations, attempt
     )
     seconds = gemini_voice.wav_seconds(dest)
     expected = _expected_voice_seconds(folded, beats, c)
-    if gemini_voice.duration_far(seconds, expected):
+    in_band = POST_TAKE_FLOOR - 1e-9 <= float(seconds) <= POST_TAKE_CEILING + 1e-9
+    if not in_band and gemini_voice.duration_far(seconds, expected):
         durations.append(seconds)
         print(f"[gemini] take {attempt + 1}: {seconds:.1f}s", flush=True)
         raise gemini_voice.GeminiFallback(
@@ -3138,8 +3202,8 @@ def _one_gemini_take(spoken, c, beats, folded, script, style, durations, attempt
             reason = f"Gemini audio trim failed (exit {getattr(exc, 'code', 1)})"
         raise gemini_voice.GeminiFallback(str(reason))
     total = sum(raw.values())
-    if window == trade_plan.VOICE_SECONDS and PLAN_TAKE_FLOOR - 1e-9 <= total < trade_plan.VOICE_SECONDS[0]:
-        raw = _pad_take_to(beats, raw, trade_plan.VOICE_SECONDS[0])
+    if POST_TAKE_FLOOR - 1e-9 <= total <= POST_TAKE_CEILING + 1e-9:
+        raw = _fit_posted_take(beats, raw)
         total = sum(raw.values())
     durations.append(total)
     print(f"[gemini] take {attempt + 1}: {total:.1f}s", flush=True)
@@ -3210,7 +3274,11 @@ def _speak_gemini(spoken, c, beats, topic):
 
 
 def synthesize_short_voices(spoken, c, beats=None, topic=None):
-    """Gemini Charon, then Rudra when credits cover it, then Edge Madhur."""
+    """Gemini Charon on every publish-bound build.
+
+    A missing or invalid Charon take is HOLD gemini_take. Edge and Rudra are
+    not the fallback. Edge remains only for a flagged dry-run preview.
+    """
     global ENGINES, VOICE_FALLBACK_REASON
     if topic is None:
         topic = _VOICE_TOPIC
@@ -3232,10 +3300,14 @@ def synthesize_short_voices(spoken, c, beats=None, topic=None):
             return _write_spoken_engine("gemini", elevenlabs_attempted=False)
         except gemini_voice.GeminiFallback as exc:
             gemini_note = gemini_voice.redact(exc.reason)
-            print(f"[warn] Gemini TTS failed ({gemini_note}). Falling back.", flush=True)
             if getattr(exc, "status", None) == 429 or "gemini_quota" in gemini_note:
                 (RUN / "gemini_quota.txt").write_text(gemini_note + "\n", encoding="utf-8")
             _drop_gemini_audio(beats)
+            if posting_bound():
+                _hold_gemini_take(gemini_note)
+            print(f"[warn] Gemini TTS failed ({gemini_note}). Preview may use Edge.", flush=True)
+    elif posting_bound():
+        _hold_gemini_take("Gemini key is not set")
     wants_paid = (
         proof_audio not in ("edge", "silence")
         and eleven_voice.paid_voice_allowed()
@@ -4773,6 +4845,43 @@ def _pad_wav(path, seconds):
     dest.replace(path)
 
 
+def _shrink_wav(path, factor):
+    """Speed a beat up so a 50–55s Charon take lands inside 40–50s."""
+    factor = float(factor)
+    if factor <= 1.001:
+        return
+    filters = []
+    left = factor
+    while left > 2.0:
+        filters.append("atempo=2.0")
+        left /= 2.0
+    filters.append(f"atempo={max(0.5, left):.6f}")
+    dest = path.with_name(path.stem + ".fast.wav")
+    subprocess.run([
+        "ffmpeg", "-v", "error", "-y", "-i", str(path),
+        "-af", ",".join(filters),
+        "-ar", "44100", "-ac", "2", str(dest),
+    ], check=True)
+    dest.replace(path)
+
+
+def _fit_posted_take(beats, raw):
+    """Pad under 40s and speed a 50–55s take down to 50s. 40–50s is left alone."""
+    total = sum(raw.values())
+    if total + 1e-9 < POST_FIT_LO:
+        return _pad_take_to(beats, raw, POST_FIT_LO)
+    if total <= POST_FIT_HI + 1e-9:
+        return raw
+    factor = total / POST_FIT_HI
+    for beat in beats:
+        clean = RUN / f"voice_clean_{beat}.wav"
+        if not clean.exists():
+            continue
+        _shrink_wav(clean, factor)
+        raw[beat] = duration(clean)
+    return raw
+
+
 def _pad_take_to(beats, raw, floor):
     """Spread the missing seconds across the beats. The take is then inside 40–55s."""
     total = sum(raw.values())
@@ -5184,7 +5293,12 @@ def require_scene_frames(topic, spec, narration=None):
     import board_scenes
     reason = board_scenes.topic_chart_block(topic)
     if reason:
-        die(reason + "; refusing TTS with 0 characters spent")
+        hold = f"HOLD: {reason}"
+        try:
+            (RUN / "scene_hold.txt").write_text(hold + "\n", encoding="utf-8")
+        except OSError:
+            pass
+        die(hold + "; refusing TTS with 0 characters spent")
     order = _lesson(topic)[0] if (topic or {}).get("_live_short") else BEATS
     missing = []
     for beat in order:
