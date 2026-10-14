@@ -359,6 +359,15 @@ class BufferGateTests(unittest.TestCase):
         }]
         again, _why = approved_buffer.choose_item(only, old, now, "08:30")
         self.assertEqual(again["topic_key"], "pat_hammer")
+        unflagged = {
+            "items": [{
+                "id": "ready-unflagged", "state": "ready", "topic_key": "pat_gap_up",
+                "owner_approved": False, "created_at": "2026-10-08T00:00:00Z",
+            }],
+        }
+        chosen, why = approved_buffer.choose_item(unflagged, [], now, "08:30")
+        self.assertEqual(why, "ready")
+        self.assertEqual(chosen["topic_key"], "pat_gap_up")
 
     def test_candidates_skip_ready_and_recent_topics(self):
         now = datetime(2026, 10, 9, 3, 10, tzinfo=IST)

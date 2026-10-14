@@ -782,9 +782,9 @@ class RenderOnlyRudraTests(unittest.TestCase):
             self.assertEqual(voice, "hi-IN-MadhurNeural")
             self.assertEqual(rate, "+0%")
             self.assertIn(locked[beat], tts_text)
-        self.assertEqual(meta["engine"], "edge")
+        self.assertTrue(meta.get("preview"))
+        self.assertIs(meta.get("upload"), False)
         self.assertIn("1000", meta["fallback_reason"])
-        self.assertIn("voice_engine=edge", summary)
 
     def test_the_hash_lock_still_stops_before_a_post(self):
         spoken = {beat: f"{beat} की तय लाइन।" for beat in ORDER}

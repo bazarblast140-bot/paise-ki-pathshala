@@ -112,7 +112,7 @@ class SessionTests(unittest.TestCase):
 
     def test_template_passes_the_narration_gate_and_stays_under_a_minute(self):
         import board_short
-        now = datetime(2026, 10, 8, 15, 50, tzinfo=IST)
+        now = datetime(2026, 10, 13, 15, 50, tzinfo=IST)
         session, reason = nifty_day.session_from_bars(_week(now), now, reply="1")
         self.assertEqual(reason, "")
         topic = {

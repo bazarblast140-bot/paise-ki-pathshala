@@ -1,8 +1,10 @@
-import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import board_scenes
+import board_short
 import buffer_shorts
 import pick_topic
 
@@ -45,7 +47,19 @@ class UnrenderableTopicTests(unittest.TestCase):
             picked = buffer_shorts.next_evergreen(bank, [], {"items": []})
             self.assertEqual(picked["key"], self.good)
             only_bad = buffer_shorts.next_evergreen([topic(self.bad)], [], {"items": []})
-            self.assertEqual(only_bad["key"], self.bad)
+            self.assertIsNone(only_bad)
+
+    def test_option_topics_without_scenes_hold_before_tts(self):
+        for key in ("option_vega", "opt_expiry_elm"):
+            self.assertNotIn(key, board_scenes.SCENES)
+            reason = board_scenes.topic_chart_block({"key": key})
+            self.assertIn("no SCENES", reason)
+            with tempfile.TemporaryDirectory() as tmp, \
+                 mock.patch.object(board_short, "RUN", Path(tmp)):
+                with self.assertRaises(SystemExit) as caught:
+                    board_short.require_scene_frames({"key": key, "_live_short": True}, {})
+            self.assertIn("HOLD", caught.exception.reason)
+            self.assertIn(key, caught.exception.reason)
 
 
 if __name__ == "__main__":

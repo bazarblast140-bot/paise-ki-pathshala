@@ -571,12 +571,12 @@ class DryRenderTests(unittest.TestCase):
              redirect_stdout(io.StringIO()):
             raw = board_short._rerender_beats(
                 {"hook": "नियम " * 40}, {"voice": _rudra_voice()}, ["hook"])
-            summary = (Path(tmp) / "summary.txt").read_text(encoding="utf-8")
             meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
         self.assertEqual(seen, [True])
         self.assertIn("1000", board_short.VOICE_FALLBACK_REASON)
         self.assertEqual(meta["engine"], "edge")
-        self.assertIn("voice_engine=edge", summary)
+        self.assertTrue(meta.get("preview"))
+        self.assertIs(meta.get("upload"), False)
         self.assertEqual(raw["hook"], 12.0)
 
     def test_rerender_quota_retries_that_beat_on_edge(self):
@@ -603,6 +603,7 @@ class DryRenderTests(unittest.TestCase):
             meta = json.loads((Path(tmp) / "voice_meta.json").read_text(encoding="utf-8"))
         self.assertEqual(calls["n"], 2)
         self.assertEqual(meta["engine"], "edge")
+        self.assertTrue(meta.get("preview"))
         self.assertIn("insufficient_credits", meta["fallback_reason"])
         self.assertEqual(raw["hook"], 12.0)
 

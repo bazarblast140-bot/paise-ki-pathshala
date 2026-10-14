@@ -154,8 +154,8 @@ def _pick_fresh(bank, flag, avoid_cats, research, fmt, now=None, skips=None):
               and not _is_competitor_duplicate(t) and not is_placeholder_topic(t)]
     if not unused:
         return None
-    # Prefer topics that can render. If none can, keep the old behaviour so the
-    # build fails with its own clear error instead of an empty-bank message.
+    # Prefer a topic that has a scene. If every remaining topic lacks one,
+    # keep the old pick so the render can HOLD it instead of crashing.
     renderable = [t for t in unused if not _chart_blocked(t)]
     if renderable:
         unused = renderable
@@ -195,6 +195,20 @@ def _pick_approved_bank():
         return
     script = approved_bank.next_script(slot_guard._read())
     if script is None:
+        import approved_buffer
+        from datetime import datetime
+        slot = os.environ.get("PUBLISH_SLOT_IST", "").strip() or "08:30"
+        item, _why = approved_buffer.choose_item(
+            approved_buffer.load_manifest(),
+            slot_guard._read(),
+            datetime.now(slot_guard.IST),
+            slot,
+        )
+        if item is not None:
+            reason = f"ready buffer item {item.get('topic_key')} publishes this slot"
+            approved_bank.skip_marker(reason)
+            print(f"[skip] {reason}")
+            return
         reason = approved_bank.skip_reason(slot_guard._read()) or "no unused approved script left"
         approved_bank.occupy_skip(reason)
         approved_bank.skip_marker(reason)
@@ -228,6 +242,8 @@ def main():
             die(f"TOPIC_KEY '{test_key}' placeholder/templated topic hai — pehle beats rewrite karo")
         if nxt.get("key") in blocked_topic_keys(research[1]):
             die(f"TOPIC_KEY '{test_key}' dated topic expire ho chuka hai — valid_until ke baad pick nahi hoga")
+        if _chart_blocked(nxt):
+            die(f"HOLD: {test_key} has no SCENES entry")
         save("topic.txt", nxt["topic"])
         save("topic.json", json.dumps(nxt, ensure_ascii=False, indent=1))
         ok(f"TEST topic (used mark nahi): {nxt['key']}")
