@@ -534,6 +534,9 @@ class BuildTests(unittest.TestCase):
             self.assertIn("15m:", qa["intraday_chart_reason"])
             self.assertEqual(qa["oi_status"], "held")
             self.assertGreaterEqual(qa["rr"], 1.5)
+            self.assertEqual(qa["cta_yt"], "Paise Ki Pathshala follow करो")
+            self.assertEqual(qa["cta_social"], "Rajesh Technical Trader ko follow करो")
+            self.assertEqual(qa["social_intro"], "intro_rtt.mp4")
             source_md = (out / "source.md").read_text(encoding="utf-8")
             self.assertIn(LABEL, source_md)
             self.assertIn("chart reason bot wall", source_md)
@@ -708,12 +711,20 @@ class EndsTests(unittest.TestCase):
         import inspect
         from realchart import qa
         from realchart.ends import (
-            FOLLOW_PKP, FOLLOW_RTT, INTRO_HI, INTRO_LO, INTRO_SOURCE, OUTRO_PKP, OUTRO_RTT, attach, trim_intro,
+            FOLLOW_PKP, FOLLOW_RTT, INTRO_HI, INTRO_LO, INTRO_RTT, INTRO_SOURCE, OUTRO_PKP, OUTRO_RTT, attach, trim_intro,
         )
         self.assertEqual(FOLLOW_RTT, "Rajesh Technical Trader ko follow करो")
         self.assertEqual(FOLLOW_PKP, "Paise Ki Pathshala follow करो")
         self.assertTrue(OUTRO_RTT.is_file())
         self.assertTrue(OUTRO_PKP.is_file())
+        self.assertTrue(INTRO_SOURCE.is_file())
+        self.assertTrue(INTRO_RTT.is_file())
+        intro_info = qa.probe(INTRO_RTT)
+        self.assertEqual((intro_info["width"], intro_info["height"]), (1080, 1920))
+        self.assertEqual(intro_info["codec"], "h264")
+        self.assertGreaterEqual(intro_info["duration"], INTRO_LO)
+        self.assertLessEqual(intro_info["duration"], INTRO_HI)
+        self.assertGreater(INTRO_RTT.stat().st_size, 200_000)
         for path in (OUTRO_RTT, OUTRO_PKP):
             info = qa.probe(path)
             self.assertEqual(info["width"], 1080)
@@ -740,7 +751,7 @@ class EndsTests(unittest.TestCase):
             self.assertLessEqual(info["duration"], INTRO_HI)
             self.assertEqual((info["width"], info["height"]), (1080, 1920))
             with self.assertRaises(FileNotFoundError):
-                trim_intro(INTRO_SOURCE, tmp / "missing.mp4")
+                trim_intro(tmp / "no-such-intro.mp4", tmp / "missing.mp4")
             main = tmp / "main.mp4"
             _color_clip(main, 1, size="1080x1920")
             # The color clip is not the shared encode. Build a matching main, then copy-concat.
@@ -763,8 +774,21 @@ class EndsTests(unittest.TestCase):
             yt_info = qa.probe(yt)
             ig_info = qa.probe(ig)
             self.assertAlmostEqual(yt_info["duration"], main_info["duration"] + qa.probe(OUTRO_PKP)["duration"], delta=0.15)
+            self.assertAlmostEqual(
+                ig_info["duration"],
+                qa.probe(intro)["duration"] + main_info["duration"] + qa.probe(OUTRO_RTT)["duration"],
+                delta=0.2,
+            )
             self.assertGreater(ig_info["duration"], yt_info["duration"])
             self.assertEqual(yt_info["codec"], main_info["codec"])
+            yt_list = (tmp / "final_yt.txt").read_text(encoding="utf-8").splitlines()
+            ig_list = (tmp / "final_ig.txt").read_text(encoding="utf-8").splitlines()
+            self.assertIn(intro.name, ig_list[0])
+            self.assertIn(main.name, ig_list[1])
+            self.assertIn("outro_rtt.mp4", ig_list[2])
+            self.assertNotIn("intro_rtt", yt_list[0])
+            self.assertIn(main.name, yt_list[0])
+            self.assertIn("outro_pkp.mp4", yt_list[1])
             with mock.patch("realchart.ends.INTRO_RTT", tmp / "absent.mp4"):
                 with self.assertRaises(FileNotFoundError) as raised:
                     attach(main, tmp)

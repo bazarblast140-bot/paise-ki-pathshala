@@ -1,4 +1,4 @@
-"""One main Reel. Channel follow lines live on fixed clips, not a second render."""
+"""One shared Reel. YouTube and social differ by the follow card, and social adds the intro."""
 from __future__ import annotations
 
 import subprocess
@@ -14,9 +14,12 @@ INTRO_SOURCE = ROOT / "uploads" / "rajesh-technical-trader-intro.mp4"
 COMMENT = "अगला कौन सा chart देखना है? Comment करो."
 FOLLOW_RTT = "Rajesh Technical Trader ko follow करो"
 FOLLOW_PKP = "Paise Ki Pathshala follow करो"
+# The source is 10s. The blast is the opening; the name is on screen at about 6–8s.
+# Start just after the black frame and keep 7.5s, so the name sits in the last ~2s.
 INTRO_LO = 5.5
 INTRO_HI = 7.5
-INTRO_TAKE = 6.5
+INTRO_START = 0.5
+INTRO_TAKE = 7.5
 OUTRO_SECONDS = 2.0
 
 # Shared with the main Reel so ffmpeg can concat with -c copy.
@@ -85,19 +88,24 @@ def render_card(text, dest, seconds=OUTRO_SECONDS):
     return dest
 
 
-def trim_intro(src, dest, seconds=INTRO_TAKE):
-    """Scale the Rajesh intro to 1080x1920 and keep about 5.5–7.5s."""
+def trim_intro(src, dest, seconds=INTRO_TAKE, start=INTRO_START):
+    """Keep the blast plus the name, then scale and pad to 1080x1920. No substitute footage."""
     src = Path(src)
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     if not src.is_file():
         raise FileNotFoundError(src)
     take = min(INTRO_HI, max(INTRO_LO, float(seconds)))
+    start = max(0.0, float(start))
     cmd = [
         "ffmpeg", "-y", "-v", "error",
         "-i", str(src),
+        "-ss", f"{start:.3f}",
         "-t", f"{take:.3f}",
-        "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,format=yuv420p",
+        "-vf", (
+            "scale=1080:1920:force_original_aspect_ratio=decrease,"
+            "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,fps=30,format=yuv420p"
+        ),
         "-af", "aresample=48000,aformat=channel_layouts=stereo,loudnorm=I=-15:TP=-1.5:LRA=11",
         *ENCODE,
         str(dest),
@@ -126,7 +134,7 @@ def concat_copy(parts, dest):
 
 
 def attach(main, directory):
-    """YT is main + Pathshala outro. IG/FB is the RTT intro, main, and RTT outro."""
+    """YT is the shared Reel plus the Pathshala follow card. IG/FB prepends Rajesh's intro and uses his follow card."""
     main = Path(main)
     directory = Path(directory)
     needed = (("intro_rtt.mp4", INTRO_RTT), ("outro_rtt.mp4", OUTRO_RTT), ("outro_pkp.mp4", OUTRO_PKP))

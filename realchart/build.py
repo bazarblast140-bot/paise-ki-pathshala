@@ -117,7 +117,7 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
         from realchart.render import assemble, frames
         pics = frames(out / "cards", kind, levels, rows, chart.get("path"), article, intraday)
         assemble(pics, out / "voice.wav", out / "final.mp4")
-        from realchart.ends import attach
+        from realchart.ends import FOLLOW_PKP, FOLLOW_RTT, attach
         try:
             attach(out / "final.mp4", out)
         except FileNotFoundError as exc:
@@ -140,6 +140,9 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             "levels_chip": levels.get("levels_chip") or "",
             "oi_status": levels.get("oi_status") or "",
             "rr": levels.get("rr"),
+            "cta_yt": FOLLOW_PKP,
+            "cta_social": FOLLOW_RTT,
+            "social_intro": "intro_rtt.mp4",
             "values_from": levels.get("values_from"),
             "voice": voice.get("engine"),
             "sync": "script-timeline",
@@ -308,6 +311,8 @@ def _write_sources(out, kind, levels, article, chart, rows, voice, now, intraday
         f"- oi {levels.get('oi_status') or ''} rr {levels.get('rr')}",
         f"- values {levels.get('values_from')} (EMA/RSI stated as cards, not lines)",
         f"- voice {voice.get('engine')} requests {voice.get('requests')}",
+        "- yt cta Paise Ki Pathshala follow करो",
+        "- social cta Rajesh Technical Trader ko follow करो intro intro_rtt.mp4",
         "- sync script-timeline hook 0-3s",
     ]
     if article:
