@@ -161,8 +161,92 @@ class CaptureTests(unittest.TestCase):
             })
             self.assertEqual(shot["source"], "yfinance")
             self.assertEqual(shot["label"], LABEL)
+            self.assertEqual(shot["reason"], "bot wall")
             self.assertNotEqual(shot["label"], "TradingView")
             self.assertTrue(dest.is_file())
+            note = dest.with_name("chart-capture.txt")
+            self.assertIn("reason: bot wall", note.read_text(encoding="utf-8"))
+            self.assertIn("unusual traffic", note.read_text(encoding="utf-8"))
+
+    def test_a_sign_in_link_is_not_a_bot_wall(self):
+        self.assertFalse(capture.walled("Sign in to save your layout"))
+        self.assertTrue(capture.walled("Please verify you are human"))
+        browser = type("Browser", (), {"version": "156.0.8078.4"})()
+        agent = capture._browser_user_agent(browser)
+        self.assertIn("Chrome/156.0.8078.4", agent)
+        self.assertNotIn("Headless", agent)
+
+    def test_a_failed_capture_keeps_the_screenshot_and_the_error(self):
+        from PIL import Image
+        bars = _bars()
+
+        def opener(_symbol, path):
+            Image.new("RGB", (8, 8), (1, 2, 3)).save(path)
+            return {
+                "ok": False,
+                "reason": "TimeoutError: navigation",
+                "text": "net::ERR_CONNECTION_RESET",
+                "path": str(path),
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "chart.png"
+            shot = capture.capture_chart("NSE:NIFTY", dest, bars, opener=opener)
+            self.assertEqual(shot["source"], "yfinance")
+            self.assertEqual(shot["reason"], "TimeoutError: navigation")
+            note = (Path(tmp) / "chart-capture.txt").read_text(encoding="utf-8")
+            self.assertIn("TimeoutError: navigation", note)
+            self.assertIn("ERR_CONNECTION_RESET", note)
+            with Image.open(Path(tmp) / "chart-capture.png") as kept:
+                self.assertEqual(kept.size, (8, 8))
+            with Image.open(dest) as drawn:
+                self.assertNotEqual(drawn.size, (8, 8))
+
+    def test_a_blank_shot_is_not_a_painted_chart(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as tmp:
+            blank = Path(tmp) / "blank.png"
+            Image.new("RGB", (80, 80), (15, 15, 15)).save(blank)
+            self.assertFalse(capture.chart_painted(blank))
+            painted = Path(tmp) / "painted.png"
+            image = Image.new("RGB", (80, 80), (15, 15, 15))
+            for x in range(10, 30):
+                for y in range(20, 60):
+                    image.putpixel((x, y), (34, 181, 60))
+            for x in range(40, 60):
+                for y in range(10, 50):
+                    image.putpixel((x, y), (240, 30, 50))
+            image.save(painted)
+            self.assertTrue(capture.chart_painted(painted))
+
+    def test_cookie_accept_is_clicked_before_the_chart(self):
+        clicked = {}
+
+        class Button:
+            def is_visible(self):
+                return True
+
+            def click(self, timeout=0):
+                clicked["timeout"] = timeout
+
+        class Locator:
+            def __init__(self, button):
+                self.button = button
+
+            def count(self):
+                return 0 if self.button is None else 1
+
+            @property
+            def first(self):
+                return self.button
+
+        class Page:
+            def get_by_role(self, role, name):
+                self.role = role
+                return Locator(Button() if name == "Accept all" else None)
+
+        self.assertEqual(capture._dismiss_cookies(Page()), "Accept all")
+        self.assertEqual(clicked["timeout"], 2000)
 
     def test_technicals_page_values_replace_the_cross_check(self):
         text = (
@@ -189,6 +273,34 @@ class BuildTests(unittest.TestCase):
             self.assertIn("no qualifying article", qa["faults"][0])
             self.assertFalse((out / "final.mp4").exists())
 
+    def test_a_relative_out_dir_does_not_double_the_concat_path(self):
+        from PIL import Image
+        from realchart.render import assemble
+        here = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            os.chdir(tmp)
+            try:
+                cards = Path("run") / "cards"
+                cards.mkdir(parents=True)
+                image = Image.new("RGB", (32, 32), (10, 20, 30))
+                paths = []
+                for name in ("hook", "chart"):
+                    image.save(cards / f"{name}.png")
+                    paths.append(Path("run") / "cards" / f"{name}.png")
+                dest = assemble(paths, Path("run") / "missing.wav", Path("run") / "final.mp4", seconds=1.0)
+                listing = (Path("run") / "frames.txt").read_text(encoding="utf-8")
+                self.assertTrue(dest.is_file())
+                self.assertGreater(dest.stat().st_size, 500)
+            finally:
+                os.chdir(here)
+        self.assertNotIn("run/run/", listing)
+        for line in listing.splitlines():
+            if not line.startswith("file "):
+                continue
+            quoted = line.split("'", 1)[1].rsplit("'", 1)[0]
+            self.assertTrue(Path(quoted).is_absolute(), quoted)
+            self.assertTrue(quoted.endswith(".png"))
+
     def test_dry_run_renders_without_gemini_and_reports_the_fallback_chart(self):
         bars = _bars()
         stamp = _stamp(datetime(2026, 10, 8).date())
@@ -212,9 +324,14 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(qa["chart"], "yfinance")
             self.assertEqual(qa["label"], LABEL)
             self.assertEqual(qa["voice"], "dry")
+            self.assertEqual(qa["chart_reason"], "bot wall")
             source = (out / "source.md").read_text(encoding="utf-8")
             self.assertIn(LABEL, source)
+            self.assertIn("chart reason bot wall", source)
             self.assertIn("requests 0", source)
+            self.assertIn("bot wall", (out / "chart-capture.txt").read_text(encoding="utf-8"))
+            levels = json.loads((out / "levels.json").read_text(encoding="utf-8"))
+            self.assertEqual(levels["chart_reason"], "bot wall")
             self.assertFalse(history.exists())
 
     def test_a_repeated_setup_holds(self):
@@ -256,6 +373,10 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("kind:", daily)
         self.assertIn("dry_run:", daily)
         self.assertIn("playwright install chromium", daily)
+        self.assertIn("run/chart-capture.png", daily)
+        self.assertIn("run/chart-capture.txt", daily)
+        self.assertIn('"$code" != "0"', daily)
+        self.assertIn('"$code" != "2"', daily)
         self.assertIn("post_story=true", daily)
         self.assertNotIn("ELEVENLABS", daily)
         publish = (ROOT / ".github" / "workflows" / "publish-artifact.yml").read_text(encoding="utf-8")

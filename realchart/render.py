@@ -128,6 +128,12 @@ def frames(out, kind, levels, rows, chart_path, article=None):
     return made
 
 
+def _concat_path(path):
+    """Absolute path. ffmpeg resolves a relative concat entry against frames.txt, so `run/cards/hook.png` became `run/run/cards/hook.png`."""
+    text = Path(path).resolve().as_posix().replace("'", "'\\''")
+    return text
+
+
 def assemble(frame_paths, voice, dest, seconds=45.0):
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -135,9 +141,9 @@ def assemble(frame_paths, voice, dest, seconds=45.0):
     each = seconds / max(1, len(frame_paths))
     lines = []
     for path in frame_paths:
-        lines.append(f"file '{path}'")
+        lines.append(f"file '{_concat_path(path)}'")
         lines.append(f"duration {each:.3f}")
-    lines.append(f"file '{frame_paths[-1]}'")
+    lines.append(f"file '{_concat_path(frame_paths[-1])}'")
     work.write_text("\n".join(lines) + "\n", encoding="utf-8")
     cmd = [
         "ffmpeg", "-y", "-v", "error",
