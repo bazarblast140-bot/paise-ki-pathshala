@@ -126,6 +126,7 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             "kind": kind,
             "chart": chart.get("source"),
             "label": chart.get("label"),
+            "chart_reason": chart.get("reason") or "",
             "values_from": levels.get("values_from"),
             "voice": voice.get("engine"),
             "sync": "script-timeline",
@@ -138,7 +139,10 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             items = _history()
             items.append({"symbol": levels.get("symbol"), "setup": levels.get("setup"), "date": str(now.date())})
             _save_history(items)
-        print(f"[realchart] chart {chart.get('source')} {chart.get('label')}", flush=True)
+        print(
+            f"[realchart] chart {chart.get('source')} {chart.get('label')} {chart.get('reason') or ''}".rstrip(),
+            flush=True,
+        )
         print(verdict, flush=True)
         return 0
     except Hold as exc:
@@ -186,6 +190,8 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
         raise Hold("news", "no qualifying article")
     chart = capture.capture_chart(levels["symbol"], out / "chart.png", levels.get("bars") or [], opener=chart_opener)
     _apply_technicals(levels, chart)
+    if chart.get("reason"):
+        levels["chart_reason"] = chart.get("reason")
     if article and article_opener is not None:
         shot = capture.capture_article(article["url"], out / "news.png", opener=article_opener)
         article["capture"] = shot
@@ -232,6 +238,7 @@ def _write_sources(out, kind, levels, article, chart, rows, voice, now):
         f"- built {now.strftime('%Y-%m-%d %H:%M IST')}",
         f"- symbol {levels.get('symbol')} date {levels.get('last_date')} setup {levels.get('setup')}",
         f"- chart {chart.get('source')} {chart.get('url')} {chart.get('label')}",
+        f"- chart reason {chart.get('reason') or 'none'}",
         f"- values {levels.get('values_from')} (EMA/RSI stated as cards, not lines)",
         f"- voice {voice.get('engine')} requests {voice.get('requests')}",
         "- sync script-timeline hook 0-3s",

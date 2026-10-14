@@ -140,6 +140,8 @@ jobs:
             run/source.md
             run/qa.json
             run/levels.json
+            run/chart-capture.png
+            run/chart-capture.txt
             run/HOLD
             run/SKIP
       - name: Publish via publish-artifact

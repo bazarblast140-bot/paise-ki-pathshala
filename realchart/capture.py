@@ -1,16 +1,17 @@
 """TradingView when the runner can see it. Otherwise a labeled NSE chart."""
 from __future__ import annotations
 
+from pathlib import Path
+
 BOT_WALL = (
     "captcha",
     "unusual traffic",
     "verify you are",
     "access denied",
-    "sign in to",
-    "log in to",
     "robot",
     "are you a human",
 )
+COOKIE_LABELS = ("Accept all", "Accept All", "Allow all", "I agree", "Agree and continue", "Accept")
 FALLBACK_LABEL = "Chart: NSE data (yfinance)"
 
 
@@ -91,24 +92,79 @@ def parse_technicals(text):
     return found
 
 
+def _browser_user_agent(browser):
+    """Match the installed Chrome and drop the Headless token runners get blocked for."""
+    version = str(getattr(browser, "version", "") or "131.0.0.0").split()[-1]
+    return (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        f"(KHTML, like Gecko) Chrome/{version} Safari/537.36"
+    )
+
+
+def _dismiss_cookies(page):
+    for label in COOKIE_LABELS:
+        try:
+            button = page.get_by_role("button", name=label)
+            if button.count() == 0:
+                continue
+            first = button.first
+            if first.is_visible():
+                first.click(timeout=2000)
+                return label
+        except Exception:  # noqa: BLE001 — a missing banner is not a failed chart
+            continue
+    return ""
+
+
+def _wait_chart(page):
+    page.wait_for_selector("canvas, [data-name='legend-source-item']", state="visible", timeout=25000)
+    page.wait_for_timeout(1500)
+
+
+def _keep_capture_failure(dest, shot, reason):
+    """Keep the TradingView page and the error. The yfinance chart then replaces dest."""
+    import shutil
+    dest = Path(dest)
+    note = dest.with_name("chart-capture.txt")
+    image = dest.with_name("chart-capture.png")
+    source = Path(shot.get("path") or dest)
+    if source.is_file() and source.resolve() != image.resolve():
+        shutil.copyfile(source, image)
+    text = " ".join(str(shot.get("text") or "").split())[:800]
+    note.write_text(f"reason: {reason}\nerror: {text}\n", encoding="utf-8")
+    return {"note": str(note), "image": str(image) if image.is_file() else ""}
+
+
+def _clear_capture_failure(dest):
+    dest = Path(dest)
+    for name in ("chart-capture.txt", "chart-capture.png"):
+        path = dest.with_name(name)
+        if path.is_file():
+            path.unlink()
+
+
 def capture_chart(symbol, dest, bars, opener=None):
-    """Try the public TradingView chart. A bot wall becomes the yfinance chart."""
+    """Try the public TradingView chart. A real block becomes the yfinance chart."""
     if opener is None:
         opener = _playwright_chart
     try:
         shot = opener(symbol, dest)
     except Exception as exc:  # noqa: BLE001 — the runner must still render
-        shot = {"ok": False, "reason": type(exc).__name__, "text": str(exc)}
+        shot = {"ok": False, "reason": f"{type(exc).__name__}: {exc}", "text": str(exc)}
     text = f"{shot.get('text') or ''} {shot.get('reason') or ''}"
     if shot.get("ok") and not walled(text):
+        _clear_capture_failure(dest)
         return {
             "source": "tradingview",
             "path": shot.get("path") or str(dest),
             "url": chart_url(symbol),
             "captured_at": shot.get("captured_at") or "",
             "label": "TradingView",
+            "reason": "",
             "technicals": shot.get("technicals") or {},
         }
+    reason = "bot wall" if walled(text) else (shot.get("reason") or "chart capture failed")
+    kept = _keep_capture_failure(dest, shot, reason)
     draw_yf_chart(bars, dest, symbol)
     return {
         "source": "yfinance",
@@ -116,29 +172,113 @@ def capture_chart(symbol, dest, bars, opener=None):
         "url": chart_url(symbol),
         "captured_at": "",
         "label": FALLBACK_LABEL,
-        "reason": "bot wall" if walled(text) else (shot.get("reason") or "chart capture failed"),
+        "reason": reason,
+        "capture_note": kept["note"],
+        "capture_image": kept["image"],
         "technicals": {},
     }
+
+
+def chart_painted(path):
+    """True when the shot has candle colors. A WebGL chart that never paints is not TradingView."""
+    from PIL import Image
+    with Image.open(path) as image:
+        rgb = image.convert("RGB")
+        width, height = rgb.size
+        pixels = rgb.load()
+        green = red = samples = 0
+        for y in range(0, height, 8):
+            for x in range(0, width, 8):
+                r, g, b = pixels[x, y]
+                samples += 1
+                if g > r + 25 and g > 60:
+                    green += 1
+                elif r > g + 25 and r > 60:
+                    red += 1
+    if samples == 0:
+        return False
+    return (green + red) / samples >= 0.01
+
+
+def _open_browser(play):
+    browser = play.chromium.launch(
+        headless=True,
+        args=[
+            "--disable-blink-features=AutomationControlled",
+            "--use-gl=angle",
+            "--use-angle=swiftshader",
+            "--enable-webgl",
+            "--ignore-gpu-blocklist",
+        ],
+        ignore_default_args=["--enable-automation"],
+    )
+    context = browser.new_context(
+        viewport={"width": 1280, "height": 800},
+        device_scale_factor=2,
+        color_scheme="dark",
+        locale="en-IN",
+        timezone_id="Asia/Kolkata",
+        user_agent=_browser_user_agent(browser),
+    )
+    context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+    return browser, context
 
 
 def _playwright_chart(symbol, dest):
     from playwright.sync_api import sync_playwright
     from realchart.session import now_ist
+    dest = Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    text = ""
+    reason = ""
+    ok = False
+    tech = {}
     with sync_playwright() as play:
-        browser = play.chromium.launch()
-        page = browser.new_page(viewport={"width": 1080, "height": 1180}, device_scale_factor=2, color_scheme="dark")
-        page.goto(chart_url(symbol), timeout=45000, wait_until="domcontentloaded")
-        page.wait_for_timeout(4000)
-        text = page.inner_text("body")
-        page.screenshot(path=str(dest))
-        tech = {}
-        if not walled(text):
-            page.goto(technicals_url(symbol), timeout=45000, wait_until="domcontentloaded")
-            page.wait_for_timeout(3000)
-            tech_text = page.inner_text("body")
-            tech = {"text": tech_text[:4000]}
-        browser.close()
-    return {"ok": True, "text": text, "path": str(dest), "captured_at": now_ist().strftime("%Y-%m-%d %H:%M IST"), "technicals": tech}
+        browser, context = _open_browser(play)
+        page = context.new_page()
+        try:
+            page.goto(chart_url(symbol), timeout=45000, wait_until="domcontentloaded")
+            _dismiss_cookies(page)
+            try:
+                _wait_chart(page)
+                ok = True
+            except Exception as exc:  # noqa: BLE001
+                reason = f"canvas missing: {type(exc).__name__}: {exc}"
+            text = (page.inner_text("body") or "")[:4000]
+            page.screenshot(path=str(dest))
+            if walled(text):
+                ok = False
+                reason = "bot wall"
+            elif ok and not chart_painted(dest):
+                ok = False
+                reason = "chart did not paint"
+            elif ok:
+                page.goto(technicals_url(symbol), timeout=45000, wait_until="domcontentloaded")
+                _dismiss_cookies(page)
+                page.wait_for_timeout(2000)
+                tech_text = page.inner_text("body") or ""
+                if not walled(tech_text):
+                    tech = {"text": tech_text[:4000]}
+        except Exception as exc:  # noqa: BLE001
+            reason = f"{type(exc).__name__}: {exc}"[:500]
+            try:
+                text = (page.inner_text("body") or "")[:4000]
+                page.screenshot(path=str(dest))
+            except Exception:  # noqa: BLE001
+                pass
+        finally:
+            browser.close()
+    if walled(text):
+        ok = False
+        reason = "bot wall"
+    return {
+        "ok": ok,
+        "reason": reason,
+        "text": text,
+        "path": str(dest),
+        "captured_at": now_ist().strftime("%Y-%m-%d %H:%M IST"),
+        "technicals": tech,
+    }
 
 
 def capture_article(url, dest, opener=None):
