@@ -6,30 +6,30 @@
       "state": "held",
       "topic_key": "pat_black_crows",
       "owner_approved": false,
-      "created_at": "2026-10-09T00:13:22Z",
-      "reason": "self-review craft 0 is below 60; self-review sync 0 is below 60; self-review overall 58.0 is below 75; sync gate did not pass; existing public-review gate did not pass; self-review 58.0 is under 75; trend score missing; craft 0 is below 60; sync 0 is below 60",
+      "created_at": "2026-10-14T12:49:05Z",
+      "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
       "voice_engine": "gemini",
-      "duration_s": 49.94
+      "duration_s": 42.28
     },
     {
       "id": "hold-pat_breakout-20261009T001322Z",
       "state": "held",
       "topic_key": "pat_breakout",
       "owner_approved": false,
-      "created_at": "2026-10-09T00:13:22Z",
-      "reason": "self-review craft 0 is below 60; self-review sync 0 is below 60; self-review overall 58.0 is below 75; sync gate did not pass; existing public-review gate did not pass; self-review 58.0 is under 75; trend score missing; craft 0 is below 60; sync 0 is below 60",
+      "created_at": "2026-10-14T12:48:53Z",
+      "reason": "render rc=1",
       "voice_engine": "gemini",
-      "duration_s": 40.52
+      "duration_s": 42.82
     },
     {
       "id": "hold-pat_bull_engulf-20261009T001322Z",
       "state": "held",
       "topic_key": "pat_bull_engulf",
       "owner_approved": false,
-      "created_at": "2026-10-09T00:13:22Z",
-      "reason": "self-review craft 0 is below 60; self-review sync 0 is below 60; self-review overall 58.0 is below 75; sync gate did not pass; existing public-review gate did not pass; self-review 58.0 is under 75; trend score missing; craft 0 is below 60; sync 0 is below 60",
+      "created_at": "2026-10-14T12:48:52Z",
+      "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
       "voice_engine": "gemini",
-      "duration_s": 42.36
+      "duration_s": 41.37
     },
     {
       "id": "hold-pat_cup_handle-20261009T001322Z",
