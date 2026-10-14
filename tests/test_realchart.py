@@ -189,6 +189,34 @@ class BuildTests(unittest.TestCase):
             self.assertIn("no qualifying article", qa["faults"][0])
             self.assertFalse((out / "final.mp4").exists())
 
+    def test_a_relative_out_dir_does_not_double_the_concat_path(self):
+        from PIL import Image
+        from realchart.render import assemble
+        here = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            os.chdir(tmp)
+            try:
+                cards = Path("run") / "cards"
+                cards.mkdir(parents=True)
+                image = Image.new("RGB", (32, 32), (10, 20, 30))
+                paths = []
+                for name in ("hook", "chart"):
+                    image.save(cards / f"{name}.png")
+                    paths.append(Path("run") / "cards" / f"{name}.png")
+                dest = assemble(paths, Path("run") / "missing.wav", Path("run") / "final.mp4", seconds=1.0)
+                listing = (Path("run") / "frames.txt").read_text(encoding="utf-8")
+                self.assertTrue(dest.is_file())
+                self.assertGreater(dest.stat().st_size, 500)
+            finally:
+                os.chdir(here)
+        self.assertNotIn("run/run/", listing)
+        for line in listing.splitlines():
+            if not line.startswith("file "):
+                continue
+            quoted = line.split("'", 1)[1].rsplit("'", 1)[0]
+            self.assertTrue(Path(quoted).is_absolute(), quoted)
+            self.assertTrue(quoted.endswith(".png"))
+
     def test_dry_run_renders_without_gemini_and_reports_the_fallback_chart(self):
         bars = _bars()
         stamp = _stamp(datetime(2026, 10, 8).date())
@@ -256,6 +284,8 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("kind:", daily)
         self.assertIn("dry_run:", daily)
         self.assertIn("playwright install chromium", daily)
+        self.assertIn('"$code" != "0"', daily)
+        self.assertIn('"$code" != "2"', daily)
         self.assertIn("post_story=true", daily)
         self.assertNotIn("ELEVENLABS", daily)
         publish = (ROOT / ".github" / "workflows" / "publish-artifact.yml").read_text(encoding="utf-8")

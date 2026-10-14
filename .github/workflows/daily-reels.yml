@@ -112,6 +112,10 @@ jobs:
           fi
           if [ "${{ steps.plan.outputs.dry }}" = "1" ]; then
             if [ -s run/final.mp4 ]; then echo "code=0" >> "$GITHUB_OUTPUT"; else echo "code=skip" >> "$GITHUB_OUTPUT"; fi
+            # A dry HOLD is exit 2 and still uploads. Any other non-zero exit is a crash.
+            if [ "$code" != "0" ] && [ "$code" != "2" ]; then
+              exit "$code"
+            fi
             exit 0
           fi
           if [ "$code" != "0" ]; then
