@@ -13,6 +13,8 @@ BOT_WALL = (
 )
 COOKIE_LABELS = ("Accept all", "Accept All", "Allow all", "I agree", "Agree and continue", "Accept")
 FALLBACK_LABEL = "Chart: NSE data (yfinance)"
+FALLBACK_LABEL_5M = "Chart: NSE data (yfinance, 5m)"
+YF_PLOT = {"left": 40, "top": 80, "width": 1000, "height": 900}
 
 
 def walled(text):
@@ -20,23 +22,23 @@ def walled(text):
     return any(phrase in low for phrase in BOT_WALL)
 
 
-def chart_url(symbol):
-    return f"https://www.tradingview.com/chart/?symbol={symbol}&interval=D&theme=dark"
+def chart_url(symbol, interval="D"):
+    return f"https://www.tradingview.com/chart/?symbol={symbol}&interval={interval}&theme=dark"
 
 
 def technicals_url(symbol):
     return f"https://www.tradingview.com/symbols/{str(symbol).replace(':', '-')}/technicals/"
 
 
-def draw_yf_chart(bars, dest, symbol):
+def draw_yf_chart(bars, dest, symbol, label=None, tag="1D"):
     """Candles from the OHLC we already computed. The label says it is not TradingView."""
     from PIL import Image, ImageDraw, ImageFont
     rows = list(bars or [])[-80:]
     image = Image.new("RGB", (1080, 1080), (22, 26, 32))
     draw = ImageDraw.Draw(image)
     font = _font(28)
-    draw.text((24, 16), f"{symbol}  1D", fill=(230, 236, 240), font=font)
-    draw.text((24, 1020), FALLBACK_LABEL, fill=(255, 214, 10), font=font)
+    draw.text((24, 16), f"{symbol}  {tag}", fill=(230, 236, 240), font=font)
+    draw.text((24, 1020), label or FALLBACK_LABEL, fill=(255, 214, 10), font=font)
     if len(rows) < 2:
         image.save(dest)
         return dest
@@ -44,7 +46,7 @@ def draw_yf_chart(bars, dest, symbol):
     lows = [float(row["l"]) for row in rows]
     top, bot = max(highs), min(lows)
     span = max(1.0, top - bot)
-    left, width, plot_top, plot_h = 40, 1000, 80, 900
+    left, width, plot_top, plot_h = YF_PLOT["left"], YF_PLOT["width"], YF_PLOT["top"], YF_PLOT["height"]
     step = width / len(rows)
     for index, row in enumerate(rows):
         x = left + index * step + step / 2
@@ -125,8 +127,8 @@ def _keep_capture_failure(dest, shot, reason):
     """Keep the TradingView page and the error. The yfinance chart then replaces dest."""
     import shutil
     dest = Path(dest)
-    note = dest.with_name("chart-capture.txt")
-    image = dest.with_name("chart-capture.png")
+    note = dest.with_name(f"{dest.stem}-capture.txt")
+    image = dest.with_name(f"{dest.stem}-capture.png")
     source = Path(shot.get("path") or dest)
     if source.is_file() and source.resolve() != image.resolve():
         shutil.copyfile(source, image)
@@ -137,45 +139,99 @@ def _keep_capture_failure(dest, shot, reason):
 
 def _clear_capture_failure(dest):
     dest = Path(dest)
-    for name in ("chart-capture.txt", "chart-capture.png"):
+    for name in (f"{dest.stem}-capture.txt", f"{dest.stem}-capture.png"):
         path = dest.with_name(name)
         if path.is_file():
             path.unlink()
 
 
-def capture_chart(symbol, dest, bars, opener=None):
+def capture_chart(symbol, dest, bars, opener=None, interval="D", fallback_label=None, allow_fallback=True):
     """Try the public TradingView chart. A real block becomes the yfinance chart."""
     if opener is None:
-        opener = _playwright_chart
+        def opener(sym, path, _interval=interval):
+            return _playwright_chart(sym, path, interval=_interval)
     try:
         shot = opener(symbol, dest)
     except Exception as exc:  # noqa: BLE001 — the runner must still render
         shot = {"ok": False, "reason": f"{type(exc).__name__}: {exc}", "text": str(exc)}
     text = f"{shot.get('text') or ''} {shot.get('reason') or ''}"
+    label = fallback_label or (FALLBACK_LABEL_5M if str(interval) in ("5", "15") else FALLBACK_LABEL)
     if shot.get("ok") and not walled(text):
         _clear_capture_failure(dest)
         return {
             "source": "tradingview",
             "path": shot.get("path") or str(dest),
-            "url": chart_url(symbol),
+            "url": chart_url(symbol, interval),
             "captured_at": shot.get("captured_at") or "",
             "label": "TradingView",
             "reason": "",
+            "interval": str(interval),
             "technicals": shot.get("technicals") or {},
         }
     reason = "bot wall" if walled(text) else (shot.get("reason") or "chart capture failed")
     kept = _keep_capture_failure(dest, shot, reason)
-    draw_yf_chart(bars, dest, symbol)
-    return {
+    if not allow_fallback:
+        return {
+            "source": "blocked",
+            "path": str(dest),
+            "url": chart_url(symbol, interval),
+            "label": label,
+            "reason": reason,
+            "interval": str(interval),
+            "capture_note": kept["note"],
+            "capture_image": kept["image"],
+            "technicals": {},
+        }
+    tag = "5m" if str(interval) == "5" else ("15m" if str(interval) == "15" else "1D")
+    draw_yf_chart(bars, dest, symbol, label=label, tag=tag)
+    drawn = {
         "source": "yfinance",
         "path": str(dest),
-        "url": chart_url(symbol),
+        "url": chart_url(symbol, interval),
         "captured_at": "",
-        "label": FALLBACK_LABEL,
+        "label": label,
         "reason": reason,
+        "interval": str(interval),
         "capture_note": kept["note"],
         "capture_image": kept["image"],
         "technicals": {},
+    }
+    if str(interval) in ("5", "15"):
+        drawn["plot"] = dict(YF_PLOT)
+        drawn["scale_bars"] = list(bars or [])
+    return drawn
+
+
+def capture_intraday(symbol, directory, bars_5m, bars_15m=None, opener=None):
+    """5-minute TradingView first. 15-minute if that capture fails. yfinance 5m only if both are blocked."""
+    directory = Path(directory)
+    shot5 = capture_chart(
+        symbol, directory / "chart-5m.png", bars_5m, opener=opener, interval="5",
+        fallback_label=FALLBACK_LABEL_5M, allow_fallback=False,
+    )
+    if shot5.get("source") == "tradingview":
+        shot5["scale_bars"] = list(bars_5m or [])
+        return shot5
+    shot15 = capture_chart(
+        symbol, directory / "chart-15m.png", bars_15m or bars_5m, opener=opener, interval="15",
+        fallback_label=FALLBACK_LABEL_5M, allow_fallback=False,
+    )
+    if shot15.get("source") == "tradingview":
+        shot15["interval"] = "15"
+        shot15["reason"] = f"5m: {shot5.get('reason') or 'capture failed'}"
+        shot15["scale_bars"] = list(bars_15m or bars_5m or [])
+        return shot15
+    dest = directory / "chart-5m.png"
+    draw_yf_chart(bars_5m, dest, symbol, label=FALLBACK_LABEL_5M, tag="5m")
+    return {
+        "source": "yfinance",
+        "path": str(dest),
+        "url": chart_url(symbol, "5"),
+        "label": FALLBACK_LABEL_5M,
+        "reason": f"5m: {shot5.get('reason') or 'capture failed'}; 15m: {shot15.get('reason') or 'capture failed'}",
+        "interval": "5",
+        "plot": dict(YF_PLOT),
+        "scale_bars": list(bars_5m or []),
     }
 
 
@@ -224,7 +280,7 @@ def _open_browser(play):
     return browser, context
 
 
-def _playwright_chart(symbol, dest):
+def _playwright_chart(symbol, dest, interval="D"):
     from playwright.sync_api import sync_playwright
     from realchart.session import now_ist
     dest = Path(dest)
@@ -237,7 +293,7 @@ def _playwright_chart(symbol, dest):
         browser, context = _open_browser(play)
         page = context.new_page()
         try:
-            page.goto(chart_url(symbol), timeout=45000, wait_until="domcontentloaded")
+            page.goto(chart_url(symbol, interval), timeout=45000, wait_until="domcontentloaded")
             _dismiss_cookies(page)
             try:
                 _wait_chart(page)
@@ -252,7 +308,7 @@ def _playwright_chart(symbol, dest):
             elif ok and not chart_painted(dest):
                 ok = False
                 reason = "chart did not paint"
-            elif ok:
+            elif ok and str(interval) == "D":
                 page.goto(technicals_url(symbol), timeout=45000, wait_until="domcontentloaded")
                 _dismiss_cookies(page)
                 page.wait_for_timeout(2000)

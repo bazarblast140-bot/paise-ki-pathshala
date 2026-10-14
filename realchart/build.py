@@ -89,7 +89,7 @@ def _on_session(rows, stamp, session, now, dry_run):
     return kept, closed
 
 
-def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_opener=None, article_opener=None):
+def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_opener=None, article_opener=None, bars_intraday=None, chain_for=None):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     now = now_ist(now)
@@ -103,9 +103,10 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
         (out / "SKIP").write_text("no session\n", encoding="utf-8")
         return 0
     try:
-        levels, article, chart = _prepare(
+        levels, article, chart, intraday = _prepare(
             kind, session, now, out, bars_for=bars_for, articles=articles,
             chart_opener=chart_opener, article_opener=article_opener, dry_run=dry_run,
+            bars_intraday=bars_intraday, chain_for=chain_for,
         )
         rows = script.chunks_for(kind, levels, article)
         faults = script.lint(rows) + script.number_faults(rows, levels)
@@ -114,9 +115,14 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
         from realchart.voice import speak
         voice = speak(script.spoken_text(rows), out / "voice.wav", kind, dry_run=dry_run, cache_key=f"{kind}-{levels.get('last_date')}-{levels.get('symbol')}")
         from realchart.render import assemble, frames
-        pics = frames(out / "cards", kind, levels, rows, chart.get("path"), article)
+        pics = frames(out / "cards", kind, levels, rows, chart.get("path"), article, intraday)
         assemble(pics, out / "voice.wav", out / "final.mp4")
-        _write_sources(out, kind, levels, article, chart, rows, voice, now)
+        from realchart.ends import attach
+        try:
+            attach(out / "final.mp4", out)
+        except FileNotFoundError as exc:
+            raise Hold("ends", str(exc)) from exc
+        _write_sources(out, kind, levels, article, chart, rows, voice, now, intraday)
         from realchart.qa import check
         qa_faults = check(out, rows, levels, voice.get("engine"), dry_run=dry_run)
         verdict = "DRY-OK" if dry_run and not qa_faults else ("PASS" if not qa_faults else "HOLD")
@@ -127,6 +133,13 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             "chart": chart.get("source"),
             "label": chart.get("label"),
             "chart_reason": chart.get("reason") or "",
+            "intraday_chart": (intraday or {}).get("source") or "",
+            "intraday_interval": (intraday or {}).get("interval") or "",
+            "intraday_label": (intraday or {}).get("label") or "",
+            "intraday_chart_reason": (intraday or {}).get("reason") or "",
+            "levels_chip": levels.get("levels_chip") or "",
+            "oi_status": levels.get("oi_status") or "",
+            "rr": levels.get("rr"),
             "values_from": levels.get("values_from"),
             "voice": voice.get("engine"),
             "sync": "script-timeline",
@@ -152,7 +165,42 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
         return 2
 
 
-def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener=None, article_opener=None, dry_run=False):
+def _download_intraday(ticker, session, interval):
+    try:
+        import yfinance as yf
+        frame = yf.download(ticker, period="5d", interval=f"{interval}m", progress=False, auto_adjust=False)
+    except Exception:  # noqa: BLE001
+        return []
+    if frame is None or getattr(frame, "empty", True):
+        return []
+    if hasattr(frame.columns, "levels"):
+        try:
+            frame.columns = frame.columns.get_level_values(0)
+        except Exception:  # noqa: BLE001
+            pass
+    rows = []
+    for index, row in frame.dropna(subset=["Close"]).iterrows():
+        stamp = index
+        try:
+            if getattr(stamp, "tzinfo", None) is None:
+                stamp = stamp.tz_localize("UTC")
+            stamp = stamp.tz_convert(now_ist().tzinfo)
+        except Exception:  # noqa: BLE001
+            pass
+        day = str(getattr(stamp, "date", lambda: stamp)())[:10]
+        if day != session.isoformat():
+            continue
+        rows.append({
+            "date": day,
+            "o": float(row["Open"]),
+            "h": float(row["High"]),
+            "l": float(row["Low"]),
+            "c": float(row["Close"]),
+        })
+    return rows
+
+
+def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener=None, article_opener=None, dry_run=False, bars_intraday=None, chain_for=None):
     symbol, ticker = ("NSE:NIFTY", "^NSEI")
     if kind == "ta":
         candidates = []
@@ -202,8 +250,23 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
         article["capture"] = shot
         if not shot.get("ok"):
             raise Hold("news", shot.get("reason") or "article capture failed")
+    intraday = None
+    if kind in ("close", "ta"):
+        if bars_intraday is not None:
+            bars_5m = list(bars_intraday(levels.get("yf") or "^NSEI", "5"))
+            bars_15m = list(bars_intraday(levels.get("yf") or "^NSEI", "15"))
+        else:
+            bars_5m = _download_intraday(levels.get("yf") or "^NSEI", session, "5")
+            bars_15m = _download_intraday(levels.get("yf") or "^NSEI", session, "15")
+        intraday = capture.capture_intraday(
+            levels["symbol"], out, bars_5m, bars_15m, opener=chart_opener,
+        )
+    from realchart.levels import apply_screen_levels, fetch_option_chain
+    chain = chain_for(levels["symbol"]) if chain_for else fetch_option_chain(levels["symbol"], session)
+    if not apply_screen_levels(levels, chain):
+        raise Hold("rr", "RR below 1.5 from pivot and OI levels")
     (out / "levels.json").write_text(json.dumps({k: v for k, v in levels.items() if k != "bars"}, indent=2) + "\n", encoding="utf-8")
-    return levels, article, chart
+    return levels, article, chart, intraday
 
 
 def _apply_technicals(levels, chart):
@@ -220,7 +283,7 @@ def _apply_technicals(levels, chart):
     levels["values_from"] = "tradingview"
 
 
-def _write_sources(out, kind, levels, article, chart, rows, voice, now):
+def _write_sources(out, kind, levels, article, chart, rows, voice, now, intraday=None):
     title = rows[0]["d"]
     body = "\n".join(row["d"] for row in rows if row.get("sec") != "key")
     script_txt = (
@@ -239,6 +302,10 @@ def _write_sources(out, kind, levels, article, chart, rows, voice, now):
         f"- symbol {levels.get('symbol')} date {levels.get('last_date')} setup {levels.get('setup')}",
         f"- chart {chart.get('source')} {chart.get('url')} {chart.get('label')}",
         f"- chart reason {chart.get('reason') or 'none'}",
+        f"- intraday {(intraday or {}).get('source') or 'none'} {(intraday or {}).get('interval') or ''} {(intraday or {}).get('label') or ''}".rstrip(),
+        f"- intraday reason {(intraday or {}).get('reason') or 'none'}",
+        f"- {levels.get('levels_chip') or ''}",
+        f"- oi {levels.get('oi_status') or ''} rr {levels.get('rr')}",
         f"- values {levels.get('values_from')} (EMA/RSI stated as cards, not lines)",
         f"- voice {voice.get('engine')} requests {voice.get('requests')}",
         "- sync script-timeline hook 0-3s",

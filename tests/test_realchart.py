@@ -11,7 +11,9 @@ from unittest import mock
 import nifty_day
 from realchart import capture, script
 from realchart.build import _on_session, run
-from realchart.levels import compute, pick_setup
+from realchart.levels import (
+    apply_screen_levels, compute, floor_pivots, option_chain_url, parse_option_chain, pick_setup, screen_zones,
+)
 from realchart.news import choose
 from realchart.session import close_matches, dry_session, expected_session, started
 
@@ -47,6 +49,42 @@ def _bars(n=40, base=22000.0, end=None):
 
 def _stamp(day):
     return datetime(day.year, day.month, day.day, 15, 30, tzinfo=IST)
+
+
+def _bars_that_clear_rr():
+    """Sit the close just above S1 so the pivot walk clears RR 1.5 without invented OI."""
+    bars = _bars()
+    s1 = floor_pivots(bars[-2])["s1"]
+    last = dict(bars[-1])
+    last["c"] = round(s1 + 8, 2)
+    last["o"] = last["c"]
+    last["h"] = max(float(last["h"]), last["c"] + 5)
+    last["l"] = min(float(last["l"]), last["c"] - 5)
+    bars[-1] = last
+    return bars
+
+
+def _held_chain(_symbol=None):
+    return {"ok": False, "reason": "NSE option chain held: test"}
+
+
+def _intraday_bars(_ticker, _interval):
+    return [
+        {"date": "2026-10-08", "o": 22100, "h": 22120, "l": 22090, "c": 22110},
+        {"date": "2026-10-08", "o": 22110, "h": 22130, "l": 22100, "c": 22115},
+    ]
+
+
+def _color_clip(dest, seconds, size="640x360"):
+    import subprocess
+    subprocess.run([
+        "ffmpeg", "-y", "-v", "error",
+        "-f", "lavfi", "-i", f"color=c=0x2244aa:s={size}:r=30:d={seconds}",
+        "-f", "lavfi", "-i", "sine=frequency=330:sample_rate=48000",
+        "-t", str(seconds),
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+        str(dest),
+    ], check=True)
 
 
 class SessionTests(unittest.TestCase):
@@ -102,6 +140,92 @@ class LevelTests(unittest.TestCase):
         self.assertEqual(picked["symbol"], "NSE:INFY")
         self.assertEqual(picked["setup"], setup)
 
+    def test_floor_pivot_is_the_prior_day_ohlc(self):
+        bar = {"date": "2026-10-13", "h": 100, "l": 90, "c": 97}
+        piv = floor_pivots(bar)
+        pivot = (100 + 90 + 97) / 3.0
+        self.assertAlmostEqual(piv["pivot"], pivot)
+        self.assertAlmostEqual(piv["r1"], 2 * pivot - 90)
+        self.assertAlmostEqual(piv["s1"], 2 * pivot - 100)
+        self.assertAlmostEqual(piv["r2"], pivot + (100 - 90))
+        self.assertAlmostEqual(piv["s2"], pivot - (100 - 90))
+        self.assertEqual(piv["pivot_date"], "2026-10-13")
+
+    def test_option_chain_uses_max_and_next_oi_on_the_nearest_expiry(self):
+        from datetime import date
+        payload = {
+            "records": {
+                "expiryDates": ["09-Oct-2026", "16-Oct-2026", "23-Oct-2026"],
+                "timestamp": "14-Oct-2026 15:30:00",
+                "data": [
+                    {"expiryDate": "09-Oct-2026", "strikePrice": 1,
+                     "CE": {"openInterest": 99999}, "PE": {"openInterest": 99999}},
+                    {"expiryDate": "16-Oct-2026", "strikePrice": 22600,
+                     "CE": {"openInterest": 100}, "PE": {"openInterest": 50}},
+                    {"expiryDate": "16-Oct-2026", "strikePrice": 22700,
+                     "CE": {"openInterest": 300}, "PE": {"openInterest": 10}},
+                    {"expiryDate": "16-Oct-2026", "strikePrice": 22500,
+                     "CE": {"openInterest": 200}, "PE": {"openInterest": 400}},
+                    {"expiryDate": "16-Oct-2026", "strikePrice": 22400,
+                     "CE": {"openInterest": 10}, "PE": {"openInterest": 250}},
+                    {"expiryDate": "23-Oct-2026", "strikePrice": 22800,
+                     "CE": {"openInterest": 5}, "PE": {"openInterest": 6}},
+                ],
+            }
+        }
+        parsed = parse_option_chain(payload, date(2026, 10, 14))
+        self.assertTrue(parsed["ok"])
+        self.assertEqual(parsed["expiry"], "16-Oct-2026")
+        self.assertEqual(parsed["as_of"], "15:30 IST")
+        self.assertEqual(parsed["call_oi"], 22700)
+        self.assertEqual(parsed["call_oi_next"], 22500)
+        self.assertEqual(parsed["put_oi"], 22500)
+        self.assertEqual(parsed["put_oi_next"], 22400)
+        later = parse_option_chain(payload, date(2026, 10, 30))
+        self.assertEqual(later["expiry"], "23-Oct-2026")
+        self.assertEqual(later["call_oi"], 22800)
+        self.assertIn("option-chain-indices?symbol=NIFTY", option_chain_url("NSE:NIFTY"))
+        self.assertIn("option-chain-equities?symbol=INFY", option_chain_url("NSE:INFY"))
+        empty = parse_option_chain({"records": {"expiryDates": ["16-Oct-2026"], "data": []}}, date(2026, 10, 14))
+        self.assertFalse(empty["ok"])
+        self.assertNotIn("call_oi", empty)
+
+    def test_a_held_chain_keeps_pivots_and_does_not_invent_strikes(self):
+        bars = _bars()
+        levels = compute(bars, "NSE:NIFTY", "^NSEI")
+        structure = list(levels["sl_zone"])
+        apply_screen_levels(levels, _held_chain())
+        for key in ("call_oi", "call_oi_next", "put_oi", "put_oi_next", "expiry"):
+            self.assertNotIn(key, levels)
+        self.assertEqual(levels["oi_status"], "held")
+        self.assertEqual(levels["levels_chip"], "Levels: Pivot (prev day OHLC) only, NSE option chain held")
+        self.assertEqual(levels["pivot_date"], bars[-2]["date"])
+        self.assertEqual(levels["structure_sl_zone"], structure)
+        self.assertFalse(levels["rr_ok"])
+
+    def test_rr_walks_to_the_first_target_that_clears_one_and_a_half(self):
+        bar = {"date": "2026-10-13", "h": 100, "l": 90, "c": 97}
+        pivots = floor_pivots(bar)
+        zones = screen_zones(97, pivots, None)
+        self.assertIsNotNone(zones)
+        self.assertGreaterEqual(zones["rr"], 1.5)
+        self.assertAlmostEqual(zones["target"], pivots["r2"], places=4)
+        self.assertLess((pivots["r1"] - 97) / (97 - pivots["s1"]), 1.5)
+        self.assertIsNone(screen_zones(pivots["r2"] + 5, pivots, None))
+        levels = compute(_bars_that_clear_rr(), "NSE:NIFTY", "^NSEI")
+        chain = {
+            "ok": True, "expiry": "16-Oct-2026", "as_of": "15:30 IST",
+            "call_oi": 23000.0, "call_oi_next": 23100.0, "put_oi": 22000.0, "put_oi_next": 21900.0,
+        }
+        self.assertTrue(apply_screen_levels(levels, chain))
+        self.assertGreaterEqual(levels["rr"], 1.5)
+        self.assertEqual(
+            levels["levels_chip"],
+            "Levels: Pivot (prev day OHLC) + NSE option chain OI, 16-Oct-2026, 15:30 IST",
+        )
+        self.assertNotIn("IST IST", levels["levels_chip"])
+        self.assertEqual(levels["oi_status"], "ok")
+
 
 class NewsTests(unittest.TestCase):
     def test_only_a_real_dated_article_is_chosen(self):
@@ -148,6 +272,21 @@ class ScriptTests(unittest.TestCase):
         bad = script.chunks_for("close", levels, None)
         bad[1]["d"] = "Close 99,999.00"
         self.assertTrue(script.number_faults(bad, levels))
+        close_rows = script.chunks_for("close", levels, None)
+        ta_rows = script.chunks_for("ta", levels, None)
+        recap_rows = script.chunks_for("recap", levels, None)
+        self.assertEqual([row["sec"] for row in close_rows], ["hook", "chart", "intraday", "view", "cta"])
+        self.assertEqual([row["sec"] for row in ta_rows][:3], ["hook", "chart", "intraday"])
+        self.assertNotIn("intraday", [row["sec"] for row in recap_rows])
+        self.assertNotIn("intraday", [row["sec"] for row in rows])
+        spoken = script.spoken_text(close_rows)
+        self.assertIn(script.CTA, spoken)
+        self.assertIn(script.DISCLAIMER, spoken)
+        for phrase in script.FORBIDDEN_FOLLOW:
+            self.assertNotIn(phrase.lower(), spoken.lower())
+        self.assertEqual(script.lint(close_rows), [])
+        close_rows[-1]["d"] = "Paise Ki Pathshala follow करो"
+        self.assertTrue(any(fault.startswith("channel follow line") for fault in script.lint(close_rows)))
 
 
 class CaptureTests(unittest.TestCase):
@@ -259,6 +398,41 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(parsed["rsi14"], 41.20)
         self.assertEqual(capture.parse_technicals("no numbers here"), {})
 
+    def test_five_minute_failure_keeps_the_fifteen_minute_tradingview_chart(self):
+        bars = _bars()
+
+        def opener(_symbol, dest):
+            if Path(dest).name.startswith("chart-5m"):
+                return {"ok": False, "reason": "captcha", "text": "captcha"}
+            return {"ok": True, "text": "candles", "path": str(dest)}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            shot = capture.capture_intraday("NSE:NIFTY", tmp, bars, bars, opener=opener)
+            self.assertEqual(shot["source"], "tradingview")
+            self.assertEqual(shot["interval"], "15")
+            self.assertTrue(str(shot["reason"]).startswith("5m:"))
+            self.assertNotEqual(shot["label"], capture.FALLBACK_LABEL_5M)
+            self.assertEqual(Path(shot["path"]).name, "chart-15m.png")
+            note = (Path(tmp) / "chart-5m-capture.txt").read_text(encoding="utf-8")
+            self.assertIn("captcha", note)
+
+    def test_both_blocked_intraday_charts_use_the_five_minute_yfinance_label(self):
+        bars = _bars()
+
+        def opener(_symbol, _dest):
+            return {"ok": False, "reason": "captcha", "text": "unusual traffic"}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            shot = capture.capture_intraday("NSE:NIFTY", tmp, bars, bars, opener=opener)
+            self.assertEqual(shot["source"], "yfinance")
+            self.assertEqual(shot["interval"], "5")
+            self.assertEqual(shot["label"], capture.FALLBACK_LABEL_5M)
+            self.assertIn("5m:", shot["reason"])
+            self.assertIn("15m:", shot["reason"])
+            self.assertEqual(shot["plot"], capture.YF_PLOT)
+            self.assertTrue((Path(tmp) / "chart-5m.png").is_file())
+            self.assertTrue((Path(tmp) / "chart-15m-capture.txt").is_file())
+
 
 class BuildTests(unittest.TestCase):
     def test_no_article_holds_and_does_not_invent_one(self):
@@ -301,8 +475,31 @@ class BuildTests(unittest.TestCase):
             self.assertTrue(Path(quoted).is_absolute(), quoted)
             self.assertTrue(quoted.endswith(".png"))
 
-    def test_dry_run_renders_without_gemini_and_reports_the_fallback_chart(self):
+    def test_rr_below_one_and_a_half_holds_before_voice(self):
         bars = _bars()
+        stamp = _stamp(datetime(2026, 10, 8).date())
+
+        def walled(_symbol, _dest):
+            return {"ok": False, "reason": "captcha", "text": "captcha"}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "run"
+            with mock.patch.dict(os.environ, {"REALCHART_NO_ALERT": "1"}), \
+                 mock.patch("gemini_voice.write_speech", side_effect=AssertionError("no gemini")):
+                code = run(
+                    "close", out, now=FRIDAY, dry_run=True,
+                    bars_for=lambda _t: (bars, stamp), articles=[], chart_opener=walled,
+                    bars_intraday=_intraday_bars, chain_for=_held_chain,
+                )
+            self.assertEqual(code, 2)
+            self.assertIn("RR below 1.5", (out / "HOLD").read_text(encoding="utf-8"))
+            self.assertFalse((out / "voice.wav").exists())
+            self.assertFalse((out / "final.mp4").exists())
+
+    def test_dry_run_renders_without_gemini_and_reports_the_fallback_chart(self):
+        from realchart.ends import trim_intro
+        from realchart.qa import probe
+        bars = _bars_that_clear_rr()
         stamp = _stamp(datetime(2026, 10, 8).date())
 
         def walled(_symbol, dest):
@@ -311,11 +508,17 @@ class BuildTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "run"
             history = Path(tmp) / "history.json"
+            source = Path(tmp) / "intro-source.mp4"
+            intro = Path(tmp) / "intro_rtt.mp4"
+            _color_clip(source, 8)
+            trim_intro(source, intro)
             with mock.patch("realchart.build.HISTORY", history), \
+                 mock.patch("realchart.ends.INTRO_RTT", intro), \
                  mock.patch("gemini_voice.write_speech", side_effect=AssertionError("no gemini")):
                 code = run(
                     "close", out, now=FRIDAY, dry_run=True,
                     bars_for=lambda _t: (bars, stamp), articles=[], chart_opener=walled,
+                    bars_intraday=_intraday_bars, chain_for=_held_chain,
                 )
             detail = (out / "qa.json").read_text(encoding="utf-8") if (out / "qa.json").is_file() else "no qa"
             self.assertEqual(code, 0, detail)
@@ -325,14 +528,38 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(qa["label"], LABEL)
             self.assertEqual(qa["voice"], "dry")
             self.assertEqual(qa["chart_reason"], "bot wall")
-            source = (out / "source.md").read_text(encoding="utf-8")
-            self.assertIn(LABEL, source)
-            self.assertIn("chart reason bot wall", source)
-            self.assertIn("requests 0", source)
+            self.assertEqual(qa["intraday_chart"], "yfinance")
+            self.assertEqual(qa["intraday_label"], capture.FALLBACK_LABEL_5M)
+            self.assertIn("5m:", qa["intraday_chart_reason"])
+            self.assertIn("15m:", qa["intraday_chart_reason"])
+            self.assertEqual(qa["oi_status"], "held")
+            self.assertGreaterEqual(qa["rr"], 1.5)
+            source_md = (out / "source.md").read_text(encoding="utf-8")
+            self.assertIn(LABEL, source_md)
+            self.assertIn("chart reason bot wall", source_md)
+            self.assertIn("requests 0", source_md)
+            self.assertIn(capture.FALLBACK_LABEL_5M, source_md)
             self.assertIn("bot wall", (out / "chart-capture.txt").read_text(encoding="utf-8"))
             levels = json.loads((out / "levels.json").read_text(encoding="utf-8"))
             self.assertEqual(levels["chart_reason"], "bot wall")
+            self.assertNotIn("call_oi", levels)
             self.assertFalse(history.exists())
+            script_txt = (out / "script.txt").read_text(encoding="utf-8")
+            self.assertIn(script.CTA, script_txt)
+            self.assertIn(script.DISCLAIMER, script_txt)
+            for phrase in script.FORBIDDEN_FOLLOW:
+                self.assertNotIn(phrase.lower(), script_txt.lower())
+            main = probe(out / "final.mp4")
+            yt = probe(out / "final_yt.mp4")
+            ig = probe(out / "final_ig.mp4")
+            self.assertGreaterEqual(main["duration"], 40)
+            self.assertLessEqual(main["duration"], 50)
+            self.assertEqual(main["width"], 1080)
+            self.assertEqual(main["height"], 1920)
+            self.assertGreater(yt["duration"], main["duration"])
+            self.assertGreater(ig["duration"], yt["duration"])
+            order = [row["sec"] for row in json.loads((out / "script.json").read_text(encoding="utf-8"))]
+            self.assertEqual(order[:3], ["hook", "chart", "intraday"])
 
     def test_a_repeated_setup_holds(self):
         now = datetime(2026, 10, 13, 18, 0, tzinfo=IST)
@@ -375,6 +602,18 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("playwright install chromium", daily)
         self.assertIn("run/chart-capture.png", daily)
         self.assertIn("run/chart-capture.txt", daily)
+        self.assertIn("run/final_yt.mp4", daily)
+        self.assertIn("run/final_ig.mp4", daily)
+        self.assertIn("run/chart-5m-capture.png", daily)
+        self.assertIn("run/chart-15m-capture.txt", daily)
+        publish_text = (ROOT / ".github" / "workflows" / "publish-artifact.yml").read_text(encoding="utf-8")
+        youtube = publish_text.split("name: Upload a new YouTube video", 1)[1].split("name: Cross-post the Reel", 1)[0]
+        reel = publish_text.split("name: Cross-post the Reel", 1)[1].split("name: Commit the ledger fill", 1)[0]
+        self.assertLess(youtube.find("final_yt.mp4"), youtube.find("python publish.py"))
+        self.assertNotIn("final_ig", youtube)
+        self.assertNotIn("skip_ig", youtube)
+        self.assertLess(reel.find("final_ig.mp4"), reel.find("python publish_instagram.py"))
+        self.assertIn("main.mp4", reel)
         self.assertIn('"$code" != "0"', daily)
         self.assertIn('"$code" != "2"', daily)
         self.assertIn("post_story=true", daily)
@@ -412,6 +651,124 @@ class WorkflowTests(unittest.TestCase):
                 self.assertFalse(gemini_budget.topic_short_allowed(now))
                 self.assertTrue(gemini_budget.allow("news", "1", now))
                 self.assertTrue(gemini_budget.allow("close", "1", now))
+
+
+class OverlayTests(unittest.TestCase):
+    def test_overlays_leave_pixels_outside_the_plot_and_do_not_clamp_off_scale(self):
+        from PIL import Image
+        from realchart.render import frames, paint_level_overlays
+        image = Image.new("RGB", (1080, 1080), (22, 26, 32))
+        outside = (8, 200)
+        below = (500, 1050)
+        image.putpixel(outside, (11, 22, 33))
+        image.putpixel(below, (44, 55, 66))
+        candle = (500, 400)
+        image.putpixel(candle, (34, 181, 60))
+        bars = [{"h": 110, "l": 90, "o": 95, "c": 100, "date": "2026-10-14"}]
+        levels = {
+            "pivot": 100, "r1": 104, "s1": 96, "r2": 108, "s2": 92,
+            "sl_zone": [92, 96], "target_zone": [104, 108],
+            "levels_chip": "Levels: Pivot (prev day OHLC) only, NSE option chain held",
+        }
+        labels = paint_level_overlays(image, levels, plot=capture.YF_PLOT, bars=bars)
+        self.assertEqual(image.getpixel(outside), (11, 22, 33))
+        self.assertEqual(image.getpixel(below), (44, 55, 66))
+        self.assertIn("P", labels)
+        self.assertIn("chip", labels)
+        off = Image.new("RGB", (200, 200), (10, 10, 10))
+        edge = (100, 40)
+        off.putpixel(edge, (10, 10, 10))
+        named = paint_level_overlays(
+            off, {"r2": 99999, "levels_chip": ""},
+            plot={"left": 20, "top": 40, "width": 160, "height": 100},
+            bars=[{"h": 10, "l": 1}],
+        )
+        self.assertIn("R2 off-scale", named)
+        self.assertEqual(off.getpixel(edge), (10, 10, 10))
+        levels = compute(_bars_that_clear_rr(), "NSE:NIFTY", "^NSEI")
+        apply_screen_levels(levels, _held_chain())
+        rows = script.chunks_for("close", levels, None)
+        with tempfile.TemporaryDirectory() as tmp:
+            chart = Path(tmp) / "chart.png"
+            Image.new("RGB", (1080, 1080), (30, 30, 30)).save(chart)
+            intra = {
+                "path": str(chart), "label": capture.FALLBACK_LABEL_5M, "interval": "5",
+                "plot": capture.YF_PLOT, "scale_bars": _intraday_bars(None, "5"),
+            }
+            made = frames(Path(tmp) / "cards", "close", levels, rows, chart, None, intra)
+            self.assertEqual([path.name for path in made], ["hook.png", "chart.png", "intraday.png", "view.png", "cta.png"])
+            article = {"title": "Nifty ends", "key_sentence": "Lower.", "source": "Mint", "published": "14 Oct"}
+            news = frames(Path(tmp) / "news", "news", levels, script.chunks_for("news", levels, article), chart, article, intra)
+            self.assertNotIn("intraday.png", [path.name for path in news])
+            self.assertEqual([path.name for path in news][:3], ["hook.png", "chart.png", "news.png"])
+
+
+class EndsTests(unittest.TestCase):
+    def test_trim_and_copy_concat_do_not_reencode_the_main_reel(self):
+        import inspect
+        from realchart import qa
+        from realchart.ends import (
+            FOLLOW_PKP, FOLLOW_RTT, INTRO_HI, INTRO_LO, INTRO_SOURCE, OUTRO_PKP, OUTRO_RTT, attach, trim_intro,
+        )
+        self.assertEqual(FOLLOW_RTT, "Rajesh Technical Trader ko follow करो")
+        self.assertEqual(FOLLOW_PKP, "Paise Ki Pathshala follow करो")
+        self.assertTrue(OUTRO_RTT.is_file())
+        self.assertTrue(OUTRO_PKP.is_file())
+        for path in (OUTRO_RTT, OUTRO_PKP):
+            info = qa.probe(path)
+            self.assertEqual(info["width"], 1080)
+            self.assertEqual(info["height"], 1920)
+            self.assertEqual(info["codec"], "h264")
+            self.assertGreaterEqual(info["duration"], 1.8)
+            self.assertLessEqual(info["duration"], 2.3)
+        source = inspect.getsource(qa.check)
+        self.assertIn('video = out / "final.mp4"', source)
+        self.assertNotIn('out / "final_ig.mp4"', source)
+        self.assertNotIn('out / "final_yt.mp4"', source)
+        ends = (ROOT / "realchart" / "ends.py").read_text(encoding="utf-8")
+        self.assertNotIn("edge_tts", ends.lower())
+        self.assertNotIn("eleven", ends.lower())
+        self.assertNotIn("gemini", ends.lower())
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            clip = tmp / "long.mp4"
+            intro = tmp / "intro_rtt.mp4"
+            _color_clip(clip, 9)
+            trim_intro(clip, intro, seconds=8)
+            info = qa.probe(intro)
+            self.assertGreaterEqual(info["duration"], INTRO_LO)
+            self.assertLessEqual(info["duration"], INTRO_HI)
+            self.assertEqual((info["width"], info["height"]), (1080, 1920))
+            with self.assertRaises(FileNotFoundError):
+                trim_intro(INTRO_SOURCE, tmp / "missing.mp4")
+            main = tmp / "main.mp4"
+            _color_clip(main, 1, size="1080x1920")
+            # The color clip is not the shared encode. Build a matching main, then copy-concat.
+            from realchart.render import assemble
+            from PIL import Image
+            cards = tmp / "cards"
+            cards.mkdir()
+            image = Image.new("RGB", (32, 32), (12, 18, 24))
+            paths = []
+            for name in ("a", "b"):
+                image.save(cards / f"{name}.png")
+                paths.append(cards / f"{name}.png")
+            main = assemble(paths, tmp / "missing.wav", tmp / "final.mp4", seconds=1.0)
+            before = main.read_bytes()
+            with mock.patch("realchart.ends.INTRO_RTT", intro):
+                yt, ig = attach(main, tmp)
+            self.assertEqual(main.read_bytes(), before)
+            self.assertTrue(yt.is_file() and ig.is_file())
+            main_info = qa.probe(main)
+            yt_info = qa.probe(yt)
+            ig_info = qa.probe(ig)
+            self.assertAlmostEqual(yt_info["duration"], main_info["duration"] + qa.probe(OUTRO_PKP)["duration"], delta=0.15)
+            self.assertGreater(ig_info["duration"], yt_info["duration"])
+            self.assertEqual(yt_info["codec"], main_info["codec"])
+            with mock.patch("realchart.ends.INTRO_RTT", tmp / "absent.mp4"):
+                with self.assertRaises(FileNotFoundError) as raised:
+                    attach(main, tmp)
+            self.assertIn("intro_rtt.mp4", str(raised.exception))
 
 
 class StoryTests(unittest.TestCase):

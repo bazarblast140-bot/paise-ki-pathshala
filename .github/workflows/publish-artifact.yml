@@ -178,7 +178,12 @@ jobs:
           EXPECTED_CHANNEL_ID: ${{ vars.YT_FIN_CHANNEL_ID }}
           APPROVED: "true"
           EXPLICIT_PRIVACY: "1"
-        run: python publish.py
+        run: |
+          if [ -s run/final_yt.mp4 ]; then
+            cp -f run/final.mp4 run/main.mp4
+            cp -f run/final_yt.mp4 run/final.mp4
+          fi
+          python publish.py
       - name: Cross-post the Reel
         if: inputs.skip_ig != 'true'
         env:
@@ -195,7 +200,13 @@ jobs:
           MEDIA_REPO: ${{ vars.MEDIA_REPO || 'bazarblast140-bot/HEYGEN--INSTAGRAM-' }}
           MEDIA_REPO_TOKEN: ${{ secrets.MEDIA_REPO_TOKEN || secrets.GITHUB_TOKEN }}
           ACTIONS_TOKEN_FOR_COMPARE: ${{ secrets.GITHUB_TOKEN }}
-        run: python publish_instagram.py
+        run: |
+          if [ -s run/final_ig.mp4 ]; then
+            cp -f run/final_ig.mp4 run/final.mp4
+          elif [ -s run/main.mp4 ]; then
+            cp -f run/main.mp4 run/final.mp4
+          fi
+          python publish_instagram.py
       - name: Commit the ledger fill
         if: ${{ !cancelled() }}
         run: |

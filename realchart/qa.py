@@ -27,6 +27,7 @@ def probe(path):
 def check(out, rows, levels, voice_engine, dry_run=False):
     faults = []
     out = Path(out)
+    # The 40–50s gate is the main Reel only. final_yt.mp4 and final_ig.mp4 are concatenations.
     video = out / "final.mp4"
     if not video.is_file():
         faults.append("final.mp4 missing")

@@ -5,7 +5,14 @@ import re
 
 BANNED = ("हद", "पूँजी", "क्षमता", "तय करो", "पलटवार", "चीरती", "नतीजा", "हिसाब")
 DISCLAIMER = "सिर्फ सीखने के लिए, फाइनेंशियल एडवाइस नहीं।"
-CTA = "पैसे की पाठशाला फॉलो करो।"
+CTA = "अगला कौन सा chart देखना है? Comment करो."
+FORBIDDEN_FOLLOW = (
+    "फॉलो करो",
+    "follow करो",
+    "follow karo",
+    "Paise Ki Pathshala follow",
+    "Rajesh Technical Trader ko follow",
+)
 
 
 def _fmt(value):
@@ -58,6 +65,15 @@ def chunks_for(kind, levels, article=None):
             "k": close,
         },
     ]
+    if kind in ("close", "ta"):
+        rows.append({
+            "sec": "intraday",
+            "start": 12.0,
+            "end": 22.0,
+            "d": "5m session",
+            "t": "डेली चार्ट के बाद आज का इंट्राडे चार्ट है।",
+            "k": "5m",
+        })
     if headline:
         rows.append({
             "sec": "news",
@@ -71,12 +87,12 @@ def chunks_for(kind, levels, article=None):
     target = levels.get("target_zone") or [None, None]
     rows.append({
         "sec": "view",
-        "start": 22.0 if headline else 12.0,
+        "start": 22.0 if headline or kind in ("close", "ta") else 12.0,
         "end": 40.0,
         "d": (
-            f"EMA20 {_fmt(levels.get('ema20'))}  EMA50 {_fmt(levels.get('ema50'))}  "
-            f"RSI {_fmt(levels.get('rsi14'))}  "
-            f"SL {_fmt(sl[0])}–{_fmt(sl[1])}  target {_fmt(target[0])}–{_fmt(target[1])}"
+            f"P {_fmt(levels.get('pivot'))} R1 {_fmt(levels.get('r1'))} S1 {_fmt(levels.get('s1'))} "
+            f"R2 {_fmt(levels.get('r2'))} S2 {_fmt(levels.get('s2'))} "
+            f"SL {_fmt(sl[0])}–{_fmt(sl[1])} target {_fmt(target[0])}–{_fmt(target[1])}"
         ),
         "t": "बुल केस में टारगेट ज़ोन तक बाउंस possible है। बेयर केस में सपोर्ट टूट सकता है। यह एक scenario है।",
         "k": "scenario",
@@ -110,6 +126,10 @@ def lint(rows):
         faults.append("cta missing")
     if DISCLAIMER not in blob:
         faults.append("disclaimer missing")
+    lowered = text.lower()
+    for phrase in FORBIDDEN_FOLLOW:
+        if phrase.lower() in lowered:
+            faults.append(f"channel follow line: {phrase}")
     hook = next((row for row in rows if row.get("sec") == "hook"), None)
     if hook is None or float(hook.get("end") if hook.get("end") is not None else 99) > 3.0:
         faults.append("hook is outside 0-3s")
@@ -136,7 +156,11 @@ def price_numbers(text):
 
 def number_faults(rows, levels):
     allowed = []
-    for key in ("open", "high", "low", "close", "prev_close", "ema20", "ema50", "rsi14", "atr14", "support", "bounce_high", "next_support"):
+    for key in (
+        "open", "high", "low", "close", "prev_close", "ema20", "ema50", "rsi14", "atr14",
+        "support", "bounce_high", "next_support", "pivot", "r1", "s1", "r2", "s2",
+        "call_oi", "call_oi_next", "put_oi", "put_oi_next",
+    ):
         if levels.get(key) is not None:
             allowed.append(float(levels[key]))
     for zone in (levels.get("sl_zone") or [], levels.get("target_zone") or []):
