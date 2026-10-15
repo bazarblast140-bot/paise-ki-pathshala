@@ -180,14 +180,22 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             f"RSI14 {float(levels.get('rsi14') or 0):.2f}",
             yf_label,
         ], "CHART · DATA", chart_path, None, None),
-        ("view", [
-            "HAMARA VIEW · OPINION (scenario)",
-            str(levels.get("levels_chip") or "")[:70],
-            f"P {float(levels.get('pivot') or 0):.2f}  R1 {float(levels.get('r1') or 0):.2f}  S1 {float(levels.get('s1') or 0):.2f}",
-            f"R2 {float(levels.get('r2') or 0):.2f}  S2 {float(levels.get('s2') or 0):.2f}",
-        ], "OPINION", chart_path, None, levels),
         ("cta", [rows[-1]["d"][:80]], "CTA", None, None, None),
     ]
+    if kind != "news":
+        specs.insert(2, (
+            "view",
+            [
+                "HAMARA VIEW · OPINION (scenario)",
+                str(levels.get("levels_chip") or "")[:70],
+                f"P {float(levels.get('pivot') or 0):.2f}  R1 {float(levels.get('r1') or 0):.2f}  S1 {float(levels.get('s1') or 0):.2f}",
+                f"R2 {float(levels.get('r2') or 0):.2f}  S2 {float(levels.get('s2') or 0):.2f}",
+            ],
+            "OPINION",
+            chart_path,
+            None,
+            levels,
+        ))
     if intraday and kind in ("close", "ta") and intraday.get("path"):
         from PIL import Image
         with Image.open(intraday["path"]) as opened:

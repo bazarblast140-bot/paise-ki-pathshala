@@ -74,29 +74,32 @@ def chunks_for(kind, levels, article=None):
             "t": "डेली चार्ट के बाद आज का इंट्राडे चार्ट है।",
             "k": "5m",
         })
-    if headline:
+    if headline or sentence:
+        published = str((article or {}).get("published") or "").strip()
+        shown = " · ".join(part for part in (headline[:110], sentence[:240], source, published) if part)
         rows.append({
             "sec": "news",
             "start": 12.0,
-            "end": 22.0,
-            "d": f"{headline[:110]} · {source}",
+            "end": 40.0 if kind == "news" else 22.0,
+            "d": shown,
             "t": "यह खबर असली आर्टिकल से है। हमने कोई लाइन नहीं जोड़ी।",
             "k": source or "खबर",
         })
-    sl = levels.get("sl_zone") or [None, None]
-    target = levels.get("target_zone") or [None, None]
-    rows.append({
-        "sec": "view",
-        "start": 22.0 if headline or kind in ("close", "ta") else 12.0,
-        "end": 40.0,
-        "d": (
-            f"P {_fmt(levels.get('pivot'))} R1 {_fmt(levels.get('r1'))} S1 {_fmt(levels.get('s1'))} "
-            f"R2 {_fmt(levels.get('r2'))} S2 {_fmt(levels.get('s2'))} "
-            f"SL {_fmt(sl[0])}–{_fmt(sl[1])} target {_fmt(target[0])}–{_fmt(target[1])}"
-        ),
-        "t": "बुल केस में टारगेट ज़ोन तक बाउंस possible है। बेयर केस में सपोर्ट टूट सकता है। यह एक scenario है।",
-        "k": "scenario",
-    })
+    if kind != "news":
+        sl = levels.get("sl_zone") or [None, None]
+        target = levels.get("target_zone") or [None, None]
+        rows.append({
+            "sec": "view",
+            "start": 22.0 if headline or kind in ("close", "ta") else 12.0,
+            "end": 40.0,
+            "d": (
+                f"P {_fmt(levels.get('pivot'))} R1 {_fmt(levels.get('r1'))} S1 {_fmt(levels.get('s1'))} "
+                f"R2 {_fmt(levels.get('r2'))} S2 {_fmt(levels.get('s2'))} "
+                f"SL {_fmt(sl[0])}–{_fmt(sl[1])} target {_fmt(target[0])}–{_fmt(target[1])}"
+            ),
+            "t": "बुल केस में टारगेट ज़ोन तक बाउंस possible है। बेयर केस में सपोर्ट टूट सकता है। यह एक scenario है।",
+            "k": "scenario",
+        })
     rows.append({
         "sec": "cta",
         "start": 40.0,
@@ -120,8 +123,10 @@ def lint(rows):
         if word in text:
             faults.append(f"banned word: {word}")
     blob = spoken_text(rows)
-    if "possible" not in blob and "scenario" not in blob and "हो सकता" not in blob:
-        faults.append("scenario wording missing")
+    # The scenario line belongs to the trade view. News has no entry, stop, or target.
+    if any(row.get("sec") == "view" for row in rows):
+        if "possible" not in blob and "scenario" not in blob and "हो सकता" not in blob:
+            faults.append("scenario wording missing")
     if CTA not in blob:
         faults.append("cta missing")
     if DISCLAIMER not in blob:
