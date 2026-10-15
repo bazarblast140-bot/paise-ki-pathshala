@@ -291,6 +291,7 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
         if levels.get(key) is not None
     ]
     axis_report = {}
+    shot_maps = {}
     overlaid = None
     if intraday and kind in ("close", "ta") and intraday.get("path") and Path(intraday["path"]).is_file():
         from PIL import Image
@@ -303,6 +304,7 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             axis_report["intraday"] = _lines_on(shot, levels)
         overlaid = out / "intraday-overlay.png"
         shot.save(overlaid)
+        shot_maps = {str(overlaid): MAPPINGS.get(id(shot))}
     daily_lines = chart_path
     if chart_path and Path(chart_path).is_file() and levels.get("chart_source") == "tradingview":
         from PIL import Image
@@ -311,6 +313,7 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
         axis_report["daily"] = _lines_on(shot, levels)
         daily_lines = out / "daily-lines.png"
         shot.save(daily_lines)
+        shot_maps[str(daily_lines)] = MAPPINGS.get(id(shot))
     (out.parent / "axis.json").write_text(json.dumps(axis_report, indent=2) + "\n", encoding="utf-8")
     lines_drawn = bool((axis_report.get("intraday") or {}).get("drawn"))
     news_shot = None
@@ -366,15 +369,53 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
         _card(title, caption, spoken, footer, visual, zoom=zoom, anchor_y=anchor_y, chips=chips, dim=dim,
               header=card_header, section=section).save(path)
         made.append(path)
-        if sec in ("chart", "intraday", "view") and visual:
-            # A second shot of the same beat, zoomed on the latest candles: a visual change every 2-3 s.
-            zpath = out.parent / f"{sec}-zoom.png"
-            _card(title, caption, spoken, footer, visual, zoom=1.4, anchor_y=anchor_y, chips=chips, dim=dim,
-                  header=card_header, section=section).save(zpath)
-            variants[path.name] = str(zpath)
+        if sec in ("chart", "intraday", "view", "cta") and visual:
+            # Visual change every 2-3 s inside a beat: zoom in on the latest
+            # candles, then back out with a ring + arrow on the key level.
+            def extra(name, vis, z):
+                dest = out.parent / f"{sec}-{name}.png"
+                _card(title, caption, spoken, footer, vis, zoom=z, anchor_y=anchor_y, chips=chips, dim=dim,
+                      header=card_header, section=section).save(dest)
+                return str(dest)
+            drawn_before = len(DRAWN)
+            zoomed = extra("zoom", visual, 1.4)
+            marks = _marked(visual, shot_maps.get(str(visual)), levels, out.parent / f"{sec}-shot")
+            pulse = [[extra(f"mark{i}", m, zoom), 0.12] for i, m in enumerate(marks[:-1])]
+            held = [[extra("marked", marks[-1], zoom), 1.0]] if marks else []
+            if sec == "chart":
+                seq = [[zoomed, 1.0]] + pulse + held  # daily first, zoom in, zoom out on the level
+            elif sec == "intraday":
+                seq = pulse + held + [[zoomed, 1.0]]
+            else:
+                seq = [[zoomed, 1.0]] + held
+            variants[path.name] = seq
+            del DRAWN[drawn_before:]  # variant shots repeat the same text; count it once
     (out.parent / "variants.json").write_text(json.dumps(variants, indent=1) + "\n", encoding="utf-8")
     (out / "overlay_text.json").write_text(json.dumps(list(DRAWN), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return made
+
+
+MAPPINGS = {}
+
+
+def _marked(shot_path, mapping, levels, dest_stem):
+    """Three stills of a ring + arrow growing onto the pivot chip: the key spot."""
+    from PIL import Image
+    from realchart import level_lines
+    price = levels.get("pivot")
+    if not mapping or price is None or not Path(shot_path).is_file():
+        return []
+    label = f"P {inr(price, 0)}"
+    paths = []
+    for step, grow in enumerate((0.55, 0.8, 1.0)):
+        with Image.open(shot_path) as opened:
+            shot = opened.convert("RGB")
+        if not level_lines.mark(shot, mapping, price, label, grow=grow):
+            return []
+        dest = Path(f"{dest_stem}-mark{step}.png")
+        shot.save(dest)
+        paths.append(dest)
+    return paths
 
 
 def _lines_on(shot, levels):
@@ -384,6 +425,7 @@ def _lines_on(shot, levels):
     if not mapping:
         return {"ok": False, "reason": "price axis not readable", "drawn": []}
     result = level_lines.draw(shot, levels, mapping)
+    MAPPINGS[id(shot)] = mapping
     DRAWN.extend(f"{name} {inr(levels.get(key), 0)}" for name, key, _c, _d in level_lines.SPECS if name in result["drawn"])
     return {"ok": True, "residual_px": round(mapping["residual"], 2), "ticks": len(mapping["ticks"]), **result}
 

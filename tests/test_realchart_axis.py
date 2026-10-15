@@ -79,3 +79,20 @@ def test_ocr_reads_rendered_axis():
     m = axis.map_axis_image(img)
     assert m is not None
     assert abs(axis.y_of(m, 22700) - 520) <= 2.0
+
+
+def test_variants_keep_every_still_under_3s(tmp_path):
+    import json
+    from realchart.build import _with_variants
+    a, z = tmp_path / "chart.png", tmp_path / "z.png"
+    a.write_bytes(b"x"); z.write_bytes(b"x")
+    (tmp_path / "v.json").write_text(json.dumps({"chart.png": [[str(z), 1.0]]}))
+    pics, beats = _with_variants([a], [10.0], tmp_path / "v.json")
+    assert max(beats) <= 3.0 and abs(sum(beats) - 10.0) < 1e-6 and len(set(map(str, pics))) == 2
+
+
+def test_box_mode_uses_saved_layout(monkeypatch):
+    from realchart import capture
+    monkeypatch.setattr(capture, "TV_LAYOUT", "ckfLnl7v")
+    assert capture.chart_url("NSE:NIFTY", "5").startswith("https://www.tradingview.com/chart/ckfLnl7v/")
+    assert capture.ema_status("EMA\n20\nclose\n22,865.36\nEMA\n50\nclose\n23,320.79") == {"ema20": True, "ema50": True}

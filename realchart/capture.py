@@ -23,7 +23,18 @@ def walled(text):
     return any(phrase in low for phrase in BOT_WALL)
 
 
+import os
+
+# Box mode: drive the box's own signed-in Chrome over its local DevTools port and
+# open the saved layout (EMA 20/50 live there). No cookie or profile is read or
+# copied; only a new tab is opened and closed again.
+CDP_URL = os.environ.get("REALCHART_CDP", "")
+TV_LAYOUT = os.environ.get("REALCHART_TV_LAYOUT", "")
+
+
 def chart_url(symbol, interval="D"):
+    if TV_LAYOUT:
+        return f"https://www.tradingview.com/chart/{TV_LAYOUT}/?symbol={symbol}&interval={interval}"
     return f"https://www.tradingview.com/chart/?symbol={symbol}&interval={interval}&theme=dark"
 
 
@@ -99,7 +110,7 @@ def ema_status(text):
     title with no number, so a title alone does not count."""
     found = {}
     for length in (20, 50):
-        hit = re.search(rf"EMA\s*{length}\b[^\n]*?\n?\s*([0-9][0-9,]*\.[0-9]+)", str(text or ""))
+        hit = re.search(rf"EMA\s*{length}\b(?:\s*close)?\s*([0-9][0-9,]*\.[0-9]+)", str(text or ""))
         found[f"ema{length}"] = bool(hit)
     return found
 
@@ -358,7 +369,43 @@ def chart_painted(path):
     return (green + red) / samples >= 0.01
 
 
+class _BoxTab:
+    """Stands in for a browser: closing it closes only our tab in the box Chrome."""
+    def __init__(self, context):
+        self.context = context
+        self.pages = []
+
+    def close(self):
+        for page in self.pages:
+            try:
+                page.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+class _BoxContext:
+    def __init__(self, context, tab):
+        self._context, self._tab = context, tab
+
+    def new_page(self):
+        page = self._context.new_page()
+        self._tab.pages.append(page)
+        page.set_viewport_size({"width": 1280, "height": 1100})
+        try:
+            cdp = self._context.new_cdp_session(page)
+            cdp.send("Emulation.setDeviceMetricsOverride",
+                     {"width": 1280, "height": 1100, "deviceScaleFactor": 2, "mobile": False})
+            cdp.send("Emulation.setTimezoneOverride", {"timezoneId": "Asia/Kolkata"})
+        except Exception:  # noqa: BLE001
+            pass
+        return page
+
+
 def _open_browser(play):
+    if CDP_URL:
+        browser = play.chromium.connect_over_cdp(CDP_URL)
+        tab = _BoxTab(browser.contexts[0])
+        return tab, _BoxContext(browser.contexts[0], tab)
     browser = play.chromium.launch(
         headless=True,
         args=[
@@ -383,7 +430,20 @@ def _open_browser(play):
 
 
 ZOOM_NOTCHES = {"D": 4, "5": 2, "15": 2}
-HIDE_UI = "[class*='toast'],[class*='Toast']{display:none!important}"
+HIDE_UI = ("[class*='toast'],[class*='Toast'],[class*='floating-toolbar'],[class*='floatingToolbar'],"
+           "[data-name='floating-toolbar'],[class*='promo'],[class*='Promo'],[data-dialog-name]{display:none!important}")
+# Signed-in layouts pop promo cards (e.g. "Try AI Copilot"); hide any small
+# fixed/absolute box whose text is a promo, without touching the chart.
+HIDE_PROMOS = """() => {
+  for (const el of document.querySelectorAll('div,section,aside')) {
+    const t = (el.innerText || '').trim();
+    if (!t || t.length > 400) continue;
+    if (/Copilot|Upgrade|Try (it|now)|free trial/i.test(t)) {
+      const pos = getComputedStyle(el).position;
+      if (pos === 'fixed' || pos === 'absolute') el.style.setProperty('display', 'none', 'important');
+    }
+  }
+}"""
 
 
 def _parking_spot(page, box, low=False):
@@ -443,6 +503,11 @@ def _frame_chart(page, interval):
         pass
     try:
         page.add_style_tag(content=HIDE_UI)
+        try:
+            page.keyboard.press("Escape")
+            page.evaluate(HIDE_PROMOS)
+        except Exception:  # noqa: BLE001
+            pass
         page.evaluate(
             """() => { for (const el of document.querySelectorAll('div,span')) {
                 const text = el.textContent || '';
