@@ -1,0 +1,26 @@
+name: IG takedown one-off 2026-10-15
+on: workflow_dispatch
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - env: {T: "${{ secrets.IG_ACCESS_TOKEN }}"}
+        run: |
+          python3 - <<'PY'
+          import os,json,urllib.request,urllib.parse,urllib.error
+          T=os.environ["T"]
+          def call(m,host,path,params={}):
+              q=urllib.parse.urlencode(dict(params,access_token=T))
+              try:
+                  r=urllib.request.urlopen(urllib.request.Request(f"https://{host}/v21.0/{path}?{q}",method=m)); return r.status,r.read().decode()[:600]
+              except urllib.error.HTTPError as e: return e.code,e.read().decode()[:600]
+              except Exception as e: return 0,str(e)
+          for host in ("graph.facebook.com","graph.instagram.com"):
+              print(host,"ME",call("GET",host,"me",{"fields":"id,name,username"}))
+          for mid in ("18219751360351951","18072480533766675"):
+              for host in ("graph.facebook.com","graph.instagram.com"):
+                  print(mid,host,"GET",call("GET",host,mid,{"fields":"id,media_type,media_product_type,permalink,timestamp,caption"}))
+                  s,b=call("DELETE",host,mid); print(mid,host,"DELETE",s,b)
+                  print(mid,host,"GET-after",call("GET",host,mid,{"fields":"id,permalink"}))
+          print("FB accounts",call("GET","graph.facebook.com","me/accounts",{"fields":"id,name"}))
+          PY
