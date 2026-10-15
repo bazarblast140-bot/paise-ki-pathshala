@@ -419,5 +419,20 @@
   "elevenlabs_characters_sent": 0,
   "elevenlabs_characters_remaining": null,
   "tts_engine": null
+ },
+ {
+  "date_ist": "2026-10-15",
+  "slot": "17:51",
+  "video_id": "uzxk1qQUp-U",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "18219751360351951",
+  "content_hash": "393dec70f5b872c1",
+  "title_norm": "nse:nifty \u0915\u094d\u0932\u094b\u091c\u093c 22,997.35"
  }
 ]
