@@ -269,7 +269,8 @@ class ScriptTests(unittest.TestCase):
         self.assertIn(article["title"][:80], shown)
         self.assertIn(article["key_sentence"], shown)
         self.assertIn(article["source"], shown)
-        self.assertIn(article["published"], shown)
+        self.assertIn("9 Oct 2026, 08:10 IST", shown)
+        self.assertNotIn("+0530", shown)
         for token in (" SL ", " target ", " R1 ", " S1 ", " R2 ", " S2 "):
             self.assertNotIn(token, shown)
         self.assertEqual(rows[0]["start"], 0.0)
@@ -586,7 +587,7 @@ class BuildTests(unittest.TestCase):
             self.assertIn("15 Oct 2026", shown)
             for token in (" SL ", " target ", " R1 ", " S1 "):
                 self.assertNotIn(token, shown)
-            names = [path.name for path in (out / "cards").iterdir()]
+            names = [path.name for path in (out / "cards").iterdir() if path.suffix == ".png"]
             self.assertEqual(sorted(names), ["chart.png", "cta.png", "hook.png", "news.png"])
             self.assertNotIn("view.png", names)
 

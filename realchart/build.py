@@ -118,9 +118,10 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
                 raise Hold("script", f"news script estimate {est:.1f}s below {script.NEWS_FLOOR_SEC:.0f}s floor (article too short)")
         from realchart.voice import speak
         voice = speak(script.spoken_text(rows), out / "voice.wav", kind, dry_run=dry_run, cache_key=f"{kind}-{levels.get('last_date')}-{levels.get('symbol')}")
-        from realchart.render import assemble, frames
+        from realchart.render import assemble, beat_seconds, frames
         pics = frames(out / "cards", kind, levels, rows, chart.get("path"), article, intraday)
-        assemble(pics, out / "voice.wav", out / "final.mp4")
+        length = min(50.0, max(40.0, _wav_seconds(out / "voice.wav") or 45.0))
+        assemble(pics, out / "voice.wav", out / "final.mp4", seconds=length, durations=beat_seconds(rows, length))
         from realchart.ends import FOLLOW_PKP, FOLLOW_RTT, attach
         try:
             attach(out / "final.mp4", out)
@@ -128,7 +129,13 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             raise Hold("ends", str(exc)) from exc
         _write_sources(out, kind, levels, article, chart, rows, voice, now, intraday)
         from realchart.qa import check
-        qa_faults = check(out, rows, levels, voice.get("engine"), dry_run=dry_run)
+        capture_dates = {"daily chart": chart.get("last_candle_date") or ""}
+        if intraday is not None:
+            capture_dates["intraday chart"] = intraday.get("last_candle_date") or ""
+        qa_faults = check(
+            out, rows, levels, voice.get("engine"), dry_run=dry_run,
+            capture_dates=capture_dates, expected_date=(levels.get("last_date") if kind == "news" else session.isoformat()),
+        )
         verdict = "DRY-OK" if dry_run and not qa_faults else ("PASS" if not qa_faults else "HOLD")
         report = {
             "verdict": verdict,
@@ -243,7 +250,16 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
     article = choose(items, now, aliases)
     if kind == "news" and not article:
         raise Hold("news", "no qualifying article")
-    chart = capture.capture_chart(levels["symbol"], out / "chart.png", levels.get("bars") or [], opener=chart_opener)
+    day_expect = {
+        "date": str(levels.get("last_date") or ""),
+        "o": levels.get("open"), "h": levels.get("high"), "l": levels.get("low"), "c": levels.get("close"),
+    }
+    chart = capture.capture_chart(
+        levels["symbol"], out / "chart.png", levels.get("bars") or [], opener=chart_opener, expect=day_expect,
+    )
+    # News runs at 08:20 before the open, so its last daily candle is the
+    # previous session; it still must match the Yahoo bar (no stale capture).
+    _require_today(chart, session if kind != "news" else None, "daily chart")
     _apply_technicals(levels, chart)
     if chart.get("reason"):
         levels["chart_reason"] = chart.get("reason")
@@ -252,11 +268,15 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
         article["capture"] = shot
         if kind == "news" and not shot.get("ok"):
             raise Hold("news", shot.get("reason") or "article capture failed")
-    elif kind == "news" and article_opener is None and not os.environ.get("REALCHART_SKIP_BROWSER"):
+    elif article and article_opener is None and not os.environ.get("REALCHART_SKIP_BROWSER"):
         shot = capture.capture_article(article["url"], out / "news.png")
         article["capture"] = shot
-        if not shot.get("ok"):
+        if kind == "news" and not shot.get("ok"):
             raise Hold("news", shot.get("reason") or "article capture failed")
+    if article and kind != "news" and not (article.get("capture") or {}).get("ok"):
+        # A news beat with no screenshot was an empty dark card (black frames
+        # at 0:29-0:38 on 15 Oct). Close/TA drop the beat instead.
+        article = None
     intraday = None
     if kind in ("close", "ta"):
         if bars_intraday is not None:
@@ -265,9 +285,13 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
         else:
             bars_5m = _download_intraday(levels.get("yf") or "^NSEI", session, "5")
             bars_15m = _download_intraday(levels.get("yf") or "^NSEI", session, "15")
+        if not bars_5m:
+            raise Hold("capture", f"no 5m bars for {session}, intraday chart date cannot be verified")
         intraday = capture.capture_intraday(
             levels["symbol"], out, bars_5m, bars_15m, opener=chart_opener,
+            expect5=_last_bar_expect(bars_5m), expect15=_last_bar_expect(bars_15m or bars_5m),
         )
+        _require_today(intraday, session, "intraday chart")
     # News is the article, the highlighted sentence, and the chart. It has no
     # entry, stop, or target, so a failed reward-to-risk screen must not hold it.
     # Close is a market summary: it still screens and shows the pivot and OI
@@ -283,6 +307,37 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
                 raise Hold("rr", "RR below 1.5 from pivot and OI levels")
     (out / "levels.json").write_text(json.dumps({k: v for k, v in levels.items() if k != "bars"}, indent=2) + "\n", encoding="utf-8")
     return levels, article, chart, intraday
+
+
+def _wav_seconds(path):
+    from realchart.qa import probe
+    if not Path(path).is_file():
+        return 0.0
+    return float(probe(path).get("duration") or 0.0)
+
+
+def _last_bar_expect(bars, tail=4):
+    rows = list(bars or [])
+    if not rows:
+        return None
+    day = str(rows[-1].get("date") or "")[:10]
+    picked = [
+        {"o": float(r["o"]), "h": float(r["h"]), "l": float(r["l"]), "c": float(r["c"])}
+        for r in rows[-tail:] if str(r.get("date") or "")[:10] == day
+    ]
+    return {"date": day, "bars": picked}
+
+
+def _require_today(chart, session, what):
+    """Fail closed: the chart's last candle must be this session (today IST on a live run)."""
+    chart = chart or {}
+    if chart.get("source") == "stale":
+        raise Hold("capture", f"{what}: {chart.get('reason')}")
+    got = str(chart.get("last_candle_date") or "")[:10]
+    if session is None:
+        return
+    if chart.get("source") in ("tradingview", "yfinance") and got != session.isoformat():
+        raise Hold("capture", f"{what}: last candle {got or 'unknown'} is not {session.isoformat()}")
 
 
 def _apply_technicals(levels, chart):

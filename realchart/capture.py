@@ -1,6 +1,7 @@
 """TradingView when the runner can see it. Otherwise a labeled NSE chart."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 BOT_WALL = (
@@ -62,19 +63,8 @@ def draw_yf_chart(bars, dest, symbol, label=None, tag="1D"):
 
 
 def _font(size):
-    from PIL import ImageFont
-    for path in (
-        "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    ):
-        try:
-            return ImageFont.truetype(path, size)
-        except OSError:
-            continue
-    try:
-        return ImageFont.load_default(size)
-    except TypeError:
-        return ImageFont.load_default()
+    from realchart.fonts import font
+    return font(size)
 
 
 def parse_technicals(text):
@@ -92,6 +82,56 @@ def parse_technicals(text):
             return {}
         found[key] = float(match.group(1).replace(",", ""))
     return found
+
+
+LEGEND = re.compile(
+    r"O\s*([0-9][0-9,]*\.?[0-9]*)\s*H\s*([0-9][0-9,]*\.?[0-9]*)\s*L\s*([0-9][0-9,]*\.?[0-9]*)\s*C\s*([0-9][0-9,]*\.?[0-9]*)"
+)
+# Daily legend must equal the session bar. A stale or cached chart differs by
+# far more than this; the 5m legend is checked against the last 5m bar.
+LEGEND_TOL = 0.0015
+
+
+def parse_legend(text):
+    """O/H/L/C of the last bar from the TradingView legend text (mouse off the chart)."""
+    blob = str(text or "")
+    start = blob.find("Nifty 50 Index")
+    match = LEGEND.search(blob[start:] if start >= 0 else blob)
+    if not match:
+        return {}
+    o, h, l, c = (float(group.replace(",", "")) for group in match.groups())
+    return {"o": o, "h": h, "l": l, "c": c}
+
+
+def _legend_matches(legend, bar):
+    for key in ("o", "h", "l", "c"):
+        want = bar.get(key)
+        if want is None:
+            continue
+        got = legend.get(key)
+        if got is None or abs(float(got) - float(want)) > abs(float(want)) * LEGEND_TOL:
+            return f"legend {key.upper()} {got} vs {float(want):.2f}"
+    return ""
+
+
+def verify_last_candle(legend, expect):
+    """Empty when the legend's last bar is a bar of the expected session, else the reason.
+
+    expect: {"date": "YYYY-MM-DD", "o"/"h"/"l"/"c": ...} for the daily bar, or
+    {"date": ..., "bars": [...]} for intraday, where Yahoo adds closing-tick
+    bars after TradingView's last 5m bar, so any of the session's last bars
+    may match. Every given field must match within LEGEND_TOL, so a chart that
+    stopped in August (cached, logged-out snapshot, wrong symbol) is refused.
+    """
+    if not expect:
+        return ""
+    if not legend:
+        return "legend unreadable, last candle date unknown"
+    candidates = list(expect.get("bars") or []) or [expect]
+    reasons = [_legend_matches(legend, bar) for bar in candidates]
+    if any(not reason for reason in reasons):
+        return ""
+    return f"last candle is not {expect.get('date')}: {reasons[-1]}"
 
 
 def _browser_user_agent(browser):
@@ -145,8 +185,12 @@ def _clear_capture_failure(dest):
             path.unlink()
 
 
-def capture_chart(symbol, dest, bars, opener=None, interval="D", fallback_label=None, allow_fallback=True):
-    """Try the public TradingView chart. A real block becomes the yfinance chart."""
+def capture_chart(symbol, dest, bars, opener=None, interval="D", fallback_label=None, allow_fallback=True, expect=None):
+    """Try the public TradingView chart. A real block becomes the yfinance chart.
+
+    With expect, a TradingView shot whose last candle is not that session is
+    refused (source "stale"); the build holds on it. It never falls back.
+    """
     if opener is None:
         def opener(sym, path, _interval=interval):
             return _playwright_chart(sym, path, interval=_interval)
@@ -157,8 +201,24 @@ def capture_chart(symbol, dest, bars, opener=None, interval="D", fallback_label=
     text = f"{shot.get('text') or ''} {shot.get('reason') or ''}"
     label = fallback_label or (FALLBACK_LABEL_5M if str(interval) in ("5", "15") else FALLBACK_LABEL)
     if shot.get("ok") and not walled(text):
+        stale = verify_last_candle(shot.get("legend") or {}, expect)
+        if stale:
+            kept = _keep_capture_failure(dest, shot, stale)
+            return {
+                "source": "stale",
+                "path": str(dest),
+                "url": chart_url(symbol, interval),
+                "label": "TradingView",
+                "reason": stale,
+                "interval": str(interval),
+                "legend": shot.get("legend") or {},
+                "capture_note": kept["note"],
+                "technicals": {},
+            }
         _clear_capture_failure(dest)
         return {
+            "legend": shot.get("legend") or {},
+            "last_candle_date": (expect or {}).get("date") or "",
             "source": "tradingview",
             "path": shot.get("path") or str(dest),
             "url": chart_url(symbol, interval),
@@ -185,6 +245,7 @@ def capture_chart(symbol, dest, bars, opener=None, interval="D", fallback_label=
     tag = "5m" if str(interval) == "5" else ("15m" if str(interval) == "15" else "1D")
     draw_yf_chart(bars, dest, symbol, label=label, tag=tag)
     drawn = {
+        "last_candle_date": str((list(bars or [])[-1:] or [{}])[0].get("date") or "")[:10],
         "source": "yfinance",
         "path": str(dest),
         "url": chart_url(symbol, interval),
@@ -202,20 +263,24 @@ def capture_chart(symbol, dest, bars, opener=None, interval="D", fallback_label=
     return drawn
 
 
-def capture_intraday(symbol, directory, bars_5m, bars_15m=None, opener=None):
+def capture_intraday(symbol, directory, bars_5m, bars_15m=None, opener=None, expect5=None, expect15=None):
     """5-minute TradingView first. 15-minute if that capture fails. yfinance 5m only if both are blocked."""
     directory = Path(directory)
     shot5 = capture_chart(
         symbol, directory / "chart-5m.png", bars_5m, opener=opener, interval="5",
-        fallback_label=FALLBACK_LABEL_5M, allow_fallback=False,
+        fallback_label=FALLBACK_LABEL_5M, allow_fallback=False, expect=expect5,
     )
+    if shot5.get("source") == "stale":
+        return shot5
     if shot5.get("source") == "tradingview":
         shot5["scale_bars"] = list(bars_5m or [])
         return shot5
     shot15 = capture_chart(
         symbol, directory / "chart-15m.png", bars_15m or bars_5m, opener=opener, interval="15",
-        fallback_label=FALLBACK_LABEL_5M, allow_fallback=False,
+        fallback_label=FALLBACK_LABEL_5M, allow_fallback=False, expect=expect15,
     )
+    if shot15.get("source") == "stale":
+        return shot15
     if shot15.get("source") == "tradingview":
         shot15["interval"] = "15"
         shot15["reason"] = f"5m: {shot5.get('reason') or 'capture failed'}"
@@ -224,6 +289,7 @@ def capture_intraday(symbol, directory, bars_5m, bars_15m=None, opener=None):
     dest = directory / "chart-5m.png"
     draw_yf_chart(bars_5m, dest, symbol, label=FALLBACK_LABEL_5M, tag="5m")
     return {
+        "last_candle_date": str((list(bars_5m or [])[-1:] or [{}])[0].get("date") or "")[:10],
         "source": "yfinance",
         "path": str(dest),
         "url": chart_url(symbol, "5"),
@@ -269,7 +335,7 @@ def _open_browser(play):
         ignore_default_args=["--enable-automation"],
     )
     context = browser.new_context(
-        viewport={"width": 1280, "height": 800},
+        viewport={"width": 1280, "height": 1000},
         device_scale_factor=2,
         color_scheme="dark",
         locale="en-IN",
@@ -278,6 +344,59 @@ def _open_browser(play):
     )
     context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
     return browser, context
+
+
+ZOOM_NOTCHES = {"D": 4, "5": 2, "15": 2}
+HIDE_UI = "[class*='toast'],[class*='Toast']{display:none!important}"
+
+
+def _frame_chart(page, interval):
+    """IST axis, zoom on the latest candles, mouse off the plot, then the chart pane only.
+
+    The old full-page shot carried the watchlist and toolbars, so after a
+    1040px thumbnail the six-month daily range read as an August chart.
+    """
+    try:
+        zone = page.locator("[data-name='time-zone-menu']")
+        if zone.count():
+            zone.first.click(timeout=3000)
+            page.wait_for_timeout(500)
+            kolkata = page.get_by_text("Kolkata")
+            if kolkata.count():
+                kolkata.first.click(timeout=3000)
+            page.wait_for_timeout(800)
+    except Exception:  # noqa: BLE001 — the date check below still guards the data
+        pass
+    box = None
+    try:
+        box = page.locator(".chart-container").first.bounding_box()
+    except Exception:  # noqa: BLE001
+        box = None
+    if box:
+        # Keyboard zoom (Ctrl+Up) keeps the latest candle at the right edge.
+        # Mouse-wheel zoom was ignored headless and left a hint toast.
+        page.mouse.click(box["x"] + box["width"] - 140, box["y"] + box["height"] * 0.45)
+        for _ in range(ZOOM_NOTCHES.get(str(interval), 0)):
+            page.keyboard.press("Control+ArrowUp")
+            page.wait_for_timeout(200)
+        page.keyboard.press("Escape")
+    page.wait_for_timeout(800)
+    # Leave over the right-hand panel: no crosshair, and the legend shows the
+    # last bar instead of a hovered one.
+    page.mouse.move(1200, 600, steps=15)
+    try:
+        page.add_style_tag(content=HIDE_UI)
+        page.evaluate(
+            """() => { for (const el of document.querySelectorAll('div,span')) {
+                const text = el.textContent || '';
+                if (text.length < 160 && /Press and hold/.test(text) && !el.querySelector('canvas')) {
+                    el.style.visibility = 'hidden';
+                } } }"""
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    page.wait_for_timeout(1200)
+    return box
 
 
 def _playwright_chart(symbol, dest, interval="D"):
@@ -289,6 +408,7 @@ def _playwright_chart(symbol, dest, interval="D"):
     reason = ""
     ok = False
     tech = {}
+    legend = {}
     with sync_playwright() as play:
         browser, context = _open_browser(play)
         page = context.new_page()
@@ -300,8 +420,13 @@ def _playwright_chart(symbol, dest, interval="D"):
                 ok = True
             except Exception as exc:  # noqa: BLE001
                 reason = f"canvas missing: {type(exc).__name__}: {exc}"
+            clip = _frame_chart(page, interval) if ok else None
             text = (page.inner_text("body") or "")[:4000]
-            page.screenshot(path=str(dest))
+            legend = parse_legend(text)
+            if clip:
+                page.screenshot(path=str(dest), clip=clip)
+            else:
+                page.screenshot(path=str(dest))
             if walled(text):
                 ok = False
                 reason = "bot wall"
@@ -334,6 +459,7 @@ def _playwright_chart(symbol, dest, interval="D"):
         "path": str(dest),
         "captured_at": now_ist().strftime("%Y-%m-%d %H:%M IST"),
         "technicals": tech,
+        "legend": legend,
     }
 
 

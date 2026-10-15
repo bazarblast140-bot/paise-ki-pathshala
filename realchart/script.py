@@ -16,12 +16,9 @@ FORBIDDEN_FOLLOW = (
 
 
 def _fmt(value):
-    if value is None:
-        return ""
-    number = float(value)
-    if abs(number) >= 100:
-        return f"{number:,.2f}"
-    return f"{number:.2f}"
+    """Two decimals with Indian commas; never a raw float like 22997.349609375."""
+    from realchart.fmt import inr
+    return inr(value)
 
 
 # Charon reads about 1.75 words a second (42 words came out at 24.0s, runs
@@ -173,7 +170,8 @@ def chunks_for(kind, levels, article=None):
             "k": "5m",
         })
     if headline or sentence:
-        published = str((article or {}).get("published") or "").strip()
+        from realchart.fmt import stamp
+        published = stamp((article or {}).get("published"))
         shown = " · ".join(part for part in (headline[:110], sentence[:240], source, published) if part)
         rows.append({
             "sec": "news",
