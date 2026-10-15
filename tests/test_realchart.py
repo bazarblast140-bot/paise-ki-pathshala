@@ -643,7 +643,7 @@ class BuildTests(unittest.TestCase):
             self.assertNotIn("call_oi", levels)
             self.assertFalse(history.exists())
             script_txt = (out / "script.txt").read_text(encoding="utf-8")
-            self.assertIn(script.CTA, script_txt)
+            self.assertIn("Comment करो", script_txt)
             self.assertIn(script.DISCLAIMER, script_txt)
             for phrase in script.FORBIDDEN_FOLLOW:
                 self.assertNotIn(phrase.lower(), script_txt.lower())

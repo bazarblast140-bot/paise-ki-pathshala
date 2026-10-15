@@ -348,21 +348,33 @@ def _voice_key(kind, levels, text):
     return f"{kind}-{levels.get('last_date')}-{levels.get('symbol')}-{digest}"
 
 
+MAX_SHOT_SEC = 3.0
+
+
 def _with_variants(pics, beats, variants_file):
-    """Split beats longer than 3.5 s across the card and its zoomed shot (visual change every 2-3 s)."""
+    """Expand each beat into its card + variant shots so no still holds longer than 3 s.
+
+    variants.json maps card name -> [[path, weight], ...]; the card itself has weight 1.
+    The sequence repeats (base, variants, base, ...) until every unit is <= 3 s.
+    """
     try:
         variants = json.loads(Path(variants_file).read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return pics, beats
+        variants = {}
     new_pics, new_beats = [], []
     for pic, sec in zip(pics, beats):
-        zoom = variants.get(Path(pic).name)
-        if zoom and sec > 3.5 and Path(zoom).is_file():
-            new_pics += [pic, Path(zoom)]
-            new_beats += [sec / 2, sec / 2]
-        else:
-            new_pics.append(pic)
-            new_beats.append(sec)
+        seq = [[str(pic), 1.0]] + [v if isinstance(v, list) else [v, 1.0] for v in (variants.get(Path(pic).name) or [])
+                                   if Path(v[0] if isinstance(v, list) else v).is_file()]
+        reps = 1
+        while True:
+            units = seq * reps
+            total = sum(w for _, w in units)
+            if max(w for _, w in units) * sec / total <= MAX_SHOT_SEC or reps > 8:
+                break
+            reps += 1
+        for path, weight in units:
+            new_pics.append(Path(path))
+            new_beats.append(sec * weight / total)
     return new_pics, new_beats
 
 
@@ -442,11 +454,13 @@ def _apply_technicals(levels, chart):
 
 
 def _write_sources(out, kind, levels, article, chart, rows, voice, now, intraday=None):
-    title = rows[0]["d"]
+    title = script.post_meta(levels)["title"] if kind == "close" else rows[0]["d"]
+    cta_row = next((row for row in rows if row.get("sec") == "cta"), None)
+    cta = str((cta_row or {}).get("t") or script.CTA).replace(script.DISCLAIMER, "").strip()
     body = "\n".join(row["d"] for row in rows if row.get("sec") != "key")
     script_txt = (
         f"TITLE\n{title}\n\nHOOK\n{rows[0]['t']}\n\nBODY\n{body}\n\n"
-        f"CTA\n{script.CTA}\n\nDISCLAIMER LINE\n{script.DISCLAIMER}\n\n"
+        f"CTA\n{cta}\n\nDISCLAIMER LINE\n{script.DISCLAIMER}\n\n"
         f"FACT LEDGER\n- {levels.get('symbol')} close {levels.get('close')} on {levels.get('last_date')}\n"
         f"- chart {chart.get('source')} {chart.get('label')}\n"
     )
