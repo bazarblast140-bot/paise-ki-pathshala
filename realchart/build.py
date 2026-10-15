@@ -117,13 +117,21 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             est = script.estimate_seconds(rows)
             if est < script.NEWS_FLOOR_SEC:
                 raise Hold("script", f"news script estimate {est:.1f}s below {script.NEWS_FLOOR_SEC:.0f}s floor (article too short)")
-        from realchart.voice import speak
-        voice = speak(script.spoken_text(rows), out / "voice.wav", kind, dry_run=dry_run, cache_key=_voice_key(kind, levels, script.spoken_text(rows)))
-        from realchart.render import assemble, beat_seconds, frames
+        from realchart.voice import speak_segments
+        # One clip per card: each card is on screen exactly while its own line is spoken.
+        voice, beats = speak_segments(
+            [str(row.get("t") or "") for row in rows], out / "voice.wav", kind, dry_run=dry_run,
+            key_prefix=_voice_key(kind, levels, ""),
+        )
+        from realchart.render import assemble, frames
         pics = frames(out / "cards", kind, levels, rows, chart.get("path"), article, intraday)
-        spoken = min(50.0, _wav_seconds(out / "voice.wav") or 45.0)
+        spoken = sum(beats)
+        if spoken > 50.0 and dry_run:
+            beats = [b * 45.0 / spoken for b in beats]  # silent placeholder voice; real reads are timed
+            spoken = 45.0
+        elif spoken > 50.0:
+            raise Hold("voice", f"narration is {spoken:.1f}s, over the 50s limit")
         length = max(40.0, spoken)
-        beats = beat_seconds(rows, spoken)
         beats[-1] += length - spoken  # a short read holds the CTA card over the silent tail
         pics, beats = _with_variants(pics, beats, out / "variants.json")
         assemble(pics, out / "voice.wav", out / "final.mp4", seconds=length, durations=beats)
@@ -388,6 +396,8 @@ def _ta_faults(out, kind, chart, intraday):
             continue
         ema = shot.get("ema") or {}
         missing = [name.upper().replace("EMA", "EMA ") for name in ("ema20", "ema50") if not ema.get(name)]
+        if shot.get("drawings_visible"):
+            faults.append(f"{label} TradingView capture shows the layout's own drawings (not today's levels)")
         if missing:
             faults.append(f"{label} TradingView capture has no {' / '.join(missing)} (TradingView indicator not rendered)")
     try:

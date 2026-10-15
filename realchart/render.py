@@ -87,7 +87,7 @@ def lift(shot):
     return ImageChops.lighter(shot.convert("RGB"), Image.new("RGB", shot.size, CHART_FLOOR))
 
 
-def _card(title, caption, spoken, footer, visual=None, zoom=1.0, anchor_y=0.5, chips=None, dim=False,
+def _card(title, caption, spoken, footer, visual=None, zoom=1.0, anchor_y=0.5, chips=None, dim=False, zoom_y=0.5,
           header=None, section=("CHART · DATA", CYAN)):
     """Terminal header, a tall media panel filled edge to edge, a caption panel, a footer chip."""
     from PIL import ImageDraw, ImageEnhance, ImageFilter
@@ -103,7 +103,8 @@ def _card(title, caption, spoken, footer, visual=None, zoom=1.0, anchor_y=0.5, c
         if zoom > 1.0:
             keep_w = round(shot.width / zoom)
             keep_h = round(shot.height / zoom)
-            top = round((shot.height - keep_h) * 0.5)
+            # Centre the zoom on the day's candles and levels (zoom_y), not the middle of the shot.
+            top = min(max(0, round(shot.height * zoom_y - keep_h / 2)), shot.height - keep_h)
             shot = shot.crop((shot.width - keep_w, top, shot.width, top + keep_h))
         if shot.size != (mw, mh):
             shot = lift(_cover(shot, mw, mh, anchor_x=1.0, anchor_y=anchor_y))
@@ -364,10 +365,11 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             section = ("HAMARA VIEW · OPINION (scenario)", (255, 159, 28))
             footer = "Source: levels computed from NSE daily data · TradingView"
         elif sec == "cta":
-            dim, footer, section = True, "Real chart · Real data", ("COMMENT", YELLOW)
+            footer, section = "Real chart · Real data", ("COMMENT", YELLOW)
         path = out / f"{sec}.png"
+        focus = _focus(shot_maps.get(str(visual)), levels)
         _card(title, caption, spoken, footer, visual, zoom=zoom, anchor_y=anchor_y, chips=chips, dim=dim,
-              header=card_header, section=section).save(path)
+              header=card_header, section=section, zoom_y=focus).save(path)
         made.append(path)
         if sec in ("chart", "intraday", "view", "cta") and visual:
             # Visual change every 2-3 s inside a beat: zoom in on the latest
@@ -375,7 +377,7 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             def extra(name, vis, z):
                 dest = out.parent / f"{sec}-{name}.png"
                 _card(title, caption, spoken, footer, vis, zoom=z, anchor_y=anchor_y, chips=chips, dim=dim,
-                      header=card_header, section=section).save(dest)
+                      header=card_header, section=section, zoom_y=focus).save(dest)
                 return str(dest)
             drawn_before = len(DRAWN)
             zoomed = extra("zoom", visual, 1.4)
@@ -396,6 +398,18 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
 
 
 MAPPINGS = {}
+
+
+def _focus(mapping, levels):
+    """Vertical centre (0-1 of the shot) of the day's high/low and the drawn levels, for zooming."""
+    if not mapping:
+        return 0.5
+    prices = [levels.get(k) for k in ("high", "low", "close", "r2", "s2")]
+    ys = [mapping["a"] * float(p) + mapping["b"] for p in prices if p is not None]
+    height = mapping.get("height") or 0
+    if not ys or not height:
+        return 0.5
+    return min(0.85, max(0.15, (min(ys) + max(ys)) / 2 / height))
 
 
 def _marked(shot_path, mapping, levels, dest_stem):
@@ -425,6 +439,7 @@ def _lines_on(shot, levels):
     if not mapping:
         return {"ok": False, "reason": "price axis not readable", "drawn": []}
     result = level_lines.draw(shot, levels, mapping)
+    mapping = dict(mapping, height=shot.height)
     MAPPINGS[id(shot)] = mapping
     DRAWN.extend(f"{name} {inr(levels.get(key), 0)}" for name, key, _c, _d in level_lines.SPECS if name in result["drawn"])
     return {"ok": True, "residual_px": round(mapping["residual"], 2), "ticks": len(mapping["ticks"]), **result}

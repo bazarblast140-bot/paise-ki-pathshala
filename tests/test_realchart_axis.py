@@ -96,3 +96,30 @@ def test_box_mode_uses_saved_layout(monkeypatch):
     monkeypatch.setattr(capture, "TV_LAYOUT", "ckfLnl7v")
     assert capture.chart_url("NSE:NIFTY", "5").startswith("https://www.tradingview.com/chart/ckfLnl7v/")
     assert capture.ema_status("EMA\n20\nclose\n22,865.36\nEMA\n50\nclose\n23,320.79") == {"ema20": True, "ema50": True}
+
+
+def test_narration_numbers_are_whole():
+    import re
+    assert script.whole_numbers("RSI 50.00 पर, 1.66 प्रतिशत, 22,997.35") == "RSI 50 पर, 2 प्रतिशत, 22997"
+    lv = {"symbol": "NSE:NIFTY", "last_date": "2026-10-15", "close": 22997.35, "prev_close": 22622.7,
+          "open": 22671.3, "high": 23056.4, "low": 22637.4, "chg_pct": 1.6561, "rsi14": 50.0, "ema20": 22865.36,
+          "ema50": 23320.79, "pivot": 22646.53, "r1": 22734.12, "s1": 22535.12, "r2": 22845.53, "s2": 22447.53,
+          "sl_zone": [22040.0, 22179.9], "target_zone": [22757.95, 22865.36]}
+    for kind in ("close", "ta", "recap"):
+        for row in script.chunks_for(kind, dict(lv), None):
+            assert not re.search(r"\d\.\d", row["t"]), (kind, row["t"])
+
+
+def test_cards_follow_real_segment_audio(tmp_path):
+    from realchart.voice import SEGMENT_GAP_SEC, speak_segments, wav_seconds
+    info, beats = speak_segments(["एक दो तीन", "", "चार पाँच छह सात आठ नौ दस"], tmp_path / "voice.wav", "close", dry_run=True)
+    assert len(beats) == 3 and beats[1] == 0.8 + SEGMENT_GAP_SEC
+    assert abs(wav_seconds(tmp_path / "voice.wav") - sum(beats)) < 0.05
+
+
+def test_single_black_frame_is_caught():
+    from realchart.video_qa import dip_faults
+    lumas = [(i / 30, 160.0) for i in range(60)]
+    lumas[30] = (1.0, 3.0)
+    assert dip_faults(lumas, "x")
+    assert not dip_faults([(i / 30, 160.0 if i < 30 else 120.0) for i in range(60)], "x")
