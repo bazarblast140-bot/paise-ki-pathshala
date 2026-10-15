@@ -328,3 +328,22 @@ class RoundThreeTests(unittest.TestCase):
         self.assertTrue(chips)
         for chip in chips:
             self.assertNotIn(".", chip)
+
+
+class VoicePadTests(unittest.TestCase):
+    def test_a_short_voice_is_padded_to_the_full_length(self):
+        import wave
+        from PIL import Image
+        from realchart.qa import probe
+        from realchart.render import assemble
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            voice = tmp / "voice.wav"
+            with wave.open(str(voice), "w") as handle:
+                handle.setnchannels(1)
+                handle.setsampwidth(2)
+                handle.setframerate(24000)
+                handle.writeframes(b"\x10\x00" * 24000 * 2)
+            Image.new("RGB", (32, 32), (90, 120, 160)).save(tmp / "a.png")
+            out = assemble([tmp / "a.png"], voice, tmp / "final.mp4", seconds=4.0, durations=[4.0])
+            self.assertAlmostEqual(probe(out)["duration"], 4.0, delta=0.15)

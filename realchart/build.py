@@ -121,8 +121,11 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
         voice = speak(script.spoken_text(rows), out / "voice.wav", kind, dry_run=dry_run, cache_key=f"{kind}-{levels.get('last_date')}-{levels.get('symbol')}")
         from realchart.render import assemble, beat_seconds, frames
         pics = frames(out / "cards", kind, levels, rows, chart.get("path"), article, intraday)
-        length = min(50.0, max(40.0, _wav_seconds(out / "voice.wav") or 45.0))
-        assemble(pics, out / "voice.wav", out / "final.mp4", seconds=length, durations=beat_seconds(rows, length))
+        spoken = min(50.0, _wav_seconds(out / "voice.wav") or 45.0)
+        length = max(40.0, spoken)
+        beats = beat_seconds(rows, spoken)
+        beats[-1] += length - spoken  # a short read holds the CTA card over the silent tail
+        assemble(pics, out / "voice.wav", out / "final.mp4", seconds=length, durations=beats)
         from realchart.ends import FOLLOW_PKP, FOLLOW_RTT, attach, render_end_card
         ends_dir = out / "ends"
         outro_rtt = render_end_card(ends_dir / "outro_rtt.mp4", chart.get("path"), "Rajesh Technical Trader", "follow करो")
