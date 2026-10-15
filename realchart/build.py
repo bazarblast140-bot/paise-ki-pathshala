@@ -112,6 +112,10 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
         faults = script.lint(rows) + script.number_faults(rows, levels)
         if faults:
             raise Hold("script", "; ".join(faults))
+        if kind == "news" and not dry_run:
+            est = script.estimate_seconds(rows)
+            if est < script.NEWS_FLOOR_SEC:
+                raise Hold("script", f"news script estimate {est:.1f}s below {script.NEWS_FLOOR_SEC:.0f}s floor (article too short)")
         from realchart.voice import speak
         voice = speak(script.spoken_text(rows), out / "voice.wav", kind, dry_run=dry_run, cache_key=f"{kind}-{levels.get('last_date')}-{levels.get('symbol')}")
         from realchart.render import assemble, frames

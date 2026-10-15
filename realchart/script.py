@@ -24,6 +24,74 @@ def _fmt(value):
     return f"{number:.2f}"
 
 
+# Charon reads about 1.75 words a second (42 words came out at 24.0s, runs
+# 38683361517 and 38700813455). The Reel QA band is 40-50s.
+WORDS_PER_SEC = 1.75
+NEWS_FLOOR_SEC = 40.0
+NEWS_TARGET_SEC = 45.0
+NEWS_CEIL_SEC = 49.0
+
+
+def estimate_seconds(text_or_rows):
+    """Rough spoken length. Takes the rows or the plain spoken text."""
+    text = text_or_rows if isinstance(text_or_rows, str) else spoken_text(text_or_rows)
+    return len(str(text or "").split()) / WORDS_PER_SEC
+
+
+def _sentences(text):
+    clean = re.sub(r"<[^>]+>", " ", str(text or ""))
+    clean = " ".join(clean.replace("&nbsp;", " ").replace("&amp;", "&").split())
+    parts = re.split(r"(?<=[.!?।])\s+", clean)
+    return [part.strip() for part in parts if len(part.strip().split()) >= 3]
+
+
+def _day(article):
+    from email.utils import parsedate_to_datetime
+    raw = str(article.get("published") or "").strip()
+    try:
+        return parsedate_to_datetime(raw).strftime("%d %B %Y").lstrip("0")
+    except (TypeError, ValueError, IndexError):
+        return ""
+
+
+def news_spoken(article, fixed_words):
+    """Article facts only: headline, summary sentences, source and date.
+
+    Sentences are added in article order until the estimate reaches the
+    target. Nothing here is written by us except the source/date frame.
+    """
+    article = article or {}
+    headline = str(article.get("title") or "").strip().rstrip(".")
+    source = str(article.get("source") or "").strip()
+    day = _day(article)
+    lines = []
+    if headline:
+        lines.append(f"हेडलाइन: {headline}.")
+    if source or day:
+        lines.append(f"यह खबर {source or 'आर्टिकल'} की है{', ' + day if day else ''}।")
+    lines.append("यह खबर असली आर्टिकल से है। हमने कोई लाइन नहीं जोड़ी।")
+    seen = {headline.lower()}
+    facts = []
+    for sentence in _sentences(article.get("summary")) + _sentences(article.get("key_sentence")) + _sentences(article.get("why")):
+        key = sentence.rstrip(".").lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        facts.append(sentence if sentence[-1] in ".!?।" else sentence + ".")
+    words = fixed_words + sum(len(line.split()) for line in lines)
+    picked = []
+    for fact in facts:
+        if words / WORDS_PER_SEC >= NEWS_TARGET_SEC:
+            break
+        n = len(fact.split())
+        if (words + n) / WORDS_PER_SEC > NEWS_CEIL_SEC:
+            continue
+        picked.append(fact)
+        words += n
+    head = lines[:1]
+    return " ".join(head + picked + lines[1:])
+
+
 def chunks_for(kind, levels, article=None):
     close = _fmt(levels.get("close"))
     chg = float(levels.get("chg_pct") or 0)
@@ -82,7 +150,10 @@ def chunks_for(kind, levels, article=None):
             "start": 12.0,
             "end": 40.0 if kind == "news" else 22.0,
             "d": shown,
-            "t": "यह खबर असली आर्टिकल से है। हमने कोई लाइन नहीं जोड़ी।",
+            "t": (
+                news_spoken(article, len(spoken_text(rows).split()) + len(f"{CTA} {DISCLAIMER}".split()))
+                if kind == "news" else "यह खबर असली आर्टिकल से है। हमने कोई लाइन नहीं जोड़ी।"
+            ),
             "k": source or "खबर",
         })
     if kind != "news":

@@ -1,4 +1,5 @@
 """Daily Reels: real articles, real levels, dry runs that do not spend Gemini."""
+import re
 import json
 import math
 import os
@@ -963,3 +964,68 @@ class StoryTests(unittest.TestCase):
                 self.assertEqual(ig.publish_story("https://example.com/final.mp4"), "story-9")
         self.assertEqual(calls[0][2]["media_type"], "STORIES")
         self.assertEqual(calls[0][2]["video_url"], "https://example.com/final.mp4")
+
+
+class NewsLengthTests(unittest.TestCase):
+    """The news Reel held at 24.00s after the levels beat left (#117)."""
+
+    ARTICLE = {
+        "title": "Sensex, Nifty open higher as banking stocks gain ahead of quarterly results",
+        "summary": (
+            "Indian equity benchmarks opened higher on Thursday, led by gains in private lenders and IT stocks. "
+            "Foreign investors were net buyers in the previous session, according to provisional exchange data. "
+            "Analysts said earnings from large banks this week will set the near-term direction for the market."
+        ),
+        "source": "livemint.com",
+        "url": "https://www.livemint.com/markets/x",
+        "published": "Thu, 15 Oct 2026 08:10:00 +0530",
+    }
+
+    def test_typical_news_script_reaches_the_40s_floor(self):
+        rows = script.chunks_for("news", compute(_bars()), dict(self.ARTICLE))
+        est = script.estimate_seconds(rows)
+        self.assertGreaterEqual(est, script.NEWS_FLOOR_SEC)
+        self.assertLessEqual(est, 50.0)
+        spoken = script.spoken_text(rows)
+        self.assertIn("Sensex, Nifty open higher", spoken)
+        self.assertIn("livemint.com", spoken)
+        self.assertIn("15 October 2026", spoken)
+        self.assertEqual(script.lint(rows), [])
+
+    def test_news_speaks_only_article_sentences(self):
+        rows = script.chunks_for("news", compute(_bars()), dict(self.ARTICLE))
+        spoken = next(row["t"] for row in rows if row["sec"] == "news")
+        for number in re.findall(r"\d+", spoken):
+            self.assertTrue(number in self.ARTICLE["published"] or number in self.ARTICLE["summary"] + self.ARTICLE["title"], number)
+
+    def test_old_24s_script_is_below_the_floor(self):
+        self.assertLess(script.estimate_seconds(" ".join(["शब्द"] * 42)), script.NEWS_FLOOR_SEC)
+
+    def test_short_live_news_holds_before_voice(self):
+        now = datetime(2026, 10, 15, 10, 2, tzinfo=IST)
+        article = {
+            "title": "Nifty ends lower",
+            "url": "https://www.livemint.com/markets/nifty-ends",
+            "summary": "The index closed lower.",
+            "published": "Thu, 15 Oct 2026 08:10:00 +0530",
+            "source": "livemint.com",
+        }
+
+        def shot(_url, dest):
+            from PIL import Image
+            Path(dest).parent.mkdir(parents=True, exist_ok=True)
+            Image.new("RGB", (80, 80), (20, 20, 20)).save(dest)
+            return {"ok": True, "path": str(dest)}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "run"
+            with mock.patch.dict(os.environ, {"REALCHART_NO_ALERT": "1"}), \
+                 mock.patch("realchart.voice.speak", side_effect=AssertionError("no voice")):
+                code = run(
+                    "news", out, now=now, dry_run=False,
+                    bars_for=lambda _t: (_bars(), _stamp(now.date())), articles=[article],
+                    chart_opener=lambda _s, _d: {"ok": False, "reason": "x"}, article_opener=shot,
+                )
+            self.assertNotEqual(code, 0)
+            self.assertTrue((out / "HOLD").exists())
+            self.assertIn("40s floor", (out / "HOLD").read_text(encoding="utf-8"))
