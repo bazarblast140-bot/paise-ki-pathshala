@@ -58,6 +58,7 @@ def empty_frame_faults(video, label):
         return [f"{label}: missing"]
     for start, end in black_spans(video, HARD_BLACK_ARGS):
         faults.append(f"black frames {label} {start:.2f}-{end:.2f}s")
+    faults += single_frame_faults(video, label, panel=(label == "final.mp4"))
     for start, end in black_spans(video):
         if any(a <= start + 0.01 and end <= b + 0.01 for a, b in black_spans(video, HARD_BLACK_ARGS)):
             continue
@@ -68,6 +69,55 @@ def empty_frame_faults(video, label):
                 faults.append(f"black/empty frames {label} {start:.2f}-{end:.2f}s (detail {pct:.1f}% at {t:.2f}s)")
                 break
             t += 0.5
+    return faults
+
+
+SINGLE_BLACK_ARGS = "blackdetect=d=0:pix_th=0.10:pic_th=0.98"
+PANEL = (20, 184, 1060, 1580)  # the chart panel of a card (x0, y0, x1, y1)
+
+
+def frame_lumas(video, crop=None):
+    """Mean luma of every decoded frame [(t, yavg)], optionally inside crop (x0,y0,x1,y1)."""
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as handle:
+        log = handle.name
+    vf = ""
+    if crop:
+        x0, y0, x1, y1 = crop
+        vf = f"crop={x1 - x0}:{y1 - y0}:{x0}:{y0},"
+    vf += f"signalstats,metadata=print:key=lavfi.signalstats.YAVG:file={log}"
+    subprocess.run(["ffmpeg", "-v", "error", "-i", str(video), "-vf", vf, "-an", "-f", "null", "-"],
+                   capture_output=True)
+    out, t = [], None
+    for line in Path(log).read_text(encoding="utf-8", errors="ignore").splitlines():
+        hit = re.search(r"pts_time:([0-9.]+)", line)
+        if hit:
+            t = float(hit.group(1))
+        elif "YAVG=" in line and t is not None:
+            out.append((t, float(line.split("=")[1])))
+    Path(log).unlink(missing_ok=True)
+    return out
+
+
+def dip_faults(lumas, label, floor=18.0, drop=0.5):
+    """Single frames (or 2-3 frame blips) far darker than the frames on both sides."""
+    faults = []
+    for i in range(1, len(lumas) - 1):
+        t, y = lumas[i]
+        j = i
+        while j + 1 < len(lumas) - 1 and j - i < 3 and abs(lumas[j + 1][1] - y) < 2:
+            j += 1
+        before, after = lumas[i - 1][1], lumas[j + 1][1] if j + 1 < len(lumas) else lumas[i - 1][1]
+        if y < floor and before > y + 20 and after > y + 20 or (before > 40 and after > 40 and y < drop * min(before, after)):
+            faults.append(f"black frame {label} at {t:.2f}s (luma {y:.0f} between {before:.0f} and {after:.0f})")
+    return faults
+
+
+def single_frame_faults(video, label, panel=True):
+    """Catch one-frame black flashes: whole frame (blackdetect d=0) and inside the chart panel."""
+    faults = [f"black frame {label} {a:.2f}-{b:.2f}s" for a, b in black_spans(video, SINGLE_BLACK_ARGS)]
+    if panel:
+        faults += dip_faults(frame_lumas(video, PANEL), f"{label} chart panel")
     return faults
 
 

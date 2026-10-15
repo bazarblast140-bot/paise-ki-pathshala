@@ -171,13 +171,26 @@ def render_end_card(dest, background=None, name="Rajesh Technical Trader", call=
     width = draw.textlength(note, font=sub)
     draw.text(((1080 - width) / 2, top + 210), note, fill=(230, 236, 242), font=sub)
     y = top + 300
-    for index, line in enumerate(extra or []):
-        face = font(54 if index == 0 else 46, semi=True)
-        width = draw.textlength(line, font=face)
-        if index == 0:
-            draw.rounded_rectangle(((1080 - width) / 2 - 30, y - 10, (1080 + width) / 2 + 30, y + 74), 20, fill=(20, 24, 32))
-        draw.text(((1080 - width) / 2, y), line, fill=(255, 226, 120) if index == 0 else (240, 244, 248), font=face)
-        y += 96
+    for index, text in enumerate(extra or []):
+        size = 70 if index == 0 else 60
+        face = font(size, semi=True)
+        # Wrap to the frame; every line on its own dark pill so it reads over the chart.
+        lines, current = [], ""
+        for word in str(text).split():
+            trial = f"{current} {word}".strip()
+            if current and draw.textlength(trial, font=face) > 960:
+                lines.append(current)
+                current = word
+            else:
+                current = trial
+        lines.append(current)
+        for line in lines:
+            width = draw.textlength(line, font=face)
+            draw.rounded_rectangle(((1080 - width) / 2 - 28, y - 8, (1080 + width) / 2 + 28, y + size + 22), 22,
+                                   fill=(14, 18, 26))
+            draw.text(((1080 - width) / 2, y), line, fill=(255, 226, 120) if index == 0 else (245, 247, 250), font=face)
+            y += size + 42
+        y += 14
     png = dest.with_suffix(".png")
     image.save(png)
     try:

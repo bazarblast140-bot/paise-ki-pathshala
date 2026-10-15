@@ -110,16 +110,34 @@ def _close_lines(levels):
     piv = f"पाँच मिनट चार्ट पर पिवट {n('pivot')}, R1 {n('r1')}, S1 {n('s1')}।"
     parts = []
     if levels.get("ema20") is not None:
-        parts.append(f"EMA20 {n('ema20')} पर है।")
+        parts.append(f"20 EMA {n('ema20')} पर है।")
     if levels.get("rsi14") is not None:
-        parts.append(f"RSI14 {round(float(levels['rsi14']))} पर है।")
+        parts.append(f"RSI {round(float(levels['rsi14']))} पर है।")
     parts.append("ज़ोन सिर्फ लेवल हैं, scenario, ट्रेड सलाह नहीं।")
     src = str(levels.get("values_from") or "").strip()
     parts.append(f"डेटा {src or 'मार्केट डेटा'} से।")
     return ohlc, piv, " ".join(parts)
 
 
+DECIMAL = re.compile(r"(?<![\d.])(\d[\d,]*)\.(\d+)(?![\d.])")
+
+
+def whole_numbers(text):
+    """Every number the voice reads is a whole number: 50.00 -> 50, 1.66 -> 2, 22,997.35 -> 22997."""
+    def repl(match):
+        value = float(match.group(1).replace(",", "") + "." + match.group(2))
+        return str(int(round(value)))
+    return DECIMAL.sub(repl, str(text or ""))
+
+
 def chunks_for(kind, levels, article=None):
+    rows = _chunks_for(kind, levels, article)
+    for row in rows:
+        row["t"] = whole_numbers(row.get("t"))
+    return rows
+
+
+def _chunks_for(kind, levels, article=None):
     close = _fmt(levels.get("close"))
     chg = float(levels.get("chg_pct") or 0)
     side = "ऊपर" if chg >= 0 else "नीचे"
@@ -256,7 +274,12 @@ def _growth_close(rows, levels):
             row["t"] = re.sub(r"\s*डेटा [^।]*से।", "", row["t"])
         if row["sec"] == "hook":
             row["d"] = f"Nifty {chg:+.2f}%, {_fmt(levels.get('close'))} पर बंद!"
-            row["t"] = f"निफ्टी आज {abs(chg):.2f} प्रतिशत {side}, {close} पर बंद!"
+            prev = levels.get("prev_close")
+            if prev is not None:
+                points = round(abs(float(levels.get("close") or 0) - float(prev)))
+                row["t"] = f"निफ्टी आज {points} अंक {side}, {close} पर बंद!"
+            else:
+                row["t"] = f"निफ्टी आज {round(abs(chg))} प्रतिशत {side}, {close} पर बंद!"
         elif row["sec"] == "cta":
             r1 = levels.get("next_r1") if chg >= 0 else levels.get("next_s1")
             verb = "टूटेगा" if chg >= 0 else "बचेगा"

@@ -242,6 +242,7 @@ def capture_chart(symbol, dest, bars, opener=None, interval="D", fallback_label=
         return {
             "legend": shot.get("legend") or {},
             "ema": shot.get("ema") or ema_status(shot.get("text") or ""),
+            "drawings_visible": bool(shot.get("drawings_visible")),
             "last_candle_date": (expect or {}).get("date") or "",
             "source": "tradingview",
             "path": shot.get("path") or str(dest),
@@ -369,6 +370,36 @@ def chart_painted(path):
     return (green + red) / samples >= 0.01
 
 
+SAVE_PATHS = re.compile(r"save|charts-storage|/chart/[^/]+/(content|update)|layout|drawing|study_templates", re.I)
+
+
+def _block_saves(route):
+    request = route.request
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and "tradingview.com" in request.url \
+            and SAVE_PATHS.search(request.url):
+        return route.abort()
+    return route.continue_()
+
+
+def layout_drawings_visible(png):
+    """True when the saved layout's own blue horizontal lines (TradingView #2962FF) cross the chart."""
+    from PIL import Image
+    with Image.open(png) as opened:
+        image = opened.convert("RGB")
+    width, height = image.size
+    span = range(int(width * 0.05), int(width * 0.8), 4)
+    for y in range(0, height, 1):
+        blue = sum(1 for x in span if _is_tv_blue(image.getpixel((x, y))))
+        if blue > 0.6 * len(span):
+            return True
+    return False
+
+
+def _is_tv_blue(px):
+    r, g, b = px
+    return b > 200 and r < 90 and 70 < g < 130
+
+
 class _BoxTab:
     """Stands in for a browser: closing it closes only our tab in the box Chrome."""
     def __init__(self, context):
@@ -390,6 +421,8 @@ class _BoxContext:
     def new_page(self):
         page = self._context.new_page()
         self._tab.pages.append(page)
+        # Nothing this tab does may be saved to the account or the saved layout.
+        page.route("**/*", _block_saves)
         page.set_viewport_size({"width": 1280, "height": 1100})
         try:
             cdp = self._context.new_cdp_session(page)
@@ -462,6 +495,16 @@ def _frame_chart(page, interval):
     The old full-page shot carried the watchlist and toolbars, so after a
     1040px thumbnail the six-month daily range read as an August chart.
     """
+    if CDP_URL:
+        # The saved layout carries Rajesh's own drawings (blue lines at old
+        # levels). Hide them for this tab only; saves are blocked (_block_saves).
+        try:
+            view = page.viewport_size or {"width": 1280, "height": 1100}
+            page.mouse.move(view["width"] * 0.45, view["height"] * 0.45)
+            page.keyboard.press("Control+Alt+h")
+            page.wait_for_timeout(1200)
+        except Exception:  # noqa: BLE001
+            pass
     try:
         zone = page.locator("[data-name='time-zone-menu']")
         if zone.count():
@@ -591,6 +634,7 @@ def _playwright_chart(symbol, dest, interval="D"):
         "technicals": tech,
         "legend": legend,
         "ema": ema_status(text),
+        "drawings_visible": bool(CDP_URL) and Path(dest).is_file() and layout_drawings_visible(dest),
     }
 
 
