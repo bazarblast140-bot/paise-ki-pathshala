@@ -67,8 +67,17 @@ def api_keys():
     import gemini_budget
     seen = set()
     pairs = []
+    secrets_dir = os.environ.get("GEMINI_SECRETS_DIR", "")  # set by scripts/box_close_reel.sh
     for slot, name in gemini_budget.KEY_ENV:
         secret = os.environ.get(name, "").strip()
+        if not secret and secrets_dir:
+            # Box runs: the key may live in a file (e.g. gemini_api_key_2) instead of the env.
+            path = os.path.join(secrets_dir, name.lower())
+            try:
+                with open(path, encoding="utf-8") as handle:
+                    secret = handle.read().strip()
+            except OSError:
+                secret = ""
         if not secret or secret in seen:
             continue
         seen.add(secret)

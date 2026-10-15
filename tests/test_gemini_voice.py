@@ -859,3 +859,13 @@ def ledger_kwargs(run):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_api_keys_read_secret_files_when_env_missing(tmp_path, monkeypatch):
+    import gemini_voice
+    for name in ("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEY_4"):
+        monkeypatch.delenv(name, raising=False)
+    (tmp_path / "gemini_api_key_2").write_text("k2\n")
+    (tmp_path / "gemini_api_key_3").write_text("k3")
+    monkeypatch.setenv("GEMINI_SECRETS_DIR", str(tmp_path))
+    assert gemini_voice.api_keys() == [("2", "k2"), ("3", "k3")]

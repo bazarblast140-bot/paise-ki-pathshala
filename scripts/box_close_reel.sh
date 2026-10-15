@@ -7,6 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export REALCHART_CDP="${REALCHART_CDP:-http://127.0.0.1:9226}"
 export REALCHART_TV_LAYOUT="${REALCHART_TV_LAYOUT:-ckfLnl7v}"
+export GEMINI_SECRETS_DIR="${GEMINI_SECRETS_DIR:-/home/box/.secrets}"
 export REALCHART_NO_ALERT="${REALCHART_NO_ALERT:-1}"
 day="$(TZ=Asia/Kolkata date +%F)"
 out="${1:-/workspace/paise-review/box-close-$day}"
