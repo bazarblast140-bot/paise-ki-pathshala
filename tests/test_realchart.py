@@ -489,7 +489,30 @@ class BuildTests(unittest.TestCase):
             self.assertTrue(Path(quoted).is_absolute(), quoted)
             self.assertTrue(quoted.endswith(".png"))
 
-    def test_rr_below_one_and_a_half_holds_before_voice(self):
+    def test_rr_below_one_and_a_half_does_not_hold_the_close_summary(self):
+        bars = _bars()
+        stamp = _stamp(datetime(2026, 10, 8).date())
+
+        def walled(_symbol, _dest):
+            return {"ok": False, "reason": "captcha", "text": "captcha"}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "run"
+            with mock.patch.dict(os.environ, {"REALCHART_NO_ALERT": "1"}), \
+                 mock.patch("gemini_voice.write_speech", side_effect=AssertionError("no gemini")):
+                run(
+                    "close", out, now=FRIDAY, dry_run=True,
+                    bars_for=lambda _t: (bars, stamp), articles=[], chart_opener=walled,
+                    bars_intraday=_intraday_bars, chain_for=_held_chain,
+                )
+            hold = (out / "HOLD").read_text(encoding="utf-8") if (out / "HOLD").exists() else ""
+            self.assertNotIn("RR below 1.5", hold)
+            shown = json.loads((out / "levels.json").read_text(encoding="utf-8"))
+            self.assertFalse(shown["rr_ok"])
+            self.assertEqual(len(shown["sl_zone"]), 2)
+            self.assertEqual(len(shown["target_zone"]), 2)
+
+    def test_rr_below_one_and_a_half_holds_ta_before_voice(self):
         bars = _bars()
         stamp = _stamp(datetime(2026, 10, 8).date())
 
@@ -501,7 +524,7 @@ class BuildTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"REALCHART_NO_ALERT": "1"}), \
                  mock.patch("gemini_voice.write_speech", side_effect=AssertionError("no gemini")):
                 code = run(
-                    "close", out, now=FRIDAY, dry_run=True,
+                    "ta", out, now=FRIDAY, dry_run=True,
                     bars_for=lambda _t: (bars, stamp), articles=[], chart_opener=walled,
                     bars_intraday=_intraday_bars, chain_for=_held_chain,
                 )
