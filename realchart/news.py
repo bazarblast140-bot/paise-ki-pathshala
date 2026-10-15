@@ -19,7 +19,11 @@ BIG = (
 
 def _text(node, name):
     child = node.find(name) if node is not None else None
-    return " ".join((child.text or "").split()) if child is not None and child.text else ""
+    if child is None or not child.text:
+        return ""
+    import html
+    # Feeds double-escape: "Hotels &amp;amp; Resorts" must read "Hotels & Resorts".
+    return " ".join(html.unescape(html.unescape(child.text)).split())
 
 
 def parse_rss(xml_text, source):

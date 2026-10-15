@@ -16,9 +16,9 @@ W, H = 1080, 1920
 # Layout after the approved 14-Oct box sample: grid background, a terminal
 # header, a tall media panel and a filled caption panel. No plain black.
 HEAD_TOP, HEAD_H = 40, 128
-MEDIA = (20, 236, 1060, 1436)       # x0, y0, x1, y1: 1040x1200, a tall crop of the chart
-CAP = (20, 1456, 1060, 1736)        # caption panel
-FOOT = (20, 1752, 1060, 1832)
+MEDIA = (20, 184, 1060, 1580)       # x0, y0, x1, y1: 1040x1396, a tall crop of the chart
+CAP = (20, 1596, 1060, 1856)        # the one caption block
+FOOT_Y = 1868                       # one small dim source line
 BG = (20, 27, 36)
 GRID = (28, 37, 48)
 PANEL = (27, 37, 50)
@@ -105,7 +105,8 @@ def _card(title, caption, spoken, footer, visual=None, zoom=1.0, anchor_y=0.5, c
             keep_h = round(shot.height / zoom)
             top = round((shot.height - keep_h) * 0.5)
             shot = shot.crop((shot.width - keep_w, top, shot.width, top + keep_h))
-        shot = lift(_cover(shot, mw, mh, anchor_x=1.0, anchor_y=anchor_y))
+        if shot.size != (mw, mh):
+            shot = lift(_cover(shot, mw, mh, anchor_x=1.0, anchor_y=anchor_y))
         if dim:
             shot = ImageEnhance.Brightness(shot.filter(ImageFilter.GaussianBlur(6))).enhance(0.75)
         image.paste(shot, (x0, y0))
@@ -144,21 +145,20 @@ def _card(title, caption, spoken, footer, visual=None, zoom=1.0, anchor_y=0.5, c
             draw.rounded_rectangle((x, rows_y, x + width, rows_y + 56), 14, fill=fill)
             _text(draw, (x + 16, rows_y + 6), text, 30, ink)
             x += width + 14
-    # caption panel
+    # one caption block: the narration line
     draw.rounded_rectangle(CAP, 20, fill=PANEL, outline=(46, 62, 80), width=2)
-    y = CAP[1] + 20
-    for line in _wrap(draw, caption, 50, CAP[2] - CAP[0] - 48, 3):
-        _text(draw, (44, y), line, 50, YELLOW)
-        y += 60
-    y += 6
-    while y + 52 <= CAP[3] - 12:
-        lines = _wrap(draw, spoken, 40, CAP[2] - CAP[0] - 48, max(1, (CAP[3] - 12 - y) // 52))
-        for line in lines:
-            _text(draw, (44, y), line, 40, WHITE, semi=True)
-            y += 52
-        break
-    draw.rounded_rectangle(FOOT, 16, fill=(15, 22, 30), outline=(46, 62, 80), width=2)
-    _text(draw, (44, FOOT[1] + 18), footer, 32, YELLOW)
+    text = caption or spoken
+    for size in (50, 46, 42, 38):
+        lines = _wrap(draw, text, size, CAP[2] - CAP[0] - 48, 99)
+        if len(lines) * (size + 12) <= CAP[3] - CAP[1] - 32:
+            break
+    lines = _wrap(draw, text, size, CAP[2] - CAP[0] - 48, max(1, (CAP[3] - CAP[1] - 32) // (size + 12)))
+    y = CAP[1] + 16 + max(0, (CAP[3] - CAP[1] - 32 - len(lines) * (size + 12)) // 2)
+    for line in lines:
+        _text(draw, (44, y), line, size, WHITE)
+        y += size + 12
+    if footer:
+        _text(draw, (44, FOOT_Y), footer, 24, GREY, semi=True)
     return image
 
 
@@ -275,11 +275,11 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
     header = {
         "brand": brand,
         "symbol": f"{symbol} · 1D",
-        "close_line": f"Close {levels.get('last_date') or ''}: {inr(levels.get('close'))} ({chg:+.2f}%)",
+        "close_line": f"Close {day_text}: {inr(levels.get('close'), 0)} ({chg:+.2f}%)",
         "close_color": GREEN if chg >= 0 else RED,
     }
     pivot_chips = [
-        (f"{name} {inr(levels.get(key))}", fill, ink)
+        (f"{name} {inr(levels.get(key), 0)}", fill, ink)
         for name, key, fill, ink in (
             ("P", "pivot", (255, 226, 120), (40, 30, 0)),
             ("R1", "r1", (186, 240, 200), (12, 70, 36)),
@@ -312,11 +312,13 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
         sec = row.get("sec")
         # The narration line, with spoken whole prices shown as 22,997 (not 22997).
         spoken = re.sub(r"(?<![\d.,])(\d{4,})(?![\d]|[.,]\d)", lambda m: inr(int(m.group(1)), 0), str(row.get("t") or ""))
+        # One caption block per card: the narration line itself (whole points,
+        # as spoken). Levels are on the chips; no second level-text block.
         spoken = danda(spoken)
-        caption = danda(_caption(kind, row, levels))
-        if same_text(spoken, caption):
-            # The CTA beat's caption and narration are the same line: show it once.
-            spoken = ""
+        caption = ""
+        if sec == "hook" and kind != "news":
+            # The hook card leads with the number (whole points, as spoken).
+            caption = f"{name} क्लोज़ {inr(levels.get('close'), 0)} ({chg:+.2f}%) · {spoken}"
         visual, zoom, footer, chips, dim, anchor_y = chart_path, 1.0, f"Source: {src} · 1D", None, False, 0.5
         section = ("CHART · DATA", CYAN)
         if sec == "hook":
@@ -328,7 +330,7 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             section = (f"INTRADAY {interval}m · time IST", CYAN)
             footer = f"Source: {(intraday or {}).get('label') or src} · {interval}m · IST"
         elif sec == "news":
-            visual, anchor_y = news_shot or chart_path, 0.0
+            visual, anchor_y = news_card(out, article, news_shot) if article else chart_path, 0.0
             published = stamp((article or {}).get("published"))
             section = ("KHABAR · FACT", GREEN)
             footer = f"{(article or {}).get('source') or ''} · {published}".strip(" ·")
@@ -336,7 +338,7 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             visual = overlaid or chart_path
             chips = pivot_chips + zone_chips
             section = ("HAMARA VIEW · OPINION (scenario)", (255, 159, 28))
-            footer = "Levels computed from NSE daily data"
+            footer = "Source: levels computed from NSE daily data · TradingView"
         elif sec == "cta":
             dim, footer, section = True, "Real chart · Real data", ("COMMENT", YELLOW)
         path = out / f"{sec}.png"
@@ -345,6 +347,42 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
         made.append(path)
     (out / "overlay_text.json").write_text(json.dumps(list(DRAWN), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return made
+
+
+def news_card(out, article, shot=None):
+    """The article as its own full card: masthead strip, the headline highlighted, source and time."""
+    from PIL import Image, ImageDraw
+    x0, y0, x1, y1 = MEDIA
+    width, height = x1 - x0, y1 - y0
+    card = Image.new("RGB", (width, height), (246, 247, 249))
+    if shot and Path(shot).is_file():
+        with Image.open(shot) as opened:
+            page = opened.convert("RGB")
+        strip = page.crop((0, 0, page.width, min(page.height, round(page.width * 0.22))))
+        strip = strip.resize((width, round(strip.height * width / strip.width)))
+        card.paste(strip, (0, 0))
+        top = strip.height + 40
+    else:
+        top = 90
+    draw = ImageDraw.Draw(card)
+    headline = str(article.get("title") or "")
+    lines = _wrap(draw, headline, 66, width - 96, 6)
+    y = top + 30
+    for line in lines:
+        w = draw.textlength(line, font=_font_any(66))
+        draw.rectangle((40, y - 4, 48 + w + 16, y + 82), fill=(255, 226, 90))
+        _text(draw, (56, y), line, 66, (16, 18, 22))
+        y += 96
+    meta = f"{article.get('source') or ''} · {stamp(article.get('published'))}".strip(" ·")
+    _text(draw, (56, y + 24), meta, 34, (90, 100, 112), semi=True)
+    y += 96
+    sentence = " ".join(re.sub(r"<[^>]+>", " ", str(article.get("key_sentence") or article.get("summary") or "")).split())
+    for line in _wrap(draw, sentence, 40, width - 112, max(0, (height - y - 60) // 54)):
+        _text(draw, (56, y + 20), line, 40, (52, 58, 66), semi=True)
+        y += 54
+    path = Path(out).parent / "news-card.png"  # beside cards/, not one of the beat cards
+    card.save(path)
+    return path
 
 
 def danda(text):
