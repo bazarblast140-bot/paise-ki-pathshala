@@ -301,6 +301,29 @@ def capture_intraday(symbol, directory, bars_5m, bars_15m=None, opener=None, exp
     }
 
 
+def crosshair_visible(path):
+    """True when a long dashed grey line (TradingView's crosshair) crosses the shot.
+
+    The crosshair is ~#797979 dashes covering ~55% of a row or column; grid
+    lines are near-black and price lines are coloured. Full resolution: a
+    thumbnail blurs the 2px dashes away.
+    """
+    import numpy as np
+    from PIL import Image
+    with Image.open(path) as image:
+        rgb = np.asarray(image.convert("RGB")).astype(int)
+    height, width = rgb.shape[:2]
+    spread = rgb.max(axis=2) - rgb.min(axis=2)
+    grey = (rgb[..., 0] >= 90) & (rgb[..., 0] <= 200) & (spread <= 14)
+    # Ignore the price axis on the right and the time axis at the bottom.
+    plot = grey[: int(height * 0.93), : int(width * 0.85)]
+    if plot.size == 0:
+        return False
+    rows = plot.mean(axis=1)
+    cols = plot[int(height * 0.06):].mean(axis=0)
+    return bool(rows.max() > 0.35 or cols.max() > 0.35)
+
+
 def chart_painted(path):
     """True when the shot has candle colors. A WebGL chart that never paints is not TradingView."""
     from PIL import Image
@@ -335,7 +358,7 @@ def _open_browser(play):
         ignore_default_args=["--enable-automation"],
     )
     context = browser.new_context(
-        viewport={"width": 1280, "height": 1000},
+        viewport={"width": 1280, "height": 1100},
         device_scale_factor=2,
         color_scheme="dark",
         locale="en-IN",
@@ -348,6 +371,16 @@ def _open_browser(play):
 
 ZOOM_NOTCHES = {"D": 4, "5": 2, "15": 2}
 HIDE_UI = "[class*='toast'],[class*='Toast']{display:none!important}"
+
+
+def _parking_spot(page, box, low=False):
+    """Bottom-left corner of the page, below the drawing toolbar and outside the pane.
+
+    Tried on 15 Oct: parking over the right widget bar or the time axis left
+    TradingView's crosshair on the 5m chart; this corner cleared it on 1D and 5m.
+    """
+    view = page.viewport_size or {"width": 1280, "height": 1100}
+    return 5, view["height"] - (4 if low else 10)
 
 
 def _frame_chart(page, interval):
@@ -375,7 +408,7 @@ def _frame_chart(page, interval):
     if box:
         # Keyboard zoom (Ctrl+Up) keeps the latest candle at the right edge.
         # Mouse-wheel zoom was ignored headless and left a hint toast.
-        page.mouse.click(box["x"] + box["width"] - 140, box["y"] + box["height"] * 0.45)
+        page.mouse.move(box["x"] + box["width"] - 140, box["y"] + box["height"] * 0.45)
         for _ in range(ZOOM_NOTCHES.get(str(interval), 0)):
             page.keyboard.press("Control+ArrowUp")
             page.wait_for_timeout(200)
@@ -383,7 +416,18 @@ def _frame_chart(page, interval):
     page.wait_for_timeout(800)
     # Leave over the right-hand panel: no crosshair, and the legend shows the
     # last bar instead of a hovered one.
-    page.mouse.move(1200, 600, steps=15)
+    page.mouse.move(*_parking_spot(page, box), steps=15)
+    page.wait_for_timeout(300)
+    try:
+        # Belt and braces: tell every chart canvas the pointer has left.
+        page.evaluate(
+            """() => { for (const c of document.querySelectorAll('.chart-container canvas')) {
+                for (const t of ['mouseleave', 'mouseout', 'pointerleave', 'pointerout']) {
+                    c.dispatchEvent(new MouseEvent(t, {bubbles: true}));
+                } } }"""
+        )
+    except Exception:  # noqa: BLE001
+        pass
     try:
         page.add_style_tag(content=HIDE_UI)
         page.evaluate(
@@ -433,6 +477,14 @@ def _playwright_chart(symbol, dest, interval="D"):
             elif ok and not chart_painted(dest):
                 ok = False
                 reason = "chart did not paint"
+            elif ok and crosshair_visible(dest):
+                # One retry with the pointer parked again, then refuse the shot.
+                page.mouse.move(*_parking_spot(page, None, low=True), steps=10)
+                page.wait_for_timeout(800)
+                page.screenshot(path=str(dest), clip=clip) if clip else page.screenshot(path=str(dest))
+                if crosshair_visible(dest):
+                    ok = False
+                    reason = "crosshair visible in capture"
             elif ok and str(interval) == "D":
                 page.goto(technicals_url(symbol), timeout=45000, wait_until="domcontentloaded")
                 _dismiss_cookies(page)

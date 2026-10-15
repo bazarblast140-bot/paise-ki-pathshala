@@ -236,3 +236,54 @@ class RenderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FillAndEndsTests(unittest.TestCase):
+    """Second review of 15 Oct: letterbox voids, crosshair, off-topic news, intro length, end card."""
+
+    def test_off_topic_news_is_not_about_the_indian_market(self):
+        from realchart.build import about_indian_market
+        self.assertFalse(about_indian_market({
+            "title": "Bank of America shares flat after earnings-driven sell-off, slide over 20% from recent peak",
+            "url": "https://www.livemint.com/market/stock-market-news/bank-of-america",
+        }))
+        self.assertTrue(about_indian_market({"title": "Nifty ends at 22,997 as India bucks Asian rout"}))
+        self.assertTrue(about_indian_market({"title": "Sensex jumps 600 points; FII buying returns"}))
+
+    def test_crosshair_detector(self):
+        from PIL import Image, ImageDraw
+        with tempfile.TemporaryDirectory() as tmp:
+            clean = Path(tmp) / "clean.png"
+            image = Image.new("RGB", (1748, 1838), (15, 15, 15))
+            draw = ImageDraw.Draw(image)
+            for x in range(0, 1400, 40):
+                draw.rectangle((x, 600, x + 16, 1200), fill=(242, 54, 69))
+            image.save(clean)
+            self.assertFalse(capture.crosshair_visible(clean))
+            for x in range(0, 1748, 14):
+                draw.line((x, 900, x + 7, 900), fill=(121, 121, 121), width=2)
+            dirty = Path(tmp) / "dirty.png"
+            image.save(dirty)
+            self.assertTrue(capture.crosshair_visible(dirty))
+
+    def test_fill_gate_fails_a_letterboxed_frame(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as tmp:
+            boxed = Image.new("RGB", (1080, 1920), (0, 0, 0))
+            boxed.paste(Image.new("RGB", (1080, 900), (90, 120, 160)), (0, 500))
+            png = Path(tmp) / "boxed.png"
+            boxed.save(png)
+            video = Path(tmp) / "boxed.mp4"
+            subprocess.run(["ffmpeg", "-y", "-v", "error", "-loop", "1", "-i", str(png), "-t", "1.5",
+                            "-vf", "fps=30,format=yuv420p", "-c:v", "libx264", str(video)], check=True)
+            self.assertTrue(video_qa.fill_faults(video, "boxed"))
+            self.assertEqual(video_qa.fill_faults(video, "boxed", skip_until=2.0), [])
+
+    def test_cards_and_end_card_fill_the_frame(self):
+        from realchart.ends import INTRO_RTT, render_end_card
+        from realchart.qa import probe
+        self.assertTrue(1.0 <= probe(INTRO_RTT)["duration"] <= 2.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            card = render_end_card(Path(tmp) / "outro_rtt.mp4", None)
+            self.assertEqual(video_qa.fill_faults(card, "outro"), [])
+            self.assertLess(video_qa.mean_volume_db(card), video_qa.OUTRO_MAX_MEAN_DB)

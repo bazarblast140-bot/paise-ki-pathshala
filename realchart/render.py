@@ -13,19 +13,29 @@ from realchart.fmt import inr, stamp
 
 
 W, H = 1080, 1920
-VIS_TOP, VIS_H = 140, 1100          # chart/article area, full width
-CAP_TOP, CAP_BOTTOM = 1262, 1660    # captions stay above the 1680 footer
-BG = (14, 16, 20)
+# Layout after the approved 14-Oct box sample: grid background, a terminal
+# header, a tall media panel and a filled caption panel. No plain black.
+HEAD_TOP, HEAD_H = 40, 128
+MEDIA = (20, 236, 1060, 1436)       # x0, y0, x1, y1: 1040x1200, a tall crop of the chart
+CAP = (20, 1456, 1060, 1736)        # caption panel
+FOOT = (20, 1752, 1060, 1832)
+BG = (20, 27, 36)
+GRID = (28, 37, 48)
+PANEL = (27, 37, 50)
+CHART_FLOOR = (26, 32, 42)          # lifts TradingView's #0F0F0F so no area reads as a void
 YELLOW = (255, 214, 10)
 WHITE = (236, 240, 244)
 GREY = (150, 165, 180)
+CYAN = (0, 209, 255)
+GREEN = (38, 222, 129)
+RED = (255, 77, 90)
 DRAWN = []  # every overlay string, for the tofu and raw-float gates
 
 
-def _text(draw, xy, text, size, fill, semi=False):
+def _text(draw, xy, text, size, fill, semi=False, anchor=None):
     text = str(text)
     DRAWN.append(text)
-    draw.text(xy, text, fill=fill, font=_font_any(size, semi))
+    draw.text(xy, text, fill=fill, font=_font_any(size, semi), anchor=anchor)
 
 
 def _font_any(size, semi=False):
@@ -52,7 +62,7 @@ def _wrap(draw, text, size, width, max_lines):
 
 
 def _cover(image, width, height, anchor_x=1.0, anchor_y=0.5):
-    """Scale to fill width x height and crop; anchor_x=1 keeps the latest candles."""
+    """Scale to fill width x height and crop; anchor_x=1 keeps the latest candles and the price axis."""
     scale = max(width / image.width, height / image.height)
     resized = image.resize((max(width, round(image.width * scale)), max(height, round(image.height * scale))))
     left = round((resized.width - width) * anchor_x)
@@ -60,46 +70,93 @@ def _cover(image, width, height, anchor_x=1.0, anchor_y=0.5):
     return resized.crop((left, top, left + width, top + height))
 
 
-def _card(title, caption, spoken, footer, visual=None, zoom=1.0, anchor_y=0.5, chips=None, dim=False):
-    """Header, a full-width visual, the beat caption, the narration line, a footer chip."""
-    from PIL import Image, ImageDraw, ImageEnhance
+def background():
+    from PIL import Image, ImageDraw
     image = Image.new("RGB", (W, H), BG)
+    draw = ImageDraw.Draw(image)
+    for y in range(0, H, 60):
+        draw.line([(0, y), (W, y)], fill=GRID)
+    for x in range(0, W, 60):
+        draw.line([(x, 0), (x, H)], fill=GRID)
+    return image
+
+
+def lift(shot):
+    """Raise the darkest pixels to CHART_FLOOR; candles and labels keep their colour."""
+    from PIL import Image, ImageChops
+    return ImageChops.lighter(shot.convert("RGB"), Image.new("RGB", shot.size, CHART_FLOOR))
+
+
+def _card(title, caption, spoken, footer, visual=None, zoom=1.0, anchor_y=0.5, chips=None, dim=False,
+          header=None, section=("CHART · DATA", CYAN)):
+    """Terminal header, a tall media panel filled edge to edge, a caption panel, a footer chip."""
+    from PIL import ImageDraw, ImageEnhance, ImageFilter
+    image = background()
+    draw = ImageDraw.Draw(image)
+    header = header or {}
+    x0, y0, x1, y1 = MEDIA
+    mw, mh = x1 - x0, y1 - y0
     if visual and Path(visual).is_file():
+        from PIL import Image
         with Image.open(visual) as opened:
             shot = opened.convert("RGB")
         if zoom > 1.0:
-            # Smart zoom on the latest candles: keep the right part of the shot.
             keep_w = round(shot.width / zoom)
             keep_h = round(shot.height / zoom)
             top = round((shot.height - keep_h) * 0.5)
             shot = shot.crop((shot.width - keep_w, top, shot.width, top + keep_h))
-        shot = _cover(shot, W, VIS_H, anchor_x=1.0, anchor_y=anchor_y)
+        shot = lift(_cover(shot, mw, mh, anchor_x=1.0, anchor_y=anchor_y))
         if dim:
-            shot = ImageEnhance.Brightness(shot).enhance(0.45)
-        image.paste(shot, (0, VIS_TOP))
-    draw = ImageDraw.Draw(image)
-    draw.rectangle((0, 0, W, VIS_TOP - 8), fill=(20, 24, 32))
-    _text(draw, (36, 22), "PAISE KI PATHSHALA", 34, WHITE)
-    _text(draw, (36, 70), title, 36, YELLOW)
+            shot = ImageEnhance.Brightness(shot.filter(ImageFilter.GaussianBlur(6))).enhance(0.75)
+        image.paste(shot, (x0, y0))
+    else:
+        draw.rectangle(MEDIA, fill=PANEL)
+    draw.rounded_rectangle(MEDIA, 18, outline=(46, 62, 80), width=3)
+    # terminal header
+    draw.rounded_rectangle((20, HEAD_TOP, W - 20, HEAD_TOP + HEAD_H), 18, fill=(15, 22, 30), outline=(46, 62, 80), width=2)
+    draw.ellipse((44, HEAD_TOP + 28, 64, HEAD_TOP + 48), fill=GREEN)
+    _text(draw, (76, HEAD_TOP + 16), "PAISE KI PATHSHALA", 36, WHITE)
+    _text(draw, (76, HEAD_TOP + 70), title, 30, GREY, semi=True)
+    sym = str(header.get("symbol") or "")
+    if sym:
+        width = draw.textlength(sym, font=_font_any(30))
+        draw.rounded_rectangle((W - 44 - width - 28, HEAD_TOP + 14, W - 44, HEAD_TOP + 60), 10, fill=(22, 34, 46), outline=CYAN, width=2)
+        _text(draw, (W - 44 - width - 14, HEAD_TOP + 16), sym, 30, CYAN)
+    close_line = str(header.get("close_line") or "")
+    if close_line:
+        width = draw.textlength(close_line, font=_font_any(28, True))
+        _text(draw, (W - 44 - width, HEAD_TOP + 72), close_line, 28, header.get("close_color") or WHITE, semi=True)
+    # section chip, on the media panel's top edge
+    label, color = section
+    width = draw.textlength(label, font=_font_any(28))
+    draw.rounded_rectangle((36, y0 + 16, 36 + width + 56, y0 + 62), 10, fill=(16, 24, 32), outline=color, width=2)
+    draw.ellipse((52, y0 + 32, 66, y0 + 46), fill=color)
+    _text(draw, (76, y0 + 18), label, 28, color)
     if chips:
         x = 36
+        rows_y = y1 - 150  # above the IST time axis
         for text, fill, ink in chips:
             width = draw.textlength(text, font=_font_any(30)) + 32
-            draw.rounded_rectangle((x, VIS_TOP + VIS_H - 76, x + width, VIS_TOP + VIS_H - 20), 14, fill=fill)
-            _text(draw, (x + 16, VIS_TOP + VIS_H - 72), text, 30, ink)
-            x += width + 16
-    y = CAP_TOP
-    for line in _wrap(draw, caption, 58, W - 72, 3):
-        _text(draw, (36, y), line, 58, YELLOW)
-        y += 72
-    y += 10
-    for line in _wrap(draw, spoken, 40, W - 72, max(1, (CAP_BOTTOM - y) // 54)):
-        if y + 54 > CAP_BOTTOM:
-            break
-        _text(draw, (36, y), line, 40, WHITE, semi=True)
-        y += 54
-    draw.rectangle((0, 1680, W, 1780), fill=(28, 32, 40))
-    _text(draw, (36, 1702), footer, 36, YELLOW)
+            if x + width > x1 - 16:
+                x, rows_y = 36, rows_y - 66
+            draw.rounded_rectangle((x, rows_y, x + width, rows_y + 56), 14, fill=fill)
+            _text(draw, (x + 16, rows_y + 6), text, 30, ink)
+            x += width + 14
+    # caption panel
+    draw.rounded_rectangle(CAP, 20, fill=PANEL, outline=(46, 62, 80), width=2)
+    y = CAP[1] + 20
+    for line in _wrap(draw, caption, 50, CAP[2] - CAP[0] - 48, 3):
+        _text(draw, (44, y), line, 50, YELLOW)
+        y += 60
+    y += 6
+    while y + 52 <= CAP[3] - 12:
+        lines = _wrap(draw, spoken, 40, CAP[2] - CAP[0] - 48, max(1, (CAP[3] - 12 - y) // 52))
+        for line in lines:
+            _text(draw, (44, y), line, 40, WHITE, semi=True)
+            y += 52
+        break
+    draw.rounded_rectangle(FOOT, 16, fill=(15, 22, 30), outline=(46, 62, 80), width=2)
+    _text(draw, (44, FOOT[1] + 18), footer, 32, YELLOW)
     return image
 
 
@@ -203,7 +260,22 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
     del DRAWN[:]
     symbol = str(levels.get("symbol") or "")
     src = "NSE data (yfinance)" if levels.get("chart_source") == "yfinance" else "TradingView"
-    title = f"{kind} · {symbol} · {levels.get('last_date') or ''}".rstrip(" ·")
+    title = f"Real chart · Real data · {kind}"
+    chg = float(levels.get("chg_pct") or 0)
+    header = {
+        "symbol": f"{symbol} · 1D",
+        "close_line": f"Close {levels.get('last_date') or ''}: {inr(levels.get('close'))} ({chg:+.2f}%)",
+        "close_color": GREEN if chg >= 0 else RED,
+    }
+    pivot_chips = [
+        (f"{name} {inr(levels.get(key))}", fill, ink)
+        for name, key, fill, ink in (
+            ("P", "pivot", (255, 226, 120), (40, 30, 0)),
+            ("R1", "r1", (186, 240, 200), (12, 70, 36)),
+            ("S1", "s1", (255, 186, 190), (90, 16, 24)),
+        )
+        if levels.get(key) is not None
+    ]
     overlaid = None
     if intraday and kind in ("close", "ta") and intraday.get("path") and Path(intraday["path"]).is_file():
         from PIL import Image
@@ -230,24 +302,31 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
         # The narration line, with spoken whole prices shown as 22,997 (not 22997).
         spoken = re.sub(r"(?<![\d.,])(\d{4,})(?![\d]|[.,]\d)", lambda m: inr(int(m.group(1)), 0), str(row.get("t") or ""))
         caption = _caption(kind, row, levels)
-        visual, zoom, footer, chips, dim, anchor_y = chart_path, 1.0, f"CHART · DATA · {src}", None, False, 0.5
+        visual, zoom, footer, chips, dim, anchor_y = chart_path, 1.0, f"Source: {src} · 1D", None, False, 0.5
+        section = ("CHART · DATA", CYAN)
         if sec == "hook":
-            zoom, footer = 1.8, f"HOOK · {src}"
+            zoom, footer, section = 1.5, f"Source: {src} · 1D", ("HOOK", YELLOW)
         elif sec == "intraday":
             interval = str((intraday or {}).get("interval") or "5")
             visual = overlaid or chart_path
-            footer = f"INTRADAY {interval}m · DATA · {(intraday or {}).get('label') or src}"
+            chips = pivot_chips
+            section = (f"INTRADAY {interval}m · time IST", CYAN)
+            footer = f"Source: {(intraday or {}).get('label') or src} · {interval}m · IST"
         elif sec == "news":
             visual, anchor_y = news_shot or chart_path, 0.0
             published = stamp((article or {}).get("published"))
-            footer = f"KHABAR · FACT · {(article or {}).get('source') or ''} {published}".strip()
+            section = ("KHABAR · FACT", GREEN)
+            footer = f"{(article or {}).get('source') or ''} · {published}".strip(" ·")
         elif sec == "view":
             visual = overlaid or chart_path
-            footer, chips = "HAMARA VIEW · OPINION (scenario)", zone_chips
+            chips = pivot_chips + zone_chips
+            section = ("HAMARA VIEW · OPINION (scenario)", (255, 159, 28))
+            footer = "Levels computed from NSE daily data"
         elif sec == "cta":
-            dim, footer = True, "Paise Ki Pathshala"
+            dim, footer, section = True, "Paise Ki Pathshala", ("FOLLOW", YELLOW)
         path = out / f"{sec}.png"
-        _card(title, caption, spoken, footer, visual, zoom=zoom, anchor_y=anchor_y, chips=chips, dim=dim).save(path)
+        _card(title, caption, spoken, footer, visual, zoom=zoom, anchor_y=anchor_y, chips=chips, dim=dim,
+              header=header, section=section).save(path)
         made.append(path)
     (out / "overlay_text.json").write_text(json.dumps(list(DRAWN), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return made
