@@ -24,7 +24,7 @@ def probe(path):
     }
 
 
-def check(out, rows, levels, voice_engine, dry_run=False):
+def check(out, rows, levels, voice_engine, dry_run=False, capture_dates=None, expected_date=None):
     faults = []
     out = Path(out)
     # The 40–50s gate is the main Reel only. final_yt.mp4 and final_ig.mp4 are concatenations.
@@ -52,4 +52,23 @@ def check(out, rows, levels, voice_engine, dry_run=False):
         faults.append("source.md missing")
     if not (out / "script.txt").is_file():
         faults.append("script.txt missing")
+    if capture_dates is not None:
+        faults.extend(video_faults(out, rows, capture_dates, expected_date))
     return faults
+
+
+def video_faults(out, rows, capture_dates, expected_date):
+    """The pre-publish video gate: black/empty frames, tofu, capture date, raw floats, IG ends."""
+    from realchart import ends, video_qa
+    captions = []
+    listing = Path(out) / "cards" / "overlay_text.json"
+    if listing.is_file():
+        captions.extend(json.loads(listing.read_text(encoding="utf-8")))
+    else:
+        return ["overlay_text.json missing, captions not checked"]
+    for row in rows:
+        captions.extend([str(row.get("d") or ""), str(row.get("t") or "")])
+    captions.extend([ends.FOLLOW_RTT, ends.FOLLOW_PKP])
+    return video_qa.run_all(
+        out, captions, capture_dates, expected_date, ends.INTRO_RTT, ends.OUTRO_RTT, ends.FOLLOW_RTT,
+    )

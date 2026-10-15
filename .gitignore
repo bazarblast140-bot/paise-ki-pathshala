@@ -15,6 +15,9 @@ assets/cache/
 assets/sfx/
 # Drop your own TTF here; the renderer falls back to a system font without it
 assets/fonts/*
+!assets/fonts/Hind-Bold.ttf
+!assets/fonts/Hind-SemiBold.ttf
+!assets/fonts/OFL-Hind.txt
 !assets/fonts/.gitkeep
 assets.zip
 

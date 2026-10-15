@@ -31,27 +31,20 @@ ENCODE = [
 ]
 
 
-def _font():
-    from PIL import ImageFont
-    for path in (
-        "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    ):
-        try:
-            return ImageFont.truetype(path, 64)
-        except OSError:
-            continue
-    return ImageFont.load_default()
+def _font(size=72):
+    from realchart.fonts import font
+    return font(size)
 
 
 def render_card(text, dest, seconds=OUTRO_SECONDS):
-    """A still card plus a tone. No spoken voice, so Edge is never called."""
+    """A still card with silent audio. No voice and no tone (the old 440 Hz tone,
+    loudness-normalised to -15 LUFS, was the loud beep at the end of the IG Reel)."""
     from PIL import Image, ImageDraw
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     image = Image.new("RGB", (1080, 1920), (14, 16, 20))
     draw = ImageDraw.Draw(image)
-    font = _font()
+    font = _font(72)
     words = str(text).split()
     lines, cur = [], ""
     for word in words:
@@ -63,19 +56,22 @@ def render_card(text, dest, seconds=OUTRO_SECONDS):
             cur = nxt
     if cur:
         lines.append(cur)
-    y = 860 - 40 * len(lines)
+    # A solid panel, so the card is never a near-black void (blackdetect gate).
+    top = 900 - 48 * len(lines) - 70
+    draw.rounded_rectangle((70, top, 1010, top + 96 * len(lines) + 120), 36, fill=(255, 214, 10))
+    y = top + 60
     for line in lines:
-        draw.text((80, y), line, fill=(255, 214, 10), font=font)
-        y += 84
+        width = draw.textlength(line, font=font)
+        draw.text(((1080 - width) / 2, y), line, fill=(14, 16, 20), font=font)
+        y += 96
     png = dest.with_suffix(".png")
     image.save(png)
     cmd = [
         "ffmpeg", "-y", "-v", "error",
         "-loop", "1", "-i", str(png),
-        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+        "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
         "-t", f"{seconds:.3f}",
         "-vf", "scale=1080:1920,fps=30,format=yuv420p",
-        "-af", "volume=0.15,loudnorm=I=-15:TP=-1.5:LRA=11",
         *ENCODE,
         "-shortest",
         str(dest),
