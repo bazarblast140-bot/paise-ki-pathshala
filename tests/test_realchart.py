@@ -290,7 +290,7 @@ class ScriptTests(unittest.TestCase):
         self.assertNotIn("intraday", [row["sec"] for row in recap_rows])
         self.assertNotIn("intraday", [row["sec"] for row in rows])
         spoken = script.spoken_text(close_rows)
-        self.assertIn(script.CTA, spoken)
+        self.assertIn("Comment करो", spoken)
         self.assertIn(script.DISCLAIMER, spoken)
         for phrase in script.FORBIDDEN_FOLLOW:
             self.assertNotIn(phrase.lower(), spoken.lower())

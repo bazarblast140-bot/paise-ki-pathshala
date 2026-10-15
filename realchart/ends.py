@@ -129,7 +129,7 @@ def concat_copy(parts, dest):
     return dest
 
 
-def render_end_card(dest, background=None, name="Rajesh Technical Trader", call="follow करो", seconds=OUTRO_SECONDS):
+def render_end_card(dest, background=None, name="Rajesh Technical Trader", call="follow करो", seconds=OUTRO_SECONDS, extra=None):
     """Full-frame end card: the chart blurred behind, the big channel name, a follow button. Silent."""
     from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
     from realchart.fonts import font
@@ -170,6 +170,14 @@ def render_end_card(dest, background=None, name="Rajesh Technical Trader", call=
     note = "Real chart · Real data · Daily"
     width = draw.textlength(note, font=sub)
     draw.text(((1080 - width) / 2, top + 210), note, fill=(230, 236, 242), font=sub)
+    y = top + 300
+    for index, line in enumerate(extra or []):
+        face = font(54 if index == 0 else 46, semi=True)
+        width = draw.textlength(line, font=face)
+        if index == 0:
+            draw.rounded_rectangle(((1080 - width) / 2 - 30, y - 10, (1080 + width) / 2 + 30, y + 74), 20, fill=(20, 24, 32))
+        draw.text(((1080 - width) / 2, y), line, fill=(255, 226, 120) if index == 0 else (240, 244, 248), font=face)
+        y += 96
     png = dest.with_suffix(".png")
     image.save(png)
     try:

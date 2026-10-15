@@ -92,6 +92,18 @@ LEGEND = re.compile(
 LEGEND_TOL = 0.0015
 
 
+def ema_status(text):
+    """Which of TradingView's own EMA 20 / EMA 50 studies the legend shows with a value.
+
+    An EMA the chart cannot compute (e.g. an anonymous view-only layout) shows its
+    title with no number, so a title alone does not count."""
+    found = {}
+    for length in (20, 50):
+        hit = re.search(rf"EMA\s*{length}\b[^\n]*?\n?\s*([0-9][0-9,]*\.[0-9]+)", str(text or ""))
+        found[f"ema{length}"] = bool(hit)
+    return found
+
+
 def parse_legend(text):
     """O/H/L/C of the last bar from the TradingView legend text (mouse off the chart)."""
     blob = str(text or "")
@@ -218,6 +230,7 @@ def capture_chart(symbol, dest, bars, opener=None, interval="D", fallback_label=
         _clear_capture_failure(dest)
         return {
             "legend": shot.get("legend") or {},
+            "ema": shot.get("ema") or ema_status(shot.get("text") or ""),
             "last_candle_date": (expect or {}).get("date") or "",
             "source": "tradingview",
             "path": shot.get("path") or str(dest),
@@ -512,6 +525,7 @@ def _playwright_chart(symbol, dest, interval="D"):
         "captured_at": now_ist().strftime("%Y-%m-%d %H:%M IST"),
         "technicals": tech,
         "legend": legend,
+        "ema": ema_status(text),
     }
 
 

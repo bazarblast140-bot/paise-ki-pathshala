@@ -216,7 +216,56 @@ def chunks_for(kind, levels, article=None):
                 row["t"] = piv
             elif row["sec"] == "view":
                 row["t"] = view
+        _growth_close(rows, levels)
+        for row in rows:
+            if row["sec"] == "chart":
+                row["t"] = f"{CURIOSITY} {row['t']}"
+            elif row["sec"] == "intraday":
+                row["t"] = f"{row['t']} {SAVE_CTA}"
     return rows
+
+
+CURIOSITY = "कल का सबसे important लेवल end में।"
+SAVE_CTA = "यह chart save करो, कल काम आएगा।"
+SERIES = "Nifty Close Report"
+
+
+def next_pivot(levels):
+    """Tomorrow's classic pivot from today's real H/L/C."""
+    try:
+        return (float(levels["high"]) + float(levels["low"]) + float(levels["close"])) / 3.0
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _growth_close(rows, levels):
+    """Section 8: the day's biggest real number first, a level-specific comment question, tomorrow's level."""
+    chg = float(levels.get("chg_pct") or 0)
+    side = "ऊपर" if chg >= 0 else "नीचे"
+    close = round(float(levels.get("close") or 0))
+    levels["next_pivot"] = next_pivot(levels)
+    if levels["next_pivot"] is not None:
+        # Tomorrow's classic R1/S1 from today's real H/L: the level the question is about.
+        levels["next_r1"] = 2 * levels["next_pivot"] - float(levels["low"])
+        levels["next_s1"] = 2 * levels["next_pivot"] - float(levels["high"])
+    for row in rows:
+        if row["sec"] == "chart":
+            # The hook already said the close and the move; don't read them twice.
+            row["t"] = re.sub(r"निफ्टी [\d,]+ पर बंद, [\d.]+ प्रतिशत \S+।\s*", "", row["t"])
+        elif row["sec"] == "view":
+            row["t"] = re.sub(r"\s*डेटा [^।]*से।", "", row["t"])
+        if row["sec"] == "hook":
+            row["d"] = f"Nifty {chg:+.2f}%, {_fmt(levels.get('close'))} पर बंद!"
+            row["t"] = f"निफ्टी आज {abs(chg):.2f} प्रतिशत {side}, {close} पर बंद!"
+        elif row["sec"] == "cta":
+            r1 = levels.get("next_r1") if chg >= 0 else levels.get("next_s1")
+            verb = "टूटेगा" if chg >= 0 else "बचेगा"
+            question = f"कल {round(float(r1))} {verb} या नहीं? Comment करो।" if r1 is not None else CTA
+            key = levels.get("next_pivot")
+            lead = f"कल का key लेवल {round(key)}, pivot। " if key is not None else ""
+            row["t"] = f"{lead}{question} कल मिलते हैं। {DISCLAIMER}"
+            key_d = f"कल का key लेवल {_fmt(key)} (pivot) · " if key is not None else ""
+            row["d"] = f"{key_d}{question} {DISCLAIMER}"
 
 
 def spoken_text(rows):
@@ -235,7 +284,7 @@ def lint(rows):
     if any(row.get("sec") == "view" for row in rows):
         if "possible" not in blob and "scenario" not in blob and "हो सकता" not in blob:
             faults.append("scenario wording missing")
-    if CTA not in blob:
+    if CTA not in blob and "Comment करो" not in blob:
         faults.append("cta missing")
     if DISCLAIMER not in blob:
         faults.append("disclaimer missing")
@@ -271,7 +320,7 @@ def number_faults(rows, levels):
     allowed = []
     for key in (
         "open", "high", "low", "close", "prev_close", "ema20", "ema50", "rsi14", "atr14",
-        "support", "bounce_high", "next_support", "pivot", "r1", "s1", "r2", "s2",
+        "support", "bounce_high", "next_support", "pivot", "r1", "s1", "r2", "s2", "next_pivot", "next_r1", "next_s1",
         "call_oi", "call_oi_next", "put_oi", "put_oi_next",
     ):
         if levels.get(key) is not None:
@@ -290,3 +339,47 @@ def number_faults(rows, levels):
             if not any(abs(value - item) <= 0.05 or abs(value - round(item)) <= 0.5 for item in allowed):
                 faults.append(f"caption number {value} is not a computed level")
     return faults
+
+
+FOLLOW_LINE = "Roz 4 baje Nifty analysis ke liye follow karo"
+
+
+def end_card_lines(kind, levels):
+    """Extra end-card lines: tomorrow's real key level, the daily follow promise, sign-off."""
+    if kind != "close":
+        return []
+    key = levels.get("next_pivot") or next_pivot(levels)
+    lines = []
+    if key is not None:
+        from realchart.fmt import inr
+        lines.append(f"Kal ka key level: {inr(key, 0)} (Pivot)")
+    lines += [FOLLOW_LINE, "Kal milte hain"]
+    return lines
+
+
+def post_meta(levels):
+    """Keyword-first title, caption, hashtags and pinned comment, all from real levels."""
+    from datetime import date
+    from realchart.fmt import inr
+    try:
+        day = date.fromisoformat(str(levels.get("last_date"))[:10])
+        day_text = f"{day.day} {day.strftime('%b %Y')}"
+    except ValueError:
+        day_text = ""
+    chg = float(levels.get("chg_pct") or 0)
+    close = inr(levels.get("close"), 0)
+    key = levels.get("next_pivot") or next_pivot(levels)
+    q = levels.get("next_r1") if chg >= 0 else levels.get("next_s1")
+    title = f"Nifty analysis today | {SERIES} {day_text}".strip()
+    caption = (
+        f"Nifty prediction for tomorrow | Nifty analysis today {day_text}: Nifty {chg:+.2f}% पर {close} पर बंद। "
+        f"कल का key level {inr(key, 0)} (pivot). Stock market Hindi me roz 4 baje. Educational only, not advice."
+    )
+    pinned = f"कल Nifty {inr(q, 0)} {'तोड़ेगा' if chg >= 0 else 'बचाएगा'} या नहीं? आपका view comment करो 👇" if q else ""
+    return {
+        "title": title,
+        "caption": caption,
+        "hashtags": ["#NiftyPrediction", "#NiftyAnalysisToday", "#StockMarketHindi", "#Nifty50", "#NiftyCloseReport"],
+        "pinned_comment": pinned,
+        "series": SERIES,
+    }
