@@ -224,7 +224,7 @@ class RenderTests(unittest.TestCase):
             texts = json.loads((Path(tmp) / "cards" / "overlay_text.json").read_text(encoding="utf-8"))
             self.assertEqual(raw_float_faults(texts), [])
             self.assertEqual(tofu_faults(texts), [])
-            self.assertTrue(any("22,997.35" in text for text in texts))
+            self.assertTrue(any("22,997" in text and "22,997.35" not in text for text in texts))
             for path in made:
                 with Image.open(path) as card:
                     # The chart fills the full width: no letterbox column at the sides.
@@ -324,7 +324,7 @@ class RoundThreeTests(unittest.TestCase):
     def test_zone_chips_are_whole_points(self):
         with tempfile.TemporaryDirectory() as tmp:
             texts = self._cards(tmp)
-        chips = [t for t in texts if t.startswith(("SL ", "Target "))]
+        chips = [t for t in texts if t.startswith(("SL ", "Target ", "P ", "R1 ", "S1 "))]
         self.assertTrue(chips)
         for chip in chips:
             self.assertNotIn(".", chip)
@@ -347,3 +347,25 @@ class VoicePadTests(unittest.TestCase):
             Image.new("RGB", (32, 32), (90, 120, 160)).save(tmp / "a.png")
             out = assemble([tmp / "a.png"], voice, tmp / "final.mp4", seconds=4.0, durations=[4.0])
             self.assertAlmostEqual(probe(out)["duration"], 4.0, delta=0.15)
+
+
+class RoundFourTests(unittest.TestCase):
+    def test_one_caption_block_and_no_level_text_block(self):
+        texts = RoundThreeTests()._cards(tempfile.mkdtemp())
+        self.assertFalse(any(t.startswith("P ") and "R1" in t for t in texts), "level text block is back")
+        self.assertFalse(any(re.search(r"\d,\d{3}\.\d\d", t) for t in texts), "decimals on screen")
+
+    def test_news_is_its_own_card_with_the_headline(self):
+        from PIL import Image
+        from realchart.render import MEDIA, news_card
+        with tempfile.TemporaryDirectory() as tmp:
+            path = news_card(tmp, {"title": "Nifty ends at 22,997 as India bucks Asian rout", "source": "Mint",
+                                   "published": "Thu, 15 Oct 2026 17:40:21 +0530", "summary": "<p>Banks led.</p>"})
+            with Image.open(path) as card:
+                self.assertEqual(card.size, (MEDIA[2] - MEDIA[0], MEDIA[3] - MEDIA[1]))
+                self.assertEqual(card.getpixel((44, 140)), (255, 226, 90))
+
+    def test_feed_titles_are_unescaped(self):
+        from realchart.news import parse_rss
+        xml = "<rss><channel><item><title>Leela Hotels &amp;amp; Resorts</title></item></channel></rss>"
+        self.assertEqual(parse_rss(xml, "x")[0]["title"], "Leela Hotels & Resorts")
