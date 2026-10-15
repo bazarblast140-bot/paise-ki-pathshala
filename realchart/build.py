@@ -264,10 +264,14 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
         intraday = capture.capture_intraday(
             levels["symbol"], out, bars_5m, bars_15m, opener=chart_opener,
         )
-    from realchart.levels import apply_screen_levels, fetch_option_chain
-    chain = chain_for(levels["symbol"]) if chain_for else fetch_option_chain(levels["symbol"], session)
-    if not apply_screen_levels(levels, chain):
-        raise Hold("rr", "RR below 1.5 from pivot and OI levels")
+    # News is the article, the highlighted sentence, and the chart. It has no
+    # entry, stop, or target, so a failed reward-to-risk screen must not hold it.
+    # Close and TA still hold before voice when no level clears 1.5.
+    if kind != "news":
+        from realchart.levels import apply_screen_levels, fetch_option_chain
+        chain = chain_for(levels["symbol"]) if chain_for else fetch_option_chain(levels["symbol"], session)
+        if not apply_screen_levels(levels, chain):
+            raise Hold("rr", "RR below 1.5 from pivot and OI levels")
     (out / "levels.json").write_text(json.dumps({k: v for k, v in levels.items() if k != "bars"}, indent=2) + "\n", encoding="utf-8")
     return levels, article, chart, intraday
 

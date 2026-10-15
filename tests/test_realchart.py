@@ -263,6 +263,14 @@ class ScriptTests(unittest.TestCase):
             "published": "Fri, 09 Oct 2026 08:10:00 +0530",
         }
         rows = script.chunks_for("news", levels, article)
+        self.assertEqual([row["sec"] for row in rows], ["hook", "chart", "news", "cta"])
+        shown = " ".join(row["d"] for row in rows)
+        self.assertIn(article["title"][:80], shown)
+        self.assertIn(article["key_sentence"], shown)
+        self.assertIn(article["source"], shown)
+        self.assertIn(article["published"], shown)
+        for token in (" SL ", " target ", " R1 ", " S1 ", " R2 ", " S2 "):
+            self.assertNotIn(token, shown)
         self.assertEqual(rows[0]["start"], 0.0)
         self.assertEqual(rows[0]["end"], 3.0)
         self.assertEqual(script.lint(rows), [])
@@ -284,7 +292,12 @@ class ScriptTests(unittest.TestCase):
         self.assertIn(script.DISCLAIMER, spoken)
         for phrase in script.FORBIDDEN_FOLLOW:
             self.assertNotIn(phrase.lower(), spoken.lower())
+        self.assertIn("SL ", close_rows[-2]["d"])
+        self.assertIn("target ", close_rows[-2]["d"])
         self.assertEqual(script.lint(close_rows), [])
+        no_scenario = [dict(row) for row in close_rows]
+        no_scenario[-2]["t"] = "बुल केस में टारगेट ज़ोन तक बाउंस है।"
+        self.assertIn("scenario wording missing", script.lint(no_scenario))
         close_rows[-1]["d"] = "Paise Ki Pathshala follow करो"
         self.assertTrue(any(fault.startswith("channel follow line") for fault in script.lint(close_rows)))
 
@@ -495,6 +508,63 @@ class BuildTests(unittest.TestCase):
             self.assertIn("RR below 1.5", (out / "HOLD").read_text(encoding="utf-8"))
             self.assertFalse((out / "voice.wav").exists())
             self.assertFalse((out / "final.mp4").exists())
+
+    def test_news_posts_the_article_when_rr_is_below_one_and_a_half(self):
+        """News is the article and the chart. The same bars that hold a close Reel do not hold news."""
+        bars = _bars()
+        stamp = _stamp(datetime(2026, 10, 8).date())
+        now = datetime(2026, 10, 15, 10, 2, tzinfo=IST)
+        article = {
+            "title": "Nifty ends lower after the open",
+            "url": "https://www.livemint.com/markets/nifty-ends",
+            "summary": "The index closed lower. Traders watched the cash session.",
+            "published": "Thu, 15 Oct 2026 08:10:00 +0530",
+            "source": "livemint.com",
+        }
+        screened = []
+
+        def walled(_symbol, _dest):
+            return {"ok": False, "reason": "captcha", "text": "captcha"}
+
+        def shot(_url, dest):
+            from PIL import Image
+            Path(dest).parent.mkdir(parents=True, exist_ok=True)
+            Image.new("RGB", (80, 80), (20, 20, 20)).save(dest)
+            return {"ok": True, "path": str(dest)}
+
+        def refused(_symbol):
+            screened.append(_symbol)
+            raise AssertionError("news must not screen pivot or OI levels")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "run"
+            with mock.patch.dict(os.environ, {"REALCHART_NO_ALERT": "1"}), \
+                 mock.patch("gemini_voice.write_speech", side_effect=AssertionError("no gemini")):
+                code = run(
+                    "news", out, now=now, dry_run=True,
+                    bars_for=lambda _t: (bars, stamp), articles=[article],
+                    chart_opener=walled, article_opener=shot, chain_for=refused,
+                )
+            detail = (out / "qa.json").read_text(encoding="utf-8") if (out / "qa.json").is_file() else "no qa"
+            self.assertEqual(code, 0, detail)
+            self.assertFalse((out / "HOLD").exists())
+            self.assertEqual(screened, [])
+            qa = json.loads(detail)
+            self.assertEqual(qa["verdict"], "DRY-OK")
+            self.assertEqual(qa["kind"], "news")
+            self.assertIsNone(qa["rr"])
+            self.assertEqual(qa["voice"], "dry")
+            rows = json.loads((out / "script.json").read_text(encoding="utf-8"))
+            self.assertEqual([row["sec"] for row in rows], ["hook", "chart", "news", "cta"])
+            shown = " ".join(row["d"] for row in rows)
+            self.assertIn("The index closed lower", shown)
+            self.assertIn("livemint.com", shown)
+            self.assertIn("15 Oct 2026", shown)
+            for token in (" SL ", " target ", " R1 ", " S1 "):
+                self.assertNotIn(token, shown)
+            names = [path.name for path in (out / "cards").iterdir()]
+            self.assertEqual(sorted(names), ["chart.png", "cta.png", "hook.png", "news.png"])
+            self.assertNotIn("view.png", names)
 
     def test_dry_run_renders_without_gemini_and_reports_the_fallback_chart(self):
         from realchart.ends import trim_intro
@@ -781,8 +851,7 @@ class OverlayTests(unittest.TestCase):
             self.assertEqual([path.name for path in made], ["hook.png", "chart.png", "intraday.png", "view.png", "cta.png"])
             article = {"title": "Nifty ends", "key_sentence": "Lower.", "source": "Mint", "published": "14 Oct"}
             news = frames(Path(tmp) / "news", "news", levels, script.chunks_for("news", levels, article), chart, article, intra)
-            self.assertNotIn("intraday.png", [path.name for path in news])
-            self.assertEqual([path.name for path in news][:3], ["hook.png", "chart.png", "news.png"])
+            self.assertEqual([path.name for path in news], ["hook.png", "chart.png", "news.png", "cta.png"])
 
 
 class EndsTests(unittest.TestCase):
