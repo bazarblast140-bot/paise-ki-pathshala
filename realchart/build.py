@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -122,13 +123,19 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
         pics = frames(out / "cards", kind, levels, rows, chart.get("path"), article, intraday)
         length = min(50.0, max(40.0, _wav_seconds(out / "voice.wav") or 45.0))
         assemble(pics, out / "voice.wav", out / "final.mp4", seconds=length, durations=beat_seconds(rows, length))
-        from realchart.ends import FOLLOW_PKP, FOLLOW_RTT, attach
+        from realchart.ends import FOLLOW_PKP, FOLLOW_RTT, attach, render_end_card
+        ends_dir = out / "ends"
+        outro_rtt = render_end_card(ends_dir / "outro_rtt.mp4", chart.get("path"), "Rajesh Technical Trader", "follow करो")
+        outro_pkp = render_end_card(ends_dir / "outro_pkp.mp4", chart.get("path"), "Paise Ki Pathshala", "follow करो")
         try:
-            attach(out / "final.mp4", out)
+            attach(out / "final.mp4", out, outro_rtt=outro_rtt, outro_pkp=outro_pkp)
         except FileNotFoundError as exc:
             raise Hold("ends", str(exc)) from exc
         _write_sources(out, kind, levels, article, chart, rows, voice, now, intraday)
         from realchart.qa import check
+        (out / "charts_used.json").write_text(json.dumps({"tradingview": [
+            c.get("path") for c in (chart, intraday or {}) if c.get("source") == "tradingview" and c.get("path")
+        ]}) + "\n", encoding="utf-8")
         capture_dates = {"daily chart": chart.get("last_candle_date") or ""}
         if intraday is not None:
             capture_dates["intraday chart"] = intraday.get("last_candle_date") or ""
@@ -248,6 +255,10 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
     items = articles if articles is not None else _load_feeds()
     aliases = [levels["symbol"].split(":")[-1], "nifty", "sensex", "market"]
     article = choose(items, now, aliases)
+    if kind != "news" and article and not about_indian_market(article):
+        # A close/TA Reel only carries Nifty/Indian-market news (15-Oct: a Bank of
+        # America story matched "market" in the livemint URL). Otherwise no news beat.
+        article = None
     if kind == "news" and not article:
         raise Hold("news", "no qualifying article")
     day_expect = {
@@ -307,6 +318,20 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
                 raise Hold("rr", "RR below 1.5 from pivot and OI levels")
     (out / "levels.json").write_text(json.dumps({k: v for k, v in levels.items() if k != "bars"}, indent=2) + "\n", encoding="utf-8")
     return levels, article, chart, intraday
+
+
+INDIA_MARKET = re.compile(
+    r"\b(nifty|sensex|bank\s*nifty|nse|bse|dalal street|d-street|sebi|rbi|"
+    r"indian (stock|share|equity|equities|market|markets)|india'?s? (stock|equity) market|"
+    r"fii|fpi|rupee)\b",
+    re.I,
+)
+
+
+def about_indian_market(article):
+    """Title or summary (not the URL) names Nifty, Sensex or the Indian market."""
+    blob = " ".join(str(article.get(key) or "") for key in ("title", "summary", "key_sentence"))
+    return bool(INDIA_MARKET.search(blob))
 
 
 def _wav_seconds(path):

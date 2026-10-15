@@ -14,12 +14,12 @@ INTRO_SOURCE = ROOT / "uploads" / "rajesh-technical-trader-intro.mp4"
 COMMENT = "अगला कौन सा chart देखना है? Comment करो."
 FOLLOW_RTT = "Rajesh Technical Trader ko follow करो"
 FOLLOW_PKP = "Paise Ki Pathshala follow करो"
-# The source is 10s. The blast is the opening; the name is on screen at about 6–8s.
-# Start just after the black frame and keep 7.5s, so the name sits in the last ~2s.
-INTRO_LO = 5.5
-INTRO_HI = 7.5
-INTRO_START = 0.5
-INTRO_TAKE = 7.5
+# The source is 10s; "RAJESH TECHNICAL TRADER" is fully visible from ~6.6s (frame-checked); 6.0–6.5s is still the blast.
+# Keep only that name reveal, 1.4s, no chart animation before it (Rajesh, 15-Oct).
+INTRO_LO = 1.0
+INTRO_HI = 2.0
+INTRO_START = 6.6
+INTRO_TAKE = 1.4
 OUTRO_SECONDS = 2.0
 
 # Shared with the main Reel so ffmpeg can concat with -c copy.
@@ -129,7 +129,63 @@ def concat_copy(parts, dest):
     return dest
 
 
-def attach(main, directory):
+def render_end_card(dest, background=None, name="Rajesh Technical Trader", call="follow करो", seconds=OUTRO_SECONDS):
+    """Full-frame end card: the chart blurred behind, the big channel name, a follow button. Silent."""
+    from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
+    from realchart.fonts import font
+    dest = Path(dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if background and Path(background).is_file():
+        with Image.open(background) as opened:
+            shot = opened.convert("RGB")
+        scale = max(1080 / shot.width, 1920 / shot.height)
+        shot = shot.resize((round(shot.width * scale) + 1, round(shot.height * scale) + 1))
+        left, top = (shot.width - 1080) // 2, (shot.height - 1920) // 2
+        image = shot.crop((left, top, left + 1080, top + 1920)).filter(ImageFilter.GaussianBlur(14))
+        from PIL import ImageChops
+        image = ImageChops.lighter(ImageEnhance.Brightness(image).enhance(0.8), Image.new("RGB", image.size, (30, 38, 52)))
+    else:
+        image = Image.new("RGB", (1080, 1920), (30, 38, 52))
+        draw = ImageDraw.Draw(image)
+        for y in range(0, 1920, 60):
+            draw.line([(0, y), (1080, y)], fill=(40, 50, 66))
+        for x in range(0, 1080, 60):
+            draw.line([(x, 0), (x, 1920)], fill=(40, 50, 66))
+    draw = ImageDraw.Draw(image)
+    words = str(name).split()
+    lines = [" ".join(words[:1]), " ".join(words[1:])] if len(words) > 2 else [str(name)]
+    big = font(132)
+    y = 640
+    for line in lines:
+        width = draw.textlength(line, font=big)
+        draw.text(((1080 - width) / 2 + 4, y + 4), line, fill=(0, 0, 0), font=big)
+        draw.text(((1080 - width) / 2, y), line, fill=(255, 255, 255), font=big)
+        y += 160
+    button = font(84)
+    width = draw.textlength(call, font=button)
+    top = y + 60
+    draw.rounded_rectangle(((1080 - width) / 2 - 60, top, (1080 + width) / 2 + 60, top + 150), 40, fill=(255, 214, 10))
+    draw.text(((1080 - width) / 2, top + 22), call, fill=(14, 16, 20), font=button)
+    sub = font(44, semi=True)
+    note = "Real chart · Real data · Daily"
+    width = draw.textlength(note, font=sub)
+    draw.text(((1080 - width) / 2, top + 210), note, fill=(230, 236, 242), font=sub)
+    png = dest.with_suffix(".png")
+    image.save(png)
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-v", "error", "-loop", "1", "-i", str(png),
+            "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+            "-t", f"{seconds:.3f}", "-vf", "scale=1080:1920,fps=30,format=yuv420p",
+            *ENCODE, "-shortest", str(dest),
+        ], check=True)
+    finally:
+        if png.is_file():
+            png.unlink()
+    return dest
+
+
+def attach(main, directory, outro_rtt=None, outro_pkp=None):
     """YT is the shared Reel plus the Pathshala follow card. IG/FB prepends Rajesh's intro and uses his follow card."""
     main = Path(main)
     directory = Path(directory)
@@ -140,6 +196,6 @@ def attach(main, directory):
             "channel clips missing: " + ", ".join(missing)
             + ". Trim uploads/rajesh-technical-trader-intro.mp4 with realchart.ends.trim_intro; do not substitute a title card."
         )
-    yt = concat_copy([main, OUTRO_PKP], directory / "final_yt.mp4")
-    ig = concat_copy([INTRO_RTT, main, OUTRO_RTT], directory / "final_ig.mp4")
+    yt = concat_copy([main, outro_pkp or OUTRO_PKP], directory / "final_yt.mp4")
+    ig = concat_copy([INTRO_RTT, main, outro_rtt or OUTRO_RTT], directory / "final_ig.mp4")
     return yt, ig

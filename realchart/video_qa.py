@@ -119,6 +119,46 @@ def ends_faults(out, intro, outro_rtt, outro_text):
     return faults
 
 
+NEAR_BLACK_LUMA = 20
+MAX_NEAR_BLACK = 0.20
+
+
+def near_black_ratio(video, at):
+    proc = subprocess.run(
+        ["ffmpeg", "-v", "error", "-ss", f"{at:.3f}", "-i", str(video), "-frames:v", "1",
+         "-vf", "scale=270:480", "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+        capture_output=True,
+    )
+    data = proc.stdout or b""
+    if len(data) < 270 * 480:
+        return 1.0
+    return sum(1 for value in data[: 270 * 480] if value < NEAR_BLACK_LUMA) / float(270 * 480)
+
+
+def fill_faults(video, label, skip_until=0.0, step=0.5):
+    """Fail when over 20% of a frame is near-black (letterbox or void), outside the intro."""
+    from realchart.qa import probe
+    video = Path(video)
+    if not video.is_file():
+        return [f"{label}: missing"]
+    duration = float(probe(video).get("duration") or 0.0)
+    worst, at = 0.0, None
+    t = skip_until + 0.1
+    while t < duration - 0.05:
+        ratio = near_black_ratio(video, t)
+        if ratio > worst:
+            worst, at = ratio, t
+        t += step
+    if worst > MAX_NEAR_BLACK:
+        return [f"fill: {label} is {100 * worst:.0f}% near-black at {at:.2f}s (max {100 * MAX_NEAR_BLACK:.0f}%)"]
+    return []
+
+
+def crosshair_faults(charts):
+    from realchart.capture import crosshair_visible
+    return [f"crosshair visible in {Path(path).name}" for path in charts if crosshair_visible(path)]
+
+
 def capture_faults(capture_dates, expected):
     faults = []
     for what, got in capture_dates.items():
@@ -127,13 +167,17 @@ def capture_faults(capture_dates, expected):
     return faults
 
 
-def run_all(out, captions, capture_dates, expected_date, intro, outro_rtt, outro_text):
+def run_all(out, captions, capture_dates, expected_date, intro, outro_rtt, outro_text, charts=()):
     from realchart.fmt import raw_float_faults
     from realchart.fonts import tofu_faults
     out = Path(out)
     faults = []
     faults += empty_frame_faults(out / "final.mp4", "final.mp4")
     faults += empty_frame_faults(out / "final_ig.mp4", "final_ig.mp4")
+    from realchart.qa import probe
+    intro_len = float(probe(intro).get("duration") or 0.0) if Path(intro).is_file() else 0.0
+    faults += fill_faults(out / "final_ig.mp4", "final_ig.mp4", skip_until=intro_len)
+    faults += crosshair_faults(charts)
     faults += tofu_faults(captions)
     faults += raw_float_faults(captions)
     faults += capture_faults(capture_dates, expected_date)

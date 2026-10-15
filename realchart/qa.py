@@ -69,6 +69,11 @@ def video_faults(out, rows, capture_dates, expected_date):
     for row in rows:
         captions.extend([str(row.get("d") or ""), str(row.get("t") or "")])
     captions.extend([ends.FOLLOW_RTT, ends.FOLLOW_PKP])
+    outro = Path(out) / "ends" / "outro_rtt.mp4"
+    used = json.loads((Path(out) / "charts_used.json").read_text(encoding="utf-8")) if (Path(out) / "charts_used.json").is_file() else {}
+    # Only the TradingView shots that are on screen; our yfinance plot has no crosshair.
+    charts = [Path(p) for p in used.get("tradingview", []) if Path(p).is_file()]
     return video_qa.run_all(
-        out, captions, capture_dates, expected_date, ends.INTRO_RTT, ends.OUTRO_RTT, ends.FOLLOW_RTT,
+        out, captions, capture_dates, expected_date, ends.INTRO_RTT, outro if outro.is_file() else ends.OUTRO_RTT,
+        ends.FOLLOW_RTT, charts=charts,
     )
