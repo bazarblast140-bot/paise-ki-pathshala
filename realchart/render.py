@@ -271,6 +271,9 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
         day_text = ""
     name = "NIFTY 50" if symbol.endswith("NIFTY") else symbol.split(":")[-1]
     brand = " • ".join(part for part in (name, str(kind).upper(), day_text) if part)
+    if kind == "close":
+        from realchart.script import SERIES
+        brand = f"{SERIES.upper()} • {day_text}".strip(" •")
     chg = float(levels.get("chg_pct") or 0)
     header = {
         "brand": brand,
@@ -287,16 +290,29 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
         )
         if levels.get(key) is not None
     ]
+    axis_report = {}
     overlaid = None
     if intraday and kind in ("close", "ta") and intraday.get("path") and Path(intraday["path"]).is_file():
         from PIL import Image
         with Image.open(intraday["path"]) as opened:
             shot = opened.convert("RGB")
         if intraday.get("plot"):
-            # Lines only where the price scale is known (our own yfinance plot).
+            # Our own yfinance plot: the price scale is known.
             paint_level_overlays(shot, levels, intraday.get("plot"), intraday.get("scale_bars") or [])
+        else:
+            axis_report["intraday"] = _lines_on(shot, levels)
         overlaid = out / "intraday-overlay.png"
         shot.save(overlaid)
+    daily_lines = chart_path
+    if chart_path and Path(chart_path).is_file() and levels.get("chart_source") == "tradingview":
+        from PIL import Image
+        with Image.open(chart_path) as opened:
+            shot = opened.convert("RGB")
+        axis_report["daily"] = _lines_on(shot, levels)
+        daily_lines = out / "daily-lines.png"
+        shot.save(daily_lines)
+    (out.parent / "axis.json").write_text(json.dumps(axis_report, indent=2) + "\n", encoding="utf-8")
+    lines_drawn = bool((axis_report.get("intraday") or {}).get("drawn"))
     news_shot = None
     if article and isinstance(article.get("capture"), dict) and article["capture"].get("ok"):
         news_shot = article["capture"].get("path")
@@ -308,6 +324,7 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
     if None not in target[:2]:
         zone_chips.append((f"Target {inr(target[0], 0)}–{inr(target[1], 0)}", (186, 240, 200), (12, 70, 36)))
     made = []
+    variants = {}
     for row in rows:
         sec = row.get("sec")
         # The narration line, with spoken whole prices shown as 22,997 (not 22997).
@@ -319,14 +336,16 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
         if sec == "hook" and kind != "news":
             # The hook card leads with the number (whole points, as spoken).
             caption = f"{name} क्लोज़ {inr(levels.get('close'), 0)} ({chg:+.2f}%) · {spoken}"
-        visual, zoom, footer, chips, dim, anchor_y = chart_path, 1.0, f"Source: {src} · 1D", None, False, 0.5
+        visual, zoom, footer, chips, dim, anchor_y = daily_lines, 1.0, f"Source: {src} · 1D", None, False, 0.5
+        card_header = header
         section = ("CHART · DATA", CYAN)
         if sec == "hook":
             zoom, footer, section = 1.5, f"Source: {src} · 1D", ("HOOK", YELLOW)
         elif sec == "intraday":
             interval = str((intraday or {}).get("interval") or "5")
             visual = overlaid or chart_path
-            chips = pivot_chips
+            chips = None if lines_drawn else pivot_chips
+            card_header = dict(header, symbol=f"{symbol} · {interval}m")
             section = (f"INTRADAY {interval}m · time IST", CYAN)
             footer = f"Source: {(intraday or {}).get('label') or src} · {interval}m · IST"
         elif sec == "news":
@@ -336,17 +355,37 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             footer = f"{(article or {}).get('source') or ''} · {published}".strip(" ·")
         elif sec == "view":
             visual = overlaid or chart_path
-            chips = pivot_chips + zone_chips
+            chips = None if lines_drawn else pivot_chips + zone_chips
+            if overlaid:
+                card_header = dict(header, symbol=f"{symbol} · {str((intraday or {}).get('interval') or '5')}m")
             section = ("HAMARA VIEW · OPINION (scenario)", (255, 159, 28))
             footer = "Source: levels computed from NSE daily data · TradingView"
         elif sec == "cta":
             dim, footer, section = True, "Real chart · Real data", ("COMMENT", YELLOW)
         path = out / f"{sec}.png"
         _card(title, caption, spoken, footer, visual, zoom=zoom, anchor_y=anchor_y, chips=chips, dim=dim,
-              header=header, section=section).save(path)
+              header=card_header, section=section).save(path)
         made.append(path)
+        if sec in ("chart", "intraday", "view") and visual:
+            # A second shot of the same beat, zoomed on the latest candles: a visual change every 2-3 s.
+            zpath = out.parent / f"{sec}-zoom.png"
+            _card(title, caption, spoken, footer, visual, zoom=1.4, anchor_y=anchor_y, chips=chips, dim=dim,
+                  header=card_header, section=section).save(zpath)
+            variants[path.name] = str(zpath)
+    (out.parent / "variants.json").write_text(json.dumps(variants, indent=1) + "\n", encoding="utf-8")
     (out / "overlay_text.json").write_text(json.dumps(list(DRAWN), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return made
+
+
+def _lines_on(shot, levels):
+    """Map price->y from the shot's own axis labels and draw the level lines. Report the fit."""
+    from realchart import axis, level_lines
+    mapping = axis.map_axis_image(shot)
+    if not mapping:
+        return {"ok": False, "reason": "price axis not readable", "drawn": []}
+    result = level_lines.draw(shot, levels, mapping)
+    DRAWN.extend(f"{name} {inr(levels.get(key), 0)}" for name, key, _c, _d in level_lines.SPECS if name in result["drawn"])
+    return {"ok": True, "residual_px": round(mapping["residual"], 2), "ticks": len(mapping["ticks"]), **result}
 
 
 def news_card(out, article, shot=None):

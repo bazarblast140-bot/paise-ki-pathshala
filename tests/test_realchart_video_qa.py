@@ -306,13 +306,13 @@ class RoundThreeTests(unittest.TestCase):
     def test_cta_line_is_drawn_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             texts = " ".join(self._cards(tmp))
-        self.assertEqual(texts.count("अगला कौन सा chart"), 1)
+        self.assertEqual(texts.count("Comment करो"), 1)
 
     def test_header_is_brand_neutral(self):
         with tempfile.TemporaryDirectory() as tmp:
             texts = self._cards(tmp)
         self.assertFalse(any("pathshala" in t.lower() for t in texts), texts)
-        self.assertIn("NIFTY 50 • CLOSE • 15 Oct 2026", texts)
+        self.assertIn("NIFTY CLOSE REPORT • 15 Oct 2026", texts)
 
     def test_danda_after_a_number_is_spaced(self):
         from realchart.render import danda

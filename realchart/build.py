@@ -118,18 +118,20 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             if est < script.NEWS_FLOOR_SEC:
                 raise Hold("script", f"news script estimate {est:.1f}s below {script.NEWS_FLOOR_SEC:.0f}s floor (article too short)")
         from realchart.voice import speak
-        voice = speak(script.spoken_text(rows), out / "voice.wav", kind, dry_run=dry_run, cache_key=f"{kind}-{levels.get('last_date')}-{levels.get('symbol')}")
+        voice = speak(script.spoken_text(rows), out / "voice.wav", kind, dry_run=dry_run, cache_key=_voice_key(kind, levels, script.spoken_text(rows)))
         from realchart.render import assemble, beat_seconds, frames
         pics = frames(out / "cards", kind, levels, rows, chart.get("path"), article, intraday)
         spoken = min(50.0, _wav_seconds(out / "voice.wav") or 45.0)
         length = max(40.0, spoken)
         beats = beat_seconds(rows, spoken)
         beats[-1] += length - spoken  # a short read holds the CTA card over the silent tail
+        pics, beats = _with_variants(pics, beats, out / "variants.json")
         assemble(pics, out / "voice.wav", out / "final.mp4", seconds=length, durations=beats)
         from realchart.ends import FOLLOW_PKP, FOLLOW_RTT, attach, render_end_card
         ends_dir = out / "ends"
-        outro_rtt = render_end_card(ends_dir / "outro_rtt.mp4", chart.get("path"), "Rajesh Technical Trader", "follow करो")
-        outro_pkp = render_end_card(ends_dir / "outro_pkp.mp4", chart.get("path"), "Paise Ki Pathshala", "follow करो")
+        extra = script.end_card_lines(kind, levels)
+        outro_rtt = render_end_card(ends_dir / "outro_rtt.mp4", chart.get("path"), "Rajesh Technical Trader", "follow करो", extra=extra)
+        outro_pkp = render_end_card(ends_dir / "outro_pkp.mp4", chart.get("path"), "Paise Ki Pathshala", "follow करो", extra=extra)
         try:
             attach(out / "final.mp4", out, outro_rtt=outro_rtt, outro_pkp=outro_pkp)
         except FileNotFoundError as exc:
@@ -146,6 +148,8 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             out, rows, levels, voice.get("engine"), dry_run=dry_run,
             capture_dates=capture_dates, expected_date=(levels.get("last_date") if kind == "news" else session.isoformat()),
         )
+        qa_faults.extend(_ta_faults(out, kind, chart, intraday))
+        _write_post_meta(out, kind, levels, rows)
         verdict = "DRY-OK" if dry_run and not qa_faults else ("PASS" if not qa_faults else "HOLD")
         report = {
             "verdict": verdict,
@@ -335,6 +339,61 @@ def about_indian_market(article):
     """Title or summary (not the URL) names Nifty, Sensex or the Indian market."""
     blob = " ".join(str(article.get(key) or "") for key in ("title", "summary", "key_sentence"))
     return bool(INDIA_MARKET.search(blob))
+
+
+def _voice_key(kind, levels, text):
+    """Cache per day AND per text: edited narration must never reuse old audio."""
+    import hashlib
+    digest = hashlib.sha1(str(text).encode("utf-8")).hexdigest()[:10]
+    return f"{kind}-{levels.get('last_date')}-{levels.get('symbol')}-{digest}"
+
+
+def _with_variants(pics, beats, variants_file):
+    """Split beats longer than 3.5 s across the card and its zoomed shot (visual change every 2-3 s)."""
+    try:
+        variants = json.loads(Path(variants_file).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return pics, beats
+    new_pics, new_beats = [], []
+    for pic, sec in zip(pics, beats):
+        zoom = variants.get(Path(pic).name)
+        if zoom and sec > 3.5 and Path(zoom).is_file():
+            new_pics += [pic, Path(zoom)]
+            new_beats += [sec / 2, sec / 2]
+        else:
+            new_pics.append(pic)
+            new_beats.append(sec)
+    return new_pics, new_beats
+
+
+def _ta_faults(out, kind, chart, intraday):
+    """TradingView's own EMA 20/50 must show on every TradingView shot; level lines must be drawn."""
+    faults = []
+    if kind not in ("close", "ta"):
+        return faults
+    for label, shot in (("daily", chart or {}), ("5m", intraday or {})):
+        if shot.get("source") != "tradingview":
+            continue
+        ema = shot.get("ema") or {}
+        missing = [name.upper().replace("EMA", "EMA ") for name in ("ema20", "ema50") if not ema.get(name)]
+        if missing:
+            faults.append(f"{label} TradingView capture has no {' / '.join(missing)} (TradingView indicator not rendered)")
+    try:
+        axis = json.loads((Path(out) / "axis.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        axis = {}
+    if (intraday or {}).get("source") == "tradingview":
+        got = axis.get("intraday") or {}
+        if not got.get("ok") or not got.get("drawn"):
+            faults.append(f"5m level lines not drawn ({got.get('reason') or 'no level on scale'})")
+    return faults
+
+
+def _write_post_meta(out, kind, levels, rows):
+    if kind != "close":
+        return
+    meta = script.post_meta(levels)
+    (Path(out) / "post_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def _wav_seconds(path):
