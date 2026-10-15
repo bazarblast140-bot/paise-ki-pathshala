@@ -1,5 +1,6 @@
 """15-Oct runner close Reel: tofu, stale chart, voids, raw floats, IG ends, and the QA gate."""
 import json
+import re
 import os
 import subprocess
 import tempfile
@@ -287,3 +288,43 @@ class FillAndEndsTests(unittest.TestCase):
             card = render_end_card(Path(tmp) / "outro_rtt.mp4", None)
             self.assertEqual(video_qa.fill_faults(card, "outro"), [])
             self.assertLess(video_qa.mean_volume_db(card), video_qa.OUTRO_MAX_MEAN_DB)
+
+
+class RoundThreeTests(unittest.TestCase):
+    def _cards(self, tmp):
+        from PIL import Image
+        from realchart.render import frames
+        levels = compute(_bars(), "NSE:NIFTY", "^NSEI")
+        levels["chart_source"] = "tradingview"
+        apply_screen_levels(levels, {"ok": False, "reason": "held"})
+        rows = script.chunks_for("close", levels, None)
+        chart = Path(tmp) / "chart.png"
+        Image.new("RGB", (900, 1000), (40, 60, 80)).save(chart)
+        frames(Path(tmp) / "cards", "close", levels, rows, chart, None, {"path": str(chart), "interval": "5"})
+        return json.loads((Path(tmp) / "cards" / "overlay_text.json").read_text(encoding="utf-8"))
+
+    def test_cta_line_is_drawn_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            texts = " ".join(self._cards(tmp))
+        self.assertEqual(texts.count("अगला कौन सा chart"), 1)
+
+    def test_header_is_brand_neutral(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            texts = self._cards(tmp)
+        self.assertFalse(any("pathshala" in t.lower() for t in texts), texts)
+        self.assertIn("NIFTY 50 • CLOSE • 15 Oct 2026", texts)
+
+    def test_danda_after_a_number_is_spaced(self):
+        from realchart.render import danda
+        self.assertEqual(danda("S1 22,535।"), "S1 22,535 ।")
+        with tempfile.TemporaryDirectory() as tmp:
+            texts = self._cards(tmp)
+        self.assertFalse(any(re.search(r"\d।", t) for t in texts))
+
+    def test_zone_chips_are_whole_points(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            texts = self._cards(tmp)
+        chips = [t for t in texts if t.startswith(("SL ", "Target "))]
+        self.assertTrue(chips)
+        for chip in chips:
+            self.assertNotIn(".", chip)
