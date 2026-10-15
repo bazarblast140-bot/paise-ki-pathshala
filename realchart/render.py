@@ -390,14 +390,16 @@ def assemble(frame_paths, voice, dest, seconds=45.0, durations=None):
         "-f", "concat", "-safe", "0", "-i", str(work),
     ]
     if voice and Path(voice).is_file():
-        cmd += ["-i", str(voice), "-map", "0:v", "-map", "1:a", "-shortest"]
+        # Pad a short voice with silence to the full length (a 38s Charon read
+        # was cut to 38s by -shortest and failed the 40-50s band).
+        cmd += ["-i", str(voice), "-map", "0:v", "-map", "1:a"]
     else:
         cmd += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-shortest"]
     cmd += [
         "-t", str(seconds),
         "-vf", "scale=1080:1920,fps=30,format=yuv420p",
         *ENCODE,
-        "-af", "loudnorm=I=-15:TP=-1.5:LRA=11",
+        "-af", "loudnorm=I=-15:TP=-1.5:LRA=11,apad",
         str(dest),
     ]
     subprocess.run(cmd, check=True)
