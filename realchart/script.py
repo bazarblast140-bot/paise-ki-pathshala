@@ -35,7 +35,10 @@ NEWS_CEIL_SEC = 49.0
 def estimate_seconds(text_or_rows):
     """Rough spoken length. Takes the rows or the plain spoken text."""
     text = text_or_rows if isinstance(text_or_rows, str) else spoken_text(text_or_rows)
-    return len(str(text or "").split()) / WORDS_PER_SEC
+    words = str(text or "").split()
+    # A spoken price like 25281 is read as five or six Hindi words.
+    extra = sum(2 for w in words if sum(c.isdigit() for c in w) >= 4)
+    return (len(words) + extra) / WORDS_PER_SEC
 
 
 def _sentences(text):
@@ -90,6 +93,33 @@ def news_spoken(article, fixed_words):
         words += n
     head = lines[:1]
     return " ".join(head + picked + lines[1:])
+
+
+def _close_lines(levels):
+    """Close narration from computed data only: OHLC, change, pivots, EMA/RSI, zones, source.
+
+    Spoken prices are rounded to whole points (Charon reads each one slowly);
+    the exact values stay on the captions.
+    """
+    def n(key):
+        value = levels.get(key)
+        return "" if value is None else f"{round(float(value))}"
+    chg = float(levels.get("chg_pct") or 0)
+    side = "ऊपर" if chg >= 0 else "नीचे"
+    ohlc = (
+        f"निफ्टी {n('close')} पर बंद, {abs(chg):.2f} प्रतिशत {side}। "
+        f"हाई {n('high')}, लो {n('low')}।"
+    )
+    piv = f"पाँच मिनट चार्ट पर पिवट {n('pivot')}, R1 {n('r1')}, S1 {n('s1')}।"
+    parts = []
+    if levels.get("ema20") is not None:
+        parts.append(f"EMA20 {n('ema20')} पर है।")
+    if levels.get("rsi14") is not None:
+        parts.append(f"RSI14 {round(float(levels['rsi14']))} पर है।")
+    parts.append("ज़ोन सिर्फ लेवल हैं, scenario, ट्रेड सलाह नहीं।")
+    src = str(levels.get("values_from") or "").strip()
+    parts.append(f"डेटा {src or 'मार्केट डेटा'} से।")
+    return ohlc, piv, " ".join(parts)
 
 
 def chunks_for(kind, levels, article=None):
@@ -179,6 +209,15 @@ def chunks_for(kind, levels, article=None):
         "t": f"{CTA} {DISCLAIMER}",
         "k": "फॉलो",
     })
+    if kind == "close":
+        ohlc, piv, view = _close_lines(levels)
+        for row in rows:
+            if row["sec"] == "chart":
+                row["t"] = ohlc
+            elif row["sec"] == "intraday":
+                row["t"] = piv
+            elif row["sec"] == "view":
+                row["t"] = view
     return rows
 
 
