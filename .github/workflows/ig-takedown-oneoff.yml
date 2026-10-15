@@ -15,12 +15,8 @@ jobs:
                   r=urllib.request.urlopen(urllib.request.Request(f"https://{host}/v21.0/{path}?{q}",method=m)); return r.status,r.read().decode()[:600]
               except urllib.error.HTTPError as e: return e.code,e.read().decode()[:600]
               except Exception as e: return 0,str(e)
-          for host in ("graph.facebook.com","graph.instagram.com"):
-              print(host,"ME",call("GET",host,"me",{"fields":"id,name,username"}))
-          for mid in ("18219751360351951","18072480533766675"):
-              for host in ("graph.facebook.com","graph.instagram.com"):
-                  print(mid,host,"GET",call("GET",host,mid,{"fields":"id,media_type,media_product_type,permalink,timestamp,caption"}))
-                  s,b=call("DELETE",host,mid); print(mid,host,"DELETE",s,b)
-                  print(mid,host,"GET-after",call("GET",host,mid,{"fields":"id,permalink"}))
-          print("FB accounts",call("GET","graph.facebook.com","me/accounts",{"fields":"id,name"}))
+          print("IGBA",call("GET","graph.facebook.com","me",{"fields":"instagram_business_account{id,username,media.limit(5){id,media_product_type,timestamp,permalink}}"}))
+          print("PAGEVIDEOS",call("GET","graph.facebook.com","me/videos",{"fields":"id,title,description,created_time,permalink_url","limit":"5"}))
+          print("PAGEREELS",call("GET","graph.facebook.com","me/video_reels",{"fields":"id,description,created_time","limit":"5"}))
+          print("PAGEPOSTS",call("GET","graph.facebook.com","me/posts",{"fields":"id,message,created_time,permalink_url","limit":"5"}))
           PY
