@@ -115,7 +115,9 @@ def _card(title, caption, spoken, footer, visual=None, zoom=1.0, anchor_y=0.5, c
     # terminal header
     draw.rounded_rectangle((20, HEAD_TOP, W - 20, HEAD_TOP + HEAD_H), 18, fill=(15, 22, 30), outline=(46, 62, 80), width=2)
     draw.ellipse((44, HEAD_TOP + 28, 64, HEAD_TOP + 48), fill=GREEN)
-    _text(draw, (76, HEAD_TOP + 16), "PAISE KI PATHSHALA", 36, WHITE)
+    # Brand-neutral: the main render is shared by YT and IG; the brand comes
+    # only from each platform's intro and end card.
+    _text(draw, (76, HEAD_TOP + 16), header.get("brand") or "NIFTY 50", 36, WHITE)
     _text(draw, (76, HEAD_TOP + 70), title, 30, GREY, semi=True)
     sym = str(header.get("symbol") or "")
     if sym:
@@ -260,9 +262,18 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
     del DRAWN[:]
     symbol = str(levels.get("symbol") or "")
     src = "NSE data (yfinance)" if levels.get("chart_source") == "yfinance" else "TradingView"
-    title = f"Real chart · Real data · {kind}"
+    title = "Real chart · Real data"
+    from datetime import date as _date
+    try:
+        day = _date.fromisoformat(str(levels.get("last_date"))[:10])
+        day_text = f"{day.day} {day.strftime('%b %Y')}"
+    except ValueError:
+        day_text = ""
+    name = "NIFTY 50" if symbol.endswith("NIFTY") else symbol.split(":")[-1]
+    brand = " • ".join(part for part in (name, str(kind).upper(), day_text) if part)
     chg = float(levels.get("chg_pct") or 0)
     header = {
+        "brand": brand,
         "symbol": f"{symbol} · 1D",
         "close_line": f"Close {levels.get('last_date') or ''}: {inr(levels.get('close'))} ({chg:+.2f}%)",
         "close_color": GREEN if chg >= 0 else RED,
@@ -293,15 +304,19 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
     target = levels.get("target_zone") or [None, None]
     zone_chips = []
     if None not in sl[:2]:
-        zone_chips.append((f"SL {inr(sl[0])}–{inr(sl[1])}", (255, 186, 190), (90, 16, 24)))
+        zone_chips.append((f"SL {inr(sl[0], 0)}–{inr(sl[1], 0)}", (255, 186, 190), (90, 16, 24)))
     if None not in target[:2]:
-        zone_chips.append((f"Target {inr(target[0])}–{inr(target[1])}", (186, 240, 200), (12, 70, 36)))
+        zone_chips.append((f"Target {inr(target[0], 0)}–{inr(target[1], 0)}", (186, 240, 200), (12, 70, 36)))
     made = []
     for row in rows:
         sec = row.get("sec")
         # The narration line, with spoken whole prices shown as 22,997 (not 22997).
         spoken = re.sub(r"(?<![\d.,])(\d{4,})(?![\d]|[.,]\d)", lambda m: inr(int(m.group(1)), 0), str(row.get("t") or ""))
-        caption = _caption(kind, row, levels)
+        spoken = danda(spoken)
+        caption = danda(_caption(kind, row, levels))
+        if same_text(spoken, caption):
+            # The CTA beat's caption and narration are the same line: show it once.
+            spoken = ""
         visual, zoom, footer, chips, dim, anchor_y = chart_path, 1.0, f"Source: {src} · 1D", None, False, 0.5
         section = ("CHART · DATA", CYAN)
         if sec == "hook":
@@ -323,13 +338,25 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             section = ("HAMARA VIEW · OPINION (scenario)", (255, 159, 28))
             footer = "Levels computed from NSE daily data"
         elif sec == "cta":
-            dim, footer, section = True, "Paise Ki Pathshala", ("FOLLOW", YELLOW)
+            dim, footer, section = True, "Real chart · Real data", ("COMMENT", YELLOW)
         path = out / f"{sec}.png"
         _card(title, caption, spoken, footer, visual, zoom=zoom, anchor_y=anchor_y, chips=chips, dim=dim,
               header=header, section=section).save(path)
         made.append(path)
     (out / "overlay_text.json").write_text(json.dumps(list(DRAWN), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return made
+
+
+def danda(text):
+    """'22,535।' reads as '22,535l' on screen: put a space before the danda after a digit."""
+    return re.sub(r"(\d)\s*([।॥])", r"\1 \2", str(text or ""))
+
+
+def same_text(a, b):
+    def norm(value):
+        return " ".join(re.sub(r"[^\w\s]", " ", str(value or "")).split()).lower()
+    a, b = norm(a), norm(b)
+    return bool(a) and (a == b or a in b or b in a)
 
 
 def beat_seconds(rows, total):
