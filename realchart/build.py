@@ -166,6 +166,7 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
         qa_faults = check(
             out, rows, levels, voice.get("engine"), dry_run=dry_run,
             capture_dates=capture_dates, expected_date=(levels.get("last_date") if kind == "news" else session.isoformat()),
+            article=article if kind == "news" else None,
         )
         qa_faults.extend(_ta_faults(out, kind, chart, intraday, dry_run=dry_run))
         qa_faults.extend(card_faults)
