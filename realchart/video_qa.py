@@ -163,16 +163,24 @@ def ends_faults(out, intro, outro_rtt, outro_text):
         if len(parts) != 3 or "intro_rtt" not in parts[0] or "outro_rtt" not in parts[-1]:
             faults.append("ig: concat list is not intro, main, outro")
     tail = mean_volume_db(ig, start=got - outro_d + 0.05)
-    if tail > OUTRO_MAX_MEAN_DB:
-        faults.append(f"ig: outro audio {tail:.1f} dB mean (tone/beep), expected silence")
-    if outro_d > 2.0:
-        faults.append(f"ig: outro {outro_d:.2f}s, keep it under 2s")
+    voiced_outro = (Path(outro_rtt).parent / (Path(outro_rtt).stem + "-line.wav")).is_file()
+    if voiced_outro:
+        # TA end card speaks the follow line over the music bed: it must NOT be silent.
+        if tail < -40.0:
+            faults.append(f"ig: voiced outro is silent ({tail:.1f} dB mean)")
+        if outro_d > 6.0:
+            faults.append(f"ig: outro {outro_d:.2f}s, keep the voiced card under 6s")
+    else:
+        if tail > OUTRO_MAX_MEAN_DB:
+            faults.append(f"ig: outro audio {tail:.1f} dB mean (tone/beep), expected silence")
+        if outro_d > 2.0:
+            faults.append(f"ig: outro {outro_d:.2f}s, keep it under 2s")
     if static_seconds(outro_rtt) > 0.5:
         faults.append("ig: outro is a static frame (needs motion)")
     dead = trailing_silence(ig)
     # A dry run has no voice at all; dead air is a silent tail after real audio.
     # The IG outro card is intentionally silent (~1.5s), so only count hush beyond it.
-    main_dead = dead - outro_d
+    main_dead = dead if voiced_outro else dead - outro_d
     if main_dead > 1.0 and dead < got - intro_d - 1.0:
         faults.append(f"ig: {dead:.1f}s of silence at the end (dead air)")
     faults.extend(f"outro: {fault}" for fault in tofu_faults([outro_text]))

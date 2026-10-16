@@ -549,3 +549,13 @@ def news_post_meta(levels, article):
         "pinned_comment": (f"आज Nifty {inr(key, 0)} के ऊपर टिकेगा या नहीं? आपका view comment करो 👇" if key else ""),
         "series": NEWS_SERIES,
     }
+
+
+def end_card_voice(kind):
+    """Spoken follow line for the end card (not part of the narration rows the lint checks)."""
+    if kind != "ta":
+        return {}
+    return {
+        "rtt": "रोज़ शाम एक स्टॉक का पूरा प्लान। Rajesh Technical Trader को follow करो।",
+        "pkp": "रोज़ शाम एक स्टॉक का पूरा प्लान। Paise Ki Pathshala को follow करो।",
+    }

@@ -40,7 +40,141 @@ class EdgeUnavailable(Exception):
     pass
 
 
+_HI_0_99 = (
+    "शून्य एक दो तीन चार पाँच छह सात आठ नौ दस ग्यारह बारह तेरह चौदह पंद्रह सोलह सत्रह अठारह उन्नीस "
+    "बीस इक्कीस बाईस तेईस चौबीस पच्चीस छब्बीस सत्ताईस अट्ठाईस उनतीस तीस इकतीस बत्तीस तैंतीस चौंतीस "
+    "पैंतीस छत्तीस सैंतीस अड़तीस उनतालीस चालीस इकतालीस बयालीस तैंतालीस चवालीस पैंतालीस छियालीस "
+    "सैंतालीस अड़तालीस उनचास पचास इक्यावन बावन तिरपन चौवन पचपन छप्पन सत्तावन अट्ठावन उनसठ साठ "
+    "इकसठ बासठ तिरसठ चौंसठ पैंसठ छियासठ सड़सठ अड़सठ उनहत्तर सत्तर इकहत्तर बहत्तर तिहत्तर चौहत्तर "
+    "पचहत्तर छिहत्तर सतहत्तर अठहत्तर उन्यासी अस्सी इक्यासी बयासी तिरासी चौरासी पचासी छियासी "
+    "सत्तासी अट्ठासी नवासी नब्बे इक्यानवे बानवे तिरानवे चौरानवे पंचानवे छियानवे सत्तानवे अट्ठानवे निन्यानवे"
+).split()
+
+
+def hindi_number(n):
+    """Whole number as Hindi words (Indian grouping): 1883 -> एक हज़ार आठ सौ तिरासी."""
+    n = int(n)
+    if n < 0:
+        return "माइनस " + hindi_number(-n)
+    if n < 100:
+        return _HI_0_99[n]
+    parts = []
+    for size, word in ((10 ** 7, "करोड़"), (10 ** 5, "लाख"), (1000, "हज़ार"), (100, "सौ")):
+        if n >= size:
+            parts.append(f"{hindi_number(n // size)} {word}")
+            n %= size
+    if n:
+        parts.append(_HI_0_99[n])
+    return " ".join(parts)
+
+
+def edge_text(text):
+    """Edge Madhur drops digits ('1883' came out as 'ek hazaar aath sau'): speak every whole number as words."""
+    import re
+    return re.sub(r"(?<![\d.,])\d+(?:,\d+)*(?![\d]|[.,]\d)", lambda m: hindi_number(m.group(0).replace(",", "")), str(text or ""))
+
+
+def speech_seconds(path, floor_db=-40.0):
+    """Seconds of voiced audio (20 ms frames above floor_db) in a wav."""
+    frames = _frames_db(path)
+    return 0.02 * sum(1 for db in frames if db > floor_db)
+
+
+def _read_wav(path):
+    import numpy as np
+    with wave.open(str(path)) as handle:
+        rate = handle.getframerate()
+        data = np.frombuffer(handle.readframes(handle.getnframes()), dtype=np.int16)
+        if handle.getnchannels() > 1:
+            data = data.reshape(-1, handle.getnchannels()).mean(axis=1).astype(np.int16)
+    return data, rate
+
+
+def _frames_db(path, frame_sec=0.02):
+    import numpy as np
+    data, rate = _read_wav(path)
+    step = max(1, int(rate * frame_sec))
+    out = []
+    for i in range(0, len(data), step):
+        chunk = data[i:i + step].astype(float)
+        rms = float(np.sqrt((chunk ** 2).mean())) if len(chunk) else 0.0
+        out.append(20 * np.log10(max(rms, 1e-3) / 32768.0))
+    return out
+
+
+EDGE_LEAD_SEC = 0.12
+EDGE_TAIL_SEC = 0.30
+MAX_PAUSE_SEC = 0.45
+
+
+def tidy_clip(path, floor_db=-40.0, lead=EDGE_LEAD_SEC, tail=EDGE_TAIL_SEC, max_pause=MAX_PAUSE_SEC):
+    """Trim leading/trailing hush and shrink long internal pauses. Cuts only inside
+    silent 20 ms frames, so no word is ever cut. Returns the new duration."""
+    import numpy as np
+    data, rate = _read_wav(path)
+    frames = _frames_db(path)
+    step = int(rate * 0.02)
+    voiced = [i for i, db in enumerate(frames) if db > floor_db]
+    if not voiced:
+        return len(data) / rate
+    keep = []
+    first, last = voiced[0], voiced[-1]
+    start = max(0, first * step - int(lead * rate))
+    end = min(len(data), (last + 1) * step + int(tail * rate))
+    i = first
+    run_start = None
+    pieces = [data[start:first * step]]
+    cursor = first * step
+    while i <= last:
+        if frames[i] <= floor_db:
+            if run_start is None:
+                run_start = i
+        else:
+            if run_start is not None:
+                length = (i - run_start) * 0.02
+                if length > max_pause:
+                    half = int(max_pause / 2 * rate)
+                    a, b = run_start * step, i * step
+                    pieces.append(data[cursor:a + half])
+                    cursor = b - half
+                run_start = None
+        i += 1
+    pieces.append(data[cursor:end])
+    out = np.concatenate(pieces).astype(np.int16)
+    with wave.open(str(path), "w") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(rate)
+        handle.writeframes(out.tobytes())
+    del keep
+    return len(out) / rate
+
+
+# Madhur at +20-32% speaks ~2.2-3.2 words a second; under 1.3 w/s of voiced audio
+# for a line means Edge dropped words (16-Oct sample: '83' and 'नहीं' missing).
+EDGE_MIN_VOICED_RATIO = 0.55
+
+
+def edge_expected_seconds(spoken):
+    return len(str(spoken).split()) / 2.8
+
+
 def edge_speech(text, dest, cache_key=None, rate=None):
+    """Edge TTS with numbers as Hindi words, tidied pauses, and a length check against the text."""
+    spoken = edge_text(text)
+    last = None
+    for attempt_rate in (rate, "+10%", "+0%"):
+        _edge_raw(spoken, dest, rate=attempt_rate)
+        voiced = speech_seconds(dest)
+        last = voiced
+        if voiced >= EDGE_MIN_VOICED_RATIO * edge_expected_seconds(spoken):
+            tidy_clip(dest)
+            return
+        print(f"[voice] Edge clip short ({voiced:.1f}s voiced for {len(spoken.split())} words); retrying slower", flush=True)
+    raise EdgeUnavailable(f"Edge clip truncated: {last:.1f}s voiced for '{spoken[:60]}'")
+
+
+def _edge_raw(text, dest, cache_key=None, rate=None):
     """Microsoft Edge TTS (hi-IN-MadhurNeural, no key) to a 24 kHz mono wav. Raises EdgeUnavailable."""
     import hashlib
     import shutil
@@ -199,21 +333,8 @@ def _speak_all(texts, dest, kind, dry_run, key_prefix, parts_dir, engine):
     listing.write_text("\n".join(lines) + "\n", encoding="utf-8")
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(listing),
                     "-ar", "24000", "-ac", "1", str(dest)], check=True)
-    # Edge/Gemini often leave ~1s of hush at the end; that plus the silent IG
-    # outro trips the dead-air QA. Trim only the trailing hush.
-    before = _clip_seconds(dest)
-    trimmed = dest.with_suffix(".trim.wav")
-    subprocess.run([
-        "ffmpeg", "-y", "-v", "error", "-i", str(dest),
-        "-af", "areverse,silenceremove=start_periods=1:start_duration=0.2:start_threshold=-40dB,areverse",
-        "-ar", "24000", "-ac", "1", str(trimmed),
-    ], check=True)
-    after = _clip_seconds(trimmed)
-    if 0.15 < before - after < 3.0 and after > 5.0:
-        trimmed.replace(dest)
-        seconds[-1] = max(0.6, seconds[-1] - (before - after))
-    elif trimmed.is_file():
-        trimmed.unlink()
+    # The last clip is already tidied (tidy_clip keeps EDGE_TAIL_SEC after the last
+    # voiced frame); the old reverse-silenceremove cut the final word ('advice na-').
     return {"engine": engine, "requests": requests, "segments": [round(s, 3) for s in seconds]}, seconds
 
 

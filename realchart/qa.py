@@ -56,6 +56,51 @@ def check(out, rows, levels, voice_engine, dry_run=False, capture_dates=None, ex
         faults.append("script.txt missing")
     if capture_dates is not None:
         faults.extend(video_faults(out, rows, capture_dates, expected_date))
+    if not dry_run:
+        faults.extend(audio_faults(out))
+    return faults
+
+
+MAX_GAP_SEC = 0.8
+MIN_END_HUSH_SEC = 0.15
+
+
+def silence_gaps(path, floor_db=-40, min_sec=MAX_GAP_SEC):
+    """[(start, seconds)] of every silence longer than min_sec in a media file."""
+    import re
+    log = subprocess.run(["ffmpeg", "-v", "info", "-i", str(path), "-af", f"silencedetect=n={floor_db}dB:d={min_sec}",
+                          "-f", "null", "-"], capture_output=True, text=True).stderr
+    starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", log)]
+    lengths = [float(x) for x in re.findall(r"silence_duration: ([\d.]+)", log)]
+    if len(starts) > len(lengths):
+        total = probe(path).get("duration") or 0.0
+        lengths.append(max(0.0, total - starts[-1]))
+    return [(start, length) for start, length in zip(starts, lengths) if length > min_sec]
+
+
+def ends_in_hush(wav, hush=MIN_END_HUSH_SEC, floor_db=-40.0):
+    """True when the clip's last `hush` seconds are silent: the last word was not cut."""
+    from realchart.voice import _frames_db
+    frames = _frames_db(wav)
+    need = max(1, int(round(hush / 0.02)))
+    return len(frames) >= need and all(db <= floor_db for db in frames[-need:])
+
+
+def audio_faults(out):
+    """16-Oct review: a 1.5 s hole where Edge dropped '83', and 'advice na-' cut at the end."""
+    out = Path(out)
+    faults = []
+    main = out / "final.mp4"
+    if main.is_file():
+        for start, length in silence_gaps(main):
+            faults.append(f"audio: {length:.1f}s silence at {start:.1f}s in final.mp4 (max {MAX_GAP_SEC}s)")
+    parts = sorted((out / "voice_parts").glob("[0-9][0-9].wav"))
+    for part in parts:
+        if not ends_in_hush(part):
+            faults.append(f"audio: voice clip {part.name} ends mid-word (truncated)")
+    voice = out / "voice.wav"
+    if voice.is_file() and not ends_in_hush(voice):
+        faults.append("audio: voice.wav ends mid-word (last clip truncated)")
     return faults
 
 

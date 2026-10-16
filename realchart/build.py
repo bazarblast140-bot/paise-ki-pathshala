@@ -149,8 +149,12 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
         from realchart.ends import FOLLOW_PKP, FOLLOW_RTT, attach, render_end_card
         ends_dir = out / "ends"
         extra = script.end_card_lines(kind, levels)
-        outro_rtt = render_end_card(ends_dir / "outro_rtt.mp4", chart.get("path"), "Rajesh Technical Trader", "follow करो", extra=extra)
-        outro_pkp = render_end_card(ends_dir / "outro_pkp.mp4", chart.get("path"), "Paise Ki Pathshala", "follow करो", extra=extra)
+        # TA: the end card speaks the follow line over music (16-Oct review: a silent card at 0:47).
+        say = script.end_card_voice(kind) if not dry_run else {}
+        outro_rtt = render_end_card(ends_dir / "outro_rtt.mp4", chart.get("path"), "Rajesh Technical Trader", "follow करो", extra=extra,
+                                    voice_text=say.get("rtt"))
+        outro_pkp = render_end_card(ends_dir / "outro_pkp.mp4", chart.get("path"), "Paise Ki Pathshala", "follow करो", extra=extra,
+                                    voice_text=say.get("pkp"))
         try:
             attach(out / "final.mp4", out, outro_rtt=outro_rtt, outro_pkp=outro_pkp)
         except FileNotFoundError as exc:
