@@ -111,7 +111,8 @@ def _close_lines(levels):
     parts = []
     if levels.get("ema20") is not None:
         parts.append(f"20 EMA {n('ema20')} पर है।")
-    if levels.get("rsi14") is not None:
+    if levels.get("rsi14") is not None and levels.get("rsi_pane_captured"):
+        # Only when the TradingView shot actually shows an RSI pane (16-Oct review).
         parts.append(f"RSI {round(float(levels['rsi14']))} पर है।")
     parts.append("ज़ोन सिर्फ लेवल हैं, scenario, ट्रेड सलाह नहीं।")
     src = str(levels.get("values_from") or "").strip()
@@ -393,7 +394,8 @@ def post_meta(levels):
     close = inr(levels.get("close"), 0)
     key = levels.get("next_pivot") or next_pivot(levels)
     q = levels.get("next_r1") if chg >= 0 else levels.get("next_s1")
-    title = f"Nifty analysis today | {SERIES} {day_text}".strip()
+    series = f"{SERIES} #{int(levels['series_n'])}" if levels.get("series_n") else SERIES
+    title = f"Nifty analysis today | {series} {day_text}".strip()
     caption = (
         f"Nifty prediction for tomorrow | Nifty analysis today {day_text}: Nifty {chg:+.2f}% पर {close} पर बंद। "
         f"कल का key level {inr(key, 0)} (pivot). Stock market Hindi me roz 4 baje. Educational only, not advice."

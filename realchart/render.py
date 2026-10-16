@@ -315,6 +315,19 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
         daily_lines = out / "daily-lines.png"
         shot.save(daily_lines)
         shot_maps[str(daily_lines)] = MAPPINGS.get(id(shot))
+    # End card: the voice names TOMORROW's pivot and R1 (from today's OHLC), so the
+    # chart under it shows those lines and the ring, not today's pivot (16-Oct review).
+    next_lines, tomorrow = None, None
+    if levels.get("next_pivot") is not None and chart_path and Path(chart_path).is_file() and levels.get("chart_source") == "tradingview":
+        from PIL import Image
+        tomorrow = {"pivot": levels.get("next_pivot"), "r1": levels.get("next_r1"), "s1": levels.get("next_s1")}
+        with Image.open(chart_path) as opened:
+            shot = opened.convert("RGB")
+        axis_report["next"] = _lines_on(shot, tomorrow)
+        if axis_report["next"].get("ok") and axis_report["next"].get("drawn"):
+            next_lines = out / "daily-next-lines.png"
+            shot.save(next_lines)
+            shot_maps[str(next_lines)] = MAPPINGS.get(id(shot))
     (out.parent / "axis.json").write_text(json.dumps(axis_report, indent=2) + "\n", encoding="utf-8")
     lines_drawn = bool((axis_report.get("intraday") or {}).get("drawn"))
     news_shot = None
@@ -345,6 +358,8 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
         section = ("CHART · DATA", CYAN)
         if sec == "hook":
             zoom, footer, section = 1.5, f"Source: {src} · 1D", ("HOOK", YELLOW)
+        elif sec == "chart" and kind != "news":
+            zoom = 1.4  # the hook ends on the full daily chart; the chart beat opens zoomed in
         elif sec == "intraday":
             interval = str((intraday or {}).get("interval") or "5")
             visual = overlaid or chart_path
@@ -366,12 +381,14 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             footer = "Source: levels computed from NSE daily data · TradingView"
         elif sec == "cta":
             footer, section = "Real chart · Real data", ("COMMENT", YELLOW)
+            if next_lines:
+                visual, footer = next_lines, f"Source: {src} · 1D · कल के levels"
         path = out / f"{sec}.png"
         focus = _focus(shot_maps.get(str(visual)), levels)
         _card(title, caption, spoken, footer, visual, zoom=zoom, anchor_y=anchor_y, chips=chips, dim=dim,
               header=card_header, section=section, zoom_y=focus).save(path)
         made.append(path)
-        if sec in ("chart", "intraday", "view", "cta") and visual:
+        if sec in ("hook", "chart", "intraday", "view", "cta") and visual and not (sec == "hook" and kind == "news"):
             # Visual change every 2-3 s inside a beat: zoom in on the latest
             # candles, then back out with a ring + arrow on the key level.
             def extra(name, vis, z):
@@ -380,12 +397,20 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
                       header=card_header, section=section, zoom_y=focus).save(dest)
                 return str(dest)
             drawn_before = len(DRAWN)
-            zoomed = extra("zoom", visual, 1.4)
-            marks = _marked(visual, shot_maps.get(str(visual)), levels, out.parent / f"{sec}-shot")
-            pulse = [[extra(f"mark{i}", m, zoom), 0.12] for i, m in enumerate(marks[:-1])]
-            held = [[extra("marked", marks[-1], zoom), 1.0]] if marks else []
-            if sec == "chart":
-                seq = [[zoomed, 1.0]] + pulse + held  # daily first, zoom in, zoom out on the level
+            # The hook card is already zoomed (1.5), so its change is a pull back to the full daily chart.
+            zoomed = extra("zoom", visual, 1.0 if sec == "hook" else 1.4)
+            mark_levels = tomorrow if (sec == "cta" and next_lines) else levels
+            marks = _marked(visual, shot_maps.get(str(visual)), mark_levels, out.parent / f"{sec}-shot")
+            ring_zoom = 1.0 if sec == "chart" else zoom  # chart: zoom back out onto the ringed level
+            pulse = [[extra(f"mark{i}", m, ring_zoom), 0.12] for i, m in enumerate(marks[:-1])]
+            held = [[extra("marked", marks[-1], ring_zoom), 1.0]] if marks else []
+            if sec == "hook":
+                seq = [[zoomed, 1.0]]  # 16-Oct review: the hook sat on one still for ~6 s
+            elif sec == "chart":
+                seq = pulse + held  # opens zoomed in (1.4), then zooms out onto the ringed level
+            elif sec in ("view", "cta"):
+                # Ring grows, holds, then zoom: no two neighbouring stills look alike when the cycle repeats.
+                seq = pulse + held + [[zoomed, 1.0]]
             elif sec == "intraday":
                 seq = pulse + held + [[zoomed, 1.0]]
             else:

@@ -109,6 +109,7 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             chart_opener=chart_opener, article_opener=article_opener, dry_run=dry_run,
             bars_intraday=bars_intraday, chain_for=chain_for,
         )
+        levels["series_n"] = _series_next(kind)
         rows = script.chunks_for(kind, levels, article)
         faults = script.lint(rows) + script.number_faults(rows, levels)
         if faults:
@@ -156,7 +157,7 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             out, rows, levels, voice.get("engine"), dry_run=dry_run,
             capture_dates=capture_dates, expected_date=(levels.get("last_date") if kind == "news" else session.isoformat()),
         )
-        qa_faults.extend(_ta_faults(out, kind, chart, intraday))
+        qa_faults.extend(_ta_faults(out, kind, chart, intraday, dry_run=dry_run))
         _write_post_meta(out, kind, levels, rows)
         verdict = "DRY-OK" if dry_run and not qa_faults else ("PASS" if not qa_faults else "HOLD")
         report = {
@@ -180,6 +181,11 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             "voice": voice.get("engine"),
             "sync": "script-timeline",
             "hook": "0-3s",
+            "capture_mode": "box-signed-in" if os.environ.get("REALCHART_CDP") else "anonymous",
+            "ema_ok": all((c or {}).get("ema", {}).get("ema20") and (c or {}).get("ema", {}).get("ema50")
+                          for c in (chart, intraday) if c is not None),
+            "series_n": levels.get("series_n"),
+            "session": session.isoformat(),
         }
         (out / "qa.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         if qa_faults:
@@ -349,6 +355,20 @@ def about_indian_market(article):
     return bool(INDIA_MARKET.search(blob))
 
 
+def _series_next(kind):
+    """Next episode number from the box's series file (written by scripts/box_publish.py after a publish)."""
+    path = os.environ.get("REALCHART_SERIES_FILE", "")
+    if kind != "close" or not path:
+        return None
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        return int(data.get(kind, 0)) + 1
+    except FileNotFoundError:
+        return 1
+    except (OSError, ValueError, TypeError):
+        return None
+
+
 def _voice_key(kind, levels, text):
     """Cache per day AND per text: edited narration must never reuse old audio."""
     import hashlib
@@ -386,11 +406,18 @@ def _with_variants(pics, beats, variants_file):
     return new_pics, new_beats
 
 
-def _ta_faults(out, kind, chart, intraday):
+def _ta_faults(out, kind, chart, intraday, dry_run=False):
     """TradingView's own EMA 20/50 must show on every TradingView shot; level lines must be drawn."""
     faults = []
     if kind not in ("close", "ta"):
         return faults
+    from realchart.capture import CDP_URL
+    if not CDP_URL and not dry_run:
+        # Only the box is signed in to TradingView. A runner capture has no EMA 20/50.
+        faults.append("chart not captured from the signed-in box browser (REALCHART_CDP unset)")
+    for label, shot in (("daily", chart or {}), ("5m", intraday or {})):
+        if shot.get("source") != "tradingview" and not dry_run:
+            faults.append(f"{label} chart is not a TradingView capture ({shot.get('source') or 'missing'})")
     for label, shot in (("daily", chart or {}), ("5m", intraday or {})):
         if shot.get("source") != "tradingview":
             continue
