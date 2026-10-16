@@ -76,3 +76,11 @@ class HideDrawingsTest(unittest.TestCase):
             def wait_for_timeout(self, ms):
                 pass
         self.assertTrue(capture.hide_drawings(Page()))
+
+
+class CloseNewsTopicTest(unittest.TestCase):
+    def test_metal_story_is_not_the_nifty_close(self):
+        from realchart.build import about_indian_market
+        self.assertFalse(about_indian_market({"title": "Gold vs silver vs platinum: Which metal saw biggest rally since last Dussehra?",
+                                              "summary": "gaining about 47% in rupee terms"}))
+        self.assertTrue(about_indian_market({"title": "Sensex, Nifty end higher as IT stocks gain"}))

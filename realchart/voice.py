@@ -40,7 +40,7 @@ class EdgeUnavailable(Exception):
     pass
 
 
-def edge_speech(text, dest, cache_key=None):
+def edge_speech(text, dest, cache_key=None, rate=None):
     """Microsoft Edge TTS (hi-IN-MadhurNeural, no key) to a 24 kHz mono wav. Raises EdgeUnavailable."""
     import hashlib
     import shutil
@@ -49,13 +49,14 @@ def edge_speech(text, dest, cache_key=None):
     dest = Path(dest)
     cache_dir = Path(__file__).resolve().parents[1] / "data" / "gemini_cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    digest = hashlib.sha1(f"{EDGE_VOICE}|+20%|{text}".encode("utf-8")).hexdigest()[:12]
+    rate = rate or os.environ.get("REALCHART_EDGE_RATE", "+20%")
+    digest = hashlib.sha1(f"{EDGE_VOICE}|{rate}|{text}".encode("utf-8")).hexdigest()[:12]
     cached = cache_dir / f"edge-{digest}.wav"
     if not cached.is_file():
         mp3 = cached.with_suffix(".mp3")
         try:
             # Edge Madhur is slower than Gemini Charon; +20% keeps the same script under the 50s QA gate.
-            subprocess.run([sys.executable, "-m", "edge_tts", "--voice", EDGE_VOICE, "--rate=+20%", "--text", str(text), "--write-media", str(mp3)],
+            subprocess.run([sys.executable, "-m", "edge_tts", "--voice", EDGE_VOICE, f"--rate={rate}", "--text", str(text), "--write-media", str(mp3)],
                            check=True, capture_output=True, timeout=90)
             subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(mp3), "-ar", "24000", "-ac", "1", str(cached)], check=True, timeout=60)
         except (subprocess.SubprocessError, OSError) as err:
@@ -156,7 +157,16 @@ def speak_segments(texts, dest, kind, dry_run=False, key_prefix="realchart"):
             # Last fallback: Edge TTS, again the whole Reel in one voice.
             print(f"[voice] Grok unavailable ({str(grok)[:80]}); using Edge TTS ({EDGE_VOICE})", flush=True)
             try:
-                return _speak_all(texts, dest, kind, dry_run, key_prefix, parts_dir, "edge")
+                info, seconds = _speak_all(texts, dest, kind, dry_run, key_prefix, parts_dir, "edge")
+                if sum(seconds) > 49.0 and not os.environ.get("REALCHART_EDGE_RATE"):
+                    # Madhur at +20% can still run past the 50s gate; one faster take (free, no key).
+                    print(f"[voice] Edge take {sum(seconds):.1f}s; re-voicing at +32%", flush=True)
+                    os.environ["REALCHART_EDGE_RATE"] = "+32%"
+                    try:
+                        info, seconds = _speak_all(texts, dest, kind, dry_run, key_prefix, parts_dir, "edge")
+                    finally:
+                        os.environ.pop("REALCHART_EDGE_RATE", None)
+                return info, seconds
             except EdgeUnavailable as edge:
                 raise gemini_voice.GeminiFallback(f"{exc}; grok: {grok}; edge: {edge}") from edge
 
