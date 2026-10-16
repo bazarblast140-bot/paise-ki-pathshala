@@ -320,11 +320,51 @@ def bundle(dest=None):
         die("source_run_id is empty; set override_mp4_url, override_thumb_url and override_script_url")
     dest.mkdir(parents=True, exist_ok=True)
     apply(mp4, dest / "final.mp4", check_duration=False)
+    tag, _name = _release_name(mp4)
+    if tag.startswith(BOX_TAG):
+        box_bundle(mp4, dest)
     apply_thumb(thumb, dest / "thumbnail.jpg")
     apply_script(script, dest / "script.txt")
     if meta:
         apply_meta(meta, dest / "publish_meta.json")
     return dest
+
+
+BOX_TAG = "box-reel-"
+
+
+def _sibling(url, name):
+    return url.rsplit("/", 1)[0] + "/" + name
+
+
+def box_gate(qa, today=None):
+    """A box-built Reel publishes only on a PASS from today's signed-in capture with EMA 20/50."""
+    from datetime import datetime, timedelta, timezone
+    today = today or (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).date().isoformat()
+    if qa.get("verdict") != "PASS":
+        return f"qa verdict {qa.get('verdict')!r}"
+    if qa.get("capture_mode") != "box-signed-in":
+        return f"capture_mode {qa.get('capture_mode')!r}"
+    if qa.get("ema_ok") is not True:
+        return "EMA 20/50 not confirmed on the captures"
+    if qa.get("session") != today:
+        return f"session {qa.get('session')} is not today {today}"
+    return ""
+
+
+def box_bundle(mp4_url, dest):
+    """Box Reel: also fetch qa.json (gate), final_yt.mp4 (PKP end) and final_ig.mp4 (RTT ends)."""
+    qa_path = dest / "qa.json"
+    _download(_sibling(mp4_url, "qa.json"), qa_path, min_bytes=2, label="qa.json")
+    try:
+        qa = json.loads(qa_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        die("box qa.json is not JSON")
+    reason = box_gate(qa)
+    if reason:
+        die(f"box Reel refused: {reason}")
+    for name in ("final_yt.mp4", "final_ig.mp4"):
+        apply(_sibling(mp4_url, name), dest / name, check_duration=False)
 
 
 def _skip_duration():

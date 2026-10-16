@@ -123,3 +123,40 @@ def test_single_black_frame_is_caught():
     lumas[30] = (1.0, 3.0)
     assert dip_faults(lumas, "x")
     assert not dip_faults([(i / 30, 160.0 if i < 30 else 120.0) for i in range(60)], "x")
+
+
+def test_box_gate_refuses_anything_but_todays_signed_in_pass():
+    from override_mp4 import box_gate
+    good = {"verdict": "PASS", "capture_mode": "box-signed-in", "ema_ok": True, "session": "2026-10-16"}
+    assert box_gate(good, today="2026-10-16") == ""
+    assert box_gate(dict(good, verdict="HOLD"), today="2026-10-16")
+    assert box_gate(dict(good, capture_mode="anonymous"), today="2026-10-16")
+    assert box_gate(dict(good, ema_ok=False), today="2026-10-16")
+    assert box_gate(good, today="2026-10-17")
+
+
+def test_runner_capture_is_a_qa_fault(monkeypatch):
+    from realchart import build, capture
+    monkeypatch.setattr(capture, "CDP_URL", "")
+    faults = build._ta_faults("/nonexistent", "close", {"source": "yfinance"}, None)
+    assert any("signed-in box" in f for f in faults) and any("not a TradingView capture" in f for f in faults)
+
+
+def test_rsi_only_with_pane_and_series_number_in_title():
+    lv = {"symbol": "NSE:NIFTY", "last_date": "2026-10-16", "close": 23000.0, "prev_close": 22900.0, "high": 23050.0,
+          "low": 22800.0, "chg_pct": 0.44, "rsi14": 55.0, "ema20": 22900.0, "pivot": 22950.0, "r1": 23100.0,
+          "s1": 22850.0}
+    text = " ".join(r["t"] for r in script.chunks_for("close", dict(lv), None))
+    assert "RSI" not in text
+    text = " ".join(r["t"] for r in script.chunks_for("close", dict(lv, rsi_pane_captured=True), None))
+    assert "RSI 55" in text
+    assert "Nifty Close Report #7 16 Oct 2026" in script.post_meta(dict(lv, series_n=7))["title"]
+
+
+def test_series_number_from_box_file(tmp_path, monkeypatch):
+    from realchart import build
+    f = tmp_path / "series.json"
+    monkeypatch.setenv("REALCHART_SERIES_FILE", str(f))
+    assert build._series_next("close") == 1
+    f.write_text('{"close": 4}')
+    assert build._series_next("close") == 5 and build._series_next("news") is None

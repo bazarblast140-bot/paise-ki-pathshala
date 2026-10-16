@@ -123,6 +123,20 @@ jobs:
               fi
             fi
           done
+      - name: Refuse a chart Reel not captured on the signed-in box
+        if: inputs.source_run_id != ''
+        run: |
+          # Runner builds capture TradingView without login (no EMA 20/50). Only box-built close/TA Reels publish.
+          python - <<'PY'
+          import json, pathlib, sys
+          qa = next(iter(pathlib.Path("run").rglob("qa.json")), None)
+          if qa is None:
+              sys.exit(0)
+          data = json.loads(qa.read_text(encoding="utf-8"))
+          if data.get("kind") in ("close", "ta") and data.get("capture_mode") != "box-signed-in":
+              print(f"Refused: {data.get('kind')} Reel capture_mode={data.get('capture_mode')!r}; publish box-built Reels only")
+              sys.exit(1)
+          PY
       - name: Download the release bundle
         if: inputs.source_run_id == ''
         env:
