@@ -489,6 +489,33 @@ def _parking_spot(page, box, low=False):
     return 5, view["height"] - (4 if low else 10)
 
 
+HIDE_ALL_JS = """(click) => {
+    const button = [...document.querySelectorAll('[data-name="hide-all"] button')]
+        .find(e => /(hide|show) all drawings/i.test(e.getAttribute('aria-label') || ''));
+    if (!button) return 'missing';
+    const label = button.getAttribute('aria-label') || '';
+    const hidden = /show all drawings/i.test(label) || button.getAttribute('aria-pressed') === 'true';
+    if (click && !hidden) button.click();
+    return hidden ? 'hidden' : 'shown';
+}"""
+
+
+def hide_drawings(page, tries=3):
+    """Click TradingView's "Hide all drawings" toolbar toggle (this tab only). True once hidden.
+
+    Never touches "Remove drawings" (data-name removeAllDrawingTools); the state is not saved.
+    """
+    for _ in range(tries):
+        try:
+            page.evaluate(HIDE_ALL_JS, True)
+            page.wait_for_timeout(800)
+            if page.evaluate(HIDE_ALL_JS, False) == "hidden":
+                return True
+        except Exception:  # noqa: BLE001
+            page.wait_for_timeout(1000)
+    return False
+
+
 def _frame_chart(page, interval):
     """IST axis, zoom on the latest candles, mouse off the plot, then the chart pane only.
 
@@ -497,14 +524,10 @@ def _frame_chart(page, interval):
     """
     if CDP_URL:
         # The saved layout carries Rajesh's own drawings (blue lines at old
-        # levels). Hide them for this tab only; saves are blocked (_block_saves).
-        try:
-            view = page.viewport_size or {"width": 1280, "height": 1100}
-            page.mouse.move(view["width"] * 0.45, view["height"] * 0.45)
-            page.keyboard.press("Control+Alt+h")
-            page.wait_for_timeout(1200)
-        except Exception:  # noqa: BLE001
-            pass
+        # levels). Hide them for this tab only with TradingView's own
+        # "Hide all drawings" toolbar button; saves are blocked (_block_saves).
+        # Keyboard shortcuts depended on window focus and stopped working (16-Oct).
+        hide_drawings(page)
     try:
         zone = page.locator("[data-name='time-zone-menu']")
         if zone.count():

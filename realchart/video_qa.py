@@ -171,7 +171,9 @@ def ends_faults(out, intro, outro_rtt, outro_text):
         faults.append("ig: outro is a static frame (needs motion)")
     dead = trailing_silence(ig)
     # A dry run has no voice at all; dead air is a silent tail after real audio.
-    if 2.0 < dead < got - intro_d - 1.0:
+    # The IG outro card is intentionally silent (~1.5s), so only count hush beyond it.
+    main_dead = dead - outro_d
+    if main_dead > 1.0 and dead < got - intro_d - 1.0:
         faults.append(f"ig: {dead:.1f}s of silence at the end (dead air)")
     faults.extend(f"outro: {fault}" for fault in tofu_faults([outro_text]))
     return faults

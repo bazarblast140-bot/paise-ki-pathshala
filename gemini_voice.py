@@ -212,6 +212,22 @@ def _response_snippet(response):
     return redact(" ".join(str(raw).split()))[:180]
 
 
+def quota_kind(response):
+    """'minute' or 'day' from Google's 429 body (quotaId ...PerMinute / ...PerDay); '' if unknown."""
+    try:
+        raw = str(getattr(response, "text", "") or "")
+    except Exception:  # noqa: BLE001
+        return ""
+    if re.search(r"PerMinute|per minute|RPM", raw, re.I):
+        return "minute"
+    if re.search(r"PerDay|per day|RPD", raw, re.I):
+        return "day"
+    return ""
+
+
+MINUTE_WAIT_S = float(os.environ.get("GEMINI_MINUTE_WAIT_S", "62"))
+
+
 def _post_speech(text, dest, style=None, api_key=None):
     """One POST. The error text is the HTTP status plus a short redacted body."""
     key = (api_key if api_key is not None else os.environ.get("GEMINI_API_KEY", "")).strip()
@@ -238,6 +254,9 @@ def _post_speech(text, dest, style=None, api_key=None):
             detail = f"{detail}: {snippet}"
         if status == 429:
             detail = f"gemini_quota: {detail}"
+            exc = GeminiFallback(detail, status=status)
+            exc.quota = quota_kind(response)
+            raise exc
         raise GeminiFallback(detail, status=status)
     try:
         payload = response.json()
@@ -342,8 +361,15 @@ def write_speech(text, dest, style=None, cache_key=None):
             except GeminiFallback as exc:
                 last = exc
                 if exc.status == 429:
-                    gemini_budget.exhaust(key_id)
-                    print(f"[gemini] key {key_id} returned 429", flush=True)
+                    kind = getattr(exc, "quota", "")
+                    if kind == "minute" and attempt == 0:
+                        # A per-minute cap is not the daily cap: wait it out on this key.
+                        print(f"[gemini] key {key_id} 429 per-minute; waiting {MINUTE_WAIT_S:.0f}s", flush=True)
+                        if MINUTE_WAIT_S > 0:
+                            time.sleep(MINUTE_WAIT_S)
+                        continue
+                    gemini_budget.exhaust(key_id, reason=f"429 {kind or 'unknown'}: {exc.reason[:160]}")
+                    print(f"[gemini] key {key_id} returned 429 ({kind or 'quota type unknown'})", flush=True)
                     break
                 if attempt == 0 and exc.status in RETRY_STATUSES:
                     wait = float(RETRY_WAIT_S)
