@@ -50,3 +50,29 @@ class EdgeFallbackTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class QuotaKindTest(unittest.TestCase):
+    def test_minute_vs_day(self):
+        import gemini_voice
+
+        class R:
+            def __init__(self, text):
+                self.text = text
+        self.assertEqual(gemini_voice.quota_kind(R('"quotaId": "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"')), "minute")
+        self.assertEqual(gemini_voice.quota_kind(R('"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"')), "day")
+
+
+class HideDrawingsTest(unittest.TestCase):
+    def test_clicks_toolbar_toggle_until_hidden(self):
+        from realchart import capture
+        states = iter(["shown", "hidden"])
+
+        class Page:
+            def evaluate(self, js, click):
+                assert "removeAllDrawingTools" not in js
+                return "shown" if click else next(states)
+
+            def wait_for_timeout(self, ms):
+                pass
+        self.assertTrue(capture.hide_drawings(Page()))

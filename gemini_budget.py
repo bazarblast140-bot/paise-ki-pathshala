@@ -253,13 +253,15 @@ def note(caller, key_id="1", now=None):
     return charge
 
 
-def exhaust(key_id, now=None):
-    """The server returned 429 for this key. Do not POST it again today."""
+def exhaust(key_id, now=None, reason=""):
+    """The server returned 429 for this key. Do not POST it again today. The reason is kept for diagnosis."""
     if not enforced():
         return
     data = load()
     bucket = _bucket(data, ist_day(now), str(key_id or "1"))
     bucket["exhausted"] = True
+    if reason:
+        bucket["exhausted_reason"] = str(reason)[:200]
     save(data)
 
 

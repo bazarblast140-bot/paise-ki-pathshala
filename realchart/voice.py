@@ -49,12 +49,13 @@ def edge_speech(text, dest, cache_key=None):
     dest = Path(dest)
     cache_dir = Path(__file__).resolve().parents[1] / "data" / "gemini_cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
-    digest = hashlib.sha1(f"{EDGE_VOICE}|{text}".encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha1(f"{EDGE_VOICE}|+20%|{text}".encode("utf-8")).hexdigest()[:12]
     cached = cache_dir / f"edge-{digest}.wav"
     if not cached.is_file():
         mp3 = cached.with_suffix(".mp3")
         try:
-            subprocess.run([sys.executable, "-m", "edge_tts", "--voice", EDGE_VOICE, "--text", str(text), "--write-media", str(mp3)],
+            # Edge Madhur is slower than Gemini Charon; +20% keeps the same script under the 50s QA gate.
+            subprocess.run([sys.executable, "-m", "edge_tts", "--voice", EDGE_VOICE, "--rate=+20%", "--text", str(text), "--write-media", str(mp3)],
                            check=True, capture_output=True, timeout=90)
             subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(mp3), "-ar", "24000", "-ac", "1", str(cached)], check=True, timeout=60)
         except (subprocess.SubprocessError, OSError) as err:
@@ -188,6 +189,21 @@ def _speak_all(texts, dest, kind, dry_run, key_prefix, parts_dir, engine):
     listing.write_text("\n".join(lines) + "\n", encoding="utf-8")
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(listing),
                     "-ar", "24000", "-ac", "1", str(dest)], check=True)
+    # Edge/Gemini often leave ~1s of hush at the end; that plus the silent IG
+    # outro trips the dead-air QA. Trim only the trailing hush.
+    before = _clip_seconds(dest)
+    trimmed = dest.with_suffix(".trim.wav")
+    subprocess.run([
+        "ffmpeg", "-y", "-v", "error", "-i", str(dest),
+        "-af", "areverse,silenceremove=start_periods=1:start_duration=0.2:start_threshold=-40dB,areverse",
+        "-ar", "24000", "-ac", "1", str(trimmed),
+    ], check=True)
+    after = _clip_seconds(trimmed)
+    if 0.15 < before - after < 3.0 and after > 5.0:
+        trimmed.replace(dest)
+        seconds[-1] = max(0.6, seconds[-1] - (before - after))
+    elif trimmed.is_file():
+        trimmed.unlink()
     return {"engine": engine, "requests": requests, "segments": [round(s, 3) for s in seconds]}, seconds
 
 
