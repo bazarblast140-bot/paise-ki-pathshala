@@ -395,6 +395,11 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
                 visual, footer = next_lines, f"Source: {src} · 1D · कल के levels"
         path = out / f"{sec}.png"
         focus = _focus(shot_maps.get(str(visual)), levels)
+        five_min = sec in ("intraday", "view") and overlaid and str(visual) == str(overlaid)
+        fit_map = shot_maps.get(str(visual)) if five_min else None
+        if fit_map:
+            zoom, focus = fit_window(fit_map, levels, zoom, focus)
+            RANGES[path.name] = visible_range(fit_map, zoom, focus)
         _card(title, caption, spoken, footer, visual, zoom=zoom, anchor_y=anchor_y, chips=chips, dim=dim,
               header=card_header, section=section, zoom_y=focus).save(path)
         made.append(path)
@@ -414,8 +419,12 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             # candles, then back out with a ring + arrow on the key level.
             def extra(name, vis, z):
                 dest = out.parent / f"{sec}-{name}.png"
+                zy = focus
+                if fit_map:
+                    z, zy = fit_window(fit_map, levels, z, focus)
+                    RANGES[dest.name] = visible_range(fit_map, z, zy)
                 _card(title, caption, spoken, footer, vis, zoom=z, anchor_y=anchor_y, chips=chips, dim=dim,
-                      header=card_header, section=section, zoom_y=focus).save(dest)
+                      header=card_header, section=section, zoom_y=zy).save(dest)
                 return str(dest)
             drawn_before = len(DRAWN)
             # The hook card is already zoomed (1.5), so its change is a pull back to the full daily chart.
@@ -439,11 +448,51 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             variants[path.name] = seq
             del DRAWN[drawn_before:]  # variant shots repeat the same text; count it once
     (out.parent / "variants.json").write_text(json.dumps(variants, indent=1) + "\n", encoding="utf-8")
+    (out.parent / "frame_ranges.json").write_text(json.dumps({
+        "must": {k: levels.get(k) for k in INTRADAY_MUST},
+        # Our own yfinance plot draws every level on a known scale; only a TradingView shot needs the axis read.
+        "shot_ok": bool(shot_maps.get(str(overlaid))) if (overlaid and not (intraday or {}).get("plot")) else None,
+        "cards": dict(RANGES),
+    }, indent=1) + "\n", encoding="utf-8")
+    RANGES.clear()
     (out / "overlay_text.json").write_text(json.dumps(list(DRAWN), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return made
 
 
 MAPPINGS = {}
+RANGES = {}
+INTRADAY_MUST = ("close", "pivot", "r1", "s1")  # latest candle + every spoken 5m level
+
+
+def fit_window(mapping, levels, zoom, focus, margin=0.04):
+    """(zoom, zoom_y) so every INTRADAY_MUST price stays inside the crop; zoom shrinks if it has to.
+
+    16-Oct: a 1.4x crop centred on the pivot cut the day's candles and R1 off the 5m card.
+    """
+    height = (mapping or {}).get("height") or 0
+    if not mapping or not height:
+        return zoom, focus
+    ys = [mapping["a"] * float(levels[k]) + mapping["b"] for k in INTRADAY_MUST if levels.get(k) is not None]
+    if not ys:
+        return zoom, focus
+    lo, hi = max(0.0, min(ys) / height - margin), min(1.0, max(ys) / height + margin)
+    span = max(hi - lo, 1e-6)
+    zoom = max(1.0, min(zoom, 1.0 / span))
+    keep = 1.0 / zoom
+    centre = min(max((lo + hi) / 2, keep / 2), 1 - keep / 2)
+    return zoom, centre
+
+
+def visible_range(mapping, zoom, focus):
+    """Price range [lo, hi] shown after the crop in _card (same top/bottom maths)."""
+    height = (mapping or {}).get("height") or 0
+    if not mapping or not height or not mapping.get("a"):
+        return None
+    keep_h = round(height / zoom) if zoom > 1.0 else height
+    top = min(max(0, round(height * focus - keep_h / 2)), height - keep_h) if zoom > 1.0 else 0
+    p1 = (top - mapping["b"]) / mapping["a"]
+    p2 = (top + keep_h - mapping["b"]) / mapping["a"]
+    return [round(min(p1, p2), 2), round(max(p1, p2), 2)]
 
 
 def _focus(mapping, levels):

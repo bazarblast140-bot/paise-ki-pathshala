@@ -84,3 +84,24 @@ class CloseNewsTopicTest(unittest.TestCase):
         self.assertFalse(about_indian_market({"title": "Gold vs silver vs platinum: Which metal saw biggest rally since last Dussehra?",
                                               "summary": "gaining about 47% in rupee terms"}))
         self.assertTrue(about_indian_market({"title": "Sensex, Nifty end higher as IT stocks gain"}))
+
+
+class FiveMinuteFrameTest(unittest.TestCase):
+    # 16-Oct 5m shot: y = a*price + b, 22,720 at y=958, 23,160 at y=78, height 1015
+    MAP = {"a": (78 - 958) / (23160 - 22720), "b": 958 - (78 - 958) / (23160 - 22720) * 22720, "height": 1015}
+    LEVELS = {"close": 23146.15, "pivot": 22897.05, "r1": 23156.7, "s1": 22737.7}
+
+    def test_fit_keeps_candle_and_levels(self):
+        from realchart import render
+        zoom, focus = render.fit_window(self.MAP, self.LEVELS, 1.4, 0.3)
+        lo, hi = render.visible_range(self.MAP, zoom, focus)
+        for value in self.LEVELS.values():
+            self.assertTrue(lo <= value <= hi, (lo, hi, value))
+
+    def test_qa_holds_when_r1_is_cut(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "frame_ranges.json").write_text(json.dumps({"must": self.LEVELS, "shot_ok": True,
+                                                                   "cards": {"intraday.png": [22720, 23060]}}))
+            faults = video_qa.intraday_frame_faults(tmp)
+        self.assertTrue(faults and "r1" in faults[0] and "close" in faults[0])
