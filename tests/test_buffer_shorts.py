@@ -580,7 +580,7 @@ class CreditAndRefillTests(unittest.TestCase):
             saved = json.loads(credits.read_text(encoding="utf-8"))
             self.assertEqual(saved["deepseek_calls"], 0)
             self.assertEqual(saved["elevenlabs_characters_sent"], 0)
-            self.assertEqual(os.environ.get("DEEPSEEK_MAX_CALLS"), "6")
+            self.assertEqual(os.environ.get("DEEPSEEK_MAX_CALLS"), "8")
             failed = buffer_shorts.load_manifest(manifest_path)
             self.assertEqual(buffer_shorts.count_ready(failed), 0)
             self.assertIn(_topic()["key"], failed.get("skipped_topics") or [])

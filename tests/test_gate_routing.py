@@ -129,9 +129,12 @@ class VagueRepairTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 board_short.narration(topic, CFG)
             block = json.loads((Path(tmp) / "narration_block.json").read_text(encoding="utf-8"))
-        self.assertEqual(len(calls), 6)
+        regens = board_short.NARRATION_GATE_REGENS
+        self.assertEqual(len(calls), 6 + regens)
         self.assertNotIn("REWRITE karein", calls[0])
-        for user in calls[1:]:
+        for user in calls[6:]:
+            self.assertIn("Gate reasons, verbatim: vague explanation (no number, level or step): karein", user)
+        for user in calls[1:6]:
             self.assertIn("REWRITE karein", user)
             self.assertIn("vague explanation (no number, level or step): karein", user)
             self.assertIn("Exact failure:", user)

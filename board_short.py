@@ -230,6 +230,10 @@ class NarrationSkip(Exception):
         super().__init__(reason)
         self.reason = reason
 NARRATION_STATIC_REPAIRS = 4
+# After the repair loop, a script that still fails the hook/teaching gate
+# gets up to this many full regenerations. Each one is told the exact gate
+# reasons. The gate itself is unchanged.
+NARRATION_GATE_REGENS = 2
 
 # Live Shorts (ElevenLabs) explain the topic in six beats. Buffer/Edge keeps
 # the four-beat lesson above. Targets are derived from the voice coefficient.
@@ -2224,6 +2228,28 @@ def topic_key_figure(topic):
     return allowed[0] if allowed else ""
 
 
+def _deepseek_room():
+    """DeepSeek calls left under this run's cap."""
+    used = int((credit_log._read() or {}).get("deepseek_calls") or 0)
+    return credit_log.call_cap() - used
+
+
+def gate_regen_instructions(reasons, topic):
+    """The exact gate reasons for a full regeneration. The gate stays as is."""
+    lines = [
+        "The previous script FAILED the hook/teaching gate. Write a NEW full script.",
+        "Gate reasons, verbatim: " + str(reasons or "").strip(),
+    ]
+    phrase = key_phrase_for(str((topic or {}).get("topic") or ""))
+    if phrase:
+        lines.append(f"The hook must say the title term exactly: {phrase}")
+    hint = " ".join(str((topic or {}).get("hook_hint") or "").split())
+    if hint:
+        lines.append(f"hook_hint (a hook that already passes): {hint}")
+    lines.append("Fix every reason above; word windows in the reasons are hard limits.")
+    return "\n".join(lines)
+
+
 def narration(topic, c, spec=None):
     market_data.sync_topic_numbers(topic)
     if _live_lesson(c) and not topic.get("_atr"):
@@ -2328,8 +2354,12 @@ def narration(topic, c, spec=None):
             "facts": topic["facts"],
             "allowed_numbers": _allowed_number_list(topic),
             "udaharan_sentence": hook_check.worked_example_sentence(topic)}
+    hint = " ".join(str(topic.get("hook_hint") or "").split())
+    if hint:
+        user["hook_hint"] = hint
     msg = json.dumps(user, ensure_ascii=False)
     draft = None
+    gate_last = ""
     repair_done = False
     repairs = 0
     last = ""
@@ -2442,6 +2472,7 @@ def narration(topic, c, spec=None):
         if not fails:
             return _accept(n, calls)
         last = "; ".join(fails)
+        gate_last = last
         print(f"[retry] narration call {calls}/{NARRATION_CALL_CAP}: {last}")
         if (
             kind == "repair"
@@ -2449,6 +2480,38 @@ def narration(topic, c, spec=None):
             and repairs >= NARRATION_STATIC_REPAIRS
         ):
             break
+    # The gate still fails. Regenerate the whole script with the exact gate
+    # reasons, at most NARRATION_GATE_REGENS times. The gate is not loosened.
+    regen = 0
+    while draft is not None and gate_last and regen < NARRATION_GATE_REGENS:
+        if _deepseek_room() < 1:
+            print("[regen] DeepSeek call cap spent; no gate regeneration")
+            break
+        regen += 1
+        calls += 1
+        user_msg = msg + "\n\n" + gate_regen_instructions(gate_last, topic)
+        try:
+            system = live_narration_system(topic) if topic.get("_live_short") else NARR_SYSTEM
+            n = claude_json(
+                system, user_msg, model=model, max_tokens=2200,
+                retries=1, attempts=1,
+            )
+        except SystemExit:
+            raise
+        except Exception as e:  # noqa: BLE001
+            print(f"[regen] gate regeneration {regen}/{NARRATION_GATE_REGENS} empty: {e}")
+            continue
+        if not _usable_narration(n, topic):
+            print(f"[regen] gate regeneration {regen}/{NARRATION_GATE_REGENS} empty")
+            continue
+        if not topic.get("_atr"):
+            n = apply_live_draft(n, topic)
+        fails = _gate(n)
+        if not fails:
+            return _accept(n, calls)
+        draft = n
+        gate_last = last = "; ".join(fails)
+        print(f"[regen] gate regeneration {regen}/{NARRATION_GATE_REGENS}: {last}")
     reason = (
         "LLM narration failed the hook/teaching gate; "
         "refusing the topic-card template (no upload, no paid voice)"

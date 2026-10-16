@@ -4256,6 +4256,7 @@
    "used": false,
    "used_short": false,
    "key": "opt_protective_put",
+   "hook_hint": "Portfolio का बीमा Nifty Put से होता है? बाज़ार गिरे तो एक index put कितना बचाता है?",
    "cat": "OPTIONS",
    "topic": "Portfolio का बीमा — Nifty Put से hedge कब काम करता है",
    "thumb": [
