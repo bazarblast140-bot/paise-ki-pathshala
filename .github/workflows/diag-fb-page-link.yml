@@ -1,0 +1,26 @@
+name: Diag FB page link 2026-10-16
+on:
+  push:
+    branches: [diag/fb-page-link-2026-10-16]
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - env: {T: "${{ secrets.IG_ACCESS_TOKEN }}", IGU: "${{ vars.IG_USER_ID }}"}
+        run: |
+          python3 - <<'PY'
+          import os,urllib.request,urllib.parse,urllib.error,re
+          T=os.environ["T"]; IGU=os.environ.get("IGU","")
+          def call(path,params={}):
+              q=urllib.parse.urlencode(dict(params,access_token=T))
+              try: r=urllib.request.urlopen(f"https://graph.facebook.com/v21.0/{path}?{q}"); s=r.read().decode()
+              except urllib.error.HTTPError as e: s=e.read().decode()
+              return re.sub(r'"access_token":"[^"]*"','"access_token":"<redacted>"',s)[:1500]
+          print("ME",call("me",{"fields":"id,name,category,instagram_business_account{id,username},connected_instagram_account{id,username}"}))
+          print("ACCOUNTS",call("me/accounts",{"fields":"id,name,instagram_business_account{id,username}"}))
+          print("DEBUG_PERMS",call("me/permissions"))
+          if IGU:
+              print("IGUSER",call(IGU,{"fields":"id,username,name"}))
+              print("IGUSER_PAGE",call(IGU,{"fields":"id,username,connected_page{id,name}"}))
+          print("PAGE_691",call("691172017411768",{"fields":"id,name,username,link,instagram_business_account{id,username}"}))
+          PY
