@@ -160,3 +160,9 @@ def test_series_number_from_box_file(tmp_path, monkeypatch):
     assert build._series_next("close") == 1
     f.write_text('{"close": 4}')
     assert build._series_next("close") == 5 and build._series_next("news") is None
+
+
+def test_stock_tip_articles_are_not_news():
+    from realchart.build import about_indian_market
+    assert not about_indian_market({"title": "Raja Venkatraman recommends three stocks for 16 October Nifty"})
+    assert about_indian_market({"title": "Nifty ends 1.6% higher as banks rally"})
