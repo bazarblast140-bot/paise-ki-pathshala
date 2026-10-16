@@ -20,6 +20,7 @@ PROMPT = (
     "return JSON {\"lead\": str, \"points\": [str, str]}. lead: one Hindi (Devanagari) sentence, at most 13 words, "
     "saying what happened. points: two Hindi sentences, at most 14 words each, with the article's key facts. "
     "Write numbers with digits exactly as in the article (you may drop commas or 'Rs' and say करोड़/प्रतिशत). "
+    "Use whole numbers only: leave out decimal values (they would be rounded when spoken). "
     "Company and person names stay in English letters. No advice, no opinion, no prediction, nothing that is "
     "not in the article. Output JSON only.\n\nARTICLE\nTitle: {title}\nSummary: {summary}\nKey sentence: {key}\n"
 )
@@ -47,6 +48,8 @@ def check(summary, article):
             faults.append(f"not Hindi: {part[:40]}")
         if len(part.split()) > 20:
             faults.append(f"too long: {part[:40]}")
+        if re.search(r"\d\.\d", part):
+            faults.append(f"decimal number in: {part[:40]}")
         for value in _numbers(part):
             if value not in have:
                 faults.append(f"number {value:g} is not in the article")
