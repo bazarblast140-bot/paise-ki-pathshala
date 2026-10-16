@@ -6,17 +6,76 @@ import wave
 from pathlib import Path
 
 
-def speak(text, dest, kind, dry_run=False, cache_key=None):
+def speak(text, dest, kind, dry_run=False, cache_key=None, engine="gemini"):
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dry_run:
         _silence(dest, 45.0)
         return {"engine": "dry", "requests": 0}
+    if engine == "grok":
+        grok_speech(text, dest, cache_key=cache_key)
+        return {"engine": "grok", "requests": 1}
     os.environ["REALCHART_REEL"] = "1"
     os.environ["REALCHART_KIND"] = str(kind)
     os.environ["GEMINI_BUDGET_CALLER"] = str(kind)
     import gemini_voice
     gemini_voice.write_speech(text, dest, cache_key=cache_key or f"realchart-{kind}")
     return {"engine": "gemini", "requests": 1}
+
+
+GROK_VOICE = "naksh"
+GROK_URL = "https://api.x.ai/v1/tts"
+
+
+class GrokUnavailable(Exception):
+    pass
+
+
+def xai_key():
+    key = os.environ.get("XAI_API_KEY", "").strip()
+    if key:
+        return key
+    secrets = os.environ.get("GEMINI_SECRETS_DIR", "")
+    if secrets:
+        try:
+            return (Path(secrets) / "xai_api_key").read_text(encoding="utf-8").strip()
+        except OSError:
+            return ""
+    return ""
+
+
+def grok_speech(text, dest, cache_key=None):
+    """xAI Grok TTS (voice naksh, Hindi) to a 24 kHz mono wav. Raises GrokUnavailable on any failure."""
+    import json
+    import subprocess
+    import urllib.error
+    import urllib.request
+    cache = Path(__file__).resolve().parent.parent / "data" / "gemini_cache" / f"grok-{cache_key}.wav" if cache_key else None
+    if cache and cache.is_file():
+        dest.write_bytes(cache.read_bytes())
+        return dest
+    key = xai_key()
+    if not key:
+        raise GrokUnavailable("no XAI_API_KEY")
+    body = json.dumps({"text": str(text), "language": "hi", "voice_id": GROK_VOICE}).encode("utf-8")
+    req = urllib.request.Request(GROK_URL, data=body, headers={"Content-Type": "application/json",
+                                                               "Authorization": f"Bearer {key}"})
+    try:
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            audio = resp.read()
+    except urllib.error.HTTPError as exc:
+        raise GrokUnavailable(f"xAI TTS HTTP {exc.code}") from exc
+    except OSError as exc:
+        raise GrokUnavailable(f"xAI TTS {type(exc).__name__}") from exc
+    if len(audio) < 1000:
+        raise GrokUnavailable("xAI TTS returned no audio")
+    mp3 = Path(str(dest) + ".mp3")
+    mp3.write_bytes(audio)
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(mp3), "-ar", "24000", "-ac", "1", str(dest)], check=True)
+    mp3.unlink()
+    if cache:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_bytes(Path(dest).read_bytes())
+    return dest
 
 
 def _silence(dest, seconds, rate=24000):
@@ -47,8 +106,25 @@ def speak_segments(texts, dest, kind, dry_run=False, key_prefix="realchart"):
     dest = Path(dest)
     parts_dir = dest.parent / "voice_parts"
     parts_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        return _speak_all(texts, dest, kind, dry_run, key_prefix, parts_dir, "dry" if dry_run else "gemini")
+    except Exception as exc:  # noqa: BLE001
+        import gemini_voice
+        if dry_run or not isinstance(exc, gemini_voice.GeminiFallback):
+            raise
+        # Gemini out (quota/outage): the WHOLE Reel in one fallback voice, never mixed.
+        print(f"[voice] Gemini unavailable ({str(exc)[:80]}); trying Grok TTS ({GROK_VOICE})", flush=True)
+        try:
+            return _speak_all(texts, dest, kind, dry_run, key_prefix, parts_dir, "grok")
+        except GrokUnavailable as grok:
+            raise gemini_voice.GeminiFallback(f"{exc}; grok: {grok}") from grok
+
+
+def _speak_all(texts, dest, kind, dry_run, key_prefix, parts_dir, engine):
+    dest = Path(dest)
+    import hashlib
+    import subprocess
     parts, seconds, requests = [], [], 0
-    engine = "dry" if dry_run else "gemini"
     for index, text in enumerate(texts):
         part = parts_dir / f"{index:02d}.wav"
         digest = hashlib.sha1(str(text).encode("utf-8")).hexdigest()[:10]
@@ -58,7 +134,7 @@ def speak_segments(texts, dest, kind, dry_run=False, key_prefix="realchart"):
             from realchart.script import estimate_seconds
             _silence(part, max(0.8, estimate_seconds(str(text))))
         else:
-            info = speak(str(text), part, kind, cache_key=f"{key_prefix}-seg{index}-{digest}")
+            info = speak(str(text), part, kind, cache_key=f"{key_prefix}-seg{index}-{digest}", engine=engine)
             requests += info.get("requests", 0)
         parts.append(part)
         seconds.append(_clip_seconds(part) + SEGMENT_GAP_SEC)

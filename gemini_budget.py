@@ -25,12 +25,8 @@ BUFFER_CAP = 3
 REEL_CALLERS = ("realchart", "news", "close", "ta", "recap")
 CALLERS = ("realchart", "nifty", "buffer", "other", "news", "close", "ta", "recap")
 # Slot id, then the env var. Later slots are used only when present.
-KEY_ENV = (
-    ("1", "GEMINI_API_KEY"),
-    ("2", "GEMINI_API_KEY_2"),
-    ("3", "GEMINI_API_KEY_3"),
-    ("4", "GEMINI_API_KEY_4"),
-)
+# Slots 1-9: GEMINI_API_KEY, GEMINI_API_KEY_2 ... _9 (env, or gemini_api_key_N in GEMINI_SECRETS_DIR).
+KEY_ENV = (("1", "GEMINI_API_KEY"),) + tuple((str(n), f"GEMINI_API_KEY_{n}") for n in range(2, 10))
 KEY_IDS = tuple(slot for slot, _name in KEY_ENV)
 ROOT = Path(__file__).resolve().parent
 DEFAULT_PATH = ROOT / "data" / "gemini_budget.json"

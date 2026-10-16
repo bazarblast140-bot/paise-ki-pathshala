@@ -43,7 +43,7 @@ def check(out, rows, levels, voice_engine, dry_run=False, capture_dates=None, ex
             faults.append(f"codec {info.get('codec') or 'missing'}")
     if voice_engine == "edge" or voice_engine == "elevenlabs":
         faults.append(f"voice_engine={voice_engine}")
-    if not dry_run and voice_engine != "gemini":
+    if not dry_run and voice_engine not in ("gemini", "grok"):
         faults.append(f"voice_engine={voice_engine}")
     from realchart.script import lint, number_faults
     faults.extend(lint(rows))
