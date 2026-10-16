@@ -275,6 +275,8 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
         levels["setup"] = "weekly recap" if kind == "recap" else "close"
     items = articles if articles is not None else _load_feeds()
     aliases = [levels["symbol"].split(":")[-1], "nifty", "sensex", "market"]
+    # Stock-tip / buy-sell pick stories are advice, never the news beat.
+    items = [item for item in items or [] if not TIPS.search(str((item or {}).get("title") or ""))]
     article = choose(items, now, aliases)
     if kind != "news" and article and not about_indian_market(article):
         # A close/TA Reel only carries Nifty/Indian-market news (15-Oct: a Bank of
@@ -352,7 +354,12 @@ INDIA_MARKET = re.compile(
 def about_indian_market(article):
     """Title or summary (not the URL) names Nifty, Sensex or the Indian market."""
     blob = " ".join(str(article.get(key) or "") for key in ("title", "summary", "key_sentence"))
+    if TIPS.search(str(article.get("title") or "")):
+        return False  # stock-tip / buy-sell picks are advice, not market news
     return bool(INDIA_MARKET.search(blob))
+
+
+TIPS = re.compile(r"recommends|stocks? to (buy|sell)|stock picks|top picks|buy or sell|buy,? sell|trade setup|stocks? for \d", re.I)
 
 
 def _series_next(kind):
