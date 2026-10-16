@@ -138,7 +138,59 @@ def chunks_for(kind, levels, article=None):
     return rows
 
 
+NEWS_SERIES = "Market News Today"
+
+
+def _stamp(value):
+    from realchart.fmt import stamp
+    return stamp(value)
+
+
+def _news_rows(levels, article):
+    """News Reel (SKILL.md section 8): a real Nifty number in the hook, a short Hindi summary
+    of the article (never the English headline read out), today's real key levels, a comment
+    question on a real level. One row = one voice clip = one card group."""
+    hindi = article.get("hindi") or {}
+    points = list(hindi.get("points") or [])
+    close = round(float(levels.get("close") or 0))
+    prev = levels.get("prev_close")
+    chg = float(levels.get("chg_pct") or 0)
+    side = "ऊपर" if chg >= 0 else "नीचे"
+    move = (f"{round(abs(float(levels['close']) - float(prev)))} अंक {side}" if prev is not None
+            else f"{round(abs(chg))} प्रतिशत {side}")
+    nxt = next_pivot(levels)
+    if nxt is not None:
+        levels["next_pivot"] = nxt
+        levels["next_r1"] = 2 * nxt - float(levels["low"])
+        levels["next_s1"] = 2 * nxt - float(levels["high"])
+    source = str(article.get("source") or "").replace("www.", "")
+    rows = [
+        {"sec": "hook", "start": 0.0, "end": 3.0,
+         "d": f"Nifty {chg:+.2f}% · {_fmt(levels.get('close'))}",
+         "t": f"निफ्टी कल {move}, {close} पर बंद। आज की बड़ी खबर क्या है?", "k": "Nifty"},
+        {"sec": "news", "skip_numbers": True,
+         "d": " · ".join(x for x in (str(article.get("title") or ""), str(article.get("summary") or article.get("key_sentence") or "")[:240],
+                                     source, _stamp(article.get("published"))) if x),
+         "t": str(hindi.get("lead") or "").strip(), "k": source or "खबर"},
+        {"sec": "points", "d": " · ".join(points), "skip_numbers": True,
+         "t": " ".join(points), "k": "points"},
+    ]
+    if nxt is not None:
+        ema = (f" 20 EMA {round(float(levels['ema20']))} पर है।" if levels.get("ema20") is not None else "")
+        rows.append({
+            "sec": "chart", "k": "levels",
+            "d": f"Pivot {_fmt(nxt)} · High {_fmt(levels.get('high'))} · Low {_fmt(levels.get('low'))}",
+            "t": (f"Nifty के लिए आज का key लेवल {round(nxt)}, pivot। कल हाई {round(float(levels['high']))}, "
+                  f"लो {round(float(levels['low']))} रहा।{ema}"),
+        })
+    question = (f"आज Nifty {round(nxt)} के ऊपर टिकेगा या नहीं? Comment करो।" if nxt is not None else CTA)
+    rows.append({"sec": "cta", "d": f"{question} {DISCLAIMER}", "t": f"{question} {DISCLAIMER}", "k": "comment"})
+    return rows
+
+
 def _chunks_for(kind, levels, article=None):
+    if kind == "news" and article and article.get("hindi"):
+        return _news_rows(levels, article)
     close = _fmt(levels.get("close"))
     chg = float(levels.get("chg_pct") or 0)
     side = "ऊपर" if chg >= 0 else "नीचे"
@@ -370,6 +422,11 @@ FOLLOW_LINE = "Roz 4 baje Nifty analysis ke liye follow karo"
 
 def end_card_lines(kind, levels):
     """Extra end-card lines: tomorrow's real key level, the daily follow promise, sign-off."""
+    if kind == "news":
+        from realchart.fmt import inr
+        key = levels.get("next_pivot")
+        lines = [f"Aaj ka key level: {inr(key, 0)} (Pivot)"] if key is not None else []
+        return lines + ["Roz subah market news ke liye follow karo", "4 baje milte hain: Nifty Close Report"]
     if kind != "close":
         return []
     key = levels.get("next_pivot") or next_pivot(levels)
@@ -407,4 +464,30 @@ def post_meta(levels):
         "hashtags": ["#NiftyPrediction", "#NiftyAnalysisToday", "#StockMarketHindi", "#Nifty50", "#NiftyCloseReport"],
         "pinned_comment": pinned,
         "series": SERIES,
+    }
+
+
+def news_post_meta(levels, article):
+    """Keyword-first title and post text for the news Reel."""
+    from datetime import datetime, timedelta, timezone
+    from realchart.fmt import inr
+    today = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).date()
+    day_text = f"{today.day} {today.strftime('%b %Y')}"
+    head = str(article.get("title") or "").strip()
+    prefix = f"Stock market news today | {day_text} | "
+    room = 100 - len(prefix)
+    if len(head) > room:
+        head = head[:room].rsplit(" ", 1)[0].rstrip(" ,:-") + "…"
+    hindi = article.get("hindi") or {}
+    key = levels.get("next_pivot")
+    caption = (f"Stock market news today Hindi ({day_text}): {hindi.get('lead') or ''} "
+               f"Source: {article.get('source') or ''}. "
+               + (f"Nifty ka aaj key level {inr(key, 0)} (pivot). " if key is not None else "")
+               + "Educational only, not advice.")
+    return {
+        "title": prefix + head,
+        "caption": caption,
+        "hashtags": ["#StockMarketNews", "#ShareMarketNewsToday", "#StockMarketHindi", "#Nifty50", "#MarketNews"],
+        "pinned_comment": (f"आज Nifty {inr(key, 0)} के ऊपर टिकेगा या नहीं? आपका view comment करो 👇" if key else ""),
+        "series": NEWS_SERIES,
     }

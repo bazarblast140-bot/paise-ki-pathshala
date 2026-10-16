@@ -109,6 +109,12 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             chart_opener=chart_opener, article_opener=article_opener, dry_run=dry_run,
             bars_intraday=bars_intraday, chain_for=chain_for,
         )
+        if kind == "news" and article:
+            from realchart.summarize import SummaryRefused, hindi_summary
+            try:
+                article["hindi"] = hindi_summary(article, dry_run=dry_run)
+            except SummaryRefused as exc:
+                raise Hold("news", f"Hindi summary refused: {exc}") from exc
         levels["series_n"] = _series_next(kind)
         rows = script.chunks_for(kind, levels, article)
         faults = script.lint(rows) + script.number_faults(rows, levels)
@@ -134,6 +140,10 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             raise Hold("voice", f"narration is {spoken:.1f}s, over the 50s limit")
         length = max(40.0, spoken)
         beats[-1] += length - spoken  # a short read holds the CTA card over the silent tail
+        card_faults = []
+        for row, sec_len in zip(rows, beats):
+            if kind == "news" and row.get("sec") == "news" and sec_len > 6.0:
+                card_faults.append(f"article card on screen {sec_len:.1f}s (max 6s)")
         pics, beats = _with_variants(pics, beats, out / "variants.json")
         assemble(pics, out / "voice.wav", out / "final.mp4", seconds=length, durations=beats)
         from realchart.ends import FOLLOW_PKP, FOLLOW_RTT, attach, render_end_card
@@ -158,7 +168,8 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             capture_dates=capture_dates, expected_date=(levels.get("last_date") if kind == "news" else session.isoformat()),
         )
         qa_faults.extend(_ta_faults(out, kind, chart, intraday, dry_run=dry_run))
-        _write_post_meta(out, kind, levels, rows)
+        qa_faults.extend(card_faults)
+        _write_post_meta(out, kind, levels, rows, article)
         verdict = "DRY-OK" if dry_run and not qa_faults else ("PASS" if not qa_faults else "HOLD")
         report = {
             "verdict": verdict,
@@ -445,10 +456,13 @@ def _ta_faults(out, kind, chart, intraday, dry_run=False):
     return faults
 
 
-def _write_post_meta(out, kind, levels, rows):
-    if kind != "close":
+def _write_post_meta(out, kind, levels, rows, article=None):
+    if kind == "news" and article:
+        meta = script.news_post_meta(levels, article)
+    elif kind == "close":
+        meta = script.post_meta(levels)
+    else:
         return
-    meta = script.post_meta(levels)
     (Path(out) / "post_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -498,7 +512,12 @@ def _apply_technicals(levels, chart):
 
 
 def _write_sources(out, kind, levels, article, chart, rows, voice, now, intraday=None):
-    title = script.post_meta(levels)["title"] if kind == "close" else rows[0]["d"]
+    if kind == "close":
+        title = script.post_meta(levels)["title"]
+    elif kind == "news" and article and article.get("hindi"):
+        title = script.news_post_meta(levels, article)["title"]
+    else:
+        title = rows[0]["d"]
     cta_row = next((row for row in rows if row.get("sec") == "cta"), None)
     cta = str((cta_row or {}).get("t") or script.CTA).replace(script.DISCLAIMER, "").strip()
     body = "\n".join(row["d"] for row in rows if row.get("sec") != "key")

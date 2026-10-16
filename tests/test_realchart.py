@@ -580,7 +580,7 @@ class BuildTests(unittest.TestCase):
             self.assertIsNone(qa["rr"])
             self.assertEqual(qa["voice"], "dry")
             rows = json.loads((out / "script.json").read_text(encoding="utf-8"))
-            self.assertEqual([row["sec"] for row in rows], ["hook", "chart", "news", "cta"])
+            self.assertEqual([row["sec"] for row in rows], ["hook", "news", "points", "chart", "cta"])
             shown = " ".join(row["d"] for row in rows)
             self.assertIn("The index closed lower", shown)
             self.assertIn("livemint.com", shown)
@@ -588,7 +588,7 @@ class BuildTests(unittest.TestCase):
             for token in (" SL ", " target ", " R1 ", " S1 "):
                 self.assertNotIn(token, shown)
             names = [path.name for path in (out / "cards").iterdir() if path.suffix == ".png"]
-            self.assertEqual(sorted(names), ["chart.png", "cta.png", "hook.png", "news.png"])
+            self.assertEqual(sorted(names), ["chart.png", "cta.png", "hook.png", "news.png", "points.png"])
             self.assertNotIn("view.png", names)
 
     def test_dry_run_renders_without_gemini_and_reports_the_fallback_chart(self):
@@ -1044,7 +1044,9 @@ class NewsLengthTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "run"
             with mock.patch.dict(os.environ, {"REALCHART_NO_ALERT": "1"}), \
-                 mock.patch("realchart.voice.speak", side_effect=AssertionError("no voice")):
+                 mock.patch("realchart.voice.speak", side_effect=AssertionError("no voice")), \
+                 mock.patch("realchart.summarize.CACHE", Path(tmp) / "cache"), \
+                 mock.patch("realchart.summarize._ask", side_effect=__import__("realchart.summarize", fromlist=["x"]).SummaryRefused("offline")):
                 code = run(
                     "news", out, now=now, dry_run=False,
                     bars_for=lambda _t: (_bars(), _stamp(now.date())), articles=[article],
@@ -1052,4 +1054,4 @@ class NewsLengthTests(unittest.TestCase):
                 )
             self.assertNotEqual(code, 0)
             self.assertTrue((out / "HOLD").exists())
-            self.assertIn("40s floor", (out / "HOLD").read_text(encoding="utf-8"))
+            self.assertIn("Hindi summary refused", (out / "HOLD").read_text(encoding="utf-8"))
