@@ -247,7 +247,9 @@ jobs:
       - name: Facebook Reel
         if: ${{ !cancelled() && (inputs.post_fb == 'true' || inputs.fb_only == 'true') }}
         env:
+          FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN || secrets.IG_ACCESS_TOKEN }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          FB_PAGE_ID: ${{ vars.FB_PAGE_ID }}
           FB_PAGE_NAME: ${{ vars.FB_PAGE_NAME || 'Rajesh Technical Trader' }}
         run: python publish_facebook.py
       - name: Commit the ledger fill

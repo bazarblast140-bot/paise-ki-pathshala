@@ -19,6 +19,7 @@ from pathlib import Path
 RUN = Path(os.environ.get("RUN_DIR", "run"))
 VERSION = os.environ.get("FB_API_VERSION", "v23.0")
 GRAPH = f"https://graph.facebook.com/{VERSION}"
+PAGE = "me"
 
 
 def call(method, url, params=None, data=None, headers=None, timeout=120):
@@ -56,7 +57,7 @@ def video_path():
 
 
 def already_posted(title):
-    data = call("GET", f"{GRAPH}/me/video_reels", {"fields": "id,description,created_time,permalink_url", "limit": "25"})
+    data = call("GET", f"{GRAPH}/{PAGE}/video_reels", {"fields": "id,description,created_time,permalink_url", "limit": "25"})
     for item in data.get("data") or []:
         if title and title in str(item.get("description") or ""):
             return item
@@ -68,13 +69,20 @@ def main():
     if not token:
         print("[fb] no page token (FB_ACCESS_TOKEN / IG_ACCESS_TOKEN); Facebook Reel not posted")
         return 2
-    want = os.environ.get("FB_PAGE_NAME", "Rajesh Technical Trader")
+    want = os.environ.get("FB_PAGE_NAME", "Rajesh Technical Trader").strip()
+    want_id = os.environ.get("FB_PAGE_ID", "").strip()
     page = call("GET", f"{GRAPH}/me", {"fields": "id,name"})
     name = str(page.get("name") or "")
     print(f"[fb] token page: {name or '(no name)'} ({page.get('id')})")
-    if want.lower() not in name.lower():
+    page_id = str(page.get("id") or "")
+    if want_id and page_id != want_id:
+        print(f"[fb] refused: the token's Page id is {page_id}, not FB_PAGE_ID {want_id}; Facebook Reel not posted")
+        return 2
+    if want.casefold() not in name.casefold():
         print(f"[fb] refused: the token's Page is {name!r}, not {want!r}; Facebook Reel not posted")
         return 2
+    global PAGE
+    PAGE = want_id or page_id or "me"
     title, text = caption()
     existing = already_posted(title)
     if existing:
@@ -84,7 +92,7 @@ def main():
     if os.environ.get("FB_DRY") == "1":
         print(f"[fb] dry: would post {path} ({path.stat().st_size} bytes) titled {title!r}")
         return 0
-    start = call("POST", f"{GRAPH}/me/video_reels", {"upload_phase": "start"})
+    start = call("POST", f"{GRAPH}/{PAGE}/video_reels", {"upload_phase": "start"})
     video_id = start["video_id"]
     blob = path.read_bytes()
     up = call("POST", f"https://rupload.facebook.com/video-upload/{VERSION}/{video_id}", data=blob, headers={
@@ -92,7 +100,7 @@ def main():
     }, timeout=600)
     if not up.get("success"):
         raise RuntimeError(f"upload not accepted: {up}")
-    call("POST", f"{GRAPH}/me/video_reels", {"upload_phase": "finish", "video_id": video_id,
+    call("POST", f"{GRAPH}/{PAGE}/video_reels", {"upload_phase": "finish", "video_id": video_id,
                                               "video_state": "PUBLISHED", "description": text})
     link = ""
     for _ in range(40):
