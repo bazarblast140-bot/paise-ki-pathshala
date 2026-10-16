@@ -1090,7 +1090,9 @@ def default_preview_runner(topic_key):
     env["PUBLISH_VISIBILITY"] = "public"
     env["AUTOMATIC_UPLOAD"] = "0"
     env["TOPIC_KEY"] = topic_key
-    env["DEEPSEEK_MAX_CALLS"] = str(__import__("credit_log").DEFAULT_DEEPSEEK_CALLS)
+    env["DEEPSEEK_MAX_CALLS"] = (
+        os.environ.get("DEEPSEEK_MAX_CALLS") or str(REFILL_DEEPSEEK_CALLS)
+    )
     env["BUFFER_FILL"] = "0"
     env["ELEVENLABS_OPT_IN"] = "0"
     env.pop("PIPELINE_MODE", None)
@@ -1112,6 +1114,29 @@ def _voice_engine(run_dir):
     return str(meta.get("engine") or "").strip().lower()
 
 
+# A topic whose narration fails the hook/teaching gate is skipped and the
+# next eligible topic is built in the same run, at most this many topics.
+REFILL_TOPIC_TRIES = 2
+# DeepSeek calls per refill topic: the 6-call narration loop plus the 2
+# gate regenerations in board_short.narration.
+REFILL_DEEPSEEK_CALLS = 8
+
+
+def narration_gate_blocked(run_dir):
+    """True when the build stopped on the LLM hook/teaching gate."""
+    data = _load_json(Path(run_dir) / "narration_block.json") or {}
+    return bool(data.get("blocked")) and "hook/teaching gate" in str(data.get("reason") or "")
+
+
+def _clear_narration_state(run_dir):
+    """A new topic starts without the previous topic's block or draft."""
+    for name in ("narration_block.json", "narration.json"):
+        try:
+            (Path(run_dir) / name).unlink()
+        except OSError:
+            pass
+
+
 def refill(*, runner=None, store=None, now=None, manifest_path=None):
     """Build at most one evergreen Short when fewer than 3 are ready.
 
@@ -1127,19 +1152,26 @@ def refill(*, runner=None, store=None, now=None, manifest_path=None):
             print(f"[buffer] {ready} ready; refill not needed", flush=True)
             return 0
         entries = slot_guard._read()
-        topic = next_evergreen(_load_bank(), entries, manifest)
-        if topic is None:
-            print("[buffer] no unused evergreen topic left", flush=True)
-            return 1
-        print(f"[buffer] building {topic.get('key')} (ready {ready}/{TARGET_READY})", flush=True)
-        os.environ["DEEPSEEK_MAX_CALLS"] = str(credit_log.DEFAULT_DEEPSEEK_CALLS)
         runner = runner or default_preview_runner
-        rc = runner(topic["key"])
-        if rc != 0:
+        rc = 1
+        for attempt in range(REFILL_TOPIC_TRIES):
+            topic = next_evergreen(_load_bank(), entries, manifest)
+            if topic is None:
+                print("[buffer] no unused evergreen topic left", flush=True)
+                return 1
+            print(f"[buffer] building {topic.get('key')} (ready {ready}/{TARGET_READY})", flush=True)
+            _clear_narration_state(RUN)
+            used = int((credit_log._read() or {}).get("deepseek_calls") or 0)
+            os.environ["DEEPSEEK_MAX_CALLS"] = str(used + REFILL_DEEPSEEK_CALLS)
+            rc = runner(topic["key"])
+            if rc == 0:
+                break
             remember_skip(manifest, topic.get("key"))
             save_manifest(manifest, manifest_path)
             print(f"[buffer] build failed rc={rc}; nothing stored; skip {topic.get('key')}", flush=True)
-            return 1
+            if not narration_gate_blocked(RUN) or attempt + 1 >= REFILL_TOPIC_TRIES:
+                return 1
+            print("[buffer] narration gate failed; trying the next eligible topic", flush=True)
         preview_gates = evaluate_gates(RUN, topic, now=now)
         if not gates_pass(preview_gates):
             failed = [name for name in _GATE_NAMES if not preview_gates[name]["passed"]]

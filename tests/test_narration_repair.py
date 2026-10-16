@@ -207,11 +207,18 @@ class RepairLoopTests(unittest.TestCase):
     def test_a_four_beat_script_gets_four_repairs_and_no_more(self):
         bad = _script(hook=41)
         still = _script(hook=40)
-        calls, result, block = self._run([bad, still, still, still, still, _script()])
+        with mock.patch.object(board_short, "NARRATION_GATE_REGENS", 0):
+            calls, result, block = self._run([bad, still, still, still, still, _script()])
         self.assertIsInstance(result, SystemExit)
         self.assertEqual(len(calls), 5)
         self.assertIn("REWRITE hook: current 41 words, target exactly 22 words", calls[1]["user"])
         self.assertIn("topic-card", block["reason"])
+        # After the four repairs, a full regeneration is told the gate reasons.
+        calls, result, block = self._run([bad, still, still, still, still, _script()])
+        self.assertEqual(len(calls), 6)
+        self.assertNotIn("REWRITE", calls[5]["user"])
+        self.assertIn("Gate reasons, verbatim: hook beat 40 words", calls[5]["user"])
+        self.assertIsNone(block)
 
     def test_the_second_repair_can_land_the_script(self):
         calls, result, block = self._run([_script(hook=41), _script(hook=40), _script()])
