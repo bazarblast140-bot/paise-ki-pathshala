@@ -188,9 +188,60 @@ def _news_rows(levels, article):
     return rows
 
 
+PATTERN_HI = {
+    "support bounce": "सपोर्ट से बाउंस",
+    "breakout": "20 दिन का ब्रेकआउट",
+    "resistance rejection": "रेजिस्टेंस से रिजेक्शन",
+}
+TA_SERIES = "Aaj Ka Stock TA"
+
+
+def _ta_rows(levels):
+    """Evening TA Reel (Rajesh, 16-Oct-2026): ONE stock. Pattern, support, resistance and the
+    full plan (valid zone, entry trigger, SL, target with RR >= 1.5, invalidation). Spoken
+    numbers are whole; the hook is the stock's real close and move in the first 1-2 s."""
+    plan = levels.get("plan") or {}
+    name = str(levels.get("symbol") or "").split(":")[-1]
+    w = lambda v: round(float(v))  # noqa: E731
+    chg = float(levels.get("chg_pct") or 0)
+    side = "ऊपर" if chg >= 0 else "नीचे"
+    pattern = PATTERN_HI.get(plan.get("pattern"), str(plan.get("pattern") or ""))
+    long = plan.get("side") == "long"
+    zone = plan.get("zone") or [None, None]
+    rr = float(plan.get("rr") or 0)
+    entry_word = "ऊपर" if long else "नीचे"
+    sl_word = "नीचे" if long else "ऊपर"
+    prev = levels.get("prev_close")
+    move = (f"{w(abs(float(levels['close']) - float(prev)))} रुपये {side}" if prev is not None
+            else f"{w(abs(chg))} प्रतिशत {side}")
+    rows = [
+        {"sec": "hook", "start": 0.0, "end": 3.0,
+         "d": f"{name} {_fmt(levels.get('close'))} ({chg:+.2f}%) · {plan.get('pattern')}",
+         "t": f"{name} {w(levels['close'])} पर, आज {move}! प्लान end तक देखो।", "k": name},
+        {"sec": "chart", "k": "pattern",
+         "d": f"Pattern: {plan.get('pattern')} · Support {_fmt(levels.get('support'))} · Resistance {_fmt(levels.get('resistance'))}",
+         "t": (f"डेली चार्ट पर {pattern}। सपोर्ट {w(levels['support'])}, "
+               f"रेजिस्टेंस {w(levels['resistance'])}। यह लेवल पहले भी कई बार टेस्ट हुआ है।")},
+        {"sec": "intraday", "k": "zone",
+         "d": f"Valid zone {_fmt(zone[0])}–{_fmt(zone[1])} · Entry trigger {_fmt(plan.get('entry'))}",
+         "t": (f"वैलिड ज़ोन {w(zone[0])} से {w(zone[1])}। एंट्री ट्रिगर: डेली कैंडल "
+               f"{w(plan['entry'])} के {entry_word} बंद हो। {SAVE_CTA}")},
+        {"sec": "view", "k": "plan",
+         "d": (f"SL {_fmt(plan.get('stop'))} · Target {_fmt(plan.get('target'))} · RR {rr:.1f} · "
+               f"Invalidation: close {sl_word} {_fmt(plan.get('invalidation'))}"),
+         "t": (f"स्टॉप लॉस {w(plan['stop'])}, टारगेट {w(plan['target'])}, रिस्क रिवॉर्ड लगभग {w(rr) if rr >= 2 else 'डेढ़'} गुना। "
+               f"डेली क्लोज़ {w(plan['invalidation'])} के {sl_word} गया तो सेटअप खत्म। यह एक scenario है।")},
+    ]
+    question = f"{name} {w(plan['entry'])} {'पार करेगा' if long else 'तोड़ेगा'} या नहीं? Comment करो।"
+    rows.append({"sec": "cta", "d": f"{question} {DISCLAIMER}", "t": f"{question} {DISCLAIMER}", "k": "comment"})
+    return rows
+
+
 def _chunks_for(kind, levels, article=None):
     if kind == "news" and article and article.get("hindi"):
         return _news_rows(levels, article)
+    if kind == "ta" and levels.get("plan"):
+        return _ta_rows(levels)
     close = _fmt(levels.get("close"))
     chg = float(levels.get("chg_pct") or 0)
     side = "ऊपर" if chg >= 0 else "नीचे"
@@ -398,10 +449,11 @@ def number_faults(rows, levels):
         "open", "high", "low", "close", "prev_close", "ema20", "ema50", "rsi14", "atr14",
         "support", "bounce_high", "next_support", "pivot", "r1", "s1", "r2", "s2", "next_pivot", "next_r1", "next_s1",
         "call_oi", "call_oi_next", "put_oi", "put_oi_next",
+        "resistance", "entry", "stop", "target", "rr",
     ):
         if levels.get(key) is not None:
             allowed.append(float(levels[key]))
-    for zone in (levels.get("sl_zone") or [], levels.get("target_zone") or []):
+    for zone in (levels.get("sl_zone") or [], levels.get("target_zone") or [], levels.get("valid_zone") or []):
         for item in zone:
             if item is not None:
                 allowed.append(float(item))
@@ -427,6 +479,12 @@ def end_card_lines(kind, levels):
         key = levels.get("next_pivot")
         lines = [f"Aaj ka key level: {inr(key, 0)} (Pivot)"] if key is not None else []
         return lines + ["Roz subah market news ke liye follow karo", "4 baje milte hain: Nifty Close Report"]
+    if kind == "ta":
+        from realchart.fmt import inr
+        plan = levels.get("plan") or {}
+        name = str(levels.get("symbol") or "").split(":")[-1]
+        lines = [f"{name}: entry {inr(plan.get('entry'), 0)} · SL {inr(plan.get('stop'), 0)} · target {inr(plan.get('target'), 0)}"] if plan else []
+        return lines + ["Roz shaam ek stock ka TA ke liye follow karo", "Kal milte hain"]
     if kind != "close":
         return []
     key = levels.get("next_pivot") or next_pivot(levels)

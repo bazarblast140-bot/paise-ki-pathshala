@@ -9,7 +9,7 @@ from pathlib import Path
 
 import nifty_day
 from realchart import capture, script
-from realchart.levels import UNIVERSE, compute, pick_setup
+from realchart.levels import STOCK_UNIVERSE, apply_stock_plan, compute, pick_stock
 from realchart.news import FEEDS, choose, parse_rss
 from realchart.session import close_matches, dry_session, expected_session, now_ist, started
 
@@ -256,40 +256,58 @@ def _download_intraday(ticker, session, interval):
 
 def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener=None, article_opener=None, dry_run=False, bars_intraday=None, chain_for=None):
     symbol, ticker = ("NSE:NIFTY", "^NSEI")
+    rest = (kind, session, now, out, articles, chart_opener, article_opener, dry_run, bars_intraday, chain_for)
     if kind == "ta":
+        # ONE liquid NSE stock a day, never Nifty (the 4 PM close Reel has Nifty).
+        # Try candidates until one has a clear real pattern at support/resistance
+        # with an RR >= 1.5 plan AND a verified TradingView capture of today.
         candidates = []
-        for name, yf in UNIVERSE:
+        for name, yf in STOCK_UNIVERSE:
             rows, stamp = (bars_for(yf) if bars_for else _bars_from_yahoo(yf))
             rows, stamp = _on_session(rows, stamp, session, now, dry_run)
-            if not rows or len(rows) < 20 or stamp is None:
+            if not rows or len(rows) < 30 or stamp is None:
                 continue
-            levels = compute(rows, name, yf)
-            candidates.append(levels)
+            candidates.append(compute(rows, name, yf))
         if not candidates:
             raise Hold("session", f"Yahoo close is not {session}")
-        picked = pick_setup(candidates, _history(), now.date())
-        if picked is None:
-            raise Hold("scan", "no fresh setup in the last five days")
-        levels = picked
-    else:
-        rows, stamp = (bars_for(ticker) if bars_for else _bars_from_yahoo(ticker))
-        if kind in ("close", "ta", "recap"):
-            rows, stamp = _on_session(rows, stamp, session, now, dry_run)
-            if not rows or not close_matches(stamp, session, now):
-                raise Hold("session", f"Yahoo close is not {session}")
-        if not rows or len(rows) < 20:
-            raise Hold("data", "Nifty bars missing")
-        levels = compute(rows, symbol, ticker)
-        if kind == "recap" and len(rows) > 5:
-            week = float(rows[-6]["c"])
-            levels["week_ago"] = week
-            levels["chg_pct"] = 100.0 * (levels["close"] / week - 1.0) if week else levels["chg_pct"]
-        levels["setup"] = "weekly recap" if kind == "recap" else "close"
+        ranked = pick_stock(candidates, _history(), now.date())
+        if not ranked:
+            raise Hold("scan", "no stock with a clear pattern at support/resistance and RR >= 1.5")
+        tried = []
+        for levels, plan in ranked[:8]:
+            levels = apply_stock_plan(dict(levels), plan)
+            try:
+                return _prepare_rest(levels, *rest)
+            except Hold as exc:
+                tried.append(f"{levels['symbol']}: {exc}")
+                print(f"[ta] skip {levels['symbol']}: {exc}", flush=True)
+        raise Hold("scan", "no candidate passed capture: " + "; ".join(tried))
+    rows, stamp = (bars_for(ticker) if bars_for else _bars_from_yahoo(ticker))
+    if kind in ("close", "recap"):
+        rows, stamp = _on_session(rows, stamp, session, now, dry_run)
+        if not rows or not close_matches(stamp, session, now):
+            raise Hold("session", f"Yahoo close is not {session}")
+    if not rows or len(rows) < 20:
+        raise Hold("data", "Nifty bars missing")
+    levels = compute(rows, symbol, ticker)
+    if kind == "recap" and len(rows) > 5:
+        week = float(rows[-6]["c"])
+        levels["week_ago"] = week
+        levels["chg_pct"] = 100.0 * (levels["close"] / week - 1.0) if week else levels["chg_pct"]
+    levels["setup"] = "weekly recap" if kind == "recap" else "close"
+    return _prepare_rest(levels, *rest)
+
+
+def _prepare_rest(levels, kind, session, now, out, articles, chart_opener, article_opener, dry_run, bars_intraday, chain_for):
     items = articles if articles is not None else _load_feeds()
     aliases = [levels["symbol"].split(":")[-1], "nifty", "sensex", "market"]
+    if kind == "ta":
+        aliases = aliases[:1]  # the stock's own news only
     # Stock-tip / buy-sell pick stories are advice, never the news beat.
     items = [item for item in items or [] if not TIPS.search(str((item or {}).get("title") or ""))]
     article = choose(items, now, aliases)
+    if kind == "ta":
+        article = None  # one stock, one chart, one plan: no news beat
     if kind != "news" and article and not about_indian_market(article):
         # A close/TA Reel only carries Nifty/Indian-market news (15-Oct: a Bank of
         # America story matched "market" in the livemint URL). Otherwise no news beat.
@@ -343,7 +361,8 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
     # Close is a market summary: it still screens and shows the pivot and OI
     # levels, but a reward-to-risk below 1.5 does not hold it (Rajesh, 15-Oct).
     # TA still holds before voice when no level clears 1.5.
-    if kind != "news":
+    if kind not in ("news", "ta"):
+        # TA already carries its daily-structure plan (RR >= 1.5, apply_stock_plan).
         from realchart.levels import apply_screen_levels, fetch_option_chain
         chain = chain_for(levels["symbol"]) if chain_for else fetch_option_chain(levels["symbol"], session)
         if not apply_screen_levels(levels, chain):
@@ -454,7 +473,12 @@ def _ta_faults(out, kind, chart, intraday, dry_run=False):
         axis = json.loads((Path(out) / "axis.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         axis = {}
-    if (intraday or {}).get("source") == "tradingview":
+    if kind == "ta":
+        got = axis.get("daily") or {}
+        drawn = set(got.get("drawn") or [])
+        if not got.get("ok") or not {"SL", "Target"} <= drawn | set(got.get("bands") or []):
+            faults.append(f"daily SL/target lines not drawn ({got.get('reason') or sorted(drawn)})")
+    elif (intraday or {}).get("source") == "tradingview":
         got = axis.get("intraday") or {}
         if not got.get("ok") or not got.get("drawn"):
             faults.append(f"5m level lines not drawn ({got.get('reason') or 'no level on scale'})")

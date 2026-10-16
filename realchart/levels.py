@@ -22,6 +22,19 @@ UNIVERSE = (
 )
 
 
+# The evening TA Reel is ONE liquid NSE stock a day; Nifty has the 4 PM close Reel
+# (Rajesh, 16-Oct-2026). Indices never enter the TA scan.
+STOCK_UNIVERSE = tuple((f"NSE:{name}", f"{name}.NS") for name in (
+    "RELIANCE", "HDFCBANK", "ICICIBANK", "INFY", "TCS", "SBIN", "ITC", "LT", "AXISBANK",
+    "BHARTIARTL", "KOTAKBANK", "BAJFINANCE", "HINDUNILVR", "MARUTI", "SUNPHARMA", "TITAN",
+    "M&M", "NTPC", "POWERGRID", "TATASTEEL", "ULTRACEMCO", "ASIANPAINT", "HCLTECH", "WIPRO",
+    "ONGC", "COALINDIA", "JSWSTEEL", "ADANIPORTS", "BAJAJFINSV", "NESTLEIND", "TECHM",
+    "HINDALCO", "GRASIM", "CIPLA", "DRREDDY", "EICHERMOT", "BAJAJ-AUTO", "HEROMOTOCO",
+    "TRENT", "BEL", "SHRIRAMFIN", "APOLLOHOSP", "TATACONSUM", "INDUSINDBK", "BPCL",
+))
+MIN_RR = 1.5
+
+
 def _ema(values, span):
     alpha = 2.0 / (span + 1.0)
     acc = None
@@ -133,6 +146,18 @@ def _score(levels):
     if abs(low - support) / close < 0.015:
         return "retest", 1
     return "support test", 1
+
+
+def pick_stock(candidates, history, today):
+    """Try candidates (most-tested level first) until one has a clear pattern and RR >= 1.5."""
+    ranked = []
+    for levels in candidates:
+        plan = stock_plan(levels)
+        if plan is None or _repeated(history, levels["symbol"], plan["pattern"], today):
+            continue
+        ranked.append((plan["touches"], -plan["distance_atr"], levels, plan))
+    ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return [(levels, plan) for _t, _d, levels, plan in ranked]
 
 
 def pick_setup(candidates, history, today):
@@ -397,3 +422,118 @@ def apply_screen_levels(levels, chain):
     levels["rr"] = zones["rr"]
     levels["rr_ok"] = True
     return True
+
+
+def _swings(rows, side, span=3):
+    """Confirmed swing lows ("l") or highs ("h"): the extreme of span bars each side."""
+    out = []
+    for i in range(span, len(rows) - span):
+        value = float(rows[i][side])
+        near = [float(row[side]) for row in rows[i - span:i + span + 1]]
+        if (side == "l" and value <= min(near)) or (side == "h" and value >= max(near)):
+            out.append((value, str(rows[i].get("date") or "")))
+    return out
+
+
+def stock_plan(levels, lookback=120):
+    """A clear real pattern at support or resistance and a full plan, or None.
+
+    Patterns (daily bars only, nothing invented):
+      support bounce   - today's low tested a swing-low support and the close held above it;
+      breakout         - today closed above the highest high of the last 20 sessions;
+      resistance rejection - today's high tested a swing-high resistance and closed below it.
+    The plan: valid zone, entry trigger (beyond today's candle), SL beyond the level,
+    target at the next real swing level, invalidation (a daily close beyond SL). RR >= 1.5.
+    """
+    rows = list(levels.get("bars") or [])
+    if len(rows) < 30:
+        return None
+    last = rows[-1]
+    hist = rows[-lookback - 1:-1]
+    close, high, low, opn = (float(last[k]) for k in ("c", "h", "l", "o"))
+    atr = float(levels.get("atr14") or 0) or (high - low)
+    lows = _swings(hist, "l")
+    highs = _swings(hist, "h")
+    buf = 0.25 * atr
+    plans = []
+
+    def build(pattern, side, level, level_date, zone, entry, stop, targets):
+        risk = (entry - stop) if side == "long" else (stop - entry)
+        if risk <= 0:
+            return
+        for target, target_date in targets:
+            reward = (target - entry) if side == "long" else (entry - target)
+            if reward / risk >= MIN_RR:
+                touches = sum(1 for value, _d in (lows + highs) if abs(value - level) <= 0.5 * atr)
+                plans.append({
+                    "touches": touches + (1 if pattern != "breakout" else 0),
+                    "pattern": pattern, "side": side,
+                    "level": level, "level_date": level_date,
+                    "support": level if side == "long" and pattern != "breakout" else None,
+                    "zone": [min(zone), max(zone)], "entry": entry, "stop": stop,
+                    "target": target, "target_date": target_date,
+                    "rr": reward / risk, "invalidation": stop,
+                    "distance_atr": abs(close - level) / atr if atr else 99.0,
+                })
+                return
+
+    # Support bounce: the nearest swing low under the close that today's low touched.
+    under = [item for item in lows if item[0] <= close]
+    if under:
+        level, when = max(under, key=lambda item: item[0])
+        if low <= level + 0.5 * atr and close > level and close >= (high + low) / 2:
+            above = sorted({item for item in highs if item[0] > high}, key=lambda item: item[0])
+            build("support bounce", "long", level, when, (level, level + 0.5 * atr),
+                  high, level - buf, above)
+    # Breakout above the 20-session high: the old high becomes support.
+    box = hist[-20:]
+    top = max(float(row["h"]) for row in box)
+    top_date = str(max(box, key=lambda row: float(row["h"])).get("date") or "")
+    if close > top and close - top <= 1.0 * atr:
+        above = sorted({item for item in highs if item[0] > high}, key=lambda item: item[0])
+        bottom = min(float(row["l"]) for row in box)
+        measured = top + (top - bottom)
+        targets = above + ([(measured, "20-day box height")] if not above or measured > above[-1][0] else [])
+        build("breakout", "long", top, top_date, (top, close), high, top - buf, targets)
+    # Resistance rejection: the nearest swing high above the low that today's high touched.
+    over = [item for item in highs if item[0] >= close]
+    if over:
+        level, when = min(over, key=lambda item: item[0])
+        if high >= level - 0.5 * atr and close < level and close <= (high + low) / 2:
+            below = sorted({item for item in lows if item[0] < low}, key=lambda item: -item[0])
+            build("resistance rejection", "short", level, when, (level - 0.5 * atr, level),
+                  low, level + buf, below)
+    # "Clear" means the level was tested before: two touches or more (today's counts).
+    plans = [plan for plan in plans if plan["touches"] >= 2]
+    if not plans:
+        return None
+    plans.sort(key=lambda plan: (-plan["touches"], plan["distance_atr"]))
+    plan = plans[0]
+    # Opposite real level for the chart: resistance above a long, support below a short.
+    if plan["side"] == "long":
+        plan["resistance"] = plan["target"]
+        plan["support"] = plan["level"]
+    else:
+        plan["resistance"] = plan["level"]
+        plan["support"] = plan["target"]
+    return plan
+
+
+def apply_stock_plan(levels, plan):
+    """Put the plan on the levels the renderer draws: red SL band, green target band."""
+    levels["setup"] = plan["pattern"]
+    levels["plan"] = plan
+    levels["rr"] = plan["rr"]
+    levels["rr_ok"] = plan["rr"] >= MIN_RR
+    levels["support"] = plan["support"]
+    levels["resistance"] = plan["resistance"]
+    levels["entry"] = plan["entry"]
+    levels["stop"] = plan["stop"]
+    levels["target"] = plan["target"]
+    levels["valid_zone"] = list(plan["zone"])
+    width = max(0.1 * float(levels.get("atr14") or 1.0), 0.002 * float(levels["close"]))
+    stop, target = float(plan["stop"]), float(plan["target"])
+    levels["sl_zone"] = [stop - width, stop] if plan["side"] == "long" else [stop, stop + width]
+    levels["target_zone"] = [target, target + width] if plan["side"] == "long" else [target - width, target]
+    levels["levels_chip"] = "Levels: daily swing highs/lows (NSE daily data)"
+    return levels
