@@ -393,6 +393,13 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             footer, section = "Real chart · Real data", ("COMMENT", YELLOW)
             if next_lines:
                 visual, footer = next_lines, f"Source: {src} · 1D · कल के levels"
+        if kind == "ta" and sec in ("intraday", "view") and daily_lines:
+            # One stock, one daily chart: the plan's levels live on the daily scale.
+            visual, chips, card_header = daily_lines, None, header
+            zoom = 1.3 if sec == "intraday" else 1.15
+            footer = f"Source: {src} · 1D · plan levels from daily swings"
+            section = (("PLAN · VALID ZONE + ENTRY", CYAN) if sec == "intraday"
+                       else ("PLAN · SL + TARGET (scenario)", (255, 159, 28)))
         path = out / f"{sec}.png"
         focus = _focus(shot_maps.get(str(visual)), levels)
         five_min = sec in ("intraday", "view") and overlaid and str(visual) == str(overlaid)
@@ -499,7 +506,8 @@ def _focus(mapping, levels):
     """Vertical centre (0-1 of the shot) of the day's high/low and the drawn levels, for zooming."""
     if not mapping:
         return 0.5
-    prices = [levels.get(k) for k in ("high", "low", "close", "r2", "s2")]
+    keys = ("high", "low", "close", "stop", "target") if levels.get("plan") else ("high", "low", "close", "r2", "s2")
+    prices = [levels.get(k) for k in keys]
     ys = [mapping["a"] * float(p) + mapping["b"] for p in prices if p is not None]
     height = mapping.get("height") or 0
     if not ys or not height:
@@ -511,10 +519,10 @@ def _marked(shot_path, mapping, levels, dest_stem):
     """Three stills of a ring + arrow growing onto the pivot chip: the key spot."""
     from PIL import Image
     from realchart import level_lines
-    price = levels.get("pivot")
+    price = levels.get("entry") if levels.get("plan") else levels.get("pivot")
     if not mapping or price is None or not Path(shot_path).is_file():
         return []
-    label = f"P {inr(price, 0)}"
+    label = f"{'Entry' if levels.get('plan') else 'P'} {inr(price, 0)}"
     paths = []
     for step, grow in enumerate((0.55, 0.8, 1.0)):
         with Image.open(shot_path) as opened:
@@ -536,7 +544,7 @@ def _lines_on(shot, levels):
     result = level_lines.draw(shot, levels, mapping)
     mapping = dict(mapping, height=shot.height)
     MAPPINGS[id(shot)] = mapping
-    DRAWN.extend(f"{name} {inr(levels.get(key), 0)}" for name, key, _c, _d in level_lines.SPECS if name in result["drawn"])
+    DRAWN.extend(f"{name} {inr(levels.get(key), 0)}" for name, key, _c, _d in level_lines.specs_for(levels) if name in result["drawn"])
     return {"ok": True, "residual_px": round(mapping["residual"], 2), "ticks": len(mapping["ticks"]), **result}
 
 

@@ -129,8 +129,37 @@ def concat_copy(parts, dest):
     return dest
 
 
-def render_end_card(dest, background=None, name="Rajesh Technical Trader", call="follow करो", seconds=OUTRO_SECONDS, extra=None):
-    """Full-frame end card: the chart blurred behind, the big channel name, a follow button. Silent."""
+BED = ASSETS / "bed" / "bed.wav"
+VOICED_TAIL_SEC = 0.6
+
+
+def end_card_audio(dest, voice_text):
+    """The spoken follow line (Edge) over the music bed, so the end card is never silent.
+    Returns (wav path, seconds) or (None, None) when Edge is unavailable."""
+    from realchart.voice import EdgeUnavailable, edge_speech, wav_seconds
+    dest = Path(dest)
+    line = dest.with_name(dest.stem + "-line.wav")
+    try:
+        edge_speech(voice_text, line)
+    except EdgeUnavailable:
+        return None, None
+    seconds = wav_seconds(line) + VOICED_TAIL_SEC
+    mixed = dest.with_name(dest.stem + "-audio.wav")
+    inputs = ["-i", str(line)]
+    if BED.is_file():
+        inputs += ["-stream_loop", "-1", "-i", str(BED)]
+        graph = (f"[1:a]volume=0.5,afade=t=in:d=0.3,afade=t=out:st={max(0.0, seconds - 0.5):.3f}:d=0.5[bed];"
+                 f"[0:a]apad[v];[v][bed]amix=inputs=2:duration=longest:normalize=0[a]")
+    else:
+        graph = "[0:a]apad[a]"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", graph, "-map", "[a]",
+                    "-t", f"{seconds:.3f}", "-ar", "48000", "-ac", "2", str(mixed)], check=True)
+    return mixed, seconds
+
+
+def render_end_card(dest, background=None, name="Rajesh Technical Trader", call="follow करो", seconds=OUTRO_SECONDS, extra=None, voice_text=None):
+    """Full-frame end card: the chart blurred behind, the big channel name, a follow button.
+    With voice_text the card is as long as the spoken follow line plus music; otherwise silent."""
     from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
     from realchart.fonts import font
     dest = Path(dest)
@@ -193,10 +222,16 @@ def render_end_card(dest, background=None, name="Rajesh Technical Trader", call=
         y += 14
     png = dest.with_suffix(".png")
     image.save(png)
+    audio_in = ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]
+    if voice_text:
+        mixed, voiced = end_card_audio(dest, voice_text)
+        if mixed is not None:
+            seconds = max(seconds, voiced)
+            audio_in = ["-i", str(mixed)]
     try:
         subprocess.run([
             "ffmpeg", "-y", "-v", "error", "-loop", "1", "-i", str(png),
-            "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+            *audio_in,
             "-t", f"{seconds:.3f}", "-vf",
             # Slow push-in (100% -> ~106%) so the card moves the whole time.
             f"scale=1080:1920,zoompan=z='1+0.0013*on':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={round(seconds*30)+30}:s=1080x1920:fps=30,format=yuv420p",

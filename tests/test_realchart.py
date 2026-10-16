@@ -530,7 +530,7 @@ class BuildTests(unittest.TestCase):
                     bars_intraday=_intraday_bars, chain_for=_held_chain,
                 )
             self.assertEqual(code, 2)
-            self.assertIn("RR below 1.5", (out / "HOLD").read_text(encoding="utf-8"))
+            self.assertIn("RR >= 1.5", (out / "HOLD").read_text(encoding="utf-8"))
             self.assertFalse((out / "voice.wav").exists())
             self.assertFalse((out / "final.mp4").exists())
 
@@ -664,8 +664,8 @@ class BuildTests(unittest.TestCase):
         bars = _bars()
         stamp = _stamp(now.date())
         history = [{"symbol": name, "setup": setup, "date": "2026-10-09"}
-                   for name, _yf in __import__("realchart.levels", fromlist=["UNIVERSE"]).UNIVERSE
-                   for setup in ("support test", "breakout", "ema cross", "retest")]
+                   for name, _yf in __import__("realchart.levels", fromlist=["STOCK_UNIVERSE"]).STOCK_UNIVERSE
+                   for setup in ("support bounce", "breakout", "resistance rejection")]
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "run"
             hist = Path(tmp) / "history.json"
@@ -678,7 +678,7 @@ class BuildTests(unittest.TestCase):
                     chart_opener=lambda _s, _d: {"ok": False, "reason": "captcha"},
                 )
             self.assertEqual(code, 2)
-            self.assertIn("no fresh setup", (out / "HOLD").read_text(encoding="utf-8"))
+            self.assertIn("scan:", (out / "HOLD").read_text(encoding="utf-8"))
 
 
 class WorkflowTests(unittest.TestCase):

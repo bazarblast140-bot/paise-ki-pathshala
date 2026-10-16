@@ -20,6 +20,19 @@ SPECS = (
     ("S2", "s2", GREEN, True),
 )
 
+# Evening TA Reel (one stock): the plan's own levels. SL is red, target green.
+TA_SPECS = (
+    ("SL", "stop", RED, False),
+    ("Target", "target", GREEN, False),
+    ("Entry", "entry", YELLOW, True),
+    ("Support", "support", GREEN, True),
+    ("Resistance", "resistance", RED, True),
+)
+
+
+def specs_for(levels):
+    return TA_SPECS if (levels or {}).get("plan") else SPECS
+
 
 def _dashed(draw, x0, x1, y, color, width, dash=26, gap=14):
     x = x0
@@ -55,8 +68,13 @@ def draw(image, levels, mapping, font_size=None):
     font_size = font_size or max(14, round(image.width / 110))
     chip_font = font(font_size)
     line_w = max(3, width // 450)
-    for name, key, color, dashed in SPECS:
+    seen = []
+    for name, key, color, dashed in specs_for(levels):
         price = levels.get(key)
+        if price is not None and any(abs(float(price) - item) < 1e-6 for item in seen):
+            continue  # a short's target is its support: draw it once
+        if price is not None:
+            seen.append(float(price))
         if price is None:
             continue
         y = y_of(mapping, price)

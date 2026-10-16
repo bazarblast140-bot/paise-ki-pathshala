@@ -14,7 +14,8 @@ import tempfile
 from pathlib import Path
 
 MAX_RESIDUAL_PX = 2.0
-LABEL = re.compile(r"^\d{1,3}(,\d{2,3})*\.\d{2}$")
+# Index labels carry 2 decimals (22,980.00); NSE stock labels carry 1 (1,216.3) or none.
+LABEL = re.compile(r"^\d{1,3}(,\d{2,3})*(\.\d{1,2})?$")
 
 
 def fit(ticks, max_residual=MAX_RESIDUAL_PX, min_share=0.6):
@@ -83,7 +84,12 @@ def read_ticks_image(image):
     left = axis_column(image)
     crop = image.crop((left, 0, image.width, int(image.height * 0.97)))
     scale = 2
-    gray = ImageOps.invert(ImageOps.grayscale(crop)).resize((crop.width * scale, crop.height * scale))
+    gray = ImageOps.grayscale(crop)
+    hist = gray.histogram()
+    mean = sum(i * n for i, n in enumerate(hist)) / max(1, sum(hist))
+    if mean < 128:
+        gray = ImageOps.invert(gray)  # dark theme: make the labels dark on light for OCR
+    gray = gray.resize((crop.width * scale, crop.height * scale))
     with tempfile.TemporaryDirectory() as tmp:
         src = Path(tmp) / "axis.png"
         gray.save(src)
