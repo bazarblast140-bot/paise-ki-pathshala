@@ -434,5 +434,20 @@
   "ig_media_id": "18219751360351951",
   "content_hash": "393dec70f5b872c1",
   "title_norm": "nse:nifty \u0915\u094d\u0932\u094b\u091c\u093c 22,997.35"
+ },
+ {
+  "date_ist": "2026-10-16",
+  "slot": "16:59",
+  "video_id": "q1mMDfpeTIM",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "17934205758143411",
+  "content_hash": "ed2dc698a45e07e7",
+  "title_norm": "nifty analysis today | nifty close report #1 16 oct 2026"
  }
 ]
