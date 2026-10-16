@@ -20,7 +20,7 @@ INTRO_LO = 1.0
 INTRO_HI = 2.0
 INTRO_START = 6.6
 INTRO_TAKE = 1.4
-OUTRO_SECONDS = 2.0
+OUTRO_SECONDS = 1.5  # with a slow push-in; no static dead air (Rajesh, 16-Oct)
 
 # Shared with the main Reel so ffmpeg can concat with -c copy.
 ENCODE = [
@@ -197,7 +197,9 @@ def render_end_card(dest, background=None, name="Rajesh Technical Trader", call=
         subprocess.run([
             "ffmpeg", "-y", "-v", "error", "-loop", "1", "-i", str(png),
             "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
-            "-t", f"{seconds:.3f}", "-vf", "scale=1080:1920,fps=30,format=yuv420p",
+            "-t", f"{seconds:.3f}", "-vf",
+            # Slow push-in (100% -> ~106%) so the card moves the whole time.
+            f"scale=1080:1920,zoompan=z='1+0.0013*on':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={round(seconds*30)+30}:s=1080x1920:fps=30,format=yuv420p",
             *ENCODE, "-shortest", str(dest),
         ], check=True)
     finally:

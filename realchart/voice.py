@@ -11,6 +11,9 @@ def speak(text, dest, kind, dry_run=False, cache_key=None, engine="gemini"):
     if dry_run:
         _silence(dest, 45.0)
         return {"engine": "dry", "requests": 0}
+    if engine == "edge":
+        edge_speech(text, dest, cache_key=cache_key)
+        return {"engine": "edge", "requests": 0}
     if engine == "grok":
         grok_speech(text, dest, cache_key=cache_key)
         return {"engine": "grok", "requests": 1}
@@ -28,6 +31,38 @@ GROK_URL = "https://api.x.ai/v1/tts"
 
 class GrokUnavailable(Exception):
     pass
+
+
+EDGE_VOICE = "hi-IN-MadhurNeural"
+
+
+class EdgeUnavailable(Exception):
+    pass
+
+
+def edge_speech(text, dest, cache_key=None):
+    """Microsoft Edge TTS (hi-IN-MadhurNeural, no key) to a 24 kHz mono wav. Raises EdgeUnavailable."""
+    import hashlib
+    import shutil
+    import subprocess
+    import sys
+    dest = Path(dest)
+    cache_dir = Path(__file__).resolve().parents[1] / "data" / "gemini_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha1(f"{EDGE_VOICE}|{text}".encode("utf-8")).hexdigest()[:12]
+    cached = cache_dir / f"edge-{digest}.wav"
+    if not cached.is_file():
+        mp3 = cached.with_suffix(".mp3")
+        try:
+            subprocess.run([sys.executable, "-m", "edge_tts", "--voice", EDGE_VOICE, "--text", str(text), "--write-media", str(mp3)],
+                           check=True, capture_output=True, timeout=90)
+            subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(mp3), "-ar", "24000", "-ac", "1", str(cached)], check=True, timeout=60)
+        except (subprocess.SubprocessError, OSError) as err:
+            raise EdgeUnavailable(str(err)[:200]) from err
+        finally:
+            if mp3.is_file():
+                mp3.unlink()
+    shutil.copyfile(cached, dest)
 
 
 def xai_key():
@@ -117,7 +152,12 @@ def speak_segments(texts, dest, kind, dry_run=False, key_prefix="realchart"):
         try:
             return _speak_all(texts, dest, kind, dry_run, key_prefix, parts_dir, "grok")
         except GrokUnavailable as grok:
-            raise gemini_voice.GeminiFallback(f"{exc}; grok: {grok}") from grok
+            # Last fallback: Edge TTS, again the whole Reel in one voice.
+            print(f"[voice] Grok unavailable ({str(grok)[:80]}); using Edge TTS ({EDGE_VOICE})", flush=True)
+            try:
+                return _speak_all(texts, dest, kind, dry_run, key_prefix, parts_dir, "edge")
+            except EdgeUnavailable as edge:
+                raise gemini_voice.GeminiFallback(f"{exc}; grok: {grok}; edge: {edge}") from edge
 
 
 def _speak_all(texts, dest, kind, dry_run, key_prefix, parts_dir, engine):

@@ -24,8 +24,10 @@ def probe(path):
     }
 
 
-def check(out, rows, levels, voice_engine, dry_run=False, capture_dates=None, expected_date=None):
+def check(out, rows, levels, voice_engine, dry_run=False, capture_dates=None, expected_date=None, article=None):
     faults = []
+    from realchart.video_qa import sentence_faults
+    faults.extend(sentence_faults(article))
     out = Path(out)
     # The 40–50s gate is the main Reel only. final_yt.mp4 and final_ig.mp4 are concatenations.
     video = out / "final.mp4"
@@ -41,9 +43,9 @@ def check(out, rows, levels, voice_engine, dry_run=False, capture_dates=None, ex
             faults.append(f"duration {duration:.2f}s outside 40-50s")
         if info.get("codec") not in ("h264", "avc1"):
             faults.append(f"codec {info.get('codec') or 'missing'}")
-    if voice_engine == "edge" or voice_engine == "elevenlabs":
+    if voice_engine == "elevenlabs":
         faults.append(f"voice_engine={voice_engine}")
-    if not dry_run and voice_engine not in ("gemini", "grok"):
+    if not dry_run and voice_engine not in ("gemini", "grok", "edge"):
         faults.append(f"voice_engine={voice_engine}")
     from realchart.script import lint, number_faults
     faults.extend(lint(rows))

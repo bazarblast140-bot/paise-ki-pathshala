@@ -235,6 +235,8 @@ def test_grok_failure_keeps_the_gemini_error(tmp_path, monkeypatch):
     def fake_speak(text, dest, kind, dry_run=False, cache_key=None, engine="gemini"):
         if engine == "gemini":
             raise gemini_voice.GeminiFallback("quota", status=429)
+        if engine == "edge":
+            raise voice.EdgeUnavailable("offline")
         raise voice.GrokUnavailable("xAI TTS HTTP 403")
 
     monkeypatch.setattr(voice, "speak", fake_speak)

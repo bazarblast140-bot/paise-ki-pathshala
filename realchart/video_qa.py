@@ -165,8 +165,49 @@ def ends_faults(out, intro, outro_rtt, outro_text):
     tail = mean_volume_db(ig, start=got - outro_d + 0.05)
     if tail > OUTRO_MAX_MEAN_DB:
         faults.append(f"ig: outro audio {tail:.1f} dB mean (tone/beep), expected silence")
+    if outro_d > 2.0:
+        faults.append(f"ig: outro {outro_d:.2f}s, keep it under 2s")
+    if static_seconds(outro_rtt) > 0.5:
+        faults.append("ig: outro is a static frame (needs motion)")
+    dead = trailing_silence(ig)
+    # A dry run has no voice at all; dead air is a silent tail after real audio.
+    if 2.0 < dead < got - intro_d - 1.0:
+        faults.append(f"ig: {dead:.1f}s of silence at the end (dead air)")
     faults.extend(f"outro: {fault}" for fault in tofu_faults([outro_text]))
     return faults
+
+
+def trailing_silence(path, floor_db=-45):
+    """Seconds of silence running to the end of the file."""
+    import subprocess
+    from realchart.qa import probe
+    total = probe(path).get("duration") or 0.0
+    log = subprocess.run(["ffmpeg", "-v", "info", "-i", str(path), "-af", f"silencedetect=n={floor_db}dB:d=0.3", "-f", "null", "-"],
+                         capture_output=True, text=True).stderr
+    starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", log)]
+    ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", log)]
+    if not starts or (ends and len(ends) == len(starts) and ends[-1] < total - 0.1):
+        return 0.0
+    return max(0.0, total - starts[-1])
+
+
+def static_seconds(path):
+    """Longest run of identical frames, in seconds."""
+    import subprocess
+    log = subprocess.run(["ffmpeg", "-v", "info", "-i", str(path), "-vf", "mpdecimate=hi=64:lo=32:frac=1,showinfo", "-f", "null", "-"],
+                         capture_output=True, text=True).stderr
+    times = [float(x) for x in re.findall(r"pts_time:([\d.]+)", log)]
+    from realchart.qa import probe
+    total = probe(path).get("duration") or 0.0
+    times.append(total)
+    return max((b - a for a, b in zip(times, times[1:])), default=total)
+
+
+def sentence_faults(article):
+    """The highlighted key sentence must not end mid-clause (feed truncation)."""
+    from realchart.news import truncated
+    sentence = str((article or {}).get("key_sentence") or "")
+    return [f"news: key sentence is cut off: ...{sentence[-40:]}"] if sentence and truncated(sentence) else []
 
 
 NEAR_BLACK_LUMA = 20
