@@ -69,6 +69,18 @@ on:
         type: choice
         options: ["false", "true"]
         default: "false"
+      post_fb:
+        description: "true = also post final_ig.mp4 as a Facebook Reel on the Rajesh Technical Trader Page (skipped if already there)."
+        required: false
+        type: choice
+        options: ["false", "true"]
+        default: "false"
+      fb_only:
+        description: "true = only the Facebook Reel. No YouTube, no Instagram."
+        required: false
+        type: choice
+        options: ["false", "true"]
+        default: "false"
 
 concurrency:
   group: paise-ki-pathshala-publish
@@ -173,7 +185,7 @@ jobs:
         run: python override_mp4.py --meta
       - name: Schedule publishAt
         id: when
-        if: inputs.ig_only != 'true'
+        if: inputs.ig_only != 'true' && inputs.fb_only != 'true'
         env:
           PRIVACY: ${{ inputs.privacy }}
           SLOT: ${{ inputs.slot }}
@@ -190,7 +202,7 @@ jobs:
           fi
           python slot_guard.py --publish-at "$SLOT" "$DATE_IST" >> "$GITHUB_OUTPUT"
       - name: Upload a new YouTube video
-        if: inputs.ig_only != 'true'
+        if: inputs.ig_only != 'true' && inputs.fb_only != 'true'
         env:
           VIDEO_FORMAT: short
           PUBLISH_VISIBILITY: ${{ inputs.privacy == 'now' && 'public' || inputs.privacy }}
@@ -210,7 +222,7 @@ jobs:
           fi
           python publish.py
       - name: Cross-post the Reel
-        if: inputs.skip_ig != 'true'
+        if: inputs.skip_ig != 'true' && inputs.fb_only != 'true'
         env:
           VIDEO_FORMAT: short
           IG_CROSSPOST: "1"
@@ -232,6 +244,12 @@ jobs:
             cp -f run/main.mp4 run/final.mp4
           fi
           python publish_instagram.py
+      - name: Facebook Reel
+        if: ${{ !cancelled() && (inputs.post_fb == 'true' || inputs.fb_only == 'true') }}
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          FB_PAGE_NAME: ${{ vars.FB_PAGE_NAME || 'Rajesh Technical Trader' }}
+        run: python publish_facebook.py
       - name: Commit the ledger fill
         if: ${{ !cancelled() }}
         run: |
