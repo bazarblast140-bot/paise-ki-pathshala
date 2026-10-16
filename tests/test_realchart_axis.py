@@ -198,3 +198,45 @@ def test_news_card_never_cuts_the_headline(tmp_path):
     render.news_card(tmp_path / "cards", {"title": head, "source": "x", "key_sentence": "A b c."})
     shown = " ".join(render.DRAWN)
     assert "…" not in shown and "signals" in shown
+
+
+def test_key_files_beyond_four_are_used(tmp_path, monkeypatch):
+    import gemini_voice
+    for n in ["", "_2", "_3", "_4", "_5", "_6", "_7", "_8", "_9"]:
+        monkeypatch.delenv(f"GEMINI_API_KEY{n}", raising=False)
+    (tmp_path / "gemini_api_key_4").write_text("k4")
+    (tmp_path / "gemini_api_key_6").write_text("k6")
+    monkeypatch.setenv("GEMINI_SECRETS_DIR", str(tmp_path))
+    assert gemini_voice.api_keys() == [("4", "k4"), ("6", "k6")]
+
+
+def test_gemini_out_falls_back_to_grok_for_the_whole_reel(tmp_path, monkeypatch):
+    import gemini_voice
+    from realchart import voice
+    calls = []
+
+    def fake_speak(text, dest, kind, dry_run=False, cache_key=None, engine="gemini"):
+        calls.append(engine)
+        if engine == "gemini" and len(calls) > 1:
+            raise gemini_voice.GeminiFallback("quota", status=429)
+        voice._silence(dest, 1.0)
+        return {"engine": engine, "requests": 1}
+
+    monkeypatch.setattr(voice, "speak", fake_speak)
+    info, beats = voice.speak_segments(["एक", "दो"], tmp_path / "v.wav", "close")
+    assert info["engine"] == "grok" and calls == ["gemini", "gemini", "grok", "grok"] and len(beats) == 2
+
+
+def test_grok_failure_keeps_the_gemini_error(tmp_path, monkeypatch):
+    import gemini_voice
+    import pytest
+    from realchart import voice
+
+    def fake_speak(text, dest, kind, dry_run=False, cache_key=None, engine="gemini"):
+        if engine == "gemini":
+            raise gemini_voice.GeminiFallback("quota", status=429)
+        raise voice.GrokUnavailable("xAI TTS HTTP 403")
+
+    monkeypatch.setattr(voice, "speak", fake_speak)
+    with pytest.raises(gemini_voice.GeminiFallback):
+        voice.speak_segments(["एक"], tmp_path / "v.wav", "close")
