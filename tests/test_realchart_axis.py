@@ -166,3 +166,35 @@ def test_stock_tip_articles_are_not_news():
     from realchart.build import about_indian_market
     assert not about_indian_market({"title": "Raja Venkatraman recommends three stocks for 16 October Nifty"})
     assert about_indian_market({"title": "Nifty ends 1.6% higher as banks rally"})
+
+
+def test_hindi_summary_numbers_must_come_from_the_article():
+    from realchart.summarize import check
+    art = {"title": "Company X to raise Rs 2,534 crore via IPO", "summary": "Promoter stake falls from 100% to 77%."}
+    ok = {"lead": "Company X IPO से 2534 करोड़ जुटाएगी।", "points": ["प्रमोटर हिस्सेदारी 100 से 77 प्रतिशत होगी।", "यह offer for sale है।"]}
+    assert check(ok, art) == []
+    bad = dict(ok, points=["प्रमोटर हिस्सेदारी 60 प्रतिशत होगी।", "यह offer for sale है।"])
+    assert any("60" in f for f in check(bad, art))
+    assert check(dict(ok, lead="Company X raises money"), art)
+
+
+def test_news_rows_have_real_hook_number_and_hindi_voice():
+    lv = {"symbol": "NSE:NIFTY", "last_date": "2026-10-15", "close": 22997.35, "prev_close": 22622.7,
+          "high": 23056.4, "low": 22637.4, "chg_pct": 1.66, "ema20": 22865.36}
+    art = {"title": "Stock market outlook today", "source": "www.livemint.com",
+           "hindi": {"lead": "आज बाज़ार की शुरुआत पर नज़र।", "points": ["एक।", "दो।"]}}
+    rows = script.chunks_for("news", lv, art)
+    assert [r["sec"] for r in rows] == ["hook", "news", "points", "chart", "cta"]
+    assert "375 अंक" in rows[0]["t"] and "Stock market outlook" not in script.spoken_text(rows)
+    assert script.lint(rows) == [] and script.number_faults(rows, lv) == []
+    meta = script.news_post_meta(lv, art)
+    assert meta["title"].startswith("Stock market news today |") and len(meta["title"]) <= 100
+
+
+def test_news_card_never_cuts_the_headline(tmp_path):
+    from realchart import render
+    head = "Stock market outlook today, 16 Oct: Sensex, Nifty prediction - DJIA, S&P, NASDAQ, GIFT Nifty, Kospi, Nikkei, Taiwan cues and more global signals"
+    del render.DRAWN[:]
+    render.news_card(tmp_path / "cards", {"title": head, "source": "x", "key_sentence": "A b c."})
+    shown = " ".join(render.DRAWN)
+    assert "…" not in shown and "signals" in shown

@@ -275,6 +275,10 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
     if kind == "close":
         from realchart.script import SERIES
         brand = f"{SERIES.upper()} • {day_text}".strip(" •")
+    elif kind == "news":
+        from datetime import datetime, timedelta, timezone
+        today = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).date()
+        brand = f"MARKET NEWS • {today.day} {today.strftime('%b %Y')}"
     chg = float(levels.get("chg_pct") or 0)
     header = {
         "brand": brand,
@@ -358,8 +362,14 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
         section = ("CHART · DATA", CYAN)
         if sec == "hook":
             zoom, footer, section = 1.5, f"Source: {src} · 1D", ("HOOK", YELLOW)
-        elif sec == "chart" and kind != "news":
+        elif sec == "chart":
             zoom = 1.4  # the hook ends on the full daily chart; the chart beat opens zoomed in
+            if kind == "news" and next_lines:
+                visual, footer = next_lines, f"Source: {src} · 1D · आज के levels"
+        elif sec == "points":
+            visual, anchor_y = points_card(out, (article or {}), 1), 0.0
+            section = ("KHABAR · MAIN POINTS", GREEN)
+            footer = f"{(article or {}).get('source') or ''} · हिंदी सार".strip(" ·")
         elif sec == "intraday":
             interval = str((intraday or {}).get("interval") or "5")
             visual = overlaid or chart_path
@@ -368,7 +378,7 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             section = (f"INTRADAY {interval}m · time IST", CYAN)
             footer = f"Source: {(intraday or {}).get('label') or src} · {interval}m · IST"
         elif sec == "news":
-            visual, anchor_y = news_card(out, article, news_shot) if article else chart_path, 0.0
+            visual, anchor_y = (news_card(out, article, news_shot) if article else chart_path), 0.0
             published = stamp((article or {}).get("published"))
             section = ("KHABAR · FACT", GREEN)
             footer = f"{(article or {}).get('source') or ''} · {published}".strip(" ·")
@@ -388,7 +398,18 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
         _card(title, caption, spoken, footer, visual, zoom=zoom, anchor_y=anchor_y, chips=chips, dim=dim,
               header=card_header, section=section, zoom_y=focus).save(path)
         made.append(path)
-        if sec in ("hook", "chart", "intraday", "view", "cta") and visual and not (sec == "hook" and kind == "news"):
+        if sec in ("news", "points") and article:
+            # The article card is on screen only while its own (short) line is spoken; the
+            # change inside it is the key sentence highlighted. Points reveal one by one.
+            drawn_before = len(DRAWN)
+            other = (news_card(out, article, news_shot, mode="sentence") if sec == "news"
+                     else points_card(out, article, 2))
+            dest = out.parent / f"{sec}-step2.png"
+            _card(title, caption, spoken, footer, other, zoom=zoom, anchor_y=anchor_y, chips=chips, dim=dim,
+                  header=card_header, section=section, zoom_y=0.5).save(dest)
+            variants[path.name] = [[str(dest), 1.0]]
+            del DRAWN[drawn_before:]
+        elif sec in ("hook", "chart", "intraday", "view", "cta") and visual:
             # Visual change every 2-3 s inside a beat: zoom in on the latest
             # candles, then back out with a ring + arrow on the key level.
             def extra(name, vis, z):
@@ -399,7 +420,7 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             drawn_before = len(DRAWN)
             # The hook card is already zoomed (1.5), so its change is a pull back to the full daily chart.
             zoomed = extra("zoom", visual, 1.0 if sec == "hook" else 1.4)
-            mark_levels = tomorrow if (sec == "cta" and next_lines) else levels
+            mark_levels = tomorrow if (sec in ("cta", "chart") and str(visual) == str(next_lines) and next_lines) else levels
             marks = _marked(visual, shot_maps.get(str(visual)), mark_levels, out.parent / f"{sec}-shot")
             ring_zoom = 1.0 if sec == "chart" else zoom  # chart: zoom back out onto the ringed level
             pulse = [[extra(f"mark{i}", m, ring_zoom), 0.12] for i, m in enumerate(marks[:-1])]
@@ -470,8 +491,22 @@ def _lines_on(shot, levels):
     return {"ok": True, "residual_px": round(mapping["residual"], 2), "ticks": len(mapping["ticks"]), **result}
 
 
-def news_card(out, article, shot=None):
-    """The article as its own full card: masthead strip, the headline highlighted, source and time."""
+def _fit_lines(draw, text, width, sizes, max_lines):
+    """Largest font whose wrap needs no more than max_lines: the text is never cut."""
+    for size in sizes:
+        lines = _wrap(draw, text, size, width, 99)
+        if len(lines) <= max_lines:
+            return size, lines
+    size = sizes[-1]
+    return size, _wrap(draw, text, size, width, 99)
+
+
+def news_card(out, article, shot=None, mode="headline"):
+    """The article as its own full card: masthead strip, the full headline, source and time.
+
+    mode="headline" highlights the headline; mode="sentence" highlights the key sentence
+    (the visual change while the article is on screen). Nothing is truncated.
+    """
     from PIL import Image, ImageDraw
     x0, y0, x1, y1 = MEDIA
     width, height = x1 - x0, y1 - y0
@@ -487,21 +522,57 @@ def news_card(out, article, shot=None):
         top = 90
     draw = ImageDraw.Draw(card)
     headline = str(article.get("title") or "")
-    lines = _wrap(draw, headline, 66, width - 96, 6)
+    size, lines = _fit_lines(draw, headline, width - 96, (66, 60, 54, 48, 44), 5)
     y = top + 30
     for line in lines:
-        w = draw.textlength(line, font=_font_any(66))
-        draw.rectangle((40, y - 4, 48 + w + 16, y + 82), fill=(255, 226, 90))
-        _text(draw, (56, y), line, 66, (16, 18, 22))
-        y += 96
+        w = draw.textlength(line, font=_font_any(size))
+        if mode == "headline":
+            draw.rectangle((40, y - 4, 48 + w + 16, y + size + 16), fill=(255, 226, 90))
+        _text(draw, (56, y), line, size, (16, 18, 22))
+        y += size + 30
     meta = f"{article.get('source') or ''} · {stamp(article.get('published'))}".strip(" ·")
     _text(draw, (56, y + 24), meta, 34, (90, 100, 112), semi=True)
     y += 96
     sentence = " ".join(re.sub(r"<[^>]+>", " ", str(article.get("key_sentence") or article.get("summary") or "")).split())
-    for line in _wrap(draw, sentence, 40, width - 112, max(0, (height - y - 60) // 54)):
-        _text(draw, (56, y + 20), line, 40, (52, 58, 66), semi=True)
-        y += 54
-    path = Path(out).parent / "news-card.png"  # beside cards/, not one of the beat cards
+    room = max(1, (height - y - 60) // 58)
+    ssize, slines = _fit_lines(draw, sentence, width - 112, (42, 38, 34, 30), room)
+    for line in slines[:room]:
+        if mode == "sentence":
+            w = draw.textlength(line, font=_font_any(ssize, semi=True))
+            draw.rectangle((48, y + 14, 56 + w + 12, y + 20 + ssize + 12), fill=(255, 226, 90))
+        _text(draw, (56, y + 20), line, ssize, (16, 18, 22) if mode == "sentence" else (52, 58, 66), semi=True)
+        y += ssize + 16
+    path = Path(out).parent / ("news-card.png" if mode == "headline" else "news-card-sentence.png")
+    card.save(path)
+    return path
+
+
+def points_card(out, article, shown):
+    """The Hindi summary points (from realchart.summarize), revealed one by one."""
+    from PIL import Image, ImageDraw
+    x0, y0, x1, y1 = MEDIA
+    width, height = x1 - x0, y1 - y0
+    card = Image.new("RGB", (width, height), (24, 30, 40))
+    draw = ImageDraw.Draw(card)
+    hindi = article.get("hindi") or {}
+    _text(draw, (56, 70), "खबर के मुख्य points", 60, (255, 226, 90), semi=True)
+    head_size, head = _fit_lines(draw, str(article.get("title") or ""), width - 112, (36, 32, 28), 3)
+    y = 170
+    for line in head:
+        _text(draw, (56, y), line, head_size, (170, 180, 192), semi=True)
+        y += head_size + 12
+    y += 50
+    for index, point in enumerate(list(hindi.get("points") or [])[:2]):
+        if index >= shown:
+            break
+        size, lines = _fit_lines(draw, point, width - 190, (58, 52, 46), 4)
+        draw.ellipse((56, y + 14, 56 + 40, y + 54), fill=(46, 204, 113) if index == shown - 1 else (120, 130, 140))
+        _text(draw, (80 - 12, y + 12), str(index + 1), 30, (14, 16, 20), semi=True)
+        for line in lines:
+            _text(draw, (130, y), line, size, (245, 247, 250))
+            y += size + 22
+        y += 50
+    path = Path(out).parent / f"points-{shown}.png"
     card.save(path)
     return path
 
