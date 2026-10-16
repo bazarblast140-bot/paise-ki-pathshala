@@ -217,11 +217,11 @@ def _ta_rows(levels):
     rows = [
         {"sec": "hook", "start": 0.0, "end": 3.0,
          "d": f"{name} {_fmt(levels.get('close'))} ({chg:+.2f}%) · {plan.get('pattern')}",
-         "t": f"{name} {w(levels['close'])} पर, आज {move}! प्लान end तक देखो।", "k": name},
+         "t": f"{name} {w(levels['close'])} पर, आज {move}! पूरा प्लान देखो।", "k": name},
         {"sec": "chart", "k": "pattern",
          "d": f"Pattern: {plan.get('pattern')} · Support {_fmt(levels.get('support'))} · Resistance {_fmt(levels.get('resistance'))}",
          "t": (f"डेली चार्ट पर {pattern}। सपोर्ट {w(levels['support'])}, "
-               f"रेजिस्टेंस {w(levels['resistance'])}। यह लेवल पहले भी कई बार टेस्ट हुआ है।")},
+               f"रेजिस्टेंस {w(levels['resistance'])}।")},
         {"sec": "intraday", "k": "zone",
          "d": f"Valid zone {_fmt(zone[0])}–{_fmt(zone[1])} · Entry trigger {_fmt(plan.get('entry'))}",
          "t": (f"वैलिड ज़ोन {w(zone[0])} से {w(zone[1])}। एंट्री ट्रिगर: डेली कैंडल "
@@ -229,8 +229,8 @@ def _ta_rows(levels):
         {"sec": "view", "k": "plan",
          "d": (f"SL {_fmt(plan.get('stop'))} · Target {_fmt(plan.get('target'))} · RR {rr:.1f} · "
                f"Invalidation: close {sl_word} {_fmt(plan.get('invalidation'))}"),
-         "t": (f"स्टॉप लॉस {w(plan['stop'])}, टारगेट {w(plan['target'])}, रिस्क रिवॉर्ड लगभग {w(rr) if rr >= 2 else 'डेढ़'} गुना। "
-               f"डेली क्लोज़ {w(plan['invalidation'])} के {sl_word} गया तो सेटअप खत्म। यह एक scenario है।")},
+         "t": (f"स्टॉप लॉस {w(plan['stop'])}, टारगेट {w(plan['target'])}, रिस्क रिवॉर्ड {str(int(rr)) + ' गुना से ज़्यादा' if rr >= 2 else 'डेढ़ गुना से ज़्यादा'}। "
+               f"क्लोज़ {w(plan['invalidation'])} के {sl_word} तो सेटअप खत्म, यह scenario है।")},
     ]
     question = f"{name} {w(plan['entry'])} {'पार करेगा' if long else 'तोड़ेगा'} या नहीं? Comment करो।"
     rows.append({"sec": "cta", "d": f"{question} {DISCLAIMER}", "t": f"{question} {DISCLAIMER}", "k": "comment"})

@@ -155,9 +155,10 @@ def pick_stock(candidates, history, today):
         plan = stock_plan(levels)
         if plan is None or _repeated(history, levels["symbol"], plan["pattern"], today):
             continue
-        ranked.append((plan["touches"], -plan["distance_atr"], levels, plan))
-    ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
-    return [(levels, plan) for _t, _d, levels, plan in ranked]
+        # Most-tested level first; on a tie the bigger real move (a stronger hook number).
+        ranked.append((plan["touches"], abs(float(levels.get("chg_pct") or 0)), -plan["distance_atr"], levels, plan))
+    ranked.sort(key=lambda item: item[:3], reverse=True)
+    return [(levels, plan) for _t, _m, _d, levels, plan in ranked]
 
 
 def pick_setup(candidates, history, today):
@@ -481,10 +482,11 @@ def stock_plan(levels, lookback=120):
     under = [item for item in lows if item[0] <= close]
     if under:
         level, when = max(under, key=lambda item: item[0])
-        if low <= level + 0.5 * atr and close > level and close >= (high + low) / 2:
+        # A clean test: the low reached the level without slicing far through it.
+        if level - 0.5 * atr <= low <= level + 0.5 * atr and close > level and close >= (high + low) / 2:
             above = sorted({item for item in highs if item[0] > high}, key=lambda item: item[0])
             build("support bounce", "long", level, when, (level, level + 0.5 * atr),
-                  high, level - buf, above)
+                  high, min(level, low) - buf, above)
     # Breakout above the 20-session high: the old high becomes support.
     box = hist[-20:]
     top = max(float(row["h"]) for row in box)
@@ -499,10 +501,10 @@ def stock_plan(levels, lookback=120):
     over = [item for item in highs if item[0] >= close]
     if over:
         level, when = min(over, key=lambda item: item[0])
-        if high >= level - 0.5 * atr and close < level and close <= (high + low) / 2:
+        if level - 0.5 * atr <= high <= level + 0.5 * atr and close < level and close <= (high + low) / 2:
             below = sorted({item for item in lows if item[0] < low}, key=lambda item: -item[0])
             build("resistance rejection", "short", level, when, (level - 0.5 * atr, level),
-                  low, level + buf, below)
+                  low, max(level, high) + buf, below)
     # "Clear" means the level was tested before: two touches or more (today's counts).
     plans = [plan for plan in plans if plan["touches"] >= 2]
     if not plans:

@@ -109,3 +109,11 @@ class TaScript(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StockAxisLabels(unittest.TestCase):
+    def test_one_decimal_stock_labels_are_ticks(self):
+        from realchart.axis import LABEL
+        for text in ("1,216.3", "1,360.0", "22,980.00", "728"):
+            self.assertRegex(text, LABEL)
+        self.assertNotRegex("1,216.345", LABEL)

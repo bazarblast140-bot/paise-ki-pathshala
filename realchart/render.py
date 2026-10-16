@@ -398,6 +398,8 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
             visual, chips, card_header = daily_lines, None, header
             zoom = 1.3 if sec == "intraday" else 1.15
             footer = f"Source: {src} · 1D · plan levels from daily swings"
+            section = (("PLAN · VALID ZONE + ENTRY", CYAN) if sec == "intraday"
+                       else ("PLAN · SL + TARGET (scenario)", (255, 159, 28)))
         path = out / f"{sec}.png"
         focus = _focus(shot_maps.get(str(visual)), levels)
         five_min = sec in ("intraday", "view") and overlaid and str(visual) == str(overlaid)
