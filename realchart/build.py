@@ -358,7 +358,7 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
 INDIA_MARKET = re.compile(
     r"\b(nifty|sensex|bank\s*nifty|nse|bse|dalal street|d-street|sebi|rbi|"
     r"indian (stock|share|equity|equities|market|markets)|india'?s? (stock|equity) market|"
-    r"fii|fpi|rupee)\b",
+    r"fii|fpi)\b",
     re.I,
 )
 
@@ -368,9 +368,13 @@ def about_indian_market(article):
     blob = " ".join(str(article.get(key) or "") for key in ("title", "summary", "key_sentence"))
     if TIPS.search(str(article.get("title") or "")):
         return False  # stock-tip / buy-sell picks are advice, not market news
+    title = str(article.get("title") or "")
+    if OFF_TOPIC.search(title) and not INDIA_MARKET.search(title):
+        return False  # a gold/silver/crude/crypto story is not the Nifty close (16-Oct: "rupee terms" let one in)
     return bool(INDIA_MARKET.search(blob))
 
 
+OFF_TOPIC = re.compile(r"\b(gold|silver|platinum|metal|crude|oil price|bitcoin|crypto|ipo gmp|mutual fund)\b", re.I)
 TIPS = re.compile(r"recommends|stocks? to (buy|sell)|stock picks|top picks|buy or sell|buy,? sell|trade setup|stocks? for \d", re.I)
 
 
