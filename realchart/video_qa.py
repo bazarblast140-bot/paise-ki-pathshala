@@ -275,8 +275,31 @@ def run_all(out, captions, capture_dates, expected_date, intro, outro_rtt, outro
     faults += raw_float_faults(captions)
     faults += capture_faults(capture_dates, expected_date)
     faults += ends_faults(out, intro, outro_rtt, outro_text)
+    faults += intraday_frame_faults(out)
     (out / "video_qa.json").write_text(json.dumps({
         "faults": faults, "expected_date": str(expected_date), "capture_dates": capture_dates,
         "captions_checked": len(captions),
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return faults
+
+
+def intraday_frame_faults(out):
+    """HOLD when a 5m card hides the latest candle (close) or a spoken level (P, R1, S1)."""
+    path = Path(out) / "frame_ranges.json"
+    if not path.is_file():
+        return []
+    data = json.loads(path.read_text(encoding="utf-8"))
+    must = {k: v for k, v in (data.get("must") or {}).items() if v is not None}
+    cards = data.get("cards") or {}
+    if data.get("shot_ok") is False:
+        return ["5m: no price axis read, cannot prove the levels are in frame"]
+    faults = []
+    for name, span in cards.items():
+        if not span:
+            faults.append(f"5m: {name} has no price range")
+            continue
+        lo, hi = span
+        missing = [k for k, v in must.items() if not lo <= float(v) <= hi]
+        if missing:
+            faults.append(f"5m: {name} shows {lo:,.0f}-{hi:,.0f}, {', '.join(missing)} out of frame")
     return faults
