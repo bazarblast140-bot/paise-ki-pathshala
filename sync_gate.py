@@ -824,6 +824,7 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
         shared = [tok for tok in content_tokens(show) if tok in script_set or tok in heard_set]
         if not shared:
             shared = [num for num in numbers_in(show) if num in script_set or num in heard_set]
+        gate_score = beat_recall if chart else covered
         row = {
             "start": round(start, 2),
             "end": round(end, 2),
@@ -831,13 +832,16 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
             "kind": scene.get("kind") or "",
             "jaccard": round(score, 3),
             "recall": round(covered, 3),
+            # The number this scene is actually gated on: the beat's fuzzy
+            # recall for a chart card, the slice recall otherwise.
+            "gate_recall": round(gate_score, 3),
             "missing_numbers": missing_numbers,
             "shared": shared[:6],
             "script": spoken,
             "heard": heard,
         }
         rows.append(row)
-        gate_score = beat_recall if chart else covered
+        before = len(reasons)
         if gate_score + 1e-9 < MIN_RECALL and not chart_ok:
             reasons.append(
                 f"{row['kind'] or beat} {row['start']:.1f}-{row['end']:.1f}s "
@@ -856,6 +860,7 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
                 f"{row['kind'] or beat} {row['start']:.1f}-{row['end']:.1f}s "
                 "on-screen text is not what this scene says"
             )
+        row["passed"] = len(reasons) == before
     beats_out = []
     for beat, span in (beat_times or {}).items():
         script = str((beats_text or {}).get(beat) or "")
@@ -872,6 +877,7 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
     return {
         "ok": not reasons,
         "reason": reason,
+        "failures": len(reasons),
         "title_note": title_note,
         "transcript": normalize(transcript),
         "scenes": rows,
@@ -1055,11 +1061,31 @@ def transcribe_pcm(audio, beam_size=1):
     return words
 
 
+def _row_gate(row):
+    """The recall this scene is gated on. Older rows only carry `recall`."""
+    raw = row.get("gate_recall")
+    if raw is None:
+        raw = row.get("recall")
+    return float(raw or 0)
+
+
 def _worst_recall(report, beat):
     rows = [row for row in (report.get("scenes") or []) if row.get("beat") == beat]
     if not rows:
         return 1.0
-    return min(float(row.get("recall") or 0) for row in rows)
+    return min(_row_gate(row) for row in rows)
+
+
+def _breaks_a_passing_scene(before, after):
+    """True when a scene that passed in `before` fails in `after`."""
+    old_rows = before.get("scenes") or []
+    new_rows = after.get("scenes") or []
+    if len(old_rows) != len(new_rows):
+        return True
+    for old, new in zip(old_rows, new_rows):
+        if old.get("passed", True) and not new.get("passed", True):
+            return True
+    return False
 
 
 def _words_on_timeline(path, t0, beam_size):
@@ -1093,7 +1119,10 @@ def upgrade_weak_scenes(words, scenes, beats_text, beat_times, answer_terms, bea
         beat = row.get("beat") or ""
         if beat in weak or beat not in (beat_audio or {}) or beat not in (beat_times or {}):
             continue
-        if float(row.get("recall") or 0) + 1e-9 < MIN_RECALL:
+        # Weak means below the bar this scene is gated on. A chart card that
+        # already passes on its beat recall is not re-decoded: a beam-5 pass
+        # with a better slice recall could replace a passing transcript.
+        if _row_gate(row) + 1e-9 < MIN_RECALL:
             path = pathlib.Path(beat_audio[beat])
             if path.is_file():
                 weak.append(beat)
@@ -1118,7 +1147,11 @@ def upgrade_weak_scenes(words, scenes, beats_text, beat_times, answer_terms, bea
         trial.extend(fresh)
         trial.sort(key=lambda word: float(word.get("start") or 0))
         trial_report = check(trial, scenes, beats_text, beat_times, answer_terms)
-        if _worst_recall(trial_report, beat) > _worst_recall(report, beat) + 1e-9:
+        # Keep the second pass only when it scores better on the gate's own
+        # number for this beat and adds no failure elsewhere (the replaced pad
+        # words belong to the neighbouring beats too). MIN_RECALL is unchanged.
+        better = _worst_recall(trial_report, beat) > _worst_recall(report, beat) + 1e-9
+        if better and not _breaks_a_passing_scene(report, trial_report):
             upgraded = trial
             report = trial_report
             report["words"] = upgraded

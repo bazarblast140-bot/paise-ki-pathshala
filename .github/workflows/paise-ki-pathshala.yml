@@ -153,6 +153,8 @@ jobs:
         run: |
           python -m py_compile *.py
           SUPPRESS_GHA_COMMANDS=1 PYTHONPATH=. python -m unittest discover -s tests || true
+          # A unit test fixture must not become the build log tail of this run.
+          rm -f run/auto_agent_last.log
       - name: DeepSeek balance (log only, no upload)
         if: steps.guard.outputs.taken != 'true'
         continue-on-error: true

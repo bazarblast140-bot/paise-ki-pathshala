@@ -265,7 +265,11 @@ class SlotPaidCallTests(unittest.TestCase):
 
     def test_auto_agent_treats_the_skip_as_done(self):
         out = "[skip] 2026-10-02 21:00 IST is on hold; exiting before paid APIs\n"
-        with mock.patch.object(auto_agent, "run_once", return_value=(0, out)) as run_once, \
+        # RUN is a temp dir: this fixture line used to land in the real
+        # run/auto_agent_last.log and became the scheduled run's log tail.
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(auto_agent, "RUN", Path(tmp)), \
+             mock.patch.object(auto_agent, "run_once", return_value=(0, out)) as run_once, \
              mock.patch.object(auto_agent, "board_quality", side_effect=AssertionError("qa")):
             self.assertEqual(auto_agent.main(), 0)
             self.assertEqual(run_once.call_count, 1)
