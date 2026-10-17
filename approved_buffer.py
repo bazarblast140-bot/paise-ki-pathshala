@@ -136,8 +136,26 @@ def _held_today(manifest, topic_key, now):
     return False
 
 
+def _last_held(manifest, topic_key):
+    """created_at of this topic's newest held row, or "" when it was never held."""
+    key = str(topic_key or "").strip()
+    latest = ""
+    for item in manifest.get("items") or []:
+        if item.get("topic_key") != key or item.get("state") != "held":
+            continue
+        stamp = str(item.get("created_at") or "")
+        if stamp > latest:
+            latest = stamp
+    return latest
+
+
 def candidate_keys(entries, manifest, now, limit=MAX_PER_RUN):
-    """Approved topics that are not ready and were not published in 14 days."""
+    """Approved topics that are not ready and were not published in 14 days.
+
+    Never-held topics go first, then the topic held longest ago. Bank order
+    alone retried the same first three held topics every day, so the daily
+    Charon cap never reached the rest of the bank.
+    """
     import approved_bank
     import trade_plan
 
@@ -146,14 +164,16 @@ def candidate_keys(entries, manifest, now, limit=MAX_PER_RUN):
         key = str(script.get("key") or "").strip()
         if not key or key == "aaj_ka_nifty" or not trade_plan.has_plan(key):
             continue
+        if key in found:
+            continue
         if _ready(manifest, key) or _held_today(manifest, key, now):
             continue
         if published_within(entries, key, now):
             continue
         found.append(key)
-        if len(found) >= int(limit):
-            break
-    return found
+    # Stable sort: bank order is kept inside each group.
+    found.sort(key=lambda key: _last_held(manifest, key))
+    return found[:max(0, int(limit))]
 
 
 def plan_gate_reasons(key):
