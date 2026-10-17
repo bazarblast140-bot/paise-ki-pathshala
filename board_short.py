@@ -4764,6 +4764,53 @@ def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, h
 
 
 # ---------------------------------------------------------------- compat files
+def plan_fact_lines(topic):
+    """FACT LEDGER rows for a trade-plan Short: where every plan figure comes from.
+
+    The plan figures are computed by trade_plan from the fixed example chart
+    the Short draws. The ledger used to carry only the topic's one-line fact
+    ("पूरा ट्रेड प्लान"), so the final verify saw every spoken number as
+    UNVERIFIED. These rows state the real source; they do not mark anything
+    as checked.
+    """
+    import trade_plan
+    topic = topic or {}
+    key = topic.get("key")
+    if not trade_plan.has_plan(key):
+        return []
+    if not (trade_plan.is_plan_topic(topic) or topic.get("_approved_bank")):
+        return []
+    try:
+        plan = trade_plan.plan_for(key)
+    except (KeyError, ValueError):
+        return []
+    f = trade_plan.fmt
+    side = "long (buy)" if plan.side == "long" else "short (sell)"
+    candles = "; ".join(
+        f"#{i + 1} O {f(c[0])} H {f(c[1])} L {f(c[2])} C {f(c[3])}"
+        for i, c in enumerate(plan.ohlc)
+    )
+    lines = [
+        "SOURCE: illustrative teaching chart drawn in this video (example candles, "
+        "not live market data, not a stock tip). Every plan number below is computed "
+        "by the channel's trade_plan rules from these candles.",
+        f"Example chart candles: {candles}.",
+        f"Plan side: {side}. Entry {f(plan.entry)}, stop-loss {f(plan.sl)}, "
+        f"target {f(plan.target)}, {plan.sr_name.lower()} {f(plan.sr)}.",
+        f"Risk = |entry - stop| = {f(plan.risk)}; reward = |target - entry| = "
+        f"{f(plan.reward)}; risk:reward = {plan.rr_text} (spoken {plan.rr_spoken}).",
+    ]
+    extras = [
+        f"{name} {f(value) if isinstance(value, (int, float)) else value}"
+        for name, value in (plan.extras or {}).items()
+    ]
+    if extras:
+        lines.append("Other chart levels: " + ", ".join(extras) + ".")
+    if plan.rsi:
+        lines.append("Example RSI values: " + ", ".join(f(v) for v in plan.rsi) + ".")
+    return lines
+
+
 def write_compat(topic, n, spoken, beat_times):
     """script.txt / spoken.txt / shots.json in the shapes run_verify + publish expect."""
     b = n["beats"]
@@ -4781,6 +4828,9 @@ def write_compat(topic, n, spoken, beat_times):
     if spec.get("mode") == "series" and spec.get("source") and spec.get("as_of"):
         facts += (f"\n- SOURCE: {spec.get('source')} as of {spec.get('as_of')} "
                   f"(monthly closes, no interpolated points).")
+    plan_lines = plan_fact_lines(topic)
+    if plan_lines:
+        facts += "\n" + "\n".join(f"- {line}" for line in plan_lines)
     cta = engagement.engagement_question(topic)
     body_beats = timed_beats(beat_times)
     segments = []
