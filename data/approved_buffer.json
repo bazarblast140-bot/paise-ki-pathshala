@@ -6,7 +6,7 @@
       "state": "held",
       "topic_key": "pat_black_crows",
       "owner_approved": false,
-      "created_at": "2026-10-16T05:10:28Z",
+      "created_at": "2026-10-17T05:04:20Z",
       "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
       "voice_engine": "gemini",
       "duration_s": 42.28
@@ -16,17 +16,17 @@
       "state": "held",
       "topic_key": "pat_breakout",
       "owner_approved": false,
-      "created_at": "2026-10-16T05:10:31Z",
+      "created_at": "2026-10-17T05:04:19Z",
       "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
       "voice_engine": "gemini",
-      "duration_s": 42.82
+      "duration_s": 42.83
     },
     {
       "id": "hold-pat_bull_engulf-20261009T001322Z",
       "state": "held",
       "topic_key": "pat_bull_engulf",
       "owner_approved": false,
-      "created_at": "2026-10-16T05:10:20Z",
+      "created_at": "2026-10-17T05:04:16Z",
       "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
       "voice_engine": "gemini",
       "duration_s": 46.4
