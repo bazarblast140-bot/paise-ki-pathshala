@@ -120,6 +120,36 @@
       "reason": "self-review sync 0 is below 60; sync gate did not pass; existing public-review gate did not pass; trend score missing; sync 0 is below 60",
       "voice_engine": "gemini",
       "duration_s": 42.28
+    },
+    {
+      "id": "hold-pat_stop_loss-20261017T061102Z",
+      "state": "held",
+      "topic_key": "pat_stop_loss",
+      "owner_approved": false,
+      "created_at": "2026-10-17T06:11:02Z",
+      "reason": "render rc=1",
+      "voice_engine": "gemini",
+      "duration_s": 41.23
+    },
+    {
+      "id": "hold-pat_support-20261017T061100Z",
+      "state": "held",
+      "topic_key": "pat_support",
+      "owner_approved": false,
+      "created_at": "2026-10-17T06:11:00Z",
+      "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
+      "voice_engine": "gemini",
+      "duration_s": 43.28
+    },
+    {
+      "id": "hold-pat_triangle-20261017T061103Z",
+      "state": "held",
+      "topic_key": "pat_triangle",
+      "owner_approved": false,
+      "created_at": "2026-10-17T06:11:03Z",
+      "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
+      "voice_engine": "gemini",
+      "duration_s": 42.71
     }
   ]
 }
