@@ -4523,7 +4523,7 @@
   {
    "id": 119,
    "used": false,
-   "used_short": false,
+   "used_short": true,
    "key": "intraday_volume",
    "cat": "INTRADAY",
    "topic": "Volume 3 गुना, पर भाव वहीं — कोई चुपचाप बेच रहा है?",
@@ -4556,7 +4556,8 @@
     "ये संभावना है, पक्का संकेत नहीं",
     "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
    ],
-   "seo": "Volume Spike"
+   "seo": "Volume Spike",
+   "used_short_at": "2026-10-18T11:44:34Z"
   },
   {
    "id": 120,

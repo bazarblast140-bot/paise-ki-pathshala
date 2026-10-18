@@ -1,6 +1,656 @@
 {
   "tag": "buffer-shorts",
-  "items": [],
+  "items": [
+    {
+      "id": "buf-intraday_volume-91600de07584",
+      "state": "ready",
+      "topic_key": "intraday_volume",
+      "title": "Volume 3 गुना, भाव वहीं — कोई चुपचाप बेच रहा?",
+      "description": "वओलउमए 3 गुना भाव वहीं, कोई चुपचाप बेच रहा? भारी वॉल्यूम आया, पर प्राइस उसी लेवल पर रुका।\n\n🔗 Zerodha / Upstox demat account (Referral link — account खोलने पर हमें commission मिल सकता है।)\nZerodha: https://zerodha.com/open-account?c=KU3466\nUpstox: https://upstox.onelink.me/0H1s/3T23\n\nVolume Spike — आसान हिंदी में: पहचान, मतलब और traders इसे आमतौर पर कैसे इस्तेमाल करते हैं।\n\n💬 Breakout से पहले volume देखते हो? Comment में हाँ या नहीं लिखो।\n\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nहम SEBI-रजिस्टर्ड सलाहकार नहीं हैं। किसी भी निवेश से पहले रजिस्टर्ड सलाहकार से बात करें।\n\nAccount / referral links\nयह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।\nयह किसी broker की सिफ़ारिश नहीं है।\n\nInstagram @rajesh_technical_trader की bio में भी यही links हैं।\n\nस्रोत और नोट्स\n- volume औसत से 3 गुना\n- भाव आगे न बढ़े तो absorption हो सकता है\n- ये संभावना है, पक्का संकेत नहीं\n- ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं\n\nPaise Ki Pathshala — ट्रेडिंग की पाठशाला — चार्ट, पैटर्न, रिस्क और असली डेटा\n\nरोज़ 3 ट्रेडिंग Shorts — कैंडलस्टिक, इंडिकेटर, ऑर्डर, F&O, रिस्क और असली डेटा।\n\n#StockMarketHindi #VolumeSpike #TradingHindi #PaiseKiPathshala #ShareMarket #IntradayTrading #PriceAction",
+      "tags": [
+        "Volume Spike hindi",
+        "Volume Spike",
+        "stock market hindi",
+        "trading hindi",
+        "paise ki pathshala"
+      ],
+      "sha256": "91600de0758495ac7ef66da363df7e612e50083950d7bde680f2d0a09ab1e940",
+      "asset_name": "buf-intraday_volume-91600de07584.mp4",
+      "meta_name": "buf-intraday_volume-91600de07584.json",
+      "created_at": "2026-10-18T11:44:30Z",
+      "used_at": null,
+      "used_slot": null,
+      "used_date_ist": null,
+      "video_id": null,
+      "gates": {
+        "fallback_narration": {
+          "passed": true,
+          "at": "2026-10-18T11:44:30Z",
+          "detail": "llm outline"
+        },
+        "ai_review": {
+          "passed": true,
+          "at": "2026-10-18T11:44:30Z",
+          "detail": "READY"
+        },
+        "sync": {
+          "passed": true,
+          "at": "2026-10-18T11:44:30Z",
+          "detail": "whisper sync passed"
+        },
+        "craft": {
+          "passed": true,
+          "at": "2026-10-18T11:44:30Z",
+          "detail": "craft 100"
+        },
+        "number_match": {
+          "passed": true,
+          "at": "2026-10-18T11:44:30Z",
+          "detail": "numbers match"
+        },
+        "duplicate_text": {
+          "passed": true,
+          "at": "2026-10-18T11:44:30Z",
+          "detail": "no duplicate text"
+        },
+        "freshness": {
+          "passed": true,
+          "at": "2026-10-18T11:44:30Z",
+          "detail": "no live market as-of; 3-trading-day gate does not apply",
+          "mode": "evergreen"
+        }
+      },
+      "files": {
+        "topic": {
+          "id": 119,
+          "used": false,
+          "used_short": false,
+          "key": "intraday_volume",
+          "cat": "INTRADAY",
+          "topic": "Volume 3 गुना, पर भाव वहीं — कोई चुपचाप बेच रहा है?",
+          "thumb": [
+            "भारी volume",
+            "भाव हिला नहीं?"
+          ],
+          "sticker": "राज़",
+          "beats": {
+            "hook": [
+              "Volume 3x",
+              "price रुका"
+            ],
+            "pehchan": [
+              "पहचान",
+              "बड़ी candle नहीं, सिर्फ़ भारी volume"
+            ],
+            "matlab": [
+              "मतलब",
+              "बड़ा seller ख़रीदारी सोख रहा हो सकता है"
+            ],
+            "karein": [
+              "क्या देखें",
+              "उस level के ऊपर साफ़ close का इंतज़ार"
+            ]
+          },
+          "facts": [
+            "volume औसत से 3 गुना",
+            "भाव आगे न बढ़े तो absorption हो सकता है",
+            "ये संभावना है, पक्का संकेत नहीं",
+            "ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं"
+          ],
+          "seo": "Volume Spike"
+        },
+        "script": "TITLE:\nVolume 3 गुना, भाव वहीं — कोई चुपचाप बेच रहा?\n\nHOOK (0-3 sec):\nवओलउमए 3 गुना भाव वहीं, कोई चुपचाप बेच रहा? भारी वॉल्यूम आया, पर प्राइस उसी लेवल पर रुका।\n\nBODY:\n[SEGMENT PEHCHAN]\nअब इसे पहचानो। बड़ी कअनदलए नहीं चाहिए, सिर्फ़ भारी वओलउमए देखो। औसत से 3 गुना वओलउमए आया, पर प्राइस उसी लएवएल पर रुका रहा।\n\n[SEGMENT MATLAB]\nमतलब ये है, इतनी ख़रीदारी आई पर भाव नहीं चढ़ा। उदाहरण: वओलउमए औसत से 3 गुना, फिर भी प्राइस वहीं अटका। इसका मतलब कोई बड़ा सएललएर ख़रीदारी सोख रहा हो सकता है।\n\n[SEGMENT KAREIN]\nअब आगे, इस लएवएल को नोट करो और उसके ऊपर साफ़ कलओसए का इंतज़ार करो। भारी वओलउमए पर भी भाव न बढ़े तो यह गलती मानी जाती है; अबसओरपटइओन सिर्फ़ संभावना है, पक्का संकेत नहीं।\n\nCTA:\nBreakout से पहले volume देखते हो? Comment में हाँ या नहीं लिखो।\n\nDISCLAIMER LINE:\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nFACT LEDGER:\n- volume औसत से 3 गुना\n- भाव आगे न बढ़े तो absorption हो सकता है\n- ये संभावना है, पक्का संकेत नहीं\n- ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं\n",
+        "report": "VERDICT: [READY TO PUBLISH]\n\n✅ Auto-checks pass:\nHook | Facts | Compliance | Coverage | Visuals | Length — sab clear, sirf ek chhoti fact-sourcing note neeche.\n\n♻️ Reused-content risk: LOW\n- Stock footage 0% (4/4 shots original charts), premium Gemini AI voice, original script + overlays always on — koi lever chahiye hi nahi.\n\n⚠️ Tumhe dekhna hai (judgment calls):\n- Thumbnail: \"3x Volume, Price Flat\" wala tension dikhao — number bada, arrow flat, warna faceless finance me scroll rukega nahi.\n- ~0-3s hook me \"volUme/price\" ka saaf Hindi-English mix hai; agar aapki audience pure Hindi hai to pronunciation check kar lo.\n- Tone: pura video ek hi idea (absorption) par hai — boring lag sakta hai; agar short hai to theek, warna ek chhota real chart example timestamp par add karna worth hai.\n\n🔴 Risks / assumptions:\n- \"volume 3x\" ek illustrative number hai — ledger me sourced nahi, isliye on-screen \"example\" label ya generic \"3x jaise cases\" bolna safer.\n- \"absorption = possibility, pakka signal nahi\" — sahi framing hai, ise mat hatao.\n- \"Likely/Assuming\": absorption ka matlab discretionary hai, koi regulatory/market figure nahi — jurisdiction note ki zarurat nahi. Disclaimer present, no buy/sell/hold, no guaranteed returns, no tax figure — compliance clean.\n\nFAILS this round: none\n",
+        "verify_meta": {
+          "ai_verdict_valid": true,
+          "verdict": "READY",
+          "public_ready": true,
+          "soft_judgment_only": false,
+          "reasons": [],
+          "spoken_words": 144
+        },
+        "self_review": {
+          "parts": {
+            "hook": 100,
+            "visual": 90,
+            "accuracy": 100,
+            "trend": 100,
+            "craft": 100,
+            "sync": 100
+          },
+          "overall": 98.3,
+          "passed": true,
+          "public_ok": true,
+          "review_flag": false,
+          "verdict": "PASS",
+          "summary": "overall 98.3 (hook 100, visual 90, accuracy 100, trend 100, craft 100, sync 100)",
+          "notes": [],
+          "bar": {
+            "part": 60,
+            "overall": 75
+          },
+          "chart": {
+            "mode": "schematic",
+            "source": null,
+            "as_of": null
+          },
+          "narration_source": "llm",
+          "sync": {
+            "ok": true,
+            "reason": "",
+            "scenes": [
+              {
+                "start": 0.0,
+                "end": 2.67,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.111,
+                "recall": 0.5,
+                "gate_recall": 0.875,
+                "missing_numbers": [],
+                "shared": [
+                  "वओलउमए",
+                  "गुना",
+                  "भाव",
+                  "वहीं",
+                  "कोई"
+                ],
+                "script": "वओलउमए 3 गुना भाव वहीं, कोई",
+                "heard": "वूलिम तीन गुना बाव वही? कोई",
+                "passed": true
+              },
+              {
+                "start": 2.67,
+                "end": 5.34,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.0,
+                "recall": 0.714,
+                "gate_recall": 0.875,
+                "missing_numbers": [],
+                "shared": [
+                  "वहीं",
+                  "कोई",
+                  "चुपचाप",
+                  "बेच",
+                  "रहा",
+                  "भारी"
+                ],
+                "script": "वहीं, कोई चुपचाप बेच रहा? भारी वॉल्यूम",
+                "heard": "वही? कोई चुप्चा बेच रा? बारी वॉलिम",
+                "passed": true
+              },
+              {
+                "start": 5.34,
+                "end": 8.0,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.286,
+                "recall": 0.857,
+                "gate_recall": 0.875,
+                "missing_numbers": [],
+                "shared": [
+                  "भारी",
+                  "वॉल्यूम",
+                  "आया",
+                  "प्राइस",
+                  "उसी",
+                  "लेवल"
+                ],
+                "script": "भारी वॉल्यूम आया, पर प्राइस उसी लेवल पर रुका।",
+                "heard": "बारी वॉलिम आया, पर प्रईस उसी लेवल पर रुका. अब इसे",
+                "passed": true
+              },
+              {
+                "start": 8.0,
+                "end": 11.43,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.188,
+                "recall": 0.667,
+                "gate_recall": 0.857,
+                "missing_numbers": [],
+                "shared": [
+                  "अब",
+                  "इसे",
+                  "पहचानो",
+                  "बडी",
+                  "कअनदलए",
+                  "नहीं"
+                ],
+                "script": "अब इसे पहचानो। बड़ी कअनदलए नहीं चाहिए, सिर्फ़ भारी",
+                "heard": "लेवल पर रुका. अब इसे पहचानो. बढ़ी कंडल नहीं चाहिए, सर्फ बारी",
+                "passed": true
+              },
+              {
+                "start": 11.43,
+                "end": 14.86,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.118,
+                "recall": 0.6,
+                "gate_recall": 0.857,
+                "missing_numbers": [],
+                "shared": [
+                  "चाहिए",
+                  "सिर्फ",
+                  "भारी",
+                  "वओलउमए",
+                  "देखो",
+                  "औसत"
+                ],
+                "script": "चाहिए, सिर्फ़ भारी वओलउमए देखो। औसत से 3 गुना वओलउमए आया,",
+                "heard": "सर्फ बारी वॉलिम देखो. अउसथ से तीन गुना वॉलिम आया,",
+                "passed": true
+              },
+              {
+                "start": 14.86,
+                "end": 18.28,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.353,
+                "recall": 0.778,
+                "gate_recall": 0.857,
+                "missing_numbers": [],
+                "shared": [
+                  "गुना",
+                  "वओलउमए",
+                  "आया",
+                  "प्राइस",
+                  "उसी",
+                  "लएवएल"
+                ],
+                "script": "3 गुना वओलउमए आया, पर प्राइस उसी लएवएल पर रुका रहा।",
+                "heard": "तीन गुना वॉलिम आया, पर प्राइस उसी लेवल पर रुका रहा. मतलब ये है,",
+                "passed": true
+              },
+              {
+                "start": 18.28,
+                "end": 21.71,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.0,
+                "recall": 1.0,
+                "gate_recall": 0.857,
+                "missing_numbers": [],
+                "shared": [
+                  "रहा"
+                ],
+                "script": "रहा।",
+                "heard": "मतलब ये है, इतनी खरीदारी आई, पर भाव नहीं चड़ा. उदारन,",
+                "passed": true
+              },
+              {
+                "start": 21.71,
+                "end": 24.54,
+                "beat": "matlab",
+                "kind": "chart-matlab",
+                "jaccard": 0.12,
+                "recall": 0.467,
+                "gate_recall": 0.731,
+                "missing_numbers": [],
+                "shared": [
+                  "मतलब",
+                  "ये",
+                  "इतनी",
+                  "खरीदारी",
+                  "आई",
+                  "भाव"
+                ],
+                "script": "मतलब ये है, इतनी ख़रीदारी आई पर भाव नहीं चढ़ा। उदाहरण: वओलउमए औसत से 3 गुना, फिर भी प्राइस",
+                "heard": "नहीं चड़ा. उदारन, वोल्युम अचद से तीं गुना, फिर भी प्राइस",
+                "passed": true
+              },
+              {
+                "start": 24.54,
+                "end": 27.38,
+                "beat": "matlab",
+                "kind": "chart-matlab",
+                "jaccard": 0.333,
+                "recall": 0.9,
+                "gate_recall": 0.731,
+                "missing_numbers": [],
+                "shared": [
+                  "गुना",
+                  "फिर",
+                  "प्राइस",
+                  "वहीं",
+                  "अटका",
+                  "इसका"
+                ],
+                "script": "गुना, फिर भी प्राइस वहीं अटका। इसका मतलब कोई बड़ा सएललएर",
+                "heard": "गुना, फिर भी प्राइस वही अट्का. इसके मतलब, कोई बड़ा सेलर",
+                "passed": true
+              },
+              {
+                "start": 27.38,
+                "end": 30.21,
+                "beat": "matlab",
+                "kind": "chart-matlab",
+                "jaccard": 0.462,
+                "recall": 0.875,
+                "gate_recall": 0.731,
+                "missing_numbers": [],
+                "shared": [
+                  "मतलब",
+                  "कोई",
+                  "बडा",
+                  "सएललएर",
+                  "खरीदारी",
+                  "सोख"
+                ],
+                "script": "मतलब कोई बड़ा सएललएर ख़रीदारी सोख रहा हो सकता है।",
+                "heard": "कोई बड़ा सेलर खरीदारी सोख रहा हो सकता है. अव अव",
+                "passed": true
+              },
+              {
+                "start": 30.21,
+                "end": 33.28,
+                "beat": "karein",
+                "kind": "chart-karein",
+                "jaccard": 0.4,
+                "recall": 0.667,
+                "gate_recall": 0.808,
+                "missing_numbers": [],
+                "shared": [
+                  "अब",
+                  "आगे",
+                  "इस",
+                  "लएवएल",
+                  "नोट",
+                  "करो"
+                ],
+                "script": "अब आगे, इस लएवएल को नोट करो और उसके ऊपर साफ़",
+                "heard": "अव अव आगे, इस लेवल को नोट करो और उसके उपर साव्फ",
+                "passed": true
+              },
+              {
+                "start": 33.28,
+                "end": 36.35,
+                "beat": "karein",
+                "kind": "chart-karein",
+                "jaccard": 0.222,
+                "recall": 0.625,
+                "gate_recall": 0.808,
+                "missing_numbers": [],
+                "shared": [
+                  "करो",
+                  "उसके",
+                  "ऊपर",
+                  "साफ",
+                  "कलओसए",
+                  "इंतजार"
+                ],
+                "script": "और उसके ऊपर साफ़ कलओसए का इंतज़ार करो। भारी वओलउमए पर भी",
+                "heard": "और उसके उपर साव्फ खलोस का इंतजार करो. बारी वोलिमपर भी भावना",
+                "passed": true
+              },
+              {
+                "start": 36.35,
+                "end": 39.42,
+                "beat": "karein",
+                "kind": "chart-karein",
+                "jaccard": 0.15,
+                "recall": 0.375,
+                "gate_recall": 0.808,
+                "missing_numbers": [],
+                "shared": [
+                  "वओलउमए",
+                  "भाव",
+                  "बढे",
+                  "गलती",
+                  "मानी",
+                  "जाती"
+                ],
+                "script": "वओलउमए पर भी भाव न बढ़े तो यह गलती मानी जाती है; अबसओरपटइओन",
+                "heard": "बारी वोलिमपर भी भावना बड़े तो ये गलती मानी जाती है. एबजोब्षिन",
+                "passed": true
+              },
+              {
+                "start": 39.42,
+                "end": 42.49,
+                "beat": "karein",
+                "kind": "chart-karein",
+                "jaccard": 0.133,
+                "recall": 0.714,
+                "gate_recall": 0.808,
+                "missing_numbers": [],
+                "shared": [
+                  "जाती",
+                  "अबसओरपटइओन",
+                  "सिर्फ",
+                  "संभावना",
+                  "पक्का",
+                  "संकेत"
+                ],
+                "script": "जाती है; अबसओरपटइओन सिर्फ़ संभावना है, पक्का संकेत नहीं।",
+                "heard": "जाती है. एबजोब्षिन स्वर्फ समबावना है. पक का संकेत नहीं.",
+                "passed": true
+              }
+            ],
+            "beats": [
+              {
+                "beat": "hook",
+                "recall": 0.875,
+                "script": "वओलउमए 3 गुना भाव वहीं, कोई चुपचाप बेच रहा? भारी वॉल्यूम आया, पर प्राइस उसी लेवल पर रुका।",
+                "heard": "वूलिम तीन गुना बाव वही? कोई चुप्चा बेच रा? बारी वॉलिम आया, पर प्रईस उसी लेवल पर रुका. अब इसे"
+              },
+              {
+                "beat": "pehchan",
+                "recall": 0.857,
+                "script": "अब इसे पहचानो। बड़ी कअनदलए नहीं चाहिए, सिर्फ़ भारी वओलउमए देखो। औसत से 3 गुना वओलउमए आया, पर प्राइस उसी लएवएल पर रुका रहा।",
+                "heard": "लेवल पर रुका. अब इसे पहचानो. बढ़ी कंडल नहीं चाहिए, सर्फ बारी वॉलिम देखो. अउसथ से तीन गुना वॉलिम आया, पर प्राइस उसी लेवल पर रुका रहा. मतलब ये है, इतनी खरीदारी आई, पर भाव नहीं चड़ा. उदारन,"
+              },
+              {
+                "beat": "matlab",
+                "recall": 0.731,
+                "script": "मतलब ये है, इतनी ख़रीदारी आई पर भाव नहीं चढ़ा। उदाहरण: वओलउमए औसत से 3 गुना, फिर भी प्राइस वहीं अटका। इसका मतलब कोई बड़ा सएललएर ख़रीदारी सोख रहा हो सकता है।",
+                "heard": "नहीं चड़ा. उदारन, वोल्युम अचद से तीं गुना, फिर भी प्राइस वही अट्का. इसके मतलब, कोई बड़ा सेलर खरीदारी सोख रहा हो सकता है. अव अव"
+              },
+              {
+                "beat": "karein",
+                "recall": 0.808,
+                "script": "अब आगे, इस लएवएल को नोट करो और उसके ऊपर साफ़ कलओसए का इंतज़ार करो। भारी वओलउमए पर भी भाव न बढ़े तो यह गलती मानी जाती है; अबसओरपटइओन सिर्फ़ संभावना है, पक्का संकेत नहीं।",
+                "heard": "अव अव आगे, इस लेवल को नोट करो और उसके उपर साव्फ खलोस का इंतजार करो. बारी वोलिमपर भी भावना बड़े तो ये गलती मानी जाती है. एबजोब्षिन स्वर्फ समबावना है. पक का संकेत नहीं."
+              }
+            ]
+          },
+          "scenes": [
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 0.0,
+              "end": 2.67
+            },
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 2.67,
+              "end": 5.34
+            },
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 5.34,
+              "end": 8.0
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 8.0,
+              "end": 11.43
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 11.43,
+              "end": 14.86
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 14.86,
+              "end": 18.28
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 18.28,
+              "end": 21.71
+            },
+            {
+              "beat": "matlab",
+              "kind": "chart-matlab",
+              "start": 21.71,
+              "end": 24.54
+            },
+            {
+              "beat": "matlab",
+              "kind": "chart-matlab",
+              "start": 24.54,
+              "end": 27.38
+            },
+            {
+              "beat": "matlab",
+              "kind": "chart-matlab",
+              "start": 27.38,
+              "end": 30.21
+            },
+            {
+              "beat": "karein",
+              "kind": "chart-karein",
+              "start": 30.21,
+              "end": 33.28
+            },
+            {
+              "beat": "karein",
+              "kind": "chart-karein",
+              "start": 33.28,
+              "end": 36.35
+            },
+            {
+              "beat": "karein",
+              "kind": "chart-karein",
+              "start": 36.35,
+              "end": 39.42
+            },
+            {
+              "beat": "karein",
+              "kind": "chart-karein",
+              "start": 39.42,
+              "end": 42.49
+            }
+          ]
+        },
+        "narration": {
+          "title": "Volume 3 गुना, भाव वहीं — कोई चुपचाप बेच रहा?",
+          "hook_line": "वओलउमए 3 गुना भाव वहीं, कोई चुपचाप बेच रहा?",
+          "beats": {
+            "hook": "वओलउमए 3 गुना भाव वहीं, कोई चुपचाप बेच रहा? भारी वॉल्यूम आया, पर प्राइस उसी लेवल पर रुका।",
+            "pehchan": "अब इसे पहचानो। बड़ी कअनदलए नहीं चाहिए, सिर्फ़ भारी वओलउमए देखो। औसत से 3 गुना वओलउमए आया, पर प्राइस उसी लएवएल पर रुका रहा।",
+            "matlab": "मतलब ये है, इतनी ख़रीदारी आई पर भाव नहीं चढ़ा। उदाहरण: वओलउमए औसत से 3 गुना, फिर भी प्राइस वहीं अटका। इसका मतलब कोई बड़ा सएललएर ख़रीदारी सोख रहा हो सकता है।",
+            "karein": "अब आगे, इस लएवएल को नोट करो और उसके ऊपर साफ़ कलओसए का इंतज़ार करो। भारी वओलउमए पर भी भाव न बढ़े तो यह गलती मानी जाती है; अबसओरपटइओन सिर्फ़ संभावना है, पक्का संकेत नहीं।"
+          },
+          "_trim_notes": [
+            "matlab: dropped 'ये संभावना है, पक्का संकेत नहीं।'"
+          ],
+          "review_attempts": 3,
+          "narration_fallback": false,
+          "source": "llm",
+          "live_beats": "four"
+        },
+        "shots": {
+          "shots": [
+            {
+              "shot_id": 1,
+              "beat": "hook",
+              "start_sec": 0.0,
+              "end_sec": 8.0,
+              "visual_type": "chart",
+              "on_screen_text": "वओलउमए 3 गुना भाव वहीं, कोई चुपचाप बेच रहा?",
+              "sub_text": "price रुका",
+              "spoken_line": "वओलउमए 3 गुना भाव वहीं, कोई चुपचाप बेच रहा? भारी वॉल्यूम आया, पर प्राइस उसी लेवल पर रुका।",
+              "chart_data": {
+                "template": "intraday_volume",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": "वओलउमए 3 गुना भाव वहीं, कोई चुपचाप बेच रहा?"
+            },
+            {
+              "shot_id": 2,
+              "beat": "pehchan",
+              "start_sec": 8.0,
+              "end_sec": 21.71,
+              "visual_type": "chart",
+              "on_screen_text": "पहचान",
+              "sub_text": "बड़ी candle नहीं, सिर्फ़ भारी volume",
+              "spoken_line": "अब इसे पहचानो। बड़ी कअनदलए नहीं चाहिए, सिर्फ़ भारी वओलउमए देखो। औसत से 3 गुना वओलउमए आया, पर प्राइस उसी लएवएल पर रुका रहा।",
+              "chart_data": {
+                "template": "intraday_volume",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 3,
+              "beat": "matlab",
+              "start_sec": 21.71,
+              "end_sec": 30.21,
+              "visual_type": "chart",
+              "on_screen_text": "मतलब",
+              "sub_text": "बड़ा seller ख़रीदारी सोख रहा हो सकता है",
+              "spoken_line": "मतलब ये है, इतनी ख़रीदारी आई पर भाव नहीं चढ़ा। उदाहरण: वओलउमए औसत से 3 गुना, फिर भी प्राइस वहीं अटका। इसका मतलब कोई बड़ा सएललएर ख़रीदारी सोख रहा हो सकता है।",
+              "chart_data": {
+                "template": "intraday_volume",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 4,
+              "beat": "karein",
+              "start_sec": 30.21,
+              "end_sec": 42.49,
+              "visual_type": "chart",
+              "on_screen_text": "क्या देखें",
+              "sub_text": "उस level के ऊपर साफ़ close का इंतज़ार",
+              "spoken_line": "अब आगे, इस लएवएल को नोट करो और उसके ऊपर साफ़ कलओसए का इंतज़ार करो। भारी वओलउमए पर भी भाव न बढ़े तो यह गलती मानी जाती है; अबसओरपटइओन सिर्फ़ संभावना है, पक्का संकेत नहीं।",
+              "chart_data": {
+                "template": "intraday_volume",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            }
+          ]
+        },
+        "audio_mix": {
+          "bed_mixed": false,
+          "background": false,
+          "sfx_present": true,
+          "sfx_under_db": 41.21094540528457,
+          "voice_rms": 0.09525756215542161,
+          "sfx_rms": 0.0008286138584360297
+        },
+        "captions": "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: T,Noto Sans Devanagari,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,8,60,190,0,1\nStyle: Cap,Noto Sans Devanagari,62,&H00FFFFFF,&H00FFFFFF,&H00101010,&HA0000000,-1,0,0,0,100,100,0,0,3,4,0,2,70,190,520,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 1,0:00:30.21,0:00:42.49,T,,0,0,0,,{\\an8\\pos(540,1604)\\fs39\\c&H00B8A394&\\q2\\fad(150,100)}सिर्फ़ जानकारी, निवेश सलाह नहीं।\n"
+      }
+    }
+  ],
   "skipped_topics": [
     "three_black_crows",
     "dark_cloud",
@@ -9,6 +659,7 @@
     "opt_protective_put",
     "opt_theta_decay",
     "intraday_orb",
-    "intraday_vwap"
+    "intraday_vwap",
+    "intraday_trend_range"
   ]
 }
