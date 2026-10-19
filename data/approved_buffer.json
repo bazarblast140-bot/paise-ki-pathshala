@@ -46,20 +46,20 @@
       "state": "held",
       "topic_key": "pat_doji",
       "owner_approved": false,
-      "created_at": "2026-10-09T00:13:22Z",
-      "reason": "self-review craft 0 is below 60; self-review sync 0 is below 60; self-review overall 65.0 is below 75; sync gate did not pass; existing public-review gate did not pass; self-review 65.0 is under 75; craft 0 is below 60; sync 0 is below 60",
+      "created_at": "2026-10-19T05:25:03Z",
+      "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
       "voice_engine": "gemini",
-      "duration_s": 40.41
+      "duration_s": 43.25
     },
     {
       "id": "hold-pat_double-20261009T001322Z",
       "state": "held",
       "topic_key": "pat_double",
       "owner_approved": false,
-      "created_at": "2026-10-09T00:13:22Z",
-      "reason": "self-review sync 0 is below 60; sync gate did not pass; existing public-review gate did not pass; trend score missing; sync 0 is below 60; voice_engine=edge is held",
-      "voice_engine": "edge",
-      "duration_s": 45.27
+      "created_at": "2026-10-19T05:24:59Z",
+      "reason": "render rc=1",
+      "voice_engine": "gemini",
+      "duration_s": 45.28
     },
     {
       "id": "hold-pat_flag-20261009T034000Z",
@@ -86,9 +86,9 @@
       "state": "held",
       "topic_key": "pat_hammer",
       "owner_approved": false,
-      "created_at": "2026-10-09T03:39:42Z",
-      "reason": "self-review craft 0 is below 60; self-review sync 0 is below 60; self-review overall 65.0 is below 75; sync gate did not pass; existing public-review gate did not pass; self-review 65.0 is under 75; craft 0 is below 60; sync 0 is below 60; voice_engine=edge is held",
-      "voice_engine": "edge",
+      "created_at": "2026-10-19T05:25:01Z",
+      "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
+      "voice_engine": "gemini",
       "duration_s": 40.02
     },
     {
