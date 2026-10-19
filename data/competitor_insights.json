@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-18T14:43:30+00:00",
+ "generated_at": "2026-10-19T17:21:44+00:00",
  "lookback_days": 30,
  "via": "oauth",
  "channels": [
@@ -30,8 +30,8 @@
    },
    "number_led": {
     "top_share": 0.52,
-    "rest_share": 0.42,
-    "lift": 1.22
+    "rest_share": 0.45,
+    "lift": 1.14
    },
    "warning": {
     "top_share": 0.1,
@@ -45,8 +45,8 @@
    },
    "real_data": {
     "top_share": 0.33,
-    "rest_share": 0.22,
-    "lift": 1.43
+    "rest_share": 0.19,
+    "lift": 1.61
    },
    "mechanism_explainer": {
     "top_share": 0.05,
@@ -55,21 +55,21 @@
    }
   },
   "winning_keywords": [
-   "samjhe",
+   "nifty",
    "kaise",
-   "nishanebaaz",
-   "murarka",
+   "samjhe",
    "nitin",
+   "murarka",
+   "nishanebaaz",
    "trade",
    "liquidity",
    "फिर",
    "call",
-   "financials",
    "review",
-   "ipo",
    "gmp",
+   "risks",
    "should",
-   "risks"
+   "avoid"
   ],
   "top_tags": [
    "candlestick",
@@ -104,9 +104,9 @@
    {
     "channel": "Nitin Murarka Nifty ke Nishanebaaz",
     "title": "Portfolio पड़ा है Idle क्या करें? | Option trading | Nitin Murarka Nifty ke Nishanebaaz",
-    "views": 108855,
-    "views_per_day": 17245.4,
-    "performance_index": 5.0,
+    "views": 109189,
+    "views_per_day": 14711.6,
+    "performance_index": 4.77,
     "duration_s": 90,
     "published_ist": "2026-10-12 12:44",
     "tags": [
@@ -125,21 +125,11 @@
     ]
    },
    {
-    "channel": "Stock Menthol",
-    "title": "Which Zone Is Best for Entry? | Liquidity Trading",
-    "views": 8107,
-    "views_per_day": 1602.9,
-    "performance_index": 4.27,
-    "duration_s": 553,
-    "published_ist": "2026-10-13 18:50",
-    "tags": []
-   },
-   {
     "channel": "Surface Trader",
     "title": "trading me candlestick chart ko kaise samjhe | candlestick charts #trading #candlestick #charts",
-    "views": 5838,
-    "views_per_day": 825.4,
-    "performance_index": 3.78,
+    "views": 5965,
+    "views_per_day": 729.0,
+    "performance_index": 3.83,
     "duration_s": 31,
     "published_ist": "2026-10-11 18:28",
     "tags": [
@@ -159,53 +149,20 @@
    },
    {
     "channel": "Stock Menthol",
-    "title": "Liquidity Sweep Trading Strategy | 3-Step Entry Model",
-    "views": 11450,
-    "views_per_day": 1266.2,
-    "performance_index": 3.37,
-    "duration_s": 482,
-    "published_ist": "2026-10-09 19:12",
-    "tags": []
-   },
-   {
-    "channel": "CNBC Awaaz.",
-    "title": "शेयर बाजार में फिर क्यों मचा हाहाकार? | Stock Market India | #shorts  N18S",
-    "views": 587998,
-    "views_per_day": 30583.2,
-    "performance_index": 3.05,
-    "duration_s": 125,
-    "published_ist": "2026-09-29 14:47",
-    "tags": [
-     "Stock Market",
-     "Stock Market India",
-     "Share Market",
-     "Share Market India",
-     "Stock Market Crash",
-     "Stock Market Today",
-     "Share Market Today",
-     "Nifty",
-     "Nifty 50",
-     "Sensex",
-     "Nifty Today",
-     "Sensex Today"
-    ]
-   },
-   {
-    "channel": "Dr. Mukul Agrawal : Stock Market Coach",
-    "title": "Trump vs Indian IT Stocks: Nifty IT Rallies 3%, TCS Jumps 5.5%! 🔥 #Shorts",
-    "views": 321974,
-    "views_per_day": 35687.4,
-    "performance_index": 3.03,
-    "duration_s": 88,
-    "published_ist": "2026-10-09 19:41",
+    "title": "Which Zone Is Best for Entry? | Liquidity Trading",
+    "views": 8179,
+    "views_per_day": 1326.1,
+    "performance_index": 3.76,
+    "duration_s": 553,
+    "published_ist": "2026-10-13 18:50",
     "tags": []
    },
    {
     "channel": "Surface Trader",
     "title": "candlestick ko kaise samjhe | candlestick pattern #candlestick #candlestickpattern #trading",
-    "views": 11152,
-    "views_per_day": 653.7,
-    "performance_index": 3.0,
+    "views": 11711,
+    "views_per_day": 644.5,
+    "performance_index": 3.38,
     "duration_s": 35,
     "published_ist": "2026-10-01 18:47",
     "tags": [
@@ -226,9 +183,9 @@
    {
     "channel": "Surface Trader",
     "title": "candlestick ko kaise samjhe | candlestick pattern | #candlestick #candlestickpattern #trading",
-    "views": 15032,
-    "views_per_day": 650.9,
-    "performance_index": 2.98,
+    "views": 15249,
+    "views_per_day": 630.1,
+    "performance_index": 3.31,
     "duration_s": 35,
     "published_ist": "2026-09-25 18:00",
     "tags": [
@@ -247,11 +204,44 @@
     ]
    },
    {
+    "channel": "Stock Menthol",
+    "title": "Liquidity Sweep Trading Strategy | 3-Step Entry Model",
+    "views": 11703,
+    "views_per_day": 1152.7,
+    "performance_index": 3.27,
+    "duration_s": 482,
+    "published_ist": "2026-10-09 19:12",
+    "tags": []
+   },
+   {
+    "channel": "CNBC Awaaz.",
+    "title": "शेयर बाजार में फिर क्यों मचा हाहाकार? | Stock Market India | #shorts  N18S",
+    "views": 588116,
+    "views_per_day": 28919.8,
+    "performance_index": 3.14,
+    "duration_s": 125,
+    "published_ist": "2026-09-29 14:47",
+    "tags": [
+     "Stock Market",
+     "Stock Market India",
+     "Share Market",
+     "Share Market India",
+     "Stock Market Crash",
+     "Stock Market Today",
+     "Share Market Today",
+     "Nifty",
+     "Nifty 50",
+     "Sensex",
+     "Nifty Today",
+     "Sensex Today"
+    ]
+   },
+   {
     "channel": "Trading Tech (Jitendra Baghel) ",
     "title": "Monday Market Prediction | Monday Nifty Prediction | #niftyprediction #shortsfeeds #nifty",
-    "views": 21665,
-    "views_per_day": 2413.6,
-    "performance_index": 2.45,
+    "views": 21749,
+    "views_per_day": 2156.3,
+    "performance_index": 2.32,
     "duration_s": 159,
     "published_ist": "2026-10-09 20:47",
     "tags": [
@@ -270,34 +260,11 @@
     ]
    },
    {
-    "channel": "THE WORLD TRADER",
-    "title": "Candlestick Patterns समझो, फिर Trade करो!🔥Candle का Logic सीखो #priceaction  #trading #candlestick",
-    "views": 33660,
-    "views_per_day": 7263.3,
-    "performance_index": 2.1,
-    "duration_s": 180,
-    "published_ist": "2026-10-14 05:00",
-    "tags": [
-     "#CandlestickPatterns",
-     "#CandlestickPatternsHindi",
-     "#CandlestickChart",
-     "#PriceAction",
-     "#TechnicalAnalysis",
-     "#TradingForBeginners",
-     "#StockMarket",
-     "#TradingHindi",
-     "#ChartAnalysis",
-     "#BullishCandlestick",
-     "#BearishCandlestick",
-     "#SupportAndResistance"
-    ]
-   },
-   {
     "channel": "Surface Trader",
     "title": "how to understand candlestick patterns | candlestick patterns ko kaise samjhe #candlestickpatterns",
-    "views": 3737,
-    "views_per_day": 413.4,
-    "performance_index": 1.89,
+    "views": 3769,
+    "views_per_day": 371.3,
+    "performance_index": 1.95,
     "duration_s": 43,
     "published_ist": "2026-10-09 19:15",
     "tags": [
@@ -316,11 +283,44 @@
     ]
    },
    {
+    "channel": "THE WORLD TRADER",
+    "title": "Candlestick Patterns समझो, फिर Trade करो!🔥Candle का Logic सीखो #priceaction  #trading #candlestick",
+    "views": 39104,
+    "views_per_day": 6807.6,
+    "performance_index": 1.63,
+    "duration_s": 180,
+    "published_ist": "2026-10-14 05:00",
+    "tags": [
+     "#CandlestickPatterns",
+     "#CandlestickPatternsHindi",
+     "#CandlestickChart",
+     "#PriceAction",
+     "#TechnicalAnalysis",
+     "#TradingForBeginners",
+     "#StockMarket",
+     "#TradingHindi",
+     "#ChartAnalysis",
+     "#BullishCandlestick",
+     "#BearishCandlestick",
+     "#SupportAndResistance"
+    ]
+   },
+   {
+    "channel": "Dr. Mukul Agrawal : Stock Market Coach",
+    "title": "Trump vs Indian IT Stocks: Nifty IT Rallies 3%, TCS Jumps 5.5%! 🔥 #Shorts",
+    "views": 348205,
+    "views_per_day": 34367.1,
+    "performance_index": 1.61,
+    "duration_s": 88,
+    "published_ist": "2026-10-09 19:41",
+    "tags": []
+   },
+   {
     "channel": "Nitin Murarka Nifty ke Nishanebaaz",
     "title": "4 Things to Check Before Buying CALL or PUT! | Nitin Murarka Nifty ke Nishanebaaz",
-    "views": 113763,
-    "views_per_day": 5063.4,
-    "performance_index": 1.57,
+    "views": 114719,
+    "views_per_day": 4865.6,
+    "performance_index": 1.58,
     "duration_s": 110,
     "published_ist": "2026-09-26 09:00",
     "tags": [
@@ -341,9 +341,9 @@
    {
     "channel": "Stock Menthol",
     "title": "5-Minute Scalping Strategy That Traders Need to Know",
-    "views": 10635,
-    "views_per_day": 588.7,
-    "performance_index": 1.57,
+    "views": 10663,
+    "views_per_day": 556.1,
+    "performance_index": 1.58,
     "duration_s": 567,
     "published_ist": "2026-09-30 18:41",
     "tags": []
@@ -351,9 +351,9 @@
    {
     "channel": "StockBox",
     "title": "HD Fire Protect IPO Review 2026: Should You Apply or Avoid? | Price, GMP, Financials & Risks #shorts",
-    "views": 77353,
-    "views_per_day": 7500.8,
-    "performance_index": 1.56,
+    "views": 79223,
+    "views_per_day": 6935.7,
+    "performance_index": 1.5,
     "duration_s": 177,
     "published_ist": "2026-10-08 12:43",
     "tags": [
@@ -372,27 +372,14 @@
     ]
    },
    {
-    "channel": "Finance with SKT",
-    "title": "अमीर बनाने वाली 5 High-Income Skills!🔥 | Finance With SKT #shorts",
-    "views": 233833,
-    "views_per_day": 27648.8,
-    "performance_index": 1.45,
-    "duration_s": 149,
-    "published_ist": "2026-10-10 09:15",
-    "tags": [
-     "Finance with SKT",
-     "Finance",
-     "Hindi Finance",
-     "Business Case Study",
-     "Startup Story",
-     "Company Story",
-     "Business Analysis",
-     "Finance Explained",
-     "Financial Education",
-     "Personal Finance",
-     "Money Management",
-     "Wealth Creation"
-    ]
+    "channel": "Stock Menthol",
+    "title": "Find Accurate Support & Resistance & Trade 1:4 RR",
+    "views": 12788,
+    "views_per_day": 508.1,
+    "performance_index": 1.44,
+    "duration_s": 524,
+    "published_ist": "2026-09-24 18:49",
+    "tags": []
    }
   ]
  },
