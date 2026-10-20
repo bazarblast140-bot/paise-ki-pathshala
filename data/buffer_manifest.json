@@ -662,6 +662,8 @@
     "intraday_vwap",
     "intraday_trend_range",
     "stock_turnaround",
-    "risk_leverage"
+    "risk_leverage",
+    "business_cash",
+    "aaj_ka_nifty"
   ]
 }
