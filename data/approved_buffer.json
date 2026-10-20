@@ -66,20 +66,20 @@
       "state": "held",
       "topic_key": "pat_flag",
       "owner_approved": false,
-      "created_at": "2026-10-09T03:40:00Z",
-      "reason": "trend score missing; voice_engine=edge is held",
-      "voice_engine": "edge",
-      "duration_s": 43.21
+      "created_at": "2026-10-20T05:25:23Z",
+      "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
+      "voice_engine": "gemini",
+      "duration_s": 43.2
     },
     {
       "id": "hold-pat_gap_up-20261009T033955Z",
       "state": "held",
       "topic_key": "pat_gap_up",
       "owner_approved": false,
-      "created_at": "2026-10-09T03:39:55Z",
-      "reason": "existing public-review gate did not pass; trend score missing",
+      "created_at": "2026-10-20T05:25:25Z",
+      "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
       "voice_engine": "gemini",
-      "duration_s": 40.47
+      "duration_s": 45.68
     },
     {
       "id": "hold-pat_hammer-20261009T033942Z",
@@ -96,10 +96,10 @@
       "state": "held",
       "topic_key": "pat_head_shoulders",
       "owner_approved": false,
-      "created_at": "2026-10-09T03:51:19Z",
-      "reason": "self-review sync 0 is below 60; sync gate did not pass; existing public-review gate did not pass; trend score missing; sync 0 is below 60; voice_engine=edge is held",
-      "voice_engine": "edge",
-      "duration_s": 45.36
+      "created_at": "2026-10-20T05:25:23Z",
+      "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
+      "voice_engine": "gemini",
+      "duration_s": 46.59
     },
     {
       "id": "hold-pat_morning_star-20261009T035521Z",
