@@ -10,6 +10,106 @@
           "exhausted": false
         }
       }
+    },
+    "2026-10-15": {
+      "keys": {
+        "2": {
+          "realchart": 0,
+          "nifty": 0,
+          "buffer": 0,
+          "other": 0,
+          "news": 0,
+          "close": 1,
+          "ta": 0,
+          "recap": 0,
+          "exhausted": true
+        },
+        "3": {
+          "realchart": 0,
+          "nifty": 0,
+          "buffer": 0,
+          "other": 0,
+          "news": 0,
+          "close": 6,
+          "ta": 0,
+          "recap": 0,
+          "exhausted": true
+        }
+      }
+    },
+    "2026-10-16": {
+      "keys": {
+        "1": {
+          "realchart": 0,
+          "nifty": 0,
+          "buffer": 0,
+          "other": 0,
+          "news": 5,
+          "close": 2,
+          "ta": 0,
+          "recap": 0,
+          "exhausted": true
+        },
+        "2": {
+          "realchart": 0,
+          "nifty": 0,
+          "buffer": 0,
+          "other": 0,
+          "news": 2,
+          "close": 0,
+          "ta": 0,
+          "recap": 0,
+          "exhausted": true
+        },
+        "3": {
+          "realchart": 0,
+          "nifty": 0,
+          "buffer": 0,
+          "other": 0,
+          "news": 2,
+          "close": 0,
+          "ta": 0,
+          "recap": 0,
+          "exhausted": true
+        },
+        "4": {
+          "realchart": 0,
+          "nifty": 0,
+          "buffer": 0,
+          "other": 0,
+          "news": 4,
+          "close": 5,
+          "ta": 0,
+          "recap": 0,
+          "exhausted": true
+        }
+      }
+    },
+    "2026-10-21": {
+      "keys": {
+        "1": {
+          "realchart": 0,
+          "nifty": 0,
+          "buffer": 0,
+          "other": 0,
+          "news": 0,
+          "close": 5,
+          "ta": 5,
+          "recap": 0,
+          "exhausted": false
+        },
+        "2": {
+          "realchart": 0,
+          "nifty": 0,
+          "buffer": 0,
+          "other": 0,
+          "news": 0,
+          "close": 1,
+          "ta": 0,
+          "recap": 0,
+          "exhausted": false
+        }
+      }
     }
   },
   "charges": [
@@ -42,6 +142,234 @@
       "date": "2026-10-14",
       "caller": "buffer",
       "key": "1"
+    },
+    {
+      "id": "f76ce40cf8f54c0a845f51c59b3a5d65",
+      "date": "2026-10-15",
+      "caller": "close",
+      "key": "2"
+    },
+    {
+      "id": "88ed50c2e0a040acb296c6dcbf6d9ce2",
+      "date": "2026-10-15",
+      "caller": "close",
+      "key": "3"
+    },
+    {
+      "id": "31290211543e4e8fb8c0172cb36d5b9d",
+      "date": "2026-10-15",
+      "caller": "close",
+      "key": "3"
+    },
+    {
+      "id": "913048cd351f45729370f9f09f29f515",
+      "date": "2026-10-15",
+      "caller": "close",
+      "key": "3"
+    },
+    {
+      "id": "3db696eb30be4daaa33d3a1169bcdf4e",
+      "date": "2026-10-15",
+      "caller": "close",
+      "key": "3"
+    },
+    {
+      "id": "e52b0f81ded341f2980b81a50ae8f181",
+      "date": "2026-10-15",
+      "caller": "close",
+      "key": "3"
+    },
+    {
+      "id": "015e4baeeaa24b868c00cef20d2cae3f",
+      "date": "2026-10-15",
+      "caller": "close",
+      "key": "3"
+    },
+    {
+      "id": "75065899df51484fbebcd98d335b9e69",
+      "date": "2026-10-16",
+      "caller": "close",
+      "key": "1"
+    },
+    {
+      "id": "724529e4bd8f49d5a9b04fce186c3443",
+      "date": "2026-10-16",
+      "caller": "close",
+      "key": "1"
+    },
+    {
+      "id": "68dfb195f60841739ebc156a72c3318f",
+      "date": "2026-10-16",
+      "caller": "news",
+      "key": "1"
+    },
+    {
+      "id": "e1a7e511ce964478b7cb582ba2bffca7",
+      "date": "2026-10-16",
+      "caller": "news",
+      "key": "1"
+    },
+    {
+      "id": "5b0951b650fc4f78bacdfe2d42fbab30",
+      "date": "2026-10-16",
+      "caller": "news",
+      "key": "1"
+    },
+    {
+      "id": "1fe6769d7c7c4ed0b26ba6b000381110",
+      "date": "2026-10-16",
+      "caller": "news",
+      "key": "1"
+    },
+    {
+      "id": "3edfd74834d6486a9ecfe3e4008f7e77",
+      "date": "2026-10-16",
+      "caller": "news",
+      "key": "1"
+    },
+    {
+      "id": "91f17545952d414693ca0c073672273c",
+      "date": "2026-10-16",
+      "caller": "news",
+      "key": "2"
+    },
+    {
+      "id": "72f25fbe943b44708779bd294a87ece2",
+      "date": "2026-10-16",
+      "caller": "news",
+      "key": "2"
+    },
+    {
+      "id": "3c3687bc1df94cf3a479d1dd5b83fc6a",
+      "date": "2026-10-16",
+      "caller": "news",
+      "key": "3"
+    },
+    {
+      "id": "446ef489c31a477d8c6f718f4a0eccdc",
+      "date": "2026-10-16",
+      "caller": "news",
+      "key": "3"
+    },
+    {
+      "id": "5593462dd6c4467c9fd90effc1d5e428",
+      "date": "2026-10-16",
+      "caller": "news",
+      "key": "4"
+    },
+    {
+      "id": "e6e258477c4244919023b57e3cb355bf",
+      "date": "2026-10-16",
+      "caller": "news",
+      "key": "4"
+    },
+    {
+      "id": "d058eba550e242139138d6df0a28f637",
+      "date": "2026-10-16",
+      "caller": "news",
+      "key": "4"
+    },
+    {
+      "id": "6aff05fa3c4a4089a08d1a855649f27d",
+      "date": "2026-10-16",
+      "caller": "news",
+      "key": "4"
+    },
+    {
+      "id": "c5161ebc408946d98b678311b95d3827",
+      "date": "2026-10-16",
+      "caller": "close",
+      "key": "4"
+    },
+    {
+      "id": "0d0cbaaa7e6047e899524e84203678f8",
+      "date": "2026-10-16",
+      "caller": "close",
+      "key": "4"
+    },
+    {
+      "id": "0c14452a1b0b46688130d6f02a510448",
+      "date": "2026-10-16",
+      "caller": "close",
+      "key": "4"
+    },
+    {
+      "id": "6eef79cc0cae4fe3b537ef8827b48a5a",
+      "date": "2026-10-16",
+      "caller": "close",
+      "key": "4"
+    },
+    {
+      "id": "264d3b3ea20946bb9977b8cce51e65bb",
+      "date": "2026-10-16",
+      "caller": "close",
+      "key": "4"
+    },
+    {
+      "id": "28b33e164fee4987a42bf0e98e83b598",
+      "date": "2026-10-21",
+      "caller": "ta",
+      "key": "1"
+    },
+    {
+      "id": "0ba819f445ba4fe79a941f07aee75d91",
+      "date": "2026-10-21",
+      "caller": "ta",
+      "key": "1"
+    },
+    {
+      "id": "e15a56c9a17f489fb36a86b32bcede0b",
+      "date": "2026-10-21",
+      "caller": "ta",
+      "key": "1"
+    },
+    {
+      "id": "92a111fa15744ec0bc46c7aab916be15",
+      "date": "2026-10-21",
+      "caller": "ta",
+      "key": "1"
+    },
+    {
+      "id": "ce26d49d3b864170b21f81cf3c96f4f3",
+      "date": "2026-10-21",
+      "caller": "ta",
+      "key": "1"
+    },
+    {
+      "id": "ffbb88b5aa5b4f9e8d487f4040de014a",
+      "date": "2026-10-21",
+      "caller": "close",
+      "key": "1"
+    },
+    {
+      "id": "03a7d58d5dfc4f4d9447222fca41b723",
+      "date": "2026-10-21",
+      "caller": "close",
+      "key": "1"
+    },
+    {
+      "id": "f3a97114024644c49eccf3c5d5b5db81",
+      "date": "2026-10-21",
+      "caller": "close",
+      "key": "1"
+    },
+    {
+      "id": "4cbf5dca399e44c88ae0d19b1961f33c",
+      "date": "2026-10-21",
+      "caller": "close",
+      "key": "1"
+    },
+    {
+      "id": "d528ec0388a54372b8cad23f1f7e1ec7",
+      "date": "2026-10-21",
+      "caller": "close",
+      "key": "1"
+    },
+    {
+      "id": "31e96617679e4abaa755ce021d4e413d",
+      "date": "2026-10-21",
+      "caller": "close",
+      "key": "2"
     }
   ]
 }

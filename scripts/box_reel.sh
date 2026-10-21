@@ -9,6 +9,7 @@ kind="${1:?kind: close|ta|news}"; shift
 publish=0
 if [ "${1:-}" = "--publish" ]; then publish=1; shift; fi
 export REALCHART_CDP="${REALCHART_CDP:-http://127.0.0.1:9226}"
+/home/box/start_tv_chrome.sh; sleep 8
 export REALCHART_TV_LAYOUT="${REALCHART_TV_LAYOUT:-ckfLnl7v}"
 export REALCHART_NO_ALERT="${REALCHART_NO_ALERT:-1}"
 export GEMINI_SECRETS_DIR="${GEMINI_SECRETS_DIR:-/home/box/.secrets}"
