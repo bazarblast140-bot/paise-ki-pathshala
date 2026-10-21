@@ -259,6 +259,34 @@ def _silence(dest, seconds, rate=24000):
 
 
 SEGMENT_GAP_SEC = 0.25
+# Silence kept at each clip edge where two clips are joined. Each TTS clip starts with
+# ~0.25 s and ends with up to ~0.37 s of hush; with the 0.25 s gap that stacked to
+# 0.8-0.9 s of dead air in final.mp4 (QA max 0.8 s). Capped edges keep a join near 0.55 s.
+JOIN_LEAD_SEC = 0.12
+JOIN_TAIL_SEC = 0.18
+
+
+def trim_join_edges(path, lead=JOIN_LEAD_SEC, tail=JOIN_TAIL_SEC, floor_db=-40.0, keep_tail=False):
+    """Trim a clip's leading/trailing silence down to `lead`/`tail` seconds. Voice is never cut."""
+    import re
+    import subprocess
+    duration = _clip_seconds(path)
+    log = subprocess.run(["ffmpeg", "-v", "info", "-i", str(path), "-af", f"silencedetect=n={floor_db}dB:d=0.05",
+                          "-f", "null", "-"], capture_output=True, text=True).stderr
+    starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", log)]
+    ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", log)]
+    begin, finish = 0.0, duration
+    if starts and starts[0] <= 0.01 and ends:
+        begin = max(0.0, ends[0] - lead)
+    if not keep_tail and starts and (len(ends) < len(starts) or ends[-1] >= duration - 0.01) and starts[-1] > begin:
+        finish = min(duration, starts[-1] + tail)
+    if begin <= 0.0 and finish >= duration - 0.001:
+        return path
+    tmp = Path(path).with_suffix(".trim.wav")
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(path), "-af", f"atrim={begin:.4f}:{finish:.4f},asetpts=N/SR/TB",
+                    str(tmp)], check=True)
+    os.replace(tmp, path)
+    return path
 
 
 def wav_seconds(path):
@@ -321,6 +349,8 @@ def _speak_all(texts, dest, kind, dry_run, key_prefix, parts_dir, engine):
         else:
             info = speak(str(text), part, kind, cache_key=f"{key_prefix}-seg{index}-{digest}", engine=engine)
             requests += info.get("requests", 0)
+        if str(text).strip() and not dry_run:
+            trim_join_edges(part, lead=JOIN_LEAD_SEC if index else 0.25, keep_tail=index == len(texts) - 1)
         parts.append(part)
         seconds.append(_clip_seconds(part) + SEGMENT_GAP_SEC)
     listing = parts_dir / "list.txt"

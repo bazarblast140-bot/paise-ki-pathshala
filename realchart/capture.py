@@ -434,6 +434,35 @@ class _BoxContext:
         return page
 
 
+def _flush_sockets(context):
+    """Flush the box Chrome's socket pools (chrome://net-internals, no profile data touched).
+
+    Behind the box egress tunnel every host resolves to the same address, so Chrome
+    coalesces www.tradingview.com onto an HTTP/2 connection opened for another
+    *.tradingview.com host and gets that backend's bare nginx 404.
+    """
+    tab = context.new_page()
+    try:
+        tab.goto("chrome://net-internals/#sockets", timeout=10000)
+        tab.click("#sockets-view-flush-button", timeout=5000)
+        tab.wait_for_timeout(300)
+    finally:
+        tab.close()
+
+
+def _goto_tv(page, url, context=None):
+    """page.goto, retried once after a socket flush when TradingView answers a bare 404."""
+    resp = page.goto(url, timeout=45000, wait_until="domcontentloaded")
+    if CDP_URL and context is not None and resp is not None and resp.status == 404:
+        print(f"[capture] TradingView 404 on {url}; flushing box Chrome sockets and retrying", flush=True)
+        try:
+            _flush_sockets(getattr(context, "_context", context))
+        except Exception as exc:  # noqa: BLE001
+            print(f"[capture] socket flush failed: {type(exc).__name__}", flush=True)
+        resp = page.goto(url, timeout=45000, wait_until="domcontentloaded")
+    return resp
+
+
 def _open_browser(play):
     if CDP_URL:
         browser = play.chromium.connect_over_cdp(CDP_URL)
@@ -601,7 +630,7 @@ def _playwright_chart(symbol, dest, interval="D"):
         browser, context = _open_browser(play)
         page = context.new_page()
         try:
-            page.goto(chart_url(symbol, interval), timeout=45000, wait_until="domcontentloaded")
+            _goto_tv(page, chart_url(symbol, interval), context)
             _dismiss_cookies(page)
             try:
                 _wait_chart(page)
@@ -630,7 +659,7 @@ def _playwright_chart(symbol, dest, interval="D"):
                     ok = False
                     reason = "crosshair visible in capture"
             elif ok and str(interval) == "D":
-                page.goto(technicals_url(symbol), timeout=45000, wait_until="domcontentloaded")
+                _goto_tv(page, technicals_url(symbol), context)
                 _dismiss_cookies(page)
                 page.wait_for_timeout(2000)
                 tech_text = page.inner_text("body") or ""
