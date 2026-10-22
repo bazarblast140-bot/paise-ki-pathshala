@@ -59,6 +59,8 @@ def video_path():
 def already_posted(title):
     data = call("GET", f"{GRAPH}/{PAGE}/video_reels", {"fields": "id,description,created_time,permalink_url", "limit": "25"})
     for item in data.get("data") or []:
+        print(f"[fb] recent: {item.get('created_time')} {item.get('id')} {str(item.get('description') or '')[:60]!r}")
+    for item in data.get("data") or []:
         if title and title in str(item.get("description") or ""):
             return item
     return None

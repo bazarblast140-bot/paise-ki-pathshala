@@ -81,6 +81,12 @@ on:
         type: choice
         options: ["false", "true"]
         default: "false"
+      fb_dry:
+        description: "true = Facebook check only: list the Page's recent Reels and say whether this one would post. Posts nothing."
+        required: false
+        type: choice
+        options: ["false", "true"]
+        default: "false"
 
 concurrency:
   group: paise-ki-pathshala-publish
@@ -251,6 +257,7 @@ jobs:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           FB_PAGE_ID: ${{ vars.FB_PAGE_ID }}
           FB_PAGE_NAME: ${{ vars.FB_PAGE_NAME || 'Rajesh Technical Trader' }}
+          FB_DRY: ${{ inputs.fb_dry == 'true' && '1' || '' }}
         run: python publish_facebook.py
       - name: Commit the ledger fill
         if: ${{ !cancelled() }}
