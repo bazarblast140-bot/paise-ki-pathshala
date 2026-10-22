@@ -144,7 +144,17 @@ class SessionTests(unittest.TestCase):
             bare = publish_gates.market_reasons(run)
             self.assertTrue(any("आज" in reason for reason in bare), bare)
             nifty_day._write_verification(session, run)
-            self.assertEqual(publish_gates.market_reasons(run), [])
+            # The bars close on 13-Oct-2026. Freeze "today" to that session so
+            # the freshness rule does not age the fixture with the wall clock.
+            import market_data
+
+            class _SessionDay(market_data.date):
+                @classmethod
+                def today(cls):
+                    return now.date()
+
+            with mock.patch.object(market_data, "date", _SessionDay):
+                self.assertEqual(publish_gates.market_reasons(run), [])
 
 
 class ChartTests(unittest.TestCase):
