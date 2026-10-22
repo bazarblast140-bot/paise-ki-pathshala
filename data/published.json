@@ -488,5 +488,20 @@
   "ig_media_id": "18129715882891873",
   "content_hash": "f2bcec9292f19acc",
   "title_norm": "nifty analysis today | nifty close report #2 22 oct 2026"
+ },
+ {
+  "date_ist": "2026-10-22",
+  "slot": "18:41",
+  "video_id": "3-yfUtpxt6U",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "18110834924612040",
+  "content_hash": "cb1cee5e28ad2c02",
+  "title_norm": "axisbank share analysis today | support bounce trade plan 22 oct 2026"
  }
 ]
