@@ -529,14 +529,35 @@ HIDE_ALL_JS = """(click) => {
 }"""
 
 
+HIDE_ALL_API_JS = """() => {
+    // View-only daily tabs have no drawing toolbar; use the chart widget's own
+    // in-memory "hide all drawings" toggle. Nothing is removed or saved.
+    try {
+        const h = window.TradingViewApi && TradingViewApi.hideAllDrawingTools();
+        if (!h) return 'missing';
+        if (!h.value()) h.setValue(true);
+        return h.value() ? 'hidden' : 'shown';
+    } catch (e) { return 'missing'; }
+}"""
+
+
 def hide_drawings(page, tries=3):
     """Click TradingView's "Hide all drawings" toolbar toggle (this tab only). True once hidden.
 
     Never touches "Remove drawings" (data-name removeAllDrawingTools); the state is not saved.
     """
+    try:
+        page.wait_for_selector('[data-name="hide-all"] button', timeout=4000)
+    except Exception:  # noqa: BLE001
+        pass
     for _ in range(tries):
         try:
-            page.evaluate(HIDE_ALL_JS, True)
+            if page.evaluate(HIDE_ALL_JS, True) == "missing":
+                if page.evaluate(HIDE_ALL_API_JS) == "hidden":
+                    page.wait_for_timeout(800)
+                    return True
+                page.wait_for_timeout(1000)
+                continue
             page.wait_for_timeout(800)
             if page.evaluate(HIDE_ALL_JS, False) == "hidden":
                 return True
