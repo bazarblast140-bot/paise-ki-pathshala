@@ -812,6 +812,97 @@ def _words_in(words, start, end):
     return rows
 
 
+CHUNK_MIN_S = 2.5
+CHUNK_MAX_S = 9.0
+
+
+def _pauses(wav_path, min_gap=0.30, thresh_db=-36.0):
+    """(start, end) of quiet stretches of at least min_gap seconds, and the duration."""
+    try:
+        with wave.open(str(wav_path), "rb") as handle:
+            rate = handle.getframerate() or 1
+            width = handle.getsampwidth()
+            channels = handle.getnchannels() or 1
+            frames = handle.readframes(handle.getnframes())
+    except (OSError, wave.Error):
+        return [], 0.0
+    if width != 2 or not frames:
+        return [], 0.0
+    import array
+    samples = array.array("h")
+    samples.frombytes(frames[: len(frames) - (len(frames) % 2)])
+    if channels > 1:
+        samples = samples[::channels]
+    duration = len(samples) / float(rate)
+    step = max(1, int(rate * 0.02))
+    amp = (10 ** (float(thresh_db) / 20.0)) * 32768.0
+    gaps = []
+    gap_start = None
+    for index in range(0, len(samples), step):
+        chunk = samples[index:index + step]
+        at = index / float(rate)
+        quiet = not chunk or (sum(v * v for v in chunk) / len(chunk)) ** 0.5 < amp
+        if quiet:
+            if gap_start is None:
+                gap_start = at
+        elif gap_start is not None:
+            if at - gap_start >= min_gap:
+                gaps.append((gap_start, at))
+            gap_start = None
+    return gaps, duration
+
+
+def chunk_cuts(wav_path):
+    """Cut points on pauses so each chunk is about 2.5-9s of the take."""
+    gaps, duration = _pauses(wav_path)
+    if duration <= 0:
+        return []
+    cuts = [0.0]
+    for start, end in gaps:
+        mid = (start + end) / 2.0
+        if mid - cuts[-1] >= CHUNK_MIN_S and duration - mid >= 1.0:
+            cuts.append(mid)
+        elif mid - cuts[-1] > CHUNK_MAX_S:
+            cuts.append(mid)
+    cuts.append(duration)
+    return cuts
+
+
+def transcribe_chunked(wav_path, transcribe):
+    """Whisper on short pause-cut pieces, put back on the take's clock.
+
+    A whole 45s Charon take is one long decode. Whisper skipped whole
+    sentences of it and, on a bad temperature fallback, wrote an
+    English hallucination over the last 12s. Pieces of a few seconds
+    keep each decode on one or two sentences.
+    """
+    import tempfile
+    from pathlib import Path
+
+    cuts = chunk_cuts(wav_path)
+    words = []
+    for start, end in zip(cuts, cuts[1:]):
+        if end - start < 0.2:
+            continue
+        with tempfile.TemporaryDirectory() as tmp:
+            piece = Path(tmp) / "piece.wav"
+            _slice_wav(wav_path, piece, start, end)
+            fresh = list(transcribe(piece) or [])
+        for word in fresh:
+            text = str(word.get("word") or "").strip()
+            try:
+                w0 = float(word.get("start") or 0)
+                w1 = float(word.get("end") or w0)
+            except (TypeError, ValueError):
+                continue
+            if not text:
+                continue
+            w0 = min(max(0.0, w0), end - start)
+            w1 = min(max(w0 + 0.02, w1), end - start)
+            words.append({"word": text, "start": round(start + w0, 3), "end": round(start + w1, 3)})
+    return words
+
+
 GAP_REDECODE_S = 1.5
 GAP_PAD_S = 0.3
 
@@ -915,6 +1006,41 @@ def fill_dropped_gaps(wav_path, words, transcribe):
     return sorted(rows + added, key=lambda row: row["start"])
 
 
+def _cut_score(spoken, order, words, duration):
+    """Worst beat recall of the cuts these words give. Content cuts score higher."""
+    import sync_gate
+    present, _weights_ = _weights(spoken, order)
+    if not words or not present:
+        return -1.0
+    content = _content_bounds(present, spoken, words, duration)
+    bounds = content or beat_bounds(spoken, order, words, duration)
+    worst = min(
+        sync_gate.fuzzy_recall(str(spoken.get(beat) or ""), _heard_between(words, *bounds[beat]))
+        for beat in present
+    )
+    return worst + (1.0 if content else 0.0)
+
+
+def _best_words(wav_path, spoken, order, words, transcribe, duration):
+    """Whole-file words, with dropped gaps re-decoded; pause-cut pieces when that still misses."""
+    import sync_gate
+    words = fill_dropped_gaps(wav_path, words, transcribe)
+    whole = _cut_score(spoken, order, words, duration)
+    if whole >= 1.0 + sync_gate.MIN_RECALL or transcribe is None:
+        return words
+    try:
+        pieces = transcribe_chunked(wav_path, transcribe)
+    except Exception as exc:  # noqa: BLE001 — the whole-file words still stand
+        print(f"[align] piece-wise whisper skipped ({type(exc).__name__})")
+        return words
+    pieces = fill_dropped_gaps(wav_path, pieces, transcribe)
+    chunked = _cut_score(spoken, order, pieces, duration)
+    if chunked > whole:
+        print(f"[align] whole-file whisper missed beats; piece-wise words kept ({len(pieces)} words)")
+        return pieces
+    return words
+
+
 def split_into_beats(wav_path, spoken, order, dest_dir, transcribe=None):
     """Cut one wav into tts_{beat}.wav and remember the whisper words that timed the cuts."""
     import json
@@ -932,7 +1058,7 @@ def split_into_beats(wav_path, spoken, order, dest_dir, transcribe=None):
     except Exception as exc:  # noqa: BLE001 — a missing model still leaves even beat cuts
         print(f"[align] whisper unavailable ({type(exc).__name__}); splitting by script length")
         words = []
-    words = fill_dropped_gaps(wav_path, words, transcribe)
+    words = _best_words(wav_path, spoken, order, words, transcribe, duration)
     bounds = beat_bounds(spoken, order, words, duration)
     silence = silence_bounds(wav_path, list(bounds) or list(order))
     if silence and words and _bounds_heard_ok(silence, spoken, words):

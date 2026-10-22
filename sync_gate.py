@@ -94,6 +94,9 @@ _ALIAS = (
     ("एकसो", "एक सौ"),
     # Charon plan prices as small-whisper writes them (pat_bear_engulf take).
     ("चब्भीस", "छब्बीस"),
+    ("चबबीस", "छब्बीस"),
+    ("अछट्तर", "अठहत्तर"),
+    ("सोला", "सोलह"),
     ("छबभीस", "छब्बीस"),
     ("छबगीस", "छब्बीस"),
     ("छोबीस", "चौबीस"),
@@ -304,6 +307,13 @@ _HINGLISH = {
     "hook": "हुक",
     "udaharan": "उदाहरण",
     "galti": "गलती",
+    # Whisper writes the plan's English trade words in Latin.
+    "stop": "स्टॉप",
+    "target": "टारगेट",
+    "risk": "रिस्क",
+    "reward": "रिवॉर्ड",
+    "high": "हाई",
+    "entry": "एंट्री",
 }
 _LATIN_TOKEN = re.compile(r"(?<![A-Za-z])([A-Za-z]{2,})(?![A-Za-z])")
 
