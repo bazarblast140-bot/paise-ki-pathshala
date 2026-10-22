@@ -238,6 +238,10 @@ def evaluate_gates(run_dir, topic, now=None, publish_at=None, today=None):
     blocked = (run_dir / "narration_block.json").exists() or review_gate.narration_is_fallback(review)
     source = str(review.get("narration_source") or review.get("source") or "").strip().lower()
     fallback_ok = (not blocked) and source in _NARRATION_OK and review_gate.narration_is_single_outline(review)
+    if not fallback_ok and not blocked and source == "approved" and (topic or {}).get("_approved_bank"):
+        # An owner-approved file script is the narration itself, not a fallback.
+        import approved_bank
+        fallback_ok = approved_bank.owner_ok(approved_bank.by_key((topic or {}).get("key")))
     ai_ok = review_gate.files_allow_public(run_dir, "short")
     sync_ok = review_gate.sync_gate_passed(review)
     try:
@@ -948,8 +952,13 @@ def cmd_fill(last_chance):
 
 
 # ---------------------------------------------------------------- refill
-def next_evergreen(bank_topics, entries, manifest):
+def next_evergreen(bank_topics, entries, manifest, approved=None):
     """First unused concept topic. At most one is built per refill run.
+
+    `approved` is the approved/*.json scripts. When the bank has no unused
+    evergreen topic, the first unused owner_approved script is taken: not
+    posted (approved_bank.posted), not skipped, not in the ledger or the
+    buffer, and a trade-plan script must pass the plan gate.
 
     A topic whose Edge build already failed is listed on the manifest and
     skipped. The topic bank is not marked used, so a live slot can still
@@ -978,7 +987,45 @@ def next_evergreen(bank_topics, entries, manifest):
         renderable = [t for t in eligible if not board_scenes.topic_chart_block(t)]
     except ImportError:
         renderable = eligible
-    return renderable[0] if renderable else None
+    if renderable:
+        return renderable[0]
+    return next_approved(approved, entries, manifest, bank_topics)
+
+
+def next_approved(scripts, entries, manifest, bank_topics=None):
+    """First unused owner-approved approved/*.json script, as a chart topic."""
+    if not scripts:
+        return None
+    import approved_bank
+    import approved_buffer
+    import trade_plan
+    skipped = {
+        str(key).strip()
+        for key in (manifest or {}).get("skipped_topics") or []
+        if str(key or "").strip()
+    }
+    for script in scripts:
+        if not approved_bank.owner_ok(script) or approved_bank.posted(script, entries):
+            continue
+        key = str(script.get("key") or "").strip()
+        if not key or key in skipped:
+            continue
+        if topic_blocked(key, entries, bank_topics, manifest):
+            continue
+        if trade_plan.has_plan(key) and approved_buffer.plan_gate_reasons(key):
+            continue
+        topic = approved_bank.topic_from(script)
+        ok, _why = is_evergreen_topic(topic)
+        if not ok:
+            continue
+        try:
+            import board_scenes
+            if board_scenes.topic_chart_block(topic):
+                continue
+        except ImportError:
+            pass
+        return topic
+    return None
 
 
 def remember_skip(manifest, topic_key):
@@ -1078,6 +1125,15 @@ def admit_run(run_dir, topic, store, manifest, *, mp4, title, description, tags,
     return item, gates
 
 
+def _approved_only(topic_key):
+    """True when the key is an approved/*.json script and not a topic-bank row."""
+    import approved_bank
+    key = str(topic_key or "").strip()
+    if not key or any(t.get("key") == key for t in _load_bank() if isinstance(t, dict)):
+        return False
+    return approved_bank.by_key(key) is not None
+
+
 def default_preview_runner(topic_key):
     """One Charon render. No publish during the build and no ElevenLabs.
 
@@ -1090,6 +1146,9 @@ def default_preview_runner(topic_key):
     env["PUBLISH_VISIBILITY"] = "public"
     env["AUTOMATIC_UPLOAD"] = "0"
     env["TOPIC_KEY"] = topic_key
+    if _approved_only(topic_key):
+        # pick_topic reads approved/ only with the approved bank switched on.
+        env["APPROVED_BANK"] = "1"
     env["DEEPSEEK_MAX_CALLS"] = (
         os.environ.get("DEEPSEEK_MAX_CALLS") or str(REFILL_DEEPSEEK_CALLS)
     )
@@ -1155,7 +1214,8 @@ def refill(*, runner=None, store=None, now=None, manifest_path=None):
         runner = runner or default_preview_runner
         rc = 1
         for attempt in range(REFILL_TOPIC_TRIES):
-            topic = next_evergreen(_load_bank(), entries, manifest)
+            import approved_bank
+            topic = next_evergreen(_load_bank(), entries, manifest, approved=approved_bank.all_scripts())
             if topic is None:
                 print("[buffer] no unused evergreen topic left", flush=True)
                 return 1
