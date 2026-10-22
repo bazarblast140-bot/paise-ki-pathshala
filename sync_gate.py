@@ -1074,10 +1074,59 @@ def _repetitive(words):
     return max(counts.values()) / len(words) > 0.45
 
 
+TRANSCRIPT_CACHE_VERSION = 1
+_REAL_MODEL = model
+
+
+def _transcript_cache_dir():
+    root = os.environ.get("TRANSCRIPT_CACHE") or str(ROOT / ".cache" / "transcripts")
+    return pathlib.Path(root)
+
+
+def _transcript_key(audio, beam_size):
+    """The audio samples and every decode setting. Same key, same words."""
+    import hashlib
+    digest = hashlib.sha256()
+    digest.update(f"v{TRANSCRIPT_CACHE_VERSION}|small|hi|beam{int(beam_size)}|".encode())
+    digest.update(repr(_WHISPER_TEMPERATURES).encode())
+    digest.update(str(audio.dtype).encode())
+    digest.update(np.ascontiguousarray(audio).tobytes())
+    return digest.hexdigest()[:32]
+
+
 def transcribe_pcm(audio, beam_size=1):
-    """One beat. VAD first when it returns a real line; temperature fallback is inside the decode."""
+    """One beat. VAD first when it returns a real line; temperature fallback is inside the decode.
+
+    Whisper's temperature fallback samples, so one take used to get a
+    different transcript, and a different sync verdict, on each render.
+    The words are cached by a hash of the samples and the decode settings:
+    the same audio always gets the same words and the same score.
+    """
     if audio.size == 0:
         raise RuntimeError("empty audio")
+    import json
+    # Only the real model's words are kept. A stubbed model in a test is not.
+    if model is not _REAL_MODEL or os.environ.get("TRANSCRIPT_CACHE") == "0":
+        return _transcribe_uncached(audio, beam_size)
+    path = _transcript_cache_dir() / f"{_transcript_key(audio, beam_size)}.json"
+    try:
+        cached = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(cached, list):
+            return cached
+    except (OSError, ValueError):
+        pass
+    words = _transcribe_uncached(audio, beam_size)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(words, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        pass
+    return words
+
+
+def _transcribe_uncached(audio, beam_size=1):
     words = _decode(audio, True, beam_size=beam_size)
     if not words or _repetitive(words):
         alt = _decode(audio, False, beam_size=beam_size)
