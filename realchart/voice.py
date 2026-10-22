@@ -289,6 +289,43 @@ def trim_join_edges(path, lead=JOIN_LEAD_SEC, tail=JOIN_TAIL_SEC, floor_db=-40.0
     return path
 
 
+INTERNAL_PAUSE_MAX_SEC = 0.6
+
+
+def cap_internal_pauses(path, max_pause=INTERNAL_PAUSE_MAX_SEC, floor_db=-40.0):
+    """Shorten a TTS clip's own mid-sentence pauses to `max_pause` (QA allows <=0.8 s dead air).
+
+    Only silence strictly inside the clip is shortened (its middle is cut); voice is never cut.
+    """
+    import re
+    import subprocess
+    duration = _clip_seconds(path)
+    log = subprocess.run(["ffmpeg", "-v", "info", "-i", str(path), "-af", f"silencedetect=n={floor_db}dB:d={max_pause}",
+                          "-f", "null", "-"], capture_output=True, text=True).stderr
+    starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", log)]
+    ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", log)]
+    cuts = []
+    for start, end in zip(starts, ends):
+        if start <= 0.01 or end >= duration - 0.01 or end - start <= max_pause:
+            continue
+        excess = (end - start) - max_pause
+        mid = (start + end) / 2.0
+        cuts.append((mid - excess / 2.0, mid + excess / 2.0))
+    if not cuts:
+        return path
+    keep, cursor = [], 0.0
+    for a, b in cuts:
+        keep.append((cursor, a))
+        cursor = b
+    keep.append((cursor, duration))
+    expr = "+".join(f"between(t,{a:.4f},{b:.4f})" for a, b in keep)
+    tmp = Path(path).with_suffix(".pause.wav")
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(path), "-af", f"aselect='{expr}',asetpts=N/SR/TB",
+                    str(tmp)], check=True)
+    os.replace(tmp, path)
+    return path
+
+
 def wav_seconds(path):
     with wave.open(str(path)) as handle:
         return handle.getnframes() / float(handle.getframerate())
@@ -351,6 +388,7 @@ def _speak_all(texts, dest, kind, dry_run, key_prefix, parts_dir, engine):
             requests += info.get("requests", 0)
         if str(text).strip() and not dry_run:
             trim_join_edges(part, lead=JOIN_LEAD_SEC if index else 0.25, keep_tail=index == len(texts) - 1)
+            cap_internal_pauses(part)
         parts.append(part)
         seconds.append(_clip_seconds(part) + SEGMENT_GAP_SEC)
     listing = parts_dir / "list.txt"
