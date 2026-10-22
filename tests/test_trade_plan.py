@@ -13,6 +13,11 @@ import scene_frames
 import trade_plan
 
 ROOT = Path(__file__).resolve().parents[1]
+# Rajesh approved these seven topics on 22-Oct-2026.
+OWNER_APPROVED_2026_10_22 = (
+    "pat_bear_engulf", "pat_shooting_star", "pat_double_bottom", "pat_evening_star",
+    "pat_bear_flag", "pat_inside_bar", "pat_ema_cross",
+)
 
 
 def _topic(key):
@@ -39,7 +44,10 @@ class LibraryTests(unittest.TestCase):
             self.assertNotIn("सवाल", screen, key)
             self.assertNotIn("जगह", screen, key)
             self.assertIn("कहाँ वैलिड", screen, key)
-            if key.startswith("pat_"):
+            if key in OWNER_APPROVED_2026_10_22:
+                self.assertIs(script.get("owner_approved"), True, key)
+                self.assertIs(script.get("reusable"), False, key)
+            elif key.startswith("pat_"):
                 self.assertIs(script.get("owner_approved"), False, key)
                 self.assertIs(script.get("reusable"), False, key)
             else:
@@ -309,3 +317,27 @@ class VoiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OwnerApprovedSevenTests(unittest.TestCase):
+    def test_seven_owner_approved_scripts_pass_the_plan_gate(self):
+        for key in OWNER_APPROVED_2026_10_22:
+            script = approved_bank.by_key(key)
+            self.assertIsNotNone(script, key)
+            self.assertIs(script.get("owner_approved"), True, key)
+            narration = approved_bank.narration_from(script)
+            topic = _topic(key)
+            self.assertEqual(trade_plan.script_fails(narration, topic), [], key)
+            self.assertEqual(board_short.check_narration(narration, topic), [], key)
+            plan = trade_plan.plan_for(key)
+            self.assertGreaterEqual(plan.rr, 1.5, key)
+            words = sum(len(narration["beats"][beat].split()) for beat in trade_plan.BEATS)
+            self.assertLessEqual(words / 1.9, trade_plan.VOICE_SECONDS[1] + 1e-9, key)
+            self.assertGreaterEqual(words / 1.9, trade_plan.VOICE_SECONDS[0], key)
+            self.assertTrue(pattern_marks_exist(key), key)
+
+
+def pattern_marks_exist(key):
+    import pattern_charts
+    marks = pattern_charts.marks_for(key)
+    return all(marks.get(beat) for beat in trade_plan.BEATS)

@@ -246,6 +246,13 @@ EXTRA_MARKS = {
         "pehchan": "GREEN THROUGH MID",
         **_PLAN_MARKS,
     },
+    "pat_bear_engulf": {"hook": "BEARISH ENGULF", "pehchan": "RED COVERS GREEN", **_PLAN_MARKS},
+    "pat_shooting_star": {"hook": "SHOOTING STAR", "pehchan": "LONG UPPER WICK", **_PLAN_MARKS},
+    "pat_double_bottom": {"hook": "DOUBLE BOTTOM", "pehchan": "TWO LOWS NECK", **_PLAN_MARKS},
+    "pat_evening_star": {"hook": "EVENING STAR", "pehchan": "CLOSE BELOW MID", **_PLAN_MARKS},
+    "pat_bear_flag": {"hook": "BEAR FLAG", "pehchan": "POLE AND FLAG", **_PLAN_MARKS},
+    "pat_inside_bar": {"hook": "INSIDE BAR", "pehchan": "INSIDE MOTHER", **_PLAN_MARKS},
+    "pat_ema_cross": {"hook": "EMA CROSS", "pehchan": "FAST OVER SLOW", **_PLAN_MARKS},
     "risk_daily_loss_limit": {
         "hook": "DAILY LIMIT",
         "pehchan": "CAPITAL LIMIT",
