@@ -100,7 +100,8 @@ class ChartRetryUsesTheGateNumberTests(unittest.TestCase):
     def test_a_retry_that_scores_worse_on_the_gate_is_discarded(self):
         self.first = _words(CONTEXT, 0.1, step=0.4) + _words("अगली कंडल", 4.1) + self.garbled
         report, calls = self._run([{"word": "absolutamente.", "start": 0.1, "end": 0.6}])
-        self.assertEqual(calls, [5])
+        # Beam-5 beat retry, then one context pass for a beat still weak.
+        self.assertEqual(calls, [5, 5])
         self.assertFalse(report["ok"])
         self.assertEqual(
             [w["word"] for w in report["words"] if 4.0 <= w["start"] < 7.0],
@@ -121,7 +122,8 @@ class ChartRetryUsesTheGateNumberTests(unittest.TestCase):
             self._passed(before), {"context": True, "entry": False, "target": False},
             before["reason"])
         report, calls = self._run(_words(ENTRY, 0.1), retry_beats=("entry",))
-        self.assertEqual(calls, [5])
+        # Beam-5 beat retry, then one context pass for a beat still weak.
+        self.assertEqual(calls, [5, 5])
         # The trial would fix entry but fail context. It is not kept.
         self.assertEqual(self._passed(report), {"context": True, "entry": False, "target": False})
 

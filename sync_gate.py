@@ -1257,5 +1257,71 @@ def upgrade_weak_scenes(words, scenes, beats_text, beat_times, answer_terms, bea
             report = trial_report
             report["words"] = upgraded
             print(f"[sync] stronger whisper kept for {beat} (beam {_RETRY_BEAM})")
+    # A short beat file decoded on its own can come back empty or garbled on a
+    # cold runner even when the take is clear. Still-weak beats get one more
+    # pass with the neighbouring beats as context; only words inside the beat
+    # span are used, and the same keep-only-if-better rule applies.
+    for beat in weak:
+        row_ok = all(
+            _row_gate(row) + 1e-9 >= MIN_RECALL
+            for row in report.get("scenes") or [] if row.get("beat") == beat
+        )
+        if row_ok:
+            continue
+        try:
+            fresh = _words_in_context(beat, beat_times, beat_audio, _RETRY_BEAM)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[sync] context whisper skipped for {beat}: {exc}")
+            continue
+        if not fresh:
+            continue
+        t0, t1 = float(beat_times[beat][0]), float(beat_times[beat][1])
+        trial = [
+            word for word in upgraded
+            if not (float(word.get("end") or 0) > t0 and float(word.get("start") or 0) < t1)
+        ]
+        trial.extend(fresh)
+        trial.sort(key=lambda word: float(word.get("start") or 0))
+        trial_report = check(trial, scenes, beats_text, beat_times, answer_terms)
+        better = _worst_recall(trial_report, beat) > _worst_recall(report, beat) + 1e-9
+        if better and not _breaks_a_passing_scene(report, trial_report):
+            upgraded = trial
+            report = trial_report
+            print(f"[sync] context whisper kept for {beat} (beam {_RETRY_BEAM})")
     report["words"] = upgraded
     return report
+
+
+def _words_in_context(beat, beat_times, beat_audio, beam_size):
+    """Decode a beat together with its neighbours; keep the words inside it."""
+    import numpy as np
+
+    order = sorted(
+        (name for name in beat_times if name in (beat_audio or {})),
+        key=lambda name: float(beat_times[name][0]),
+    )
+    if beat not in order:
+        return []
+    i = order.index(beat)
+    group = order[max(0, i - 1): i + 2]
+    if len(group) < 2:
+        return []  # no neighbour: the beam-5 beat pass already decoded this audio
+    pieces, offsets, cursor = [], {}, 0.0
+    for name in group:
+        audio = pcm(beat_audio[name])
+        offsets[name] = cursor
+        pieces.append(audio)
+        cursor += len(audio) / 16000.0
+    words = transcribe_pcm(np.concatenate(pieces), beam_size=beam_size)
+    lo = offsets[beat]
+    hi = lo + len(pieces[group.index(beat)]) / 16000.0
+    t0 = float(beat_times[beat][0])
+    out = []
+    for word in words:
+        text = str(word.get("word") or "").strip()
+        start, end = float(word.get("start") or 0), float(word.get("end") or 0)
+        mid = (start + end) / 2.0
+        if not text or mid < lo or mid > hi:
+            continue
+        out.append({"word": text, "start": start - lo + t0, "end": end - lo + t0})
+    return out
