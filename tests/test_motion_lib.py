@@ -120,19 +120,17 @@ class CandleTests(unittest.TestCase):
         self.assertGreaterEqual(len(key), 2)
         self.assertLessEqual(len(key), 3)
         self.assertTrue(context)
-        windows = motion_lib.candle_windows(plan, _beats())
-        self.assertEqual(windows[context[0]][1], 0.0)
-        self.assertAlmostEqual(windows[context[0]][1] - windows[context[0]][0], 0.15)
-        rest = context[1:]
-        self.assertTrue(rest)
-        self.assertGreater(windows[rest[-1]][0], 1.0)
-        for left, right in zip(rest, rest[1:]):
-            self.assertGreater(windows[right][0], windows[left][0])
-            self.assertAlmostEqual(windows[left][1] - windows[left][0], 0.15)
-        self.assertAlmostEqual(windows[rest[-1]][1] - windows[rest[-1]][0], 0.15)
-        for index, beat in zip(key, ("pehchan", "context", "entry")):
-            self.assertAlmostEqual(windows[index][0], _beats()[beat][0])
-            self.assertAlmostEqual(windows[index][1] - windows[index][0], motion_lib.REVEAL_S)
+        beats = _beats()
+        windows = motion_lib.candle_windows(plan, beats)
+        self.assertEqual(windows[0][1], 0.0)
+        self.assertAlmostEqual(windows[0][1] - windows[0][0], 0.15)
+        # Left to right in time: no candle appears before the one on its left.
+        starts = [w[0] for w in windows]
+        self.assertEqual(starts, sorted(starts))
+        # The focus candle is finished when pehchan starts.
+        self.assertAlmostEqual(windows[plan.focus][1], beats["pehchan"][0])
+        for index in range(plan.focus + 1, len(plan.ohlc)):
+            self.assertGreaterEqual(windows[index][0], beats["entry"][0])
         box, lo, hi, pad = motion_lib.motion_geometry(plan)
         empty = _flat()
         motion_lib.candle_build(empty, box, plan.ohlc, lo, hi, 0.0, pad)

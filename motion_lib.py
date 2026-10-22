@@ -139,36 +139,53 @@ def candle_roles(plan):
 
 
 def candle_windows(plan, beats=None):
-    """The first context candle is done at t=0. The rest keep arriving through the hook.
+    """Candles arrive left to right, in time order, so no candle floats ahead of its slot.
 
-    Each candle still draws in 150 ms. Spacing them across the hook means a
-    four-second span from t=1 is not a still. Key candles wait for their beat.
+    The first candle is done at t=0. The run-up to the focus candle keeps
+    arriving through the hook, 150 ms each. The focus candle (the pattern
+    the pehchan beat names) finishes exactly when pehchan starts, so the
+    highlight box never points at an empty slot. Candles after the focus
+    are the "next candle" the entry beat talks about and arrive with it.
     """
     beats = beats or {}
-    context, key = candle_roles(plan)
-    windows = [None] * len(plan.ohlc)
-    if context:
-        windows[context[0]] = (-CONTEXT_CANDLE_S, 0.0)
-        rest = context[1:]
-        hook = beats.get("hook")
-        hook_end = float(hook[1]) if hook and len(hook) >= 2 else 5.0
-        last = 4.6 if hook_end >= 5.0 else max(1.2, hook_end - CONTEXT_CANDLE_S)
-        last = min(last, max(hook_end - CONTEXT_CANDLE_S, 0.4))
-        if rest:
-            if len(rest) == 1:
-                starts = [min(0.8, last)]
-            else:
-                span = max(last - 0.4, CONTEXT_CANDLE_S)
-                step = span / (len(rest) - 1)
-                starts = [0.4 + i * step for i in range(len(rest))]
-            for index, start in zip(rest, starts):
-                windows[index] = (float(start), float(start) + CONTEXT_CANDLE_S)
-    names = ("pehchan", "context", "entry")
-    for nth, index in enumerate(key):
-        span = beats.get(names[min(nth, len(names) - 1)])
-        start = float(span[0]) if span else 2.0 + nth * 2.5
-        windows[index] = (start, start + REVEAL_S)
+    n = len(plan.ohlc)
+    windows = [None] * n
+    if not n:
+        return windows
+    focus = max(0, min(int(plan.focus), n - 1))
+    pehchan = beats.get("pehchan")
+    hook = beats.get("hook")
+    hook_end = float(hook[1]) if hook and len(hook) >= 2 else 5.0
+    p0 = float(pehchan[0]) if pehchan else max(hook_end, 2.0)
+    windows[0] = (-CONTEXT_CANDLE_S, 0.0)
+    focus_start = max(0.0, p0 - REVEAL_S)
+    windows[focus] = (focus_start, p0) if focus else (-CONTEXT_CANDLE_S, 0.0)
+    before = list(range(1, focus))
+    if before:
+        last = max(0.4, min(4.6, focus_start - CONTEXT_CANDLE_S - 0.05))
+        step = (last - 0.4) / max(1, len(before) - 1)
+        for k, index in enumerate(before):
+            start = 0.4 + k * step if len(before) > 1 else min(0.8, last)
+            windows[index] = (start, start + CONTEXT_CANDLE_S)
+    after = list(range(focus + 1, n))
+    entry = beats.get("entry") or beats.get("context")
+    e0 = float(entry[0]) if entry else p0 + 5.0
+    for k, index in enumerate(after):
+        start = e0 + k * CONTEXT_CANDLE_S
+        dur = REVEAL_S if k == 0 else CONTEXT_CANDLE_S
+        windows[index] = (start, start + dur)
     return windows
+
+
+def _ready_before(windows, focus, at):
+    """Every candle up to the focus is finished by `at`. Order is kept."""
+    out = list(windows)
+    for index in range(0, min(focus, len(out) - 1) + 1):
+        w = out[index]
+        if w and w[1] > at:
+            dur = w[1] - w[0]
+            out[index] = (at - dur, at)
+    return out
 
 
 def _axes(box, n, lo, hi, pad, width_frac=0.62, ypad=0.12):
@@ -181,7 +198,10 @@ def _axes(box, n, lo, hi, pad, width_frac=0.62, ypad=0.12):
 # Room above the highest and below the lowest price for a level pill and its
 # label, as a share of the price span. MOTION_YPAD alone put the SR/SL pills
 # on the board edge.
-MOTION_HEADROOM = 0.06
+MOTION_HEADROOM = 0.10
+FRAME_MARGIN = 14
+# The stop-break candle closes this share of `gap` beyond the stop.
+BREAK_REACH = 0.6
 
 
 def _failure_prices(plan):
@@ -191,11 +211,11 @@ def _failure_prices(plan):
     gap = max(abs(entry - sl) * 0.35, 6.0)
     if str(getattr(plan, "side", "long")) == "short":
         open_p = sl - gap * 0.15
-        close_p = sl + gap
-        return open_p, close_p, close_p + gap * 0.2, open_p - gap * 0.05
+        close_p = sl + gap * BREAK_REACH
+        return open_p, close_p, close_p + gap * 0.15, open_p - gap * 0.05
     open_p = sl + gap * 0.15
-    close_p = sl - gap
-    return open_p, close_p, open_p + gap * 0.05, close_p - gap * 0.2
+    close_p = sl - gap * BREAK_REACH
+    return open_p, close_p, open_p + gap * 0.05, close_p - gap * 0.15
 
 
 def motion_geometry(plan):
@@ -291,8 +311,11 @@ def _plot_rails(img, ax):
     if bot < top:
         top, bot = bot, top
     draw = ImageDraw.Draw(img)
-    for x in (ax.x0 + 12, ax.x1 - 12):
-        draw.line([(x, top), (x, bot)], fill=AXIS, width=4)
+    # A closed chart box. Every candle, wick, line and label stays inside it.
+    left, right = ax.x0 + 12, ax.x1 - 12
+    top, bot = top - FRAME_MARGIN, bot + FRAME_MARGIN
+    draw.rectangle([left, top, right, bot], outline=AXIS, width=4)
+    ax.frame = (left, top, right, bot)
 
 
 def _hdash(img, x0, x1, y, color, width=4):
@@ -363,6 +386,11 @@ def _pill(img, x, y, text, size=LABEL_SIZE):
     tw = draw.textlength(str(text), font=font)
     th = int(size)
     rect = [float(x), float(y), float(x) + tw + 28, float(y) + th + 16]
+    queue = getattr(img, "_pill_queue", None)
+    if queue is not None:
+        # draw_plan paints every pill after every line, so no line crosses a label.
+        queue.append((rect, str(text), int(size)))
+        return rect
     placed = getattr(img, "_placed_pills", None)
     if placed is not None:
         bounds = getattr(img, "_pill_bounds", None) or (0, 0, img.size[0], img.size[1])
@@ -371,6 +399,68 @@ def _pill(img, x, y, text, size=LABEL_SIZE):
     draw.rounded_rectangle(rect, 12, fill=PILL)
     draw.text((rect[0] + 14, rect[1] + 6), str(text), font=font, fill=WHITE)
     return rect
+
+
+
+PILL_CLEAR = 8.0
+
+
+def place_pills(rects, line_ys, frame):
+    """Final pill rects: inside the frame, apart from each other, off every level line.
+
+    Each pill keeps its x. Its y moves to the nearest free slot, trying the
+    asked spot first and then alternating below and above it.
+    """
+    fx0, fy0, fx1, fy1 = (float(v) for v in frame)
+    placed = []
+    for rect in rects:
+        x0, y0, x1, y1 = (float(v) for v in rect)
+        h = y1 - y0
+        if x1 > fx1 - 4:
+            x0, x1 = fx1 - 4 - (x1 - x0), fx1 - 4
+        if x0 < fx0 + 4:
+            x0, x1 = fx0 + 4, fx0 + 4 + (x1 - x0)
+
+        def free(top):
+            bot = top + h
+            if top < fy0 + 4 or bot > fy1 - 4:
+                return False
+            for y in line_ys:
+                if top - 6 <= y <= bot + 6:
+                    return False
+            for other in placed:
+                if x1 <= other[0] or other[2] <= x0:
+                    continue
+                if top < other[3] + PILL_CLEAR and bot > other[1] - PILL_CLEAR:
+                    return False
+            return True
+
+        chosen = None
+        for k in range(0, 160):
+            for top in ((y0 + 6 * k, y0 - 6 * k) if k else (y0,)):
+                if free(top):
+                    chosen = top
+                    break
+            if chosen is not None:
+                break
+        if chosen is None:
+            chosen = min(max(y0, fy0 + 4), fy1 - 4 - h)
+        placed.append([x0, chosen, x1, chosen + h])
+    return placed
+
+
+def _flush_pills(img, line_ys, frame):
+    import board_kit as K
+    from PIL import ImageDraw
+    queue = getattr(img, "_pill_queue", None) or []
+    img._pill_queue = None
+    rects = place_pills([row[0] for row in queue], line_ys, frame)
+    draw = ImageDraw.Draw(img)
+    for rect, (_asked, text, size) in zip(rects, queue):
+        draw.rounded_rectangle(rect, 12, fill=PILL)
+        draw.text((rect[0] + 14, rect[1] + 6), text, font=K.font(size), fill=WHITE)
+    img.pill_rects = rects
+    return rects
 
 
 def _dashed_curve(img, p0, p1, color=WHITE):
@@ -639,13 +729,13 @@ def _failure_candle(img, ax, plan, progress):
     # Same shape as _failure_prices at progress 1, which sizes the scale.
     if short:
         open_p = sl - gap * 0.15
-        close_p = sl + gap * progress
-        high_p = close_p + gap * 0.2
+        close_p = sl + gap * BREAK_REACH * progress
+        high_p = close_p + gap * 0.15
         low_p = open_p - gap * 0.05
     else:
         open_p = sl + gap * 0.15
-        close_p = sl - gap * progress
-        low_p = close_p - gap * 0.2
+        close_p = sl - gap * BREAK_REACH * progress
+        low_p = close_p - gap * 0.15
         high_p = open_p + gap * 0.05
     last = max(0, len(plan.ohlc) - 1)
     half = max(8.0, float(ax.bw) * 0.45)
@@ -680,8 +770,10 @@ def sl_break(img, ax, plan, progress, flash_on=False):
     _hline(img, box[0] + 24, box[2] - 24, y, color, width=8 if flash_on else 6)
     entry_y = ax.y(float(plan.entry))
     mark_y = entry_y + (y - entry_y) * progress
-    label_x = ax.x(max(0, min(int(plan.focus), len(plan.ohlc) - 1)))
-    K.label(img, label_x + 16, mark_y - 20, _fmt(plan.sl), WHITE, 36)
+    del K
+    short = str(getattr(plan, "side", "long")) == "short"
+    # The broken stop price sits beside the break candle, on the inside of the line.
+    _pill(img, candle["cx"] - 160, (mark_y + 14) if short else (mark_y - 66), _fmt(plan.sl), size=36)
     info["flash"] = bool(flash_on)
     return info
 
@@ -761,8 +853,12 @@ def clock_from(topic, plan=None):
     if zoom_at is None:
         zoom_at = start("entry", "entry")
     inv = beats.get("invalidation")
+    windows = candle_windows(plan, beats) if plan is not None else None
+    if windows and zoom_at is not None:
+        # The highlight box lands on a candle that is already drawn.
+        windows = _ready_before(windows, int(plan.focus), float(zoom_at))
     clock = {
-        "candle_windows": candle_windows(plan, beats) if plan is not None else None,
+        "candle_windows": windows,
         "trend": window("trend", "pehchan"),
         "sr": window("sr", "context"),
         "entry": window("entry", "entry"),
@@ -876,6 +972,8 @@ def draw_plan(img, plan, shown, t, clock):
     box, lo, hi, pad = motion_geometry(plan)
     img._placed_pills = []
     img._pill_bounds = box
+    img._pill_queue = []
+    line_ys = []
     per = _candle_progresses(plan, t, clock)
     zoom_start = None
     highlight_window = (clock or {}).get("highlight")
@@ -938,6 +1036,8 @@ def draw_plan(img, plan, shown, t, clock):
         window = (clock or {}).get(kind)
         pill = _pill_on(t, window) if window else (1.0 if prog >= 1.0 else 0.0)
         drawn = {"price_label": None, "drawn": False, "x1": box[0] + 24, "pill": False}
+        if prog > 0.0 or (ghost > 0.0 and kind in ("entry", "sl", "target")):
+            line_ys.append(float(ax.y(price)))
         if prog > 0.0:
             drawn = level_line(
                 img, box, ax.y(price), colors[kind], label, sides[kind], prog,
@@ -972,6 +1072,8 @@ def draw_plan(img, plan, shown, t, clock):
     broken = sl_break(img, ax, plan, break_p, flash_on=flash_on) if break_p > 0.0 else {
         "price": float(plan.sl), "progress": 0.0, "flash": False,
     }
+    frame = getattr(ax, "frame", None) or box
+    pill_rects = _flush_pills(img, line_ys, frame)
     counter_p = _progress(clock, "counter", t, 0.0)
     # The line pill is the target label. A second big TARGET under the chart covers the caption.
     counter = number_counter(img, plan.target, counter_p, label="TARGET", paint=False)
@@ -1000,6 +1102,8 @@ def draw_plan(img, plan, shown, t, clock):
         "break": broken,
         "candles": per,
         "on_screen_text": on_screen,
+        "frame": tuple(float(v) for v in frame),
+        "pill_rects": [tuple(r) for r in pill_rects],
     }
 
 
