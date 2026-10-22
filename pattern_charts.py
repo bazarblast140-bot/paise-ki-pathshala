@@ -209,6 +209,35 @@ PATTERNS = {
 }
 
 
+# Seven owner-approved plan topics (22-Oct-2026). The chart is the trade_plan
+# OHLC, so every price painted here is a code-computed price the script may say.
+_PLAN_TOPIC_MARKS = {
+    "pat_bear_engulf": ("BEARISH ENGULF", "RED COVERS GREEN"),
+    "pat_shooting_star": ("SHOOTING STAR", "LONG UPPER WICK"),
+    "pat_double_bottom": ("DOUBLE BOTTOM", "TWO LOWS + NECK"),
+    "pat_evening_star": ("EVENING STAR", "CLOSE BELOW MID"),
+    "pat_bear_flag": ("BEAR FLAG", "POLE + FLAG"),
+    "pat_inside_bar": ("INSIDE BAR", "INSIDE MOTHER BAR"),
+    "pat_ema_cross": ("EMA CROSS", "20 OVER 50"),
+}
+
+
+def _plan_topic_specs():
+    import trade_plan
+    for key, (hook, pehchan) in _PLAN_TOPIC_MARKS.items():
+        plan = trade_plan.plan_for(key)
+        sr = trade_plan.fmt(plan.sr)
+        PATTERNS[key] = {
+            "kind": "candles",
+            "ohlc": tuple(tuple(int(v) if float(v).is_integer() else v for v in c) for c in plan.ohlc),
+            "focus": {"hook": plan.focus, "pehchan": plan.focus, "matlab": plan.focus, "karein": plan.focus},
+            "lines": ((plan.sr, sr),),
+            "marks": {"hook": hook, "pehchan": pehchan, "matlab": f"{plan.sr_name} {sr}", "karein": "PLAN"},
+        }
+
+
+_plan_topic_specs()
+
 PLAN_BEATS = (
     "hook", "pehchan", "context", "entry", "sl", "target", "invalidation", "cta",
 )
@@ -246,13 +275,6 @@ EXTRA_MARKS = {
         "pehchan": "GREEN THROUGH MID",
         **_PLAN_MARKS,
     },
-    "pat_bear_engulf": {"hook": "BEARISH ENGULF", "pehchan": "RED COVERS GREEN", **_PLAN_MARKS},
-    "pat_shooting_star": {"hook": "SHOOTING STAR", "pehchan": "LONG UPPER WICK", **_PLAN_MARKS},
-    "pat_double_bottom": {"hook": "DOUBLE BOTTOM", "pehchan": "TWO LOWS NECK", **_PLAN_MARKS},
-    "pat_evening_star": {"hook": "EVENING STAR", "pehchan": "CLOSE BELOW MID", **_PLAN_MARKS},
-    "pat_bear_flag": {"hook": "BEAR FLAG", "pehchan": "POLE AND FLAG", **_PLAN_MARKS},
-    "pat_inside_bar": {"hook": "INSIDE BAR", "pehchan": "INSIDE MOTHER", **_PLAN_MARKS},
-    "pat_ema_cross": {"hook": "EMA CROSS", "pehchan": "FAST OVER SLOW", **_PLAN_MARKS},
     "risk_daily_loss_limit": {
         "hook": "DAILY LIMIT",
         "pehchan": "CAPITAL LIMIT",
