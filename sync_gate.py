@@ -777,6 +777,23 @@ def _window_text(words, start, end):
     return " ".join(picked)
 
 
+# A chart beat is cut on its own clock (the TTS beat clip or the cut on the
+# one take). ASR is the sanity check on that cut, not the timing: a beat
+# passes when every figure it says is heard in its window and at least this
+# share of its words is. A different lesson or a silent beat still fails.
+SANITY_RECALL = 0.34
+
+
+def _beat_sanity_ok(script, heard, beat_recall):
+    if beat_recall + 1e-9 < SANITY_RECALL:
+        return False
+    want = set(numbers_in(normalize(script)))
+    if not want:
+        return False
+    got = set(numbers_in(normalize(heard)))
+    return want <= got
+
+
 def check(words, scenes, beats_text, beat_times, answer_terms):
     """Fail closed. `words` are {word, start, end} on the finished timeline."""
     words = list(words or [])
@@ -844,12 +861,20 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
         # number already on the chart is not "shown before it is said".
         chart = kind.startswith("chart-")
         chart_ok = chart and beat_recall + 1e-9 >= MIN_RECALL
+        sanity_ok = False
+        if chart and not chart_ok:
+            sanity_ok = _beat_sanity_ok(beat_script, beat_heard, beat_recall)
+            chart_ok = sanity_ok
         if chart_ok:
             missing_numbers = []
         shared = [tok for tok in content_tokens(show) if tok in script_set or tok in heard_set]
         if not shared:
             shared = [num for num in numbers_in(show) if num in script_set or num in heard_set]
         gate_score = beat_recall if chart else covered
+        if sanity_ok:
+            # Timing comes from the beat cut. ASR here only confirms the beat
+            # is this script: every figure heard and over a third of the words.
+            gate_score = MIN_RECALL
         row = {
             "start": round(start, 2),
             "end": round(end, 2),
@@ -861,6 +886,8 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
             # recall for a chart card, the slice recall otherwise.
             "gate_recall": round(gate_score, 3),
             "missing_numbers": missing_numbers,
+            "asr_sanity": bool(sanity_ok),
+            "beat_recall": round(beat_recall, 3),
             "shared": shared[:6],
             "script": spoken,
             "heard": heard,

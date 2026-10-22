@@ -77,3 +77,20 @@ class TranscriptCacheTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AsrSanityTests(unittest.TestCase):
+    def _scene(self, heard):
+        words = [{"word": w, "start": i * 0.3, "end": i * 0.3 + 0.25} for i, w in enumerate(heard.split())]
+        beats = {"context": "तेजी के बाद रेसिस्टेंस 124 पर वैलिड। साइडवेज में कमजोर।"}
+        scenes = [{"start": 0.0, "end": 4.0, "beat": "context", "kind": "chart-context", "show": []}]
+        return sync_gate.check(words, scenes, beats, {"context": (0.0, 4.0)}, [])
+
+    def test_a_misheard_beat_with_its_figures_heard_passes_as_sanity(self):
+        report = self._scene("तेजी के बाद रिजिस्तन्स एकसो चोबीस पर वलगद यागद")
+        self.assertTrue(report["ok"], report["reason"])
+        self.assertTrue(report["scenes"][0]["asr_sanity"])
+
+    def test_a_wrong_figure_or_another_lesson_still_fails(self):
+        self.assertFalse(self._scene("तेजी के बाद रिजिस्तन्स एकसो चालीस पर वलगद")["ok"])
+        self.assertFalse(self._scene("आज निफ्टी बंद हुआ एकसो चोबीस")["ok"])
