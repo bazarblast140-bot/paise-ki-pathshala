@@ -107,8 +107,11 @@ class ScriptTests(unittest.TestCase):
 
 class PickTests(unittest.TestCase):
     def test_nothing_approved_is_a_clean_skip(self):
-        self.assertIsNone(approved_bank.next_script([]))
-        reason = approved_bank.skip_reason([])
+        # Owner-approved scripts now exist in approved/. Keep only the unapproved ones here.
+        unapproved = [row for row in approved_bank.all_scripts() if not approved_bank.owner_ok(row)]
+        with mock.patch("approved_bank.all_scripts", return_value=unapproved):
+            self.assertIsNone(approved_bank.next_script([]))
+            reason = approved_bank.skip_reason([])
         self.assertIn("owner_approved", reason)
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "published.json"

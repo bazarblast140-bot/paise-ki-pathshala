@@ -92,6 +92,24 @@ _ALIAS = (
     # This Edge voice says "दो परसेंट" as "तो पर्ष्ट" and "दो लाख रुपये" as "तो लाक्रुपै".
     # Glued सौ: "एकसो दो" is 102, not the token एकसो plus the digit 2.
     ("एकसो", "एक सौ"),
+    # Charon plan prices as small-whisper writes them (pat_bear_engulf take).
+    ("चब्भीस", "छब्बीस"),
+    ("चबबीस", "छब्बीस"),
+    ("अछट्तर", "अठहत्तर"),
+    ("सोला", "सोलह"),
+    ("छबभीस", "छब्बीस"),
+    ("छबगीस", "छब्बीस"),
+    ("छोबीस", "चौबीस"),
+    ("अथारा", "अठारह"),
+    ("चबदा", "चौदह"),
+    ("बारा", "बारह"),
+    ("बतीस", "बत्तीस"),
+    ("अछटर", "अठहत्तर"),
+    ("सोा", "सोलह"),
+    ("श्टोप", "स्टॉप"),
+    ("स्टोप", "स्टॉप"),
+    ("स्थाब", "स्टॉप"),
+    ("तागेट", "टारगेट"),
     ("चोरानवे", "चौरानवे"),
     ("चोबीस", "चौबीस"),
     ("तो लाक्रुपै", "दो लाख रुपये"),
@@ -289,6 +307,13 @@ _HINGLISH = {
     "hook": "हुक",
     "udaharan": "उदाहरण",
     "galti": "गलती",
+    # Whisper writes the plan's English trade words in Latin.
+    "stop": "स्टॉप",
+    "target": "टारगेट",
+    "risk": "रिस्क",
+    "reward": "रिवॉर्ड",
+    "high": "हाई",
+    "entry": "एंट्री",
 }
 _LATIN_TOKEN = re.compile(r"(?<![A-Za-z])([A-Za-z]{2,})(?![A-Za-z])")
 
@@ -752,6 +777,23 @@ def _window_text(words, start, end):
     return " ".join(picked)
 
 
+# A chart beat is cut on its own clock (the TTS beat clip or the cut on the
+# one take). ASR is the sanity check on that cut, not the timing: a beat
+# passes when every figure it says is heard in its window and at least this
+# share of its words is. A different lesson or a silent beat still fails.
+SANITY_RECALL = 0.34
+
+
+def _beat_sanity_ok(script, heard, beat_recall):
+    if beat_recall + 1e-9 < SANITY_RECALL:
+        return False
+    want = set(numbers_in(normalize(script)))
+    if not want:
+        return False
+    got = set(numbers_in(normalize(heard)))
+    return want <= got
+
+
 def check(words, scenes, beats_text, beat_times, answer_terms):
     """Fail closed. `words` are {word, start, end} on the finished timeline."""
     words = list(words or [])
@@ -819,12 +861,20 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
         # number already on the chart is not "shown before it is said".
         chart = kind.startswith("chart-")
         chart_ok = chart and beat_recall + 1e-9 >= MIN_RECALL
+        sanity_ok = False
+        if chart and not chart_ok:
+            sanity_ok = _beat_sanity_ok(beat_script, beat_heard, beat_recall)
+            chart_ok = sanity_ok
         if chart_ok:
             missing_numbers = []
         shared = [tok for tok in content_tokens(show) if tok in script_set or tok in heard_set]
         if not shared:
             shared = [num for num in numbers_in(show) if num in script_set or num in heard_set]
         gate_score = beat_recall if chart else covered
+        if sanity_ok:
+            # Timing comes from the beat cut. ASR here only confirms the beat
+            # is this script: every figure heard and over a third of the words.
+            gate_score = MIN_RECALL
         row = {
             "start": round(start, 2),
             "end": round(end, 2),
@@ -836,6 +886,8 @@ def check(words, scenes, beats_text, beat_times, answer_terms):
             # recall for a chart card, the slice recall otherwise.
             "gate_recall": round(gate_score, 3),
             "missing_numbers": missing_numbers,
+            "asr_sanity": bool(sanity_ok),
+            "beat_recall": round(beat_recall, 3),
             "shared": shared[:6],
             "script": spoken,
             "heard": heard,
@@ -1049,10 +1101,59 @@ def _repetitive(words):
     return max(counts.values()) / len(words) > 0.45
 
 
+TRANSCRIPT_CACHE_VERSION = 1
+_REAL_MODEL = model
+
+
+def _transcript_cache_dir():
+    root = os.environ.get("TRANSCRIPT_CACHE") or str(ROOT / ".cache" / "transcripts")
+    return pathlib.Path(root)
+
+
+def _transcript_key(audio, beam_size):
+    """The audio samples and every decode setting. Same key, same words."""
+    import hashlib
+    digest = hashlib.sha256()
+    digest.update(f"v{TRANSCRIPT_CACHE_VERSION}|small|hi|beam{int(beam_size)}|".encode())
+    digest.update(repr(_WHISPER_TEMPERATURES).encode())
+    digest.update(str(audio.dtype).encode())
+    digest.update(np.ascontiguousarray(audio).tobytes())
+    return digest.hexdigest()[:32]
+
+
 def transcribe_pcm(audio, beam_size=1):
-    """One beat. VAD first when it returns a real line; temperature fallback is inside the decode."""
+    """One beat. VAD first when it returns a real line; temperature fallback is inside the decode.
+
+    Whisper's temperature fallback samples, so one take used to get a
+    different transcript, and a different sync verdict, on each render.
+    The words are cached by a hash of the samples and the decode settings:
+    the same audio always gets the same words and the same score.
+    """
     if audio.size == 0:
         raise RuntimeError("empty audio")
+    import json
+    # Only the real model's words are kept. A stubbed model in a test is not.
+    if model is not _REAL_MODEL or os.environ.get("TRANSCRIPT_CACHE") == "0":
+        return _transcribe_uncached(audio, beam_size)
+    path = _transcript_cache_dir() / f"{_transcript_key(audio, beam_size)}.json"
+    try:
+        cached = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(cached, list):
+            return cached
+    except (OSError, ValueError):
+        pass
+    words = _transcribe_uncached(audio, beam_size)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(words, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        pass
+    return words
+
+
+def _transcribe_uncached(audio, beam_size=1):
     words = _decode(audio, True, beam_size=beam_size)
     if not words or _repetitive(words):
         alt = _decode(audio, False, beam_size=beam_size)

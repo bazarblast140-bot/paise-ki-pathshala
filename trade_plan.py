@@ -505,6 +505,190 @@ def _daily():
     )
 
 
+def _bear_engulf():
+    ohlc = (
+        (100, 108, 98, 106),
+        (106, 114, 104, 112),
+        (112, 116, 110, 114),
+        (114, 120, 112, 118),
+        (122, 124, 110, 112),
+        (112, 114, 100, 102),
+        (102, 104, 84, 86),
+        (86, 88, 76, 78),
+    )
+    green, red = ohlc[3], ohlc[4]
+    if not (green[3] > green[0] and red[3] < red[0]):
+        raise ValueError("bearish engulf colours")
+    if max(red[0], red[3]) <= max(green[0], green[3]) or min(red[0], red[3]) >= min(green[0], green[3]):
+        raise ValueError("bearish engulf body")
+    entry, level = red[2], red[1]
+    sl = _buffered_stop("short", level, level)
+    return Plan(
+        "pat_bear_engulf", "short", ohlc, entry, sl, _target_short(entry, sl), level, "RESIST", 4,
+        {"green_open": green[0], "green_close": green[3], "red_open": red[0], "red_close": red[3]},
+    )
+
+
+def _shooting_star():
+    ohlc = (
+        (106, 112, 104, 110),
+        (110, 118, 108, 116),
+        (116, 124, 114, 122),
+        (122, 130, 120, 128),
+        (128, 140, 127, 130),
+        (130, 131, 120, 122),
+        (122, 124, 108, 110),
+        (110, 112, 94, 96),
+    )
+    focus = 4
+    o, h, l, c = ohlc[focus]
+    body = abs(c - o)
+    upper = h - max(o, c)
+    lower = min(o, c) - l
+    if body <= 0 or upper < body * 2 or lower > body:
+        raise ValueError("shooting star shape")
+    entry = l
+    sl = _buffered_stop("short", h, h)
+    return Plan(
+        "pat_shooting_star", "short", ohlc, entry, sl, _target_short(entry, sl), h, "RESIST", focus,
+        {"mult": 2, "body": body, "wick": upper, "high": h, "low": l},
+    )
+
+
+def _double_bottom():
+    ohlc = (
+        (120, 122, 106, 108),
+        (108, 110, 80, 84),
+        (84, 96, 82, 94),
+        (94, 95, 80, 90),
+        (90, 104, 88, 102),
+        (102, 118, 100, 116),
+        (116, 136, 114, 134),
+    )
+    if ohlc[1][2] != ohlc[3][2]:
+        raise ValueError("double bottom")
+    bottom = ohlc[1][2]
+    neck = ohlc[2][1]
+    entry = neck
+    sl = _buffered_stop("long", bottom, ohlc[3][2])
+    target, kept = _priced("long", entry, sl, entry + (neck - bottom))
+    extras = {"bottom": bottom, "neck": neck}
+    if kept:
+        extras["rule"] = "पैटर्न हाइट"
+    return Plan(
+        "pat_double_bottom", "long", ohlc, entry, sl, target, bottom, "SUPPORT", 3, extras,
+    )
+
+
+def _evening():
+    ohlc = (
+        (84, 92, 82, 90),
+        (90, 100, 88, 98),
+        (100, 122, 98, 120),
+        (120, 128, 118, 124),
+        (124, 126, 104, 106),
+        (106, 108, 90, 92),
+        (92, 94, 72, 74),
+        (74, 76, 54, 56),
+    )
+    first, star, third = ohlc[2], ohlc[3], ohlc[4]
+    mid = (first[0] + first[3]) / 2
+    if not (first[3] > first[0] and third[3] < mid and star[1] - star[2] < first[3] - first[0]):
+        raise ValueError("evening star")
+    entry = third[2]
+    level = max(star[1], third[1])
+    sl = _buffered_stop("short", level, third[1])
+    return Plan(
+        "pat_evening_star", "short", ohlc, entry, sl, _target_short(entry, sl), level, "RESIST", 4,
+        {"mid": mid, "star_high": star[1]},
+    )
+
+
+def _bear_flag():
+    ohlc = (
+        (160, 162, 150, 152),
+        (152, 154, 140, 142),
+        (142, 144, 130, 132),
+        (132, 138, 131, 136),
+        (136, 139, 134, 135),
+        (135, 136, 124, 126),
+        (126, 128, 100, 102),
+    )
+    entry = min(ohlc[3][2], ohlc[4][2])
+    level = max(ohlc[3][1], ohlc[4][1])
+    sl = _buffered_stop("short", level, ohlc[4][1])
+    pole = ohlc[0][0] - entry
+    target, kept = _priced("short", entry, sl, entry - pole)
+    extras = {"pole": pole, "flag": level}
+    if kept:
+        extras["rule"] = "पोल की हाइट"
+    return Plan(
+        "pat_bear_flag", "short", ohlc, entry, sl, target, level, "RESIST", 4, extras,
+    )
+
+
+def _inside_bar():
+    ohlc = (
+        (80, 88, 78, 86),
+        (86, 96, 84, 94),
+        (94, 102, 92, 100),
+        (100, 120, 98, 118),
+        (116, 118, 106, 112),
+        (112, 128, 110, 126),
+        (126, 154, 124, 152),
+    )
+    mother, inside = ohlc[3], ohlc[4]
+    if not (inside[1] < mother[1] and inside[2] > mother[2]):
+        raise ValueError("inside bar")
+    entry = mother[1]
+    sl = _buffered_stop("long", inside[2], inside[2])
+    return Plan(
+        "pat_inside_bar", "long", ohlc, entry, sl, _target_long(entry, sl), mother[2], "SUPPORT", 4,
+        {"mother_high": mother[1], "mother_low": mother[2], "inside_low": inside[2]},
+    )
+
+
+def _ema(values, span):
+    k = 2.0 / (span + 1)
+    out, level = [], float(values[0])
+    for value in values:
+        level = float(value) * k + level * (1 - k)
+        out.append(level)
+    return out
+
+
+EMA_FAST, EMA_SLOW = 20, 50
+
+
+def _ema_history():
+    """Generated closes: a slow fall, then a rally. The chart shows the tail."""
+    closes = [110 - 0.3 * i for i in range(45)]
+    closes += [96.5, 97, 98, 100, 102, 104, 106, 108, 110, 112, 114, 116, 118, 120, 122, 128, 136, 146]
+    return closes
+
+
+def _ema_cross():
+    closes = _ema_history()
+    fast, slow = _ema(closes, EMA_FAST), _ema(closes, EMA_SLOW)
+    cross = next(
+        i for i in range(1, len(closes))
+        if fast[i - 1] <= slow[i - 1] and fast[i] > slow[i]
+    )
+    start = cross - 4
+    ohlc = []
+    for i in range(start, len(closes)):
+        o, c = closes[i - 1], closes[i]
+        ohlc.append((o, max(o, c) + 2, min(o, c) - 2, c))
+    focus = cross - start
+    entry = ohlc[focus][1]
+    swing = ohlc[0][2]
+    sl = _buffered_stop("long", swing, ohlc[focus][2])
+    return Plan(
+        "pat_ema_cross", "long", ohlc, entry, sl, _target_long(entry, sl), swing, "SUPPORT", focus,
+        {"fast": EMA_FAST, "slow": EMA_SLOW, "swing": swing},
+    )
+
+
 BUILDERS = {
     "pat_hammer": _hammer,
     "pat_doji": _doji,
@@ -523,6 +707,13 @@ BUILDERS = {
     "pat_stop_loss": _stop,
     "piercing": _piercing,
     "risk_daily_loss_limit": _daily,
+    "pat_bear_engulf": _bear_engulf,
+    "pat_shooting_star": _shooting_star,
+    "pat_double_bottom": _double_bottom,
+    "pat_evening_star": _evening,
+    "pat_bear_flag": _bear_flag,
+    "pat_inside_bar": _inside_bar,
+    "pat_ema_cross": _ema_cross,
 }
 KEYS = tuple(BUILDERS)
 
