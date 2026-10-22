@@ -494,6 +494,8 @@ def _write_post_meta(out, kind, levels, rows, article=None):
         meta = script.news_post_meta(levels, article)
     elif kind == "close":
         meta = script.post_meta(levels)
+    elif kind == "ta":
+        meta = script.ta_post_meta(levels)
     else:
         return
     (Path(out) / "post_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

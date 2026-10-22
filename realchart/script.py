@@ -559,3 +559,34 @@ def end_card_voice(kind):
         "rtt": "रोज़ शाम एक स्टॉक का पूरा प्लान। Rajesh Technical Trader को follow करो।",
         "pkp": "रोज़ शाम एक स्टॉक का पूरा प्लान। Paise Ki Pathshala को follow करो।",
     }
+
+
+def ta_post_meta(levels):
+    """Evening one-stock TA Reel: keyword-first title, caption and hashtags from real plan levels."""
+    from datetime import date
+    from realchart.fmt import inr
+    try:
+        day = date.fromisoformat(str(levels.get("last_date"))[:10])
+        day_text = f"{day.day} {day.strftime('%b %Y')}"
+    except ValueError:
+        day_text = ""
+    name = str(levels.get("symbol") or "").split(":")[-1]
+    setup = levels.get("setup") or "chart pattern"
+    chg = float(levels.get("chg_pct") or 0)
+    rr = levels.get("rr")
+    rr_text = f" RR {float(rr):.1f}." if rr else ""
+    title = f"{name} share analysis today | {setup} trade plan {day_text}".strip()
+    caption = (
+        f"{name} technical analysis {day_text}: close {inr(levels.get('close'), 2)} ({chg:+.2f}%). "
+        f"Setup: {setup}. Support {inr(levels.get('support'), 2)}, resistance {inr(levels.get('resistance'), 2)}. "
+        f"Entry trigger {inr(levels.get('entry'), 2)}, SL {inr(levels.get('stop'), 2)}, target {inr(levels.get('target'), 2)}.{rr_text} "
+        f"Roz shaam ek stock ka real chart analysis. Educational only, not financial advice."
+    )
+    pinned = f"{name} {inr(levels.get('entry'), 0)} पार करेगा या नहीं? Comment करो 👇" if levels.get("entry") else ""
+    return {
+        "title": title,
+        "caption": caption,
+        "hashtags": [f"#{name}", "#StockMarketHindi", "#TechnicalAnalysis", "#StockAnalysis", "#Nifty50Stocks"],
+        "pinned_comment": pinned,
+        "series": "Stock TA",
+    }
