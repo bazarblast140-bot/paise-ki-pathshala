@@ -849,7 +849,9 @@ def clock_from(topic, plan=None):
             return None
         return (t0, t0 + float(dur))
 
-    zoom_at = start("trend", "pehchan")
+    # The pehchan beat names the key candle, so the push-in starts with it.
+    pehchan = beats.get("pehchan")
+    zoom_at = float(pehchan[0]) if pehchan else start("trend", "pehchan")
     if zoom_at is None:
         zoom_at = start("entry", "entry")
     inv = beats.get("invalidation")
