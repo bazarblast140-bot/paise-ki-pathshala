@@ -501,6 +501,7 @@ def _content_bounds(present, spoken, words, duration):
         return None
     cursor = 0
     spans = []
+    weights = []
     matched = 0
     wanted = 0
     for beat in present:
@@ -527,27 +528,68 @@ def _content_bounds(present, spoken, words, duration):
                 first = word_index
             last = word_index
             scan = found + 1
-        matched += hit
         if not want or first is None or hit < max(1, int(round(len(want) * 0.34))):
-            return None
+            # One garbled beat (cold-runner whisper) must not throw away every
+            # other cut. The beat stays unanchored and the cursor does not
+            # move; it is placed between its anchored neighbours below.
+            spans.append(None)
+            weights.append(max(1, len(want)))
+            continue
+        matched += hit
         spans.append((first, last))
+        weights.append(max(1, len(want)))
         cursor = scan
+    anchored = [span for span in spans if span is not None]
     if wanted == 0 or matched / float(wanted) < 0.45:
         return None
+    if spans[0] is None or len(anchored) * 2 < len(spans) + 1:
+        return None
+    starts = _place_unanchored(spans, weights, words, duration)
     bounds = {}
     prev = 0.0
     for index, beat in enumerate(present):
         if index == len(present) - 1:
             end = float(duration)
         else:
-            next_first = spans[index + 1][0]
-            end = float(words[next_first].get("start") or prev)
+            end = starts[index + 1]
             end = min(float(duration), max(prev, end))
         if end - prev < 1.05:
             return None
         bounds[beat] = (prev, end)
         prev = end
     return bounds
+
+
+def _place_unanchored(spans, weights, words, duration):
+    """Start time of every beat. A run of unanchored beats shares the time
+    between the previous beat's start and the next anchored start with that
+    previous beat, in proportion to script length."""
+    n = len(spans)
+    starts = [None] * n
+    for i, span in enumerate(spans):
+        if span is not None:
+            starts[i] = float(words[span[0]].get("start") or 0)
+    starts[0] = 0.0
+    i = 1
+    while i < n:
+        if starts[i] is not None:
+            i += 1
+            continue
+        j = i
+        while j < n and starts[j] is None:
+            j += 1
+        # The run shares the time from the previous beat's start with that
+        # beat, by script length: its own last matched word may sit early.
+        lo = starts[i - 1]
+        hi = starts[j] if j < n else float(duration)
+        group = list(range(i - 1, j))
+        total = float(sum(weights[k] for k in group)) or 1.0
+        acc = float(weights[i - 1])
+        for k in range(i, j):
+            starts[k] = lo + (hi - lo) * acc / total
+            acc += weights[k]
+        i = j
+    return starts
 
 
 def _skewed_bounds(bounds, order, weights, duration):
