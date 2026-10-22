@@ -649,6 +649,791 @@
         },
         "captions": "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: T,Noto Sans Devanagari,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,8,60,190,0,1\nStyle: Cap,Noto Sans Devanagari,62,&H00FFFFFF,&H00FFFFFF,&H00101010,&HA0000000,-1,0,0,0,100,100,0,0,3,4,0,2,70,190,520,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 1,0:00:30.21,0:00:42.49,T,,0,0,0,,{\\an8\\pos(540,1604)\\fs39\\c&H00B8A394&\\q2\\fad(150,100)}सिर्फ़ जानकारी, निवेश सलाह नहीं।\n"
       }
+    },
+    {
+      "id": "buf-pat_double_bottom-71dd3e56a2f2",
+      "state": "ready",
+      "topic_key": "pat_double_bottom",
+      "title": "डबल बॉटम आकार",
+      "description": "डबल बॉटम आकार पर खरीद कब करें? एंट्री 96 और स्टॉप 78 का प्लान।\n\nडबल बॉटम आकार — आसान हिंदी में: पहचान, मतलब और traders इसे आमतौर पर कैसे इस्तेमाल करते हैं।\n\n💬 यह बात पहले से पता थी? Comment में हाँ या नहीं लिखो।\n\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nहम SEBI-रजिस्टर्ड सलाहकार नहीं हैं। किसी भी निवेश से पहले रजिस्टर्ड सलाहकार से बात करें।\n\nस्रोत और नोट्स\n- पूरा ट्रेड प्लान\n- स्रोत: illustrative teaching chart drawn in this video (example candles, not live market data, not a stock tip). Every plan number below is computed by the channel's trade_plan rules from these candles.\n- Example chart candles: #1 O 120 H 122 L 106 C 108; #2 O 108 H 110 L 80 C 84; #3 O 84 H 96 L 82 C 94; #4 O 94 H 95 L 80 C 90; #5 O 90 H 104 L 88 C 102; #6 O 102 H 118 L 100 C 116; #7 O 116 H 136 L 114 C 134.\n- Plan side: long (buy). Entry 96, stop-loss 78, target 132, support 80.\n- Risk = |entry - stop| = 18; reward = |target - entry| = 36; risk:reward = 1:2 (spoken 1 बटा 2).\n- Other chart levels: bottom 80, neck 96.\n\nPaise Ki Pathshala — ट्रेडिंग की पाठशाला — चार्ट, पैटर्न, रिस्क और असली डेटा\n\nरोज़ 3 ट्रेडिंग Shorts — कैंडलस्टिक, इंडिकेटर, ऑर्डर, F&O, रिस्क और असली डेटा।\n\n#StockMarketHindi #TradingHindi #PaiseKiPathshala #ShareMarket",
+      "tags": [
+        "hindi",
+        "stock market hindi",
+        "trading hindi",
+        "paise ki pathshala"
+      ],
+      "sha256": "71dd3e56a2f2b55bf93b0b330c7d6f19601068347adc1c5a65d257fc81432c92",
+      "asset_name": "buf-pat_double_bottom-71dd3e56a2f2.mp4",
+      "meta_name": "buf-pat_double_bottom-71dd3e56a2f2.json",
+      "created_at": "2026-10-22T12:33:35Z",
+      "used_at": null,
+      "used_slot": null,
+      "used_date_ist": null,
+      "video_id": null,
+      "gates": {
+        "fallback_narration": {
+          "passed": true,
+          "at": "2026-10-22T12:33:35Z",
+          "detail": "llm outline"
+        },
+        "ai_review": {
+          "passed": true,
+          "at": "2026-10-22T12:33:35Z",
+          "detail": "READY"
+        },
+        "sync": {
+          "passed": true,
+          "at": "2026-10-22T12:33:35Z",
+          "detail": "whisper sync passed"
+        },
+        "craft": {
+          "passed": true,
+          "at": "2026-10-22T12:33:35Z",
+          "detail": "craft 100"
+        },
+        "number_match": {
+          "passed": true,
+          "at": "2026-10-22T12:33:35Z",
+          "detail": "numbers match"
+        },
+        "duplicate_text": {
+          "passed": true,
+          "at": "2026-10-22T12:33:35Z",
+          "detail": "no duplicate text"
+        },
+        "freshness": {
+          "passed": true,
+          "at": "2026-10-22T12:33:35Z",
+          "detail": "no live market as-of; 3-trading-day gate does not apply",
+          "mode": "evergreen"
+        }
+      },
+      "files": {
+        "topic": {
+          "key": "pat_double_bottom",
+          "cat": "PATTERN",
+          "topic": "डबल बॉटम आकार",
+          "thumb": [
+            "DOUBLE",
+            "BOTTOM"
+          ],
+          "sticker": "डबल बॉटम",
+          "beats": {
+            "hook": [
+              "प्लान",
+              "कमेंट"
+            ],
+            "pehchan": [
+              "पहचान",
+              "नियम"
+            ],
+            "context": [
+              "कहाँ वैलिड",
+              "कमजोर"
+            ],
+            "entry": [
+              "एंट्री",
+              "ट्रिगर"
+            ],
+            "sl": [
+              "स्टॉप",
+              "क्यों"
+            ],
+            "target": [
+              "टारगेट",
+              "रिस्क-रिवॉर्ड"
+            ],
+            "invalidation": [
+              "स्किप",
+              "गलती"
+            ],
+            "cta": [
+              "कमेंट",
+              "प्लान"
+            ]
+          },
+          "facts": [
+            "पूरा ट्रेड प्लान"
+          ],
+          "seo": "डबल बॉटम आकार",
+          "hook_line": "डबल बॉटम आकार पर खरीद कब करें?",
+          "_spoken_beats": {
+            "hook": "डबल बॉटम आकार पर खरीद कब करें? एंट्री 96 और स्टॉप 78 का प्लान।",
+            "pehchan": "दो बॉटम 80 पर बनें। नेक 96 के ऊपर क्लोज आए।",
+            "context": "गिरावट के बाद सपोर्ट 80 पर वैलिड। साइडवेज में कमजोर।",
+            "entry": "एंट्री 96, नेकलाइन ब्रेकआउट क्लोज पर।",
+            "sl": "स्टॉप 78 बॉटम के नीचे। लो टूटा तो प्लान गलत।",
+            "target": "टारगेट 132, 1:2। रिस्क 18, रिवॉर्ड 36, यानी रिस्क-रिवॉर्ड 1 बटा 2।",
+            "invalidation": "गलती दूसरे बॉटम पर ही खरीद। लो 78 टूटे तो स्किप।",
+            "cta": "डबल बॉटम के नेक ब्रेकआउट पर खरीद ली? कमेंट करो। Sirf seekhne ke liye, financial advice nahi."
+          },
+          "_approved_bank": true,
+          "_live_short": true,
+          "_live_beats": "plan",
+          "_voice": {
+            "words_per_second": 1.9
+          }
+        },
+        "script": "TITLE:\nडबल बॉटम आकार\n\nHOOK (0-3 sec):\nडबल बॉटम आकार पर खरीद कब करें? एंट्री 96 और स्टॉप 78 का प्लान।\n\nBODY:\n[SEGMENT PEHCHAN]\nदो बॉटम 80 पर बनें। नेक 96 के ऊपर क्लोज आए।\n\n[SEGMENT CONTEXT]\nगिरावट के बाद सपोर्ट 80 पर वैलिड। साइडवेज में कमजोर।\n\n[SEGMENT ENTRY]\nएंट्री 96, नेकलाइन ब्रेकआउट क्लोज पर।\n\n[SEGMENT SL]\nस्टॉप 78 बॉटम के नीचे। लो टूटा तो प्लान गलत।\n\n[SEGMENT TARGET]\nटारगेट 132, 1:2। रिस्क 18, रिवॉर्ड 36, यानी रिस्क-रिवॉर्ड 1 बटा 2।\n\n[SEGMENT INVALIDATION]\nगलती दूसरे बॉटम पर ही खरीद। लो 78 टूटे तो स्किप।\n\n[SEGMENT CTA]\nडबल बॉटम के नेक ब्रेकआउट पर खरीद ली? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.\n\nCTA:\nयह बात पहले से पता थी? Comment में हाँ या नहीं लिखो।\n\nDISCLAIMER LINE:\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nFACT LEDGER:\n- पूरा ट्रेड प्लान\n- SOURCE: illustrative teaching chart drawn in this video (example candles, not live market data, not a stock tip). Every plan number below is computed by the channel's trade_plan rules from these candles.\n- Example chart candles: #1 O 120 H 122 L 106 C 108; #2 O 108 H 110 L 80 C 84; #3 O 84 H 96 L 82 C 94; #4 O 94 H 95 L 80 C 90; #5 O 90 H 104 L 88 C 102; #6 O 102 H 118 L 100 C 116; #7 O 116 H 136 L 114 C 134.\n- Plan side: long (buy). Entry 96, stop-loss 78, target 132, support 80.\n- Risk = |entry - stop| = 18; reward = |target - entry| = 36; risk:reward = 1:2 (spoken 1 बटा 2).\n- Other chart levels: bottom 80, neck 96.\n",
+        "report": "VERDICT: [READY TO PUBLISH]\n\n✅ Auto-checks pass:\nHook | Facts (saare numbers illustrative chart se computed, koi UNVERIFIED nahi) | Compliance (educational framing + disclaimer OK, koi specific stock/fund/product nahi, koi guaranteed-return claim nahi) | Coverage | Visuals (8/8 chart shots) | Length\n\n♻️ Reused-content risk: LOW\n- 0% stock footage, 8/8 original chart shots, premium Gemini AI voice, original script + overlays always on — yeh teen mitigating factors (script_original, original_overlays_always_on, charts) risk ko LOW rakhte hain; lever already tight, ElevenLabs ki zaroorat nahi.\n\n⚠️ Tumhe dekhna hai (judgment calls):\n- Thumbnail: \"96 entry / 78 stop / 132 target\" ke bade numbers + double-bottom diagram dikhao — pattern-siksha wala hook, tip-jaisa nahi lagna chahiye.\n- Assumption: 1:2 risk-reward aur target 132 sirf illustrative candles se nikla hai — kahin bhi \"aise hi hota hai\" jaisa tone na aaye.\n- 0-3 sec hook tez hai; \"entry 96, stop 78\" numbers thodi jaldi bol rahe ho — text overlay se support karo.\n\n🔴 Risks / assumptions:\n- Saare plan numbers \"Likely/illustrative teaching chart\" hain — live market data nahi; description mein bhi yeh clearly likho.\n- Koi tax/regulatory figure use nahi hua, isliye financial-year naming ka issue nahi.\n- Channel SEBI-registered nahi hai — disclaimer \"sirf jaankari, niv esh salah nahi\" audio + on-screen dono jagah rakho.\n\nFAILS this round: none\n",
+        "verify_meta": {
+          "ai_verdict_valid": true,
+          "verdict": "READY",
+          "public_ready": true,
+          "soft_judgment_only": false,
+          "reasons": [],
+          "spoken_words": 119
+        },
+        "self_review": {
+          "parts": {
+            "hook": 100,
+            "visual": 90,
+            "accuracy": 100,
+            "trend": null,
+            "craft": 100,
+            "sync": 100
+          },
+          "overall": 98.0,
+          "passed": true,
+          "public_ok": true,
+          "review_flag": false,
+          "verdict": "PASS",
+          "summary": "overall 98.0 (hook 100, visual 90, accuracy 100, trend skip, craft 100, sync 100)",
+          "notes": [],
+          "bar": {
+            "part": 60,
+            "overall": 75
+          },
+          "chart": {
+            "mode": "schematic",
+            "source": null,
+            "as_of": null
+          },
+          "narration_source": "approved",
+          "sync": {
+            "ok": true,
+            "reason": "",
+            "scenes": [
+              {
+                "start": 0.0,
+                "end": 3.6,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.125,
+                "recall": 0.625,
+                "gate_recall": 0.727,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.727,
+                "shared": [
+                  "डबल",
+                  "बॉटम",
+                  "आकार",
+                  "खरीद",
+                  "कब",
+                  "करें"
+                ],
+                "script": "डबल बॉटम आकार पर खरीद कब करें? एंट्री 96 और",
+                "heard": "दबल बोट्व आखार पर ख़ीद कब करें अंट्री च्यानबे और",
+                "passed": true
+              },
+              {
+                "start": 3.6,
+                "end": 7.21,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.071,
+                "recall": 0.4,
+                "gate_recall": 0.727,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.727,
+                "shared": [],
+                "script": "एंट्री 96 और स्टॉप 78 का प्लान।",
+                "heard": "अंट्री च्यानबे और स्थाप अख्तर्तर का प्लान तो बोटम अस्ची",
+                "passed": true
+              },
+              {
+                "start": 7.21,
+                "end": 9.53,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.067,
+                "recall": 0.429,
+                "gate_recall": 0.667,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.667,
+                "shared": [
+                  "बॉटम",
+                  "बनें",
+                  "नेक",
+                  "ऊपर"
+                ],
+                "script": "दो बॉटम 80 पर बनें। नेक 96 के ऊपर",
+                "heard": "तो बोटम अस्ची पर बने नेक च्यानबे के उपर",
+                "passed": true
+              },
+              {
+                "start": 9.53,
+                "end": 11.85,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.077,
+                "recall": 0.8,
+                "gate_recall": 0.667,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.667,
+                "shared": [
+                  "ऊपर",
+                  "क्लोज",
+                  "आए"
+                ],
+                "script": "नेक 96 के ऊपर क्लोज आए।",
+                "heard": "नेक च्यानबे के उपर ख्लोज आए गिराववट गिराववट के बाद",
+                "passed": true
+              },
+              {
+                "start": 11.85,
+                "end": 15.5,
+                "beat": "context",
+                "kind": "chart-context",
+                "jaccard": 0.048,
+                "recall": 0.429,
+                "gate_recall": 0.571,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.571,
+                "shared": [
+                  "गिरावट",
+                  "बाद",
+                  "सपोर्ट",
+                  "वैलिड",
+                  "साइडवेज",
+                  "कमजोर"
+                ],
+                "script": "गिरावट के बाद सपोर्ट 80 पर वैलिड। साइडवेज में कमजोर।",
+                "heard": "गिराववट गिराववट के बाद सपोट अस्फीपर वलिद सआईवेश में कुई कम्सोड. अंट्रीच अंट्रीच श्यानवे",
+                "passed": true
+              },
+              {
+                "start": 15.5,
+                "end": 19.12,
+                "beat": "entry",
+                "kind": "chart-entry",
+                "jaccard": 0.0,
+                "recall": 0.6,
+                "gate_recall": 0.6,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.6,
+                "shared": [
+                  "एंट्री",
+                  "नेकलाइन",
+                  "ब्रेकआउट",
+                  "क्लोज"
+                ],
+                "script": "एंट्री 96, नेकलाइन ब्रेकआउट क्लोज पर।",
+                "heard": "अंट्रीच अंट्रीच श्यानवे अच़द. नेक्लाई ब्रेकाउट ख्लोस पर. श्टाब 78",
+                "passed": true
+              },
+              {
+                "start": 19.12,
+                "end": 21.77,
+                "beat": "sl",
+                "kind": "chart-sl",
+                "jaccard": 0.154,
+                "recall": 0.714,
+                "gate_recall": 0.875,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.875,
+                "shared": [
+                  "स्टॉप",
+                  "बॉटम",
+                  "नीचे",
+                  "लो",
+                  "टूटा",
+                  "प्लान"
+                ],
+                "script": "स्टॉप 78 बॉटम के नीचे। लो टूटा तो प्लान",
+                "heard": "श्टाब 78 बोटम के नीचे लो तूटा तो",
+                "passed": true
+              },
+              {
+                "start": 21.77,
+                "end": 24.42,
+                "beat": "sl",
+                "kind": "chart-sl",
+                "jaccard": 0.0,
+                "recall": 0.667,
+                "gate_recall": 0.875,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.875,
+                "shared": [
+                  "लो",
+                  "टूटा",
+                  "प्लान",
+                  "गलती"
+                ],
+                "script": "टूटा तो प्लान गलत।",
+                "heard": "लो तूटा तो प्लन गलत तागेत एक सुब",
+                "passed": true
+              },
+              {
+                "start": 24.42,
+                "end": 27.57,
+                "beat": "target",
+                "kind": "chart-target",
+                "jaccard": 0.182,
+                "recall": 0.667,
+                "gate_recall": 0.786,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.786,
+                "shared": [
+                  "टारगेट",
+                  "रिस्क"
+                ],
+                "script": "टारगेट 132, 1:2। रिस्क 18,",
+                "heard": "तागेत एक सुब वत्तिस एक अनुपात दो रिस्क 18,",
+                "passed": true
+              },
+              {
+                "start": 27.57,
+                "end": 30.71,
+                "beat": "target",
+                "kind": "chart-target",
+                "jaccard": 0.231,
+                "recall": 0.7,
+                "gate_recall": 0.786,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.786,
+                "shared": [
+                  "रिस्क",
+                  "रिवॉर्ड",
+                  "यानी",
+                  "रिस्क",
+                  "रिवॉर्ड"
+                ],
+                "script": "रिस्क 18, रिवॉर्ड 36, यानी रिस्क-रिवॉर्ड 1 बटा 2।",
+                "heard": "रिस्क 18, रिवाड चद्टिस yani risk reward 1",
+                "passed": true
+              },
+              {
+                "start": 30.71,
+                "end": 33.49,
+                "beat": "invalidation",
+                "kind": "chart-invalidation",
+                "jaccard": 0.0,
+                "recall": 1.0,
+                "gate_recall": 0.889,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.889,
+                "shared": [
+                  "रिस्क",
+                  "रिवॉर्ड",
+                  "गलती",
+                  "दूसरे",
+                  "बॉटम"
+                ],
+                "script": "गलती दूसरे बॉटम",
+                "heard": "risk reward 1 -2. गल्ती दूस्रे बोटम",
+                "passed": true
+              },
+              {
+                "start": 33.49,
+                "end": 36.27,
+                "beat": "invalidation",
+                "kind": "chart-invalidation",
+                "jaccard": 0.286,
+                "recall": 0.875,
+                "gate_recall": 0.889,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.889,
+                "shared": [
+                  "दूसरे",
+                  "बॉटम",
+                  "ही",
+                  "खरीद",
+                  "लो",
+                  "टूटे"
+                ],
+                "script": "दूसरे बॉटम पर ही खरीद। लो 78 टूटे तो स्किप।",
+                "heard": "दूस्रे बोटम पर ही खरीद. लो अख़टर तूटे तो स्किप.",
+                "passed": true
+              },
+              {
+                "start": 36.27,
+                "end": 39.73,
+                "beat": "cta",
+                "kind": "chart-cta",
+                "jaccard": 0.0,
+                "recall": 0.286,
+                "gate_recall": 0.714,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.714,
+                "shared": [
+                  "डबल",
+                  "बॉटम",
+                  "नेक",
+                  "ब्रेकआउट",
+                  "खरीद",
+                  "ली"
+                ],
+                "script": "डबल बॉटम के नेक ब्रेकआउट पर खरीद ली? कमेंट",
+                "heard": "अख़टर तूटे तो स्किप. दबल बोटम के नेग्ग ब्रेकाउट पर ख़़ीद लीग? कोमन्द",
+                "passed": true
+              },
+              {
+                "start": 39.73,
+                "end": 43.18,
+                "beat": "cta",
+                "kind": "chart-cta",
+                "jaccard": 0.0,
+                "recall": 0.3,
+                "gate_recall": 0.714,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.714,
+                "shared": [
+                  "खरीद",
+                  "ली",
+                  "कमेंट",
+                  "करो",
+                  "सिर्फ",
+                  "सीखने"
+                ],
+                "script": "पर खरीद ली? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.",
+                "heard": "पर ख़़ीद लीग? कोमन्द करो. स्रफ सीखने कगलिए fynancial advice nahin.",
+                "passed": true
+              }
+            ],
+            "beats": [
+              {
+                "beat": "hook",
+                "recall": 0.727,
+                "script": "डबल बॉटम आकार पर खरीद कब करें? एंट्री 96 और स्टॉप 78 का प्लान।",
+                "heard": "दबल बोट्व आखार पर ख़ीद कब करें अंट्री च्यानबे और स्थाप अख्तर्तर का प्लान तो बोटम अस्ची"
+              },
+              {
+                "beat": "pehchan",
+                "recall": 0.667,
+                "script": "दो बॉटम 80 पर बनें। नेक 96 के ऊपर क्लोज आए।",
+                "heard": "तो बोटम अस्ची पर बने नेक च्यानबे के उपर ख्लोज आए गिराववट गिराववट के बाद"
+              },
+              {
+                "beat": "context",
+                "recall": 0.571,
+                "script": "गिरावट के बाद सपोर्ट 80 पर वैलिड। साइडवेज में कमजोर।",
+                "heard": "गिराववट गिराववट के बाद सपोट अस्फीपर वलिद सआईवेश में कुई कम्सोड. अंट्रीच अंट्रीच श्यानवे"
+              },
+              {
+                "beat": "entry",
+                "recall": 0.6,
+                "script": "एंट्री 96, नेकलाइन ब्रेकआउट क्लोज पर।",
+                "heard": "अंट्रीच अंट्रीच श्यानवे अच़द. नेक्लाई ब्रेकाउट ख्लोस पर. श्टाब 78"
+              },
+              {
+                "beat": "sl",
+                "recall": 0.875,
+                "script": "स्टॉप 78 बॉटम के नीचे। लो टूटा तो प्लान गलत।",
+                "heard": "श्टाब 78 बोटम के नीचे लो तूटा तो प्लन गलत तागेत एक सुब"
+              },
+              {
+                "beat": "target",
+                "recall": 0.786,
+                "script": "टारगेट 132, 1:2। रिस्क 18, रिवॉर्ड 36, यानी रिस्क-रिवॉर्ड 1 बटा 2।",
+                "heard": "तागेत एक सुब वत्तिस एक अनुपात दो रिस्क 18, रिवाड चद्टिस yani risk reward 1"
+              },
+              {
+                "beat": "invalidation",
+                "recall": 0.889,
+                "script": "गलती दूसरे बॉटम पर ही खरीद। लो 78 टूटे तो स्किप।",
+                "heard": "risk reward 1 -2. गल्ती दूस्रे बोटम पर ही खरीद. लो अख़टर तूटे तो स्किप."
+              },
+              {
+                "beat": "cta",
+                "recall": 0.714,
+                "script": "डबल बॉटम के नेक ब्रेकआउट पर खरीद ली? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.",
+                "heard": "अख़टर तूटे तो स्किप. दबल बोटम के नेग्ग ब्रेकाउट पर ख़़ीद लीग? कोमन्द करो. स्रफ सीखने कगलिए fynancial advice nahin."
+              }
+            ]
+          },
+          "scenes": [
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 0.0,
+              "end": 3.6
+            },
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 3.6,
+              "end": 7.21
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 7.21,
+              "end": 9.53
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 9.53,
+              "end": 11.85
+            },
+            {
+              "beat": "context",
+              "kind": "chart-context",
+              "start": 11.85,
+              "end": 15.5
+            },
+            {
+              "beat": "entry",
+              "kind": "chart-entry",
+              "start": 15.5,
+              "end": 19.12
+            },
+            {
+              "beat": "sl",
+              "kind": "chart-sl",
+              "start": 19.12,
+              "end": 21.77
+            },
+            {
+              "beat": "sl",
+              "kind": "chart-sl",
+              "start": 21.77,
+              "end": 24.42
+            },
+            {
+              "beat": "target",
+              "kind": "chart-target",
+              "start": 24.42,
+              "end": 27.57
+            },
+            {
+              "beat": "target",
+              "kind": "chart-target",
+              "start": 27.57,
+              "end": 30.71
+            },
+            {
+              "beat": "invalidation",
+              "kind": "chart-invalidation",
+              "start": 30.71,
+              "end": 33.49
+            },
+            {
+              "beat": "invalidation",
+              "kind": "chart-invalidation",
+              "start": 33.49,
+              "end": 36.27
+            },
+            {
+              "beat": "cta",
+              "kind": "chart-cta",
+              "start": 36.27,
+              "end": 39.73
+            },
+            {
+              "beat": "cta",
+              "kind": "chart-cta",
+              "start": 39.73,
+              "end": 43.18
+            }
+          ]
+        },
+        "narration": {
+          "title": "डबल बॉटम आकार",
+          "hook_line": "डबल बॉटम आकार पर खरीद कब करें?",
+          "beats": {
+            "hook": "डबल बॉटम आकार पर खरीद कब करें? एंट्री 96 और स्टॉप 78 का प्लान।",
+            "pehchan": "दो बॉटम 80 पर बनें। नेक 96 के ऊपर क्लोज आए।",
+            "context": "गिरावट के बाद सपोर्ट 80 पर वैलिड। साइडवेज में कमजोर।",
+            "entry": "एंट्री 96, नेकलाइन ब्रेकआउट क्लोज पर।",
+            "sl": "स्टॉप 78 बॉटम के नीचे। लो टूटा तो प्लान गलत।",
+            "target": "टारगेट 132, 1:2। रिस्क 18, रिवॉर्ड 36, यानी रिस्क-रिवॉर्ड 1 बटा 2।",
+            "invalidation": "गलती दूसरे बॉटम पर ही खरीद। लो 78 टूटे तो स्किप।",
+            "cta": "डबल बॉटम के नेक ब्रेकआउट पर खरीद ली? कमेंट करो। Sirf seekhne ke liye, financial advice nahi."
+          },
+          "facts": [
+            "पूरा ट्रेड प्लान"
+          ],
+          "source": "approved",
+          "plan": true,
+          "live_beats": "plan",
+          "narration_fallback": false,
+          "review_attempts": 1,
+          "key": "pat_double_bottom"
+        },
+        "shots": {
+          "shots": [
+            {
+              "shot_id": 1,
+              "beat": "hook",
+              "start_sec": 0.0,
+              "end_sec": 7.21,
+              "visual_type": "chart",
+              "on_screen_text": "एंट्री",
+              "sub_text": "कमेंट",
+              "spoken_line": "डबल बॉटम आकार पर खरीद कब करें? एंट्री 96 और स्टॉप 78 का प्लान।",
+              "chart_data": {
+                "template": "pat_double_bottom",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": "डबल बॉटम आकार पर खरीद कब करें?"
+            },
+            {
+              "shot_id": 2,
+              "beat": "pehchan",
+              "start_sec": 7.21,
+              "end_sec": 11.85,
+              "visual_type": "chart",
+              "on_screen_text": "क्लोज",
+              "sub_text": "नियम",
+              "spoken_line": "दो बॉटम 80 पर बनें। नेक 96 के ऊपर क्लोज आए।",
+              "chart_data": {
+                "template": "pat_double_bottom",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 3,
+              "beat": "context",
+              "start_sec": 11.85,
+              "end_sec": 15.5,
+              "visual_type": "chart",
+              "on_screen_text": "साइडवेज",
+              "sub_text": "कमजोर",
+              "spoken_line": "गिरावट के बाद सपोर्ट 80 पर वैलिड। साइडवेज में कमजोर।",
+              "chart_data": {
+                "template": "pat_double_bottom",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 4,
+              "beat": "entry",
+              "start_sec": 15.5,
+              "end_sec": 19.12,
+              "visual_type": "chart",
+              "on_screen_text": "ब्रेकआउट",
+              "sub_text": "ट्रिगर",
+              "spoken_line": "एंट्री 96, नेकलाइन ब्रेकआउट क्लोज पर।",
+              "chart_data": {
+                "template": "pat_double_bottom",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 5,
+              "beat": "sl",
+              "start_sec": 19.12,
+              "end_sec": 24.42,
+              "visual_type": "chart",
+              "on_screen_text": "स्टॉप",
+              "sub_text": "क्यों",
+              "spoken_line": "स्टॉप 78 बॉटम के नीचे। लो टूटा तो प्लान गलत।",
+              "chart_data": {
+                "template": "pat_double_bottom",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 6,
+              "beat": "target",
+              "start_sec": 24.42,
+              "end_sec": 30.71,
+              "visual_type": "chart",
+              "on_screen_text": "रिवॉर्ड",
+              "sub_text": "रिस्क-रिवॉर्ड",
+              "spoken_line": "टारगेट 132, 1:2। रिस्क 18, रिवॉर्ड 36, यानी रिस्क-रिवॉर्ड 1 बटा 2।",
+              "chart_data": {
+                "template": "pat_double_bottom",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 7,
+              "beat": "invalidation",
+              "start_sec": 30.71,
+              "end_sec": 36.27,
+              "visual_type": "chart",
+              "on_screen_text": "दूसरे",
+              "sub_text": "गलती",
+              "spoken_line": "गलती दूसरे बॉटम पर ही खरीद। लो 78 टूटे तो स्किप।",
+              "chart_data": {
+                "template": "pat_double_bottom",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 8,
+              "beat": "cta",
+              "start_sec": 36.27,
+              "end_sec": 43.18,
+              "visual_type": "chart",
+              "on_screen_text": "फाइनेंशिएसएल",
+              "sub_text": "प्लान",
+              "spoken_line": "डबल बॉटम के नेक ब्रेकआउट पर खरीद ली? कमेंट करो। सिर्फ सीखने के लिए, फाइनेंशियल एडवाइस नहीं।",
+              "chart_data": {
+                "template": "pat_double_bottom",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            }
+          ]
+        },
+        "captions": "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: T,Noto Sans Devanagari,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,8,60,190,0,1\nStyle: Cap,Noto Sans Devanagari,62,&H00FFFFFF,&H00FFFFFF,&H00101010,&HA0000000,-1,0,0,0,100,100,0,0,3,4,0,2,70,190,520,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n\n"
+      }
     }
   ],
   "skipped_topics": [
