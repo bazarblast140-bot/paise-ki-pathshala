@@ -178,12 +178,40 @@ def _axes(box, n, lo, hi, pad, width_frac=0.62, ypad=0.12):
     return ax
 
 
+# Room above the highest and below the lowest price for a level pill and its
+# label, as a share of the price span. MOTION_YPAD alone put the SR/SL pills
+# on the board edge.
+MOTION_HEADROOM = 0.06
+
+
+def _failure_prices(plan):
+    """Open, close, high, low of the finished stop-break candle (progress 1)."""
+    sl = float(plan.sl)
+    entry = float(plan.entry)
+    gap = max(abs(entry - sl) * 0.35, 6.0)
+    if str(getattr(plan, "side", "long")) == "short":
+        open_p = sl - gap * 0.15
+        close_p = sl + gap
+        return open_p, close_p, close_p + gap * 0.2, open_p - gap * 0.05
+    open_p = sl + gap * 0.15
+    close_p = sl - gap
+    return open_p, close_p, open_p + gap * 0.05, close_p - gap * 0.2
+
+
 def motion_geometry(plan):
-    """One price scale for the whole video, so a new beat does not jump the chart."""
+    """One price scale for the whole video, so a new beat does not jump the chart.
+
+    The scale also holds the invalidation beat's stop-break candle, which
+    trades beyond the stop. Without it that candle stuck out of the board.
+    """
     import board_kit as K
     prices = [candle[1] for candle in plan.ohlc] + [candle[2] for candle in plan.ohlc]
     prices.extend([float(plan.entry), float(plan.sl), float(plan.target), float(plan.sr)])
-    return K.BOARD, min(prices), max(prices), MOTION_PAD
+    _o, _c, high, low = _failure_prices(plan)
+    prices.extend([high, low])
+    lo, hi = min(prices), max(prices)
+    room = (hi - lo) * MOTION_HEADROOM
+    return K.BOARD, lo - room, hi + room, MOTION_PAD
 
 
 def _stroke_candle(draw, ax, index, row, color, frac):
@@ -608,6 +636,7 @@ def _failure_candle(img, ax, plan, progress):
     entry = float(plan.entry)
     gap = max(abs(entry - sl) * 0.35, 6.0)
     short = str(getattr(plan, "side", "long")) == "short"
+    # Same shape as _failure_prices at progress 1, which sizes the scale.
     if short:
         open_p = sl - gap * 0.15
         close_p = sl + gap * progress
