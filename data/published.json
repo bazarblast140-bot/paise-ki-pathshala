@@ -464,5 +464,14 @@
   "ig_media_id": "18254247205308469",
   "content_hash": "543559ecd11f05b6",
   "title_norm": "stock market news today | 22 oct 2026 | negative breakout: these 8 stocks cross below their 200 dmas"
+ },
+ {
+  "date_ist": "2026-10-22",
+  "slot": "21:00",
+  "video_id": "zo1D8-0PrcY",
+  "format": "long",
+  "topic_key": "pat_bear_engulf",
+  "source": "approved-buffer",
+  "buffer_id": "ap-pat_bear_engulf-2773759c0e75"
  }
 ]
