@@ -57,6 +57,22 @@ def _remember_narration_skip():
     pick_topic.remember_gate_skip(key)
 
 
+# Approved scripts are owner-approved content. Only a content HOLD (final
+# verify / quality gate) retires one; a transient stage failure (quota,
+# preflight) must not drop it from the approved bank for good.
+HOLD_STAGES = ("Final verify", "Pre-publish Quality Gate")
+
+
+def _should_remember_skip(label):
+    try:
+        import approved_bank
+        if approved_bank.active():
+            return label in HOLD_STAGES
+    except Exception:  # noqa: BLE001
+        pass
+    return True
+
+
 def settle_topic(uploaded):
     """Long topics are reserved at pick time. A Short is marked used_short only
     after a successful upload. A failed or blocked Short leaves that flag false
@@ -257,7 +273,8 @@ def main():
         if rc != 0:
             print(f"[STOP] {label} failed (rc={rc}). Pipeline halted.")
             status = f"failed at: {label}"
-            if video_format() == "short" and not (RUN / "uploaded.txt").exists():
+            if video_format() == "short" and not (RUN / "uploaded.txt").exists() \
+                    and _should_remember_skip(label):
                 _remember_narration_skip()
             break
 

@@ -394,7 +394,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Fail loudly if a scheduled slot built nothing
         if: ${{ !cancelled() && github.event_name == 'schedule' && steps.guard.outputs.taken != 'true' && steps.topicbuf.outputs.handled != 'true' && steps.uploaded.outputs.youtube_uploaded != 'true' }}
+        env:
+          BUFFER_FILLED: ${{ steps.buffer.outputs.filled }}
+          BUFFER_REASON: ${{ steps.buffer.outputs.buffer_reason }}
         run: |
+          if [ "$BUFFER_FILLED" = "true" ] || [ "$BUFFER_REASON" = "scheduled" ]; then
+            echo "slot already has a private + publishAt upload (buffer reason=$BUFFER_REASON filled=$BUFFER_FILLED)"
+            exit 0
+          fi
           if [ -s run/topic_budget_skip.txt ]; then
             echo "budget skip recorded; nothing to build"
             exit 0
