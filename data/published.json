@@ -503,5 +503,20 @@
   "ig_media_id": "18110834924612040",
   "content_hash": "cb1cee5e28ad2c02",
   "title_norm": "axisbank share analysis today | support bounce trade plan 22 oct 2026"
+ },
+ {
+  "date_ist": "2026-10-23",
+  "slot": "08:15",
+  "video_id": "WttFTE3bXUQ",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "17996509101020960",
+  "content_hash": "b544a692e21f7bdb",
+  "title_norm": "stock market news today | 23 oct 2026 | zetwerk manufacturing business shares to list today: check\u2026"
  }
 ]
