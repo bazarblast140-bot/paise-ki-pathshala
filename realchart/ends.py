@@ -184,7 +184,7 @@ def render_end_card(dest, background=None, name="Rajesh Technical Trader", call=
     words = str(name).split()
     lines = [" ".join(words[:1]), " ".join(words[1:])] if len(words) > 2 else [str(name)]
     big = font(132)
-    y = 640
+    y = 420  # safe zone: everything ends above the bottom 25% (23-Oct)
     for line in lines:
         width = draw.textlength(line, font=big)
         draw.text(((1080 - width) / 2 + 4, y + 4), line, fill=(0, 0, 0), font=big)
@@ -207,7 +207,7 @@ def render_end_card(dest, background=None, name="Rajesh Technical Trader", call=
         lines, current = [], ""
         for word in str(text).split():
             trial = f"{current} {word}".strip()
-            if current and draw.textlength(trial, font=face) > 960:
+            if current and draw.textlength(trial, font=face) > 820:
                 lines.append(current)
                 current = word
             else:

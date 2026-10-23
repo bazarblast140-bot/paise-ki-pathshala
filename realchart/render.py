@@ -16,9 +16,14 @@ W, H = 1080, 1920
 # Layout after the approved 14-Oct box sample: grid background, a terminal
 # header, a tall media panel and a filled caption panel. No plain black.
 HEAD_TOP, HEAD_H = 40, 128
-MEDIA = (20, 184, 1060, 1580)       # x0, y0, x1, y1: 1040x1396, a tall crop of the chart
-CAP = (20, 1596, 1060, 1856)        # the one caption block
-FOOT_Y = 1868                       # one small dim source line
+# Safe zone (Rajesh, 23-Oct-2026): the bottom ~25% (y >= 1440) belongs to the IG/YT
+# username, follow button and title, and x >= 940 to the right-side icons. Every
+# caption and footer stays above y 1440 and left of x 940.
+SAFE_BOTTOM = 1440
+SAFE_RIGHT = 940
+MEDIA = (20, 184, 1060, 1080)       # x0, y0, x1, y1
+CAP = (20, 1096, SAFE_RIGHT, 1396)  # the one caption block
+FOOT_Y = 1404                       # one small dim source line (ends by ~1430)
 BG = (20, 27, 36)
 GRID = (28, 37, 48)
 PANEL = (27, 37, 50)
@@ -130,12 +135,7 @@ def _card(title, caption, spoken, footer, visual=None, zoom=1.0, anchor_y=0.5, c
     if close_line:
         width = draw.textlength(close_line, font=_font_any(28, True))
         _text(draw, (W - 44 - width, HEAD_TOP + 72), close_line, 28, header.get("close_color") or WHITE, semi=True)
-    # section chip, on the media panel's top edge
-    label, color = section
-    width = draw.textlength(label, font=_font_any(28))
-    draw.rounded_rectangle((36, y0 + 16, 36 + width + 56, y0 + 62), 10, fill=(16, 24, 32), outline=color, width=2)
-    draw.ellipse((52, y0 + 32, 66, y0 + 46), fill=color)
-    _text(draw, (76, y0 + 18), label, 28, color)
+    # No section chip: internal labels (HOOK, CTA, ...) are never shown to viewers (23-Oct).
     if chips:
         x = 36
         rows_y = y1 - 150  # above the IST time axis
@@ -261,6 +261,8 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     del DRAWN[:]
+    if kind == "news":
+        return _news_frames(out, rows, article or {})
     symbol = str(levels.get("symbol") or "")
     src = "NSE data (yfinance)" if levels.get("chart_source") == "yfinance" else "TradingView"
     title = "Real chart · Real data"
@@ -660,7 +662,117 @@ def _concat_path(path):
     return text
 
 
-def assemble(frame_paths, voice, dest, seconds=45.0, durations=None):
+def article_view(shot, boxes, target=None, overview=False, mark=()):
+    """A real article screenshot fitted to the media panel. overview: the page top, whole
+    width, shrunk to fit (zoomed out). Otherwise zoomed in, width-fit and centred on
+    boxes[target]. Highlight = an outline drawn AROUND the marked boxes; the page pixels
+    themselves are never edited."""
+    from PIL import Image, ImageDraw
+    mw, mh = MEDIA[2] - MEDIA[0], MEDIA[3] - MEDIA[1]
+    with Image.open(shot) as opened:
+        page = opened.convert("RGB")
+    boxes = boxes or {}
+    if overview:
+        crop_h = min(page.height, round(page.width * mh / mw * 1.55))
+        top = 0
+        part = page.crop((0, 0, page.width, crop_h))
+        scale = min(mw / part.width, mh / part.height)
+    else:
+        box = boxes.get(target)
+        crop_h = min(page.height, round(page.width * mh / mw))
+        centre = (box[1] + box[3]) / 2 if box else crop_h / 2
+        top = int(min(max(0, centre - crop_h / 2), max(0, page.height - crop_h)))
+        part = page.crop((0, top, page.width, top + crop_h))
+        scale = mw / part.width
+    part = part.resize((round(part.width * scale), round(part.height * scale)))
+    canvas = Image.new("RGB", (mw, mh), (236, 239, 243))
+    ox = (mw - part.width) // 2
+    canvas.paste(part, (ox, 0))
+    draw = ImageDraw.Draw(canvas)
+    for name in mark:
+        box = boxes.get(name)
+        if not box:
+            continue
+        x0, y0, x1, y1 = [v * scale for v in box]
+        y0, y1 = y0 - top * scale, y1 - top * scale
+        pad = 10
+        draw.rounded_rectangle((ox + x0 - pad, y0 - pad, ox + x1 + pad, y1 + pad), 14, outline=(255, 196, 0), width=8)
+    return canvas
+
+
+def _news_frames(out, rows, article):
+    """Morning Reel cards: real article screenshots, zoomed and highlighted over several slides."""
+    from datetime import datetime, timedelta, timezone
+    today = (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).date()
+    source = str(article.get("source") or "").replace("www.", "")
+    header = {"brand": f"MORNING NEWS • {today.day} {today.strftime('%b %Y')}", "symbol": source}
+    cap = article.get("capture") or {}
+    shot = cap.get("path") if cap.get("ok") and cap.get("path") and Path(cap["path"]).is_file() else None
+    boxes = cap.get("boxes") or {}
+    title = "Real article · unedited screenshot"
+    footer = f"Source: {source} · {stamp(article.get('published'))}".strip(" ·")
+    plan = {
+        "hook": [dict(overview=True), dict(target="headline", mark=("headline",))],
+        "news": [dict(target="headline", mark=("headline",)), dict(target="para", mark=("para",))],
+        "points": [None, dict(target="para", mark=("para",))],
+        "key": [dict(target="para", mark=("para",)), dict(overview=True, mark=("headline", "para"))],
+        "cta": [dict(overview=True, mark=("headline",))],
+    }
+    made, variants = [], {}
+    for row in rows:
+        sec = row.get("sec")
+        spoken = danda(str(row.get("t") or ""))
+        steps = plan.get(sec) or [dict(overview=True)]
+        paths = []
+        drawn_before = len(DRAWN)
+        for i, step in enumerate(steps):
+            if step is None:
+                vis = points_card(out, article, 2)
+            elif shot:
+                vis = out.parent / f"{sec}-view{i}.png"
+                article_view(shot, boxes, **step).save(vis)
+            else:
+                vis = news_card(out, article, None)
+            dest = out / f"{sec}.png" if i == 0 else out.parent / f"{sec}-step{i + 1}.png"
+            _card(title, "", spoken, footer, vis, zoom=1.0, anchor_y=0.0, header=header).save(dest)
+            paths.append(dest)
+            if i == 0:
+                drawn_before = len(DRAWN)
+        del DRAWN[drawn_before:]
+        made.append(paths[0])
+        variants[paths[0].name] = [[str(p), 1.0] for p in paths[1:]]
+    (out.parent / "variants.json").write_text(json.dumps(variants, indent=1) + "\n", encoding="utf-8")
+    (out.parent / "axis.json").write_text("{}\n", encoding="utf-8")
+    (out.parent / "frame_ranges.json").write_text(json.dumps({"must": {}, "shot_ok": None, "cards": {}}) + "\n", encoding="utf-8")
+    (out / "overlay_text.json").write_text(json.dumps(list(DRAWN), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return made
+
+
+def make_thumbnail(dest, background, headline, tag=""):
+    """Custom YouTube thumbnail: a real frame behind, a big clear Hindi headline on top."""
+    from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
+    with Image.open(background) as opened:
+        image = opened.convert("RGB").resize((W, H))
+    image = ImageEnhance.Brightness(image.filter(ImageFilter.GaussianBlur(3))).enhance(0.55)
+    draw = ImageDraw.Draw(image)
+    size, lines = _fit_lines(draw, headline, W - 140, (128, 116, 104, 92, 80), 4)
+    block = len(lines) * (size + 34)
+    y = max(260, (H - block) // 2 - 120)
+    for line in lines:
+        width = draw.textlength(line, font=_font_any(size))
+        draw.rounded_rectangle(((W - width) / 2 - 30, y - 14, (W + width) / 2 + 30, y + size + 30), 24, fill=(255, 214, 10))
+        draw.text(((W - width) / 2, y), line, fill=(14, 16, 20), font=_font_any(size))
+        y += size + 34
+    if tag:
+        width = draw.textlength(tag, font=_font_any(54, True))
+        draw.text(((W - width) / 2, y + 30), tag, fill=WHITE, font=_font_any(54, True))
+    dest = Path(dest)
+    image.save(dest.with_suffix(".png"))
+    image.save(dest.with_suffix(".jpg"), quality=92)
+    return dest.with_suffix(".jpg")
+
+
+def assemble(frame_paths, voice, dest, seconds=45.0, durations=None, thumb_text=None, thumb_tag=""):
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     work = dest.parent / "frames.txt"
@@ -694,4 +806,7 @@ def assemble(frame_paths, voice, dest, seconds=45.0, durations=None):
     subprocess.run([
         "ffmpeg", "-y", "-v", "error", "-i", str(dest), "-frames:v", "1", str(thumb),
     ], check=True)
+    if thumb_text:
+        # Every Paise Reel gets a custom thumbnail with a clear Hindi headline (23-Oct).
+        make_thumbnail(thumb, thumb, thumb_text, thumb_tag)
     return dest

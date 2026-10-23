@@ -127,3 +127,65 @@ def complete_clause(sentence):
                     words[-1] = words[-1].rstrip(",")
                     break
     return " ".join(words).rstrip(",;:- ")
+
+
+# Morning Reel (Rajesh, 23-Oct-2026): no Nifty chart and no Nifty levels. The single
+# biggest story of the last 24 h across AI, technology, finance, stocks and crypto.
+MORNING_FEEDS = (
+    "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+    "https://www.cnbc.com/id/19854910/device/rss/rss.html",
+    "https://techcrunch.com/feed/",
+    "https://www.livemint.com/rss/technology",
+    "https://economictimes.indiatimes.com/tech/rssfeeds/13357270.cms",
+    "https://feeds.bbci.co.uk/news/business/rss.xml",
+) + FEEDS
+TOPIC_WORDS = {
+    "ai": 3, "openai": 3, "nvidia": 3, "chatgpt": 3, "gemini": 2, "anthropic": 3, "chip": 2, "chips": 2,
+    "apple": 2, "google": 2, "microsoft": 2, "meta": 2, "amazon": 2, "tesla": 2, "bitcoin": 3, "crypto": 3,
+    "ethereum": 2, "fed": 3, "rate": 2, "rates": 2, "inflation": 2, "tariff": 3, "tariffs": 3, "earnings": 2,
+    "stocks": 2, "shares": 1, "nifty": 1, "index": 1, "market": 1, "markets": 1, "sensex": 2, "rbi": 2, "sebi": 2, "ipo": 2, "billion": 2,
+    "trillion": 3, "record": 2, "crash": 3, "surge": 2, "plunge": 3, "soar": 2, "deal": 2, "acquire": 2,
+}
+STOP = {"the", "a", "an", "of", "to", "in", "on", "for", "and", "as", "at", "is", "with", "its", "by", "after",
+        "from", "says", "will", "new", "how", "why", "what", "this", "that", "are", "be", "it", "his", "her"}
+SKIP = re.compile(r"\b(live updates?|live blog|podcast|newsletter|deals? of the day|best .* to buy|review:|quiz|horoscope|"
+                  r"stocks? to (buy|sell)|recommends|top picks|buy or sell|stocks? in (the )?news|stocks? to watch|"
+                  r"market (live|today|wrap|outlook)|morning (brief|briefing)|week ahead|things to know|explained)\b", re.I)
+
+
+def _words(text):
+    return {w for w in re.findall(r"[a-z][a-z0-9]+", str(text or "").lower()) if w not in STOP and len(w) > 2}
+
+
+def biggest(items, now, hours=24):
+    """The single biggest real story of the last `hours`: covered by the most outlets
+    (shared headline words), weighted by AI/tech/finance/crypto topic words, then newest."""
+    from datetime import timedelta
+    pool = []
+    for item in items or []:
+        title = str(item.get("title") or "").strip()
+        url = str(item.get("url") or "").strip()
+        stamp = _when(item)
+        if not title or not url.startswith("https://") or stamp is None or stamp > now:
+            continue
+        if now - stamp > timedelta(hours=hours) or SKIP.search(title):
+            continue
+        pool.append((item, stamp, _words(title)))
+    best, best_key = None, None
+    for item, stamp, words in pool:
+        topic = sum(TOPIC_WORDS.get(w, 0) for w in words | _words(item.get("summary"))) 
+        if topic == 0:
+            continue
+        hosts = {other.get("source") for other, _s, ow in pool
+                 if other is not item and len(words & ow) >= 3 and len(words & ow) / max(1, len(words | ow)) >= 0.2}
+        hosts.discard(item.get("source"))
+        key = (len(hosts) * 4 + min(topic, 9), stamp)
+        if best_key is None or key > best_key:
+            best, best_key = item, key
+    if best is None:
+        return None
+    best = dict(best)
+    best["published_at"] = _when(best).isoformat()
+    best["key_sentence"] = complete_clause(first_sentence(best.get("summary") or best["title"])[:240])
+    best["coverage"] = best_key[0]
+    return best

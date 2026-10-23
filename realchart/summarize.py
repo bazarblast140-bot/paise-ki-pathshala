@@ -16,13 +16,13 @@ TEXT_MODEL = "gemini-3.8-flash"
 FALLBACK_MODELS = ("gemini-flash-latest", "gemini-3.5-flash")
 CACHE = Path(__file__).resolve().parent.parent / "data" / "gemini_cache"
 PROMPT = (
-    "You write the voice-over for a 40-second Hindi stock-market news Reel. Using ONLY the article below, "
-    "return JSON {\"lead\": str, \"points\": [str, str]}. lead: one Hindi (Devanagari) sentence, at most 13 words, "
-    "saying what happened. points: two Hindi sentences, at most 14 words each, with the article's key facts. "
+    "You write the voice-over for a 40-second Hindi business/tech news Reel. Using ONLY the article below, "
+    "return JSON {\"headline\": str, \"lead\": str, \"points\": [str, str, str]}. headline: a punchy Hindi (Devanagari) thumbnail headline, at most 7 words. lead: one Hindi (Devanagari) sentence, at most 13 words, "
+    "saying what happened. points: three Hindi sentences, at most 14 words each, with the article's key facts. "
     "Write numbers with digits exactly as in the article (you may drop commas or 'Rs' and say करोड़/प्रतिशत). "
     "Use whole numbers only: leave out decimal values (they would be rounded when spoken). "
     "Company and person names stay in English letters. No advice, no opinion, no prediction, nothing that is "
-    "not in the article. Output JSON only.\n\nARTICLE\nTitle: {title}\nSummary: {summary}\nKey sentence: {key}\n"
+    "not in the article. Output JSON only.\n\nARTICLE\nTitle: {title}\nSummary: {summary}\nKey sentence: {key}\nBody: {body}\n"
 )
 NUM = re.compile(r"\d[\d,]*(?:\.\d+)?")
 
@@ -38,11 +38,14 @@ def _numbers(text):
 def check(summary, article):
     """Empty when the summary is short Hindi whose numbers are all in the article."""
     faults = []
-    source = " ".join(str(article.get(k) or "") for k in ("title", "summary", "key_sentence", "why"))
+    source = " ".join(str(article.get(k) or "") for k in ("title", "summary", "key_sentence", "why", "body"))
     have = _numbers(source)
+    have |= {float(round(v)) for v in have} | {float(int(v)) for v in have}  # 5.57 may be said as 5 / 6
     parts = [summary.get("lead") or ""] + list(summary.get("points") or [])
-    if len(parts) != 3 or not all(isinstance(p, str) and p.strip() for p in parts):
+    if len(parts) not in (3, 4) or not all(isinstance(p, str) and p.strip() for p in parts):
         return ["summary needs a lead and two points"]
+    if summary.get("headline"):
+        parts.append(str(summary["headline"]))
     for part in parts:
         if not re.search(r"[\u0900-\u097F]", part):
             faults.append(f"not Hindi: {part[:40]}")
@@ -60,7 +63,7 @@ def hindi_summary(article, dry_run=False):
     key = hashlib.sha1(json.dumps([article.get("url"), article.get("title")]).encode("utf-8")).hexdigest()[:12]
     if dry_run and not (CACHE / f"summary-{key}.json").is_file():
         source = str(article.get("source") or "आर्टिकल")
-        return {"lead": f"{source} की यह खबर स्क्रीन पर है।", "points": ["पूरी हेडलाइन कार्ड पर पढ़ें।",
+        return {"headline": "आज की सबसे बड़ी खबर", "lead": f"{source} की यह खबर स्क्रीन पर है।", "points": ["पूरी हेडलाइन कार्ड पर पढ़ें।",
                                                                         "यह असली आर्टिकल से है।"]}
     key = hashlib.sha1(json.dumps([article.get("url"), article.get("title")]).encode("utf-8")).hexdigest()[:12]
     cached = CACHE / f"summary-{key}.json"
@@ -80,7 +83,8 @@ def _ask(article):
     import gemini_voice
     prompt = (PROMPT.replace("{title}", str(article.get("title") or ""))
               .replace("{summary}", str(article.get("summary") or ""))
-              .replace("{key}", str(article.get("key_sentence") or "")))
+              .replace("{key}", str(article.get("key_sentence") or ""))
+              .replace("{body}", str(article.get("body") or "")[:3000]))
     body = json.dumps({"contents": [{"parts": [{"text": prompt}]}],
                        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2}}).encode()
     import time
@@ -103,6 +107,9 @@ def _ask(article):
                     break
                 if exc.code != 429:
                     raise SummaryRefused(f"summary request failed: {last}") from exc
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                last = f"{model} network: {type(exc).__name__}"
+                break
             except (KeyError, IndexError, ValueError) as exc:
                 last = f"{model} bad response: {type(exc).__name__}"
                 break

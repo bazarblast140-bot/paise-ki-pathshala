@@ -8,6 +8,8 @@ cd "$(dirname "$0")/.."
 kind="${1:?kind: close|ta|news}"; shift
 publish=0
 if [ "${1:-}" = "--publish" ]; then publish=1; shift; fi
+export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/home/box/agent-data/pkp/ms-playwright}"
+scripts/ensure_playwright.sh || exit $?
 export REALCHART_CDP="${REALCHART_CDP:-http://127.0.0.1:9226}"
 export REALCHART_TV_LAYOUT="${REALCHART_TV_LAYOUT:-ckfLnl7v}"
 export REALCHART_NO_ALERT="${REALCHART_NO_ALERT:-1}"
