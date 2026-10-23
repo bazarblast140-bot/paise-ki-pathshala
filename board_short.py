@@ -3257,6 +3257,11 @@ def _one_gemini_take(spoken, c, beats, folded, script, style, durations, attempt
     for beat in beats:
         spoken[beat] = folded[beat]
     gemini_voice.split_into_beats(dest, spoken, beats, RUN)
+    # A dry-run Edge proof leaves tts_{beat}.mp3 and an "edge" engine marker
+    # in run/. Without this the take is timed from the Edge mp3 (run
+    # 39973714175: 47.5s take, 39.8s Charon audio at the remux gate).
+    for beat in beats:
+        (RUN / f"tts_{beat}.engine").write_text("gemini", encoding="utf-8")
     try:
         raw = _trim_rendered(beats)
     except SystemExit as exc:
@@ -6029,6 +6034,9 @@ def _pay_and_remux(topic, n, c, spec, source, proven):
     finally:
         _VOICE_TOPIC = None
     raw = _trim_rendered(order)
+    # The re-trim rewrites voice_clean_*; apply the same fit the take got.
+    if POST_TAKE_FLOOR - 1e-9 <= sum(raw.values()) <= POST_TAKE_CEILING + 1e-9:
+        raw = _fit_posted_take(order, raw)
     beat_times, total = _timeline(raw, order)
     lo, hi = _output_bounds(topic)
     import trade_plan
