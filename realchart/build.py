@@ -147,7 +147,8 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
                 card_faults.append(f"article card on screen {sec_len:.1f}s (max 6s)")
         pics, beats = _with_variants(pics, beats, out / "variants.json")
         assemble(pics, out / "voice.wav", out / "final.mp4", seconds=length, durations=beats,
-                 thumb_text=script.thumb_text(kind, levels, article), thumb_tag="Paise Ki Pathshala")
+                 thumb_text=script.thumb_text(kind, levels, article), thumb_tag="Paise Ki Pathshala",
+                 thumb_topic=None if dry_run else script.thumb_topic(kind, levels, article))
         from realchart.ends import FOLLOW_PKP, FOLLOW_RTT, attach, render_end_card
         ends_dir = out / "ends"
         extra = script.end_card_lines(kind, levels)

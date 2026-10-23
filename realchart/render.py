@@ -748,12 +748,15 @@ def _news_frames(out, rows, article):
     return made
 
 
-def make_thumbnail(dest, background, headline, tag=""):
-    """Custom YouTube thumbnail: a real frame behind, a big clear Hindi headline on top."""
-    from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
+def make_thumbnail(dest, background, headline, tag="", generated=False):
+    """Custom YouTube thumbnail: a background (Gemini art or a blurred real frame), big Hindi headline on top."""
+    from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
     with Image.open(background) as opened:
-        image = opened.convert("RGB").resize((W, H))
-    image = ImageEnhance.Brightness(image.filter(ImageFilter.GaussianBlur(3))).enhance(0.55)
+        image = ImageOps.fit(opened.convert("RGB"), (W, H)) if generated else opened.convert("RGB").resize((W, H))
+    if generated:
+        image = ImageEnhance.Brightness(image).enhance(0.8)
+    else:
+        image = ImageEnhance.Brightness(image.filter(ImageFilter.GaussianBlur(3))).enhance(0.55)
     draw = ImageDraw.Draw(image)
     size, lines = _fit_lines(draw, headline, W - 140, (128, 116, 104, 92, 80), 4)
     block = len(lines) * (size + 34)
@@ -772,7 +775,7 @@ def make_thumbnail(dest, background, headline, tag=""):
     return dest.with_suffix(".jpg")
 
 
-def assemble(frame_paths, voice, dest, seconds=45.0, durations=None, thumb_text=None, thumb_tag=""):
+def assemble(frame_paths, voice, dest, seconds=45.0, durations=None, thumb_text=None, thumb_tag="", thumb_topic=None):
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     work = dest.parent / "frames.txt"
@@ -808,5 +811,13 @@ def assemble(frame_paths, voice, dest, seconds=45.0, durations=None, thumb_text=
     ], check=True)
     if thumb_text:
         # Every Paise Reel gets a custom thumbnail with a clear Hindi headline (23-Oct).
-        make_thumbnail(thumb, thumb, thumb_text, thumb_tag)
+        # Gemini (free keys) paints a story background; the Hindi text is always drawn by us.
+        art = None
+        if thumb_topic:
+            from realchart.thumbgen import gemini_background
+            art = gemini_background(thumb_topic, dest.parent / "thumb_bg.png")
+        if art:
+            make_thumbnail(thumb, art, thumb_text, thumb_tag, generated=True)
+        else:
+            make_thumbnail(thumb, thumb, thumb_text, thumb_tag)
     return dest
