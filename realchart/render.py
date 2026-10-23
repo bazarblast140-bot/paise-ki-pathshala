@@ -719,20 +719,29 @@ def _news_frames(out, rows, article):
         "cta": [dict(overview=True, mark=("headline",))],
     }
     made, variants = [], {}
+    plan["news2"], plan["points2"] = plan["news"], plan["points"]
+    main = (article, shot, boxes, footer, header)
+    second = article.get("second") or {}
+    cap2 = second.get("capture") or {}
+    shot2 = cap2.get("path") if cap2.get("ok") and cap2.get("path") and Path(cap2["path"]).is_file() else None
+    src2 = str(second.get("source") or "").replace("www.", "")
+    alt = (second, shot2, cap2.get("boxes") or {}, f"Source: {src2} · {stamp(second.get('published'))}".strip(" ·"),
+           {**header, "symbol": src2})
     for row in rows:
         sec = row.get("sec")
+        story, shot, boxes, footer, header = alt if str(sec).endswith("2") and second else main
         spoken = danda(str(row.get("t") or ""))
         steps = plan.get(sec) or [dict(overview=True)]
         paths = []
         drawn_before = len(DRAWN)
         for i, step in enumerate(steps):
             if step is None:
-                vis = points_card(out, article, 2)
+                vis = points_card(out, story, 2)
             elif shot:
                 vis = out.parent / f"{sec}-view{i}.png"
                 article_view(shot, boxes, **step).save(vis)
             else:
-                vis = news_card(out, article, None)
+                vis = news_card(out, story, None)
             dest = out / f"{sec}.png" if i == 0 else out.parent / f"{sec}-step{i + 1}.png"
             _card(title, "", spoken, footer, vis, zoom=1.0, anchor_y=0.0, header=header).save(dest)
             paths.append(dest)
