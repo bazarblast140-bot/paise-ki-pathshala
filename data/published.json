@@ -518,5 +518,20 @@
   "ig_media_id": "17996509101020960",
   "content_hash": "b544a692e21f7bdb",
   "title_norm": "stock market news today | 23 oct 2026 | zetwerk manufacturing business shares to list today: check\u2026"
+ },
+ {
+  "date_ist": "2026-10-23",
+  "slot": "16:06",
+  "video_id": "z9WrP06FmSw",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "18132257848666774",
+  "content_hash": "434e6b4f7d1ecd50",
+  "title_norm": "nifty analysis today | nifty close report #2 23 oct 2026"
  }
 ]
