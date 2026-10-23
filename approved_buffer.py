@@ -692,7 +692,6 @@ def publish_slot(*, now=None, manifest_path=None, store=None, uploader=None, cro
     import buffer_shorts
     import slot_guard
 
-    _handled()
     slot = (os.environ.get("PUBLISH_SLOT_IST") or os.environ.get("BUFFER_SLOT") or "").strip()
     date_ist = (os.environ.get("PUBLISH_DATE_IST") or os.environ.get("BUFFER_DATE") or "").strip()
     now = now or datetime.now(slot_guard.IST)
@@ -709,6 +708,7 @@ def publish_slot(*, now=None, manifest_path=None, store=None, uploader=None, cro
     state = slot_guard.row_state(slot_guard.find_entry(entries, date_ist, slot))
     if state in ("held", "filled"):
         print(f"[skip] {date_ist} {slot} is {state}", flush=True)
+        _handled()
         return 0
     manifest_path = Path(manifest_path) if manifest_path else MANIFEST
     manifest = load_manifest(manifest_path)
@@ -784,6 +784,9 @@ def publish_slot(*, now=None, manifest_path=None, store=None, uploader=None, cro
         except Exception as exc:  # noqa: BLE001 — YouTube already has the video
             print(f"[buffer] cross-post soft-fail: {type(exc).__name__}: {exc}", flush=True)
     print(f"[publish] {item.get('topic_key')} {video_id}", flush=True)
+    # Only a real publish (or a held/filled slot) hands the slot over; an
+    # empty or repeat buffer must let the live build and buffer fill run.
+    _handled()
     return 0
 
 
