@@ -392,3 +392,12 @@ jobs:
             echo "artifact: ${{ steps.fmt.outputs.format }}-${{ github.run_number }}"
             echo "final.mp4: run/final.mp4"
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Fail loudly if a scheduled slot built nothing
+        if: ${{ !cancelled() && github.event_name == 'schedule' && steps.guard.outputs.taken != 'true' && steps.topicbuf.outputs.handled != 'true' && steps.uploaded.outputs.youtube_uploaded != 'true' }}
+        run: |
+          if [ -s run/topic_budget_skip.txt ]; then
+            echo "budget skip recorded; nothing to build"
+            exit 0
+          fi
+          echo "::error title=built nothing::slot ${{ steps.fmt.outputs.date_ist }} ${{ steps.fmt.outputs.slot }} is still empty: no buffer publish, no build, no buffer fill"
+          exit 1
