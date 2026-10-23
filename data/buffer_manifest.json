@@ -1451,6 +1451,7 @@
     "business_cash",
     "aaj_ka_nifty",
     "pat_bear_flag",
-    "pat_ema_cross"
+    "pat_ema_cross",
+    "pat_evening_star"
   ]
 }
