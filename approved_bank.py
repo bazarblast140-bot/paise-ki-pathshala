@@ -63,27 +63,58 @@ def posted(script, entries):
     return False
 
 
-def select(scripts, entries):
-    """The first unused owner-approved script in the given order."""
+def held(script, skips):
+    """True when final verify already HELD this script (data/gate_skips.json).
+
+    Without this check the first approved file is picked again on every run
+    and every retry, and the slot stays empty.
+    """
+    keys = {str(k or "").strip() for k in (skips or []) if str(k or "").strip()}
+    if not keys:
+        return False
+    key = str((script or {}).get("key") or "").strip()
+    stem = Path(str((script or {}).get("_file") or "")).stem
+    return bool(key and key in keys) or bool(stem and stem in keys)
+
+
+def _gate_skips():
+    try:
+        import pick_topic
+        return pick_topic.load_gate_skips()
+    except Exception:  # noqa: BLE001 - an unreadable list must not empty the bank
+        return []
+
+
+def select(scripts, entries, skips=None):
+    """The first unused, not-held owner-approved script in the given order."""
     for script in scripts or []:
-        if not owner_ok(script) or posted(script, entries):
+        if not owner_ok(script) or posted(script, entries) or held(script, skips):
             continue
         return script
     return None
 
 
-def next_script(entries):
-    """The first unused owner-approved script, in filename order."""
-    return select(all_scripts(), entries)
+def next_script(entries, skips=None):
+    """The first unused owner-approved script, in filename order.
+
+    Scripts that final verify HELD are skipped so the slot falls through to
+    the next approved script or to the buffer.
+    """
+    skips = _gate_skips() if skips is None else skips
+    return select(all_scripts(), entries, skips)
 
 
-def skip_reason(entries, scripts=None):
+def skip_reason(entries, scripts=None, skips=None):
     scripts = all_scripts() if scripts is None else scripts
+    skips = _gate_skips() if skips is None else skips
     approved = [script for script in scripts if owner_ok(script)]
     if not approved:
         return "no owner_approved script left in approved/"
-    if not any(not posted(script, entries) for script in approved):
+    unposted = [script for script in approved if not posted(script, entries)]
+    if not unposted:
         return "no unused approved script left; reusable is not set"
+    if not any(not held(script, skips) for script in unposted):
+        return "every unused approved script was held by final verify (data/gate_skips.json)"
     return ""
 
 
