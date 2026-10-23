@@ -266,3 +266,15 @@ def test_grok_failure_keeps_the_gemini_error(tmp_path, monkeypatch):
     monkeypatch.setattr(voice, "speak", fake_speak)
     with pytest.raises(gemini_voice.GeminiFallback):
         voice.speak_segments(["एक"], tmp_path / "v.wav", "close")
+
+
+def test_gemini_thumbnail_falls_back_and_never_asks_for_charts(tmp_path):
+    import urllib.error
+    from realchart import thumbgen
+
+    def failing(req, timeout=0):
+        raise urllib.error.HTTPError(req.full_url, 429, "quota", {}, None)
+
+    assert thumbgen.gemini_background("Jio IPO", tmp_path / "bg.png", keys=["k"], opener=failing) is None
+    prompt = thumbgen.prompt_for("Jio IPO").lower()
+    assert "no charts" in prompt and "no text" in prompt

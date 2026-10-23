@@ -550,3 +550,14 @@ def thumb_text(kind, levels, article=None):
         return "आज का Nifty क्लोज़"
     word = "चढ़ा" if float(levels.get("chg_pct") or 0) >= 0 else "गिरा"
     return f"Nifty {inr(levels.get('close'), 0)} पर बंद, आज {word}"
+
+
+def thumb_topic(kind, levels, article=None):
+    """What the Gemini thumbnail background should depict (scene only, never data)."""
+    if kind == "news":
+        return str((article or {}).get("title") or "biggest business news of the day")
+    name = str(levels.get("symbol") or "").split(":")[-1]
+    if kind == "ta":
+        return f"{name} stock: a trader's game plan for today"
+    up = float(levels.get("chg_pct") or 0) >= 0
+    return f"Indian stock market closing bell, Nifty {'rallies' if up else 'falls'} today"
