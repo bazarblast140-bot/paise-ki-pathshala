@@ -559,6 +559,8 @@
   "buffer_id": "buf-intraday_volume-91600de07584",
   "source_run": "39978723060",
   "slot_skipped": "beat karein: key cue word \u0926\u0947\u0916\u0947\u0902 is not spoken in this beat; duration 42.5s outside 45-62s",
-  "note": "beat karein: key cue word \u0926\u0947\u0916\u0947\u0902 is not spoken in this beat; duration 42.5s outside 45-62s"
+  "note": "beat karein: key cue word \u0926\u0947\u0916\u0947\u0902 is not spoken in this beat; duration 42.5s outside 45-62s",
+  "pending_qa": false,
+  "ig_deferred": "deferred: pyWjYFJniW0 publishAt=2026-10-24T03:00:00Z run=39978723060"
  }
 ]
