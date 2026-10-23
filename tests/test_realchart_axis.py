@@ -178,17 +178,41 @@ def test_hindi_summary_numbers_must_come_from_the_article():
     assert check(dict(ok, lead="Company X raises money"), art)
 
 
-def test_news_rows_have_real_hook_number_and_hindi_voice():
-    lv = {"symbol": "NSE:NIFTY", "last_date": "2026-10-15", "close": 22997.35, "prev_close": 22622.7,
-          "high": 23056.4, "low": 22637.4, "chg_pct": 1.66, "ema20": 22865.36}
-    art = {"title": "Stock market outlook today", "source": "www.livemint.com",
-           "hindi": {"lead": "आज बाज़ार की शुरुआत पर नज़र।", "points": ["एक।", "दो।"]}}
+def test_news_rows_have_no_nifty_levels_and_hindi_voice():
+    lv = {"symbol": "NEWS", "last_date": "2026-10-23"}
+    art = {"title": "Jio Platforms IPO subscribed 5.57 times", "source": "www.livemint.com",
+           "key_sentence": "The issue was subscribed 5.57 times.",
+           "hindi": {"headline": "Jio IPO को ज़बरदस्त रिस्पॉन्स", "lead": "Jio IPO दूसरे दिन भरा।", "points": ["एक।", "दो।"]}}
     rows = script.chunks_for("news", lv, art)
-    assert [r["sec"] for r in rows] == ["hook", "news", "points", "chart", "cta"]
-    assert "375 अंक" in rows[0]["t"] and "Stock market outlook" not in script.spoken_text(rows)
+    assert [r["sec"] for r in rows] == ["hook", "news", "points", "key", "cta"]
+    spoken = script.spoken_text(rows)
+    assert "Jio IPO को ज़बरदस्त रिस्पॉन्स" in rows[0]["t"] and "Nifty" not in spoken and "pivot" not in spoken
     assert script.lint(rows) == [] and script.number_faults(rows, lv) == []
+    assert script.thumb_text("news", lv, art) == "Jio IPO को ज़बरदस्त रिस्पॉन्स"
+    assert script.end_card_lines("news", lv) and not any("Pivot" in x for x in script.end_card_lines("news", lv))
     meta = script.news_post_meta(lv, art)
-    assert meta["title"].startswith("Stock market news today |") and len(meta["title"]) <= 100
+    assert len(meta["title"]) <= 100 and "Nifty" not in meta["caption"]
+
+
+def test_biggest_story_is_last_24h_and_cross_source():
+    from datetime import datetime, timedelta, timezone
+    from realchart.news import biggest
+    now = datetime(2026, 10, 23, 8, 0, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+    fresh = "Fri, 23 Oct 2026 06:00:00 +0530"
+    items = [
+        {"title": "Nvidia shares surge to record on AI chip demand", "url": "https://a.com/1", "published": fresh, "source": "a.com"},
+        {"title": "Nvidia record: AI chip demand lifts shares", "url": "https://b.com/1", "published": fresh, "source": "b.com"},
+        {"title": "Bitcoin dips slightly", "url": "https://c.com/1", "published": fresh, "source": "c.com"},
+        {"title": "Stocks in news: A, B, C, D", "url": "https://d.com/1", "published": fresh, "source": "d.com"},
+        {"title": "Fed crash plunge tariff record trillion", "url": "https://e.com/1", "published": "Mon, 19 Oct 2026 06:00:00 +0530", "source": "e.com"},
+    ]
+    best = biggest(items, now)
+    assert best and "Nvidia" in best["title"]
+
+
+def test_cards_keep_text_in_the_safe_zone():
+    from realchart import render
+    assert render.CAP[3] < 1440 and render.FOOT_Y + 30 < 1440 and render.CAP[2] <= 940
 
 
 def test_news_card_never_cuts_the_headline(tmp_path):

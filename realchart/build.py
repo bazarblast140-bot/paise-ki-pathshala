@@ -10,7 +10,7 @@ from pathlib import Path
 import nifty_day
 from realchart import capture, script
 from realchart.levels import STOCK_UNIVERSE, apply_stock_plan, compute, pick_stock
-from realchart.news import FEEDS, choose, parse_rss
+from realchart.news import FEEDS, MORNING_FEEDS, biggest, choose, parse_rss
 from realchart.session import close_matches, dry_session, expected_session, now_ist, started
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -61,15 +61,16 @@ def _bars_from_yahoo(ticker):
     return rows, stamp
 
 
-def _load_feeds(loader=None):
+def _load_feeds(loader=None, feeds=FEEDS):
     if loader is not None:
         return loader()
     import urllib.request
     items = []
-    for url in FEEDS:
+    for url in feeds:
         source = url.split("/")[2]
         try:
-            with urllib.request.urlopen(url, timeout=20) as resp:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
                 xml = resp.read().decode("utf-8", "replace")
         except Exception:  # noqa: BLE001
             continue
@@ -145,7 +146,8 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             if kind == "news" and row.get("sec") == "news" and sec_len > 6.0:
                 card_faults.append(f"article card on screen {sec_len:.1f}s (max 6s)")
         pics, beats = _with_variants(pics, beats, out / "variants.json")
-        assemble(pics, out / "voice.wav", out / "final.mp4", seconds=length, durations=beats)
+        assemble(pics, out / "voice.wav", out / "final.mp4", seconds=length, durations=beats,
+                 thumb_text=script.thumb_text(kind, levels, article), thumb_tag="Paise Ki Pathshala")
         from realchart.ends import FOLLOW_PKP, FOLLOW_RTT, attach, render_end_card
         ends_dir = out / "ends"
         extra = script.end_card_lines(kind, levels)
@@ -259,6 +261,8 @@ def _download_intraday(ticker, session, interval):
 
 
 def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener=None, article_opener=None, dry_run=False, bars_intraday=None, chain_for=None):
+    if kind == "news":
+        return _prepare_news(now, out, articles, article_opener, dry_run)
     symbol, ticker = ("NSE:NIFTY", "^NSEI")
     rest = (kind, session, now, out, articles, chart_opener, article_opener, dry_run, bars_intraday, chain_for)
     if kind == "ta":
@@ -376,6 +380,32 @@ def _prepare_rest(levels, kind, session, now, out, articles, chart_opener, artic
                 raise Hold("rr", "RR below 1.5 from pivot and OI levels")
     (out / "levels.json").write_text(json.dumps({k: v for k, v in levels.items() if k != "bars"}, indent=2) + "\n", encoding="utf-8")
     return levels, article, chart, intraday
+
+
+def _prepare_news(now, out, articles, article_opener, dry_run):
+    """Morning Reel (Rajesh, 23-Oct-2026): no Nifty chart, no Nifty levels. The single biggest
+    real story of the last 24 h (AI, tech, finance, stocks, crypto), shown as real article
+    screenshots (zoom + highlight boxes drawn around, never over, the source text)."""
+    items = articles if articles is not None else _load_feeds(feeds=MORNING_FEEDS)
+    article = biggest(items, now)
+    if not article:
+        raise Hold("news", "no qualifying article in the last 24h")
+    if article_opener is not None:
+        shot = capture.capture_article(article["url"], out / "news.png", opener=article_opener)
+    elif os.environ.get("REALCHART_SKIP_BROWSER"):
+        shot = {"ok": False, "reason": "browser skipped"}
+    else:
+        shot = capture.capture_article(article["url"], out / "news.png")
+    article["capture"] = shot
+    if not shot.get("ok") and not dry_run:
+        raise Hold("news", shot.get("reason") or "article capture failed")
+    article["body"] = str(shot.get("text") or "")
+    day = now.date().isoformat()
+    levels = {"symbol": "NEWS", "setup": "news", "last_date": day, "close": None, "chg_pct": 0.0}
+    chart = {"path": shot.get("path") if shot.get("ok") else None, "source": "article", "label": article.get("source"),
+             "url": article.get("url"), "last_candle_date": day}
+    (out / "levels.json").write_text(json.dumps(levels, indent=2) + "\n", encoding="utf-8")
+    return levels, article, chart, None
 
 
 INDIA_MARKET = re.compile(

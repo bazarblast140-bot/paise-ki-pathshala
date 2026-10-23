@@ -580,7 +580,8 @@ class BuildTests(unittest.TestCase):
             self.assertIsNone(qa["rr"])
             self.assertEqual(qa["voice"], "dry")
             rows = json.loads((out / "script.json").read_text(encoding="utf-8"))
-            self.assertEqual([row["sec"] for row in rows], ["hook", "news", "points", "chart", "cta"])
+            # Morning Reel (23-Oct): no Nifty chart beat; the article's own key line instead.
+            self.assertEqual([row["sec"] for row in rows], ["hook", "news", "points", "key", "cta"])
             shown = " ".join(row["d"] for row in rows)
             self.assertIn("The index closed lower", shown)
             self.assertIn("livemint.com", shown)
@@ -588,7 +589,7 @@ class BuildTests(unittest.TestCase):
             for token in (" SL ", " target ", " R1 ", " S1 "):
                 self.assertNotIn(token, shown)
             names = [path.name for path in (out / "cards").iterdir() if path.suffix == ".png"]
-            self.assertEqual(sorted(names), ["chart.png", "cta.png", "hook.png", "news.png", "points.png"])
+            self.assertEqual(sorted(names), ["cta.png", "hook.png", "key.png", "news.png", "points.png"])
             self.assertNotIn("view.png", names)
 
     def test_dry_run_renders_without_gemini_and_reports_the_fallback_chart(self):

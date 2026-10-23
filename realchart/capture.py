@@ -700,11 +700,39 @@ def _playwright_article(url, dest):
         context = browser.new_context(**{**device, "device_scale_factor": 3, "locale": "en-IN", "timezone_id": "Asia/Kolkata"})
         page = context.new_page()
         page.goto(url, timeout=45000, wait_until="domcontentloaded")
-        page.wait_for_timeout(2500)
+        page.wait_for_timeout(3500)
         page.add_style_tag(content="iframe,[class*=advert],[id*=google_ads]{visibility:hidden!important}")
+        # Floating overlays (font-size / share sheets, app banners) cover the article body
+        # in a full-page shot. Hide them like the ads; the article text itself is untouched.
+        page.evaluate("""() => { for (const el of document.querySelectorAll('body *')) {
+            const cs = getComputedStyle(el);
+            const floating = cs.position === 'fixed' || cs.position === 'sticky' ||
+                (cs.position === 'absolute' && parseInt(cs.zIndex || '0', 10) >= 5 && el.offsetHeight > 150);
+            if (floating && !el.querySelector('h1') && !el.closest('h1'))
+                el.style.setProperty(cs.position === 'fixed' ? 'display' : 'opacity', cs.position === 'fixed' ? 'none' : '0', 'important'); } }""")
         text = page.inner_text("body")
-        page.screenshot(path=str(dest), full_page=False)
+        # Where the headline and the first real paragraph sit (CSS px), so the Reel can zoom
+        # into and box them. The page itself is never edited beyond hiding ads.
+        boxes = page.evaluate("""() => {
+            const box = el => { if (!el) return null; const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 ? [r.left + scrollX, r.top + scrollY, r.right + scrollX, r.bottom + scrollY] : null; };
+            const h1 = document.querySelector('h1');
+            const top = h1 ? h1.getBoundingClientRect().bottom + scrollY : 0;
+            // First real body paragraph below the headline: a <p>, or a text block with few children.
+            const para = [...document.querySelectorAll('p, div, section')].filter(el => {
+                const t = (el.innerText || '').trim(), r = el.getBoundingClientRect();
+                const own = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim();
+                return t.length > 120 && own.length > 120 && !el.closest('[role=dialog],[class*=popup],[class*=modal]') &&
+                    r.width > innerWidth * 0.6 && r.top + scrollY > top && getComputedStyle(el).visibility !== 'hidden';
+            }).sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0];
+            return {headline: box(h1), para: box(para), width: innerWidth};
+        }""")
+        bottom = max(page.viewport_size["height"], ((boxes.get("para") or [0, 0, 0, 0])[3] or 0) + 40)
+        bottom = min(bottom, 3000)
+        page.screenshot(path=str(dest), full_page=True, clip={"x": 0, "y": 0, "width": page.viewport_size["width"], "height": bottom})
         browser.close()
     if walled(text):
         return {"ok": False, "reason": "bot wall", "text": text[:500]}
-    return {"ok": True, "path": str(dest), "captured_at": now_ist().strftime("%Y-%m-%d %H:%M IST")}
+    scale = 3.0
+    boxes = {k: [round(v * scale) for v in val] for k, val in (boxes or {}).items() if isinstance(val, list)}
+    return {"ok": True, "path": str(dest), "boxes": boxes, "text": text[:4000], "captured_at": now_ist().strftime("%Y-%m-%d %H:%M IST")}
