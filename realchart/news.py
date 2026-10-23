@@ -157,9 +157,10 @@ def _words(text):
     return {w for w in re.findall(r"[a-z][a-z0-9]+", str(text or "").lower()) if w not in STOP and len(w) > 2}
 
 
-def biggest(items, now, hours=24):
-    """The single biggest real story of the last `hours`: covered by the most outlets
-    (shared headline words), weighted by AI/tech/finance/crypto topic words, then newest."""
+def top_stories(items, now, n=2, hours=24):
+    """The `n` biggest distinct real stories of the last `hours`: covered by the most outlets
+    (shared headline words), weighted by AI/tech/finance/crypto topic words, then newest.
+    Later picks must be a different story (no headline overlap) from a different source."""
     from datetime import timedelta
     pool = []
     for item in items or []:
@@ -171,21 +172,37 @@ def biggest(items, now, hours=24):
         if now - stamp > timedelta(hours=hours) or SKIP.search(title):
             continue
         pool.append((item, stamp, _words(title)))
-    best, best_key = None, None
+
+    def same(words, ow):
+        return len(words & ow) >= 3 and len(words & ow) / max(1, len(words | ow)) >= 0.2
+
+    scored = []
     for item, stamp, words in pool:
-        topic = sum(TOPIC_WORDS.get(w, 0) for w in words | _words(item.get("summary"))) 
+        topic = sum(TOPIC_WORDS.get(w, 0) for w in words | _words(item.get("summary")))
         if topic == 0:
             continue
-        hosts = {other.get("source") for other, _s, ow in pool
-                 if other is not item and len(words & ow) >= 3 and len(words & ow) / max(1, len(words | ow)) >= 0.2}
+        hosts = {other.get("source") for other, _s, ow in pool if other is not item and same(words, ow)}
         hosts.discard(item.get("source"))
-        key = (len(hosts) * 4 + min(topic, 9), stamp)
-        if best_key is None or key > best_key:
-            best, best_key = item, key
-    if best is None:
-        return None
-    best = dict(best)
-    best["published_at"] = _when(best).isoformat()
-    best["key_sentence"] = complete_clause(first_sentence(best.get("summary") or best["title"])[:240])
-    best["coverage"] = best_key[0]
-    return best
+        scored.append(((len(hosts) * 4 + min(topic, 9), stamp), item, words))
+    scored.sort(key=lambda row: row[0], reverse=True)
+    picked = []
+    for key, item, words in scored:
+        if any(same(words, w) or item.get("source") == it.get("source") for _k, it, w in picked):
+            continue
+        picked.append((key, item, words))
+        if len(picked) == n:
+            break
+    out = []
+    for key, item, _w in picked:
+        best = dict(item)
+        best["published_at"] = _when(best).isoformat()
+        best["key_sentence"] = complete_clause(first_sentence(best.get("summary") or best["title"])[:240])
+        best["coverage"] = key[0]
+        out.append(best)
+    return out
+
+
+def biggest(items, now, hours=24):
+    """The single biggest real story of the last `hours` (see top_stories)."""
+    top = top_stories(items, now, 1, hours)
+    return top[0] if top else None

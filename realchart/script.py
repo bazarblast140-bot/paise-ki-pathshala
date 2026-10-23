@@ -166,7 +166,21 @@ def _news_rows(levels, article):
          "d": str(article.get("key_sentence") or "")[:240],
          "t": " ".join(points[2:3] + [f"यह सब सीधे {source or 'आर्टिकल'} के आर्टिकल से है।"]), "k": "source"},
     ]
-    question = "इस खबर का आप पर क्या असर होगा? Comment करो।"
+    second = article.get("second") or {}
+    h2 = second.get("hindi") or {}
+    if h2:
+        # Second story (Rajesh, 23-Oct-2026: top 2 stories, ~45 s, <= 7 voice clips).
+        rows[0]["t"] = f"{headline}! और साथ में आज की दूसरी बड़ी खबर भी।"
+        rows[3]["t"] = " ".join(points[2:3] + [f"यह {source or 'आर्टिकल'} से है।"])
+        src2 = str(second.get("source") or "").replace("www.", "")
+        p2 = list(h2.get("points") or [])
+        rows.append({"sec": "news2", "skip_numbers": True,
+                     "d": " · ".join(x for x in (str(second.get("title") or ""), src2, _stamp(second.get("published"))) if x),
+                     "t": f"दूसरी बड़ी खबर: {str(h2.get('headline') or '').strip()}। {str(h2.get('lead') or '').strip()}",
+                     "k": src2 or "खबर 2"})
+        rows.append({"sec": "points2", "skip_numbers": True, "d": " · ".join(p2[:2]),
+                     "t": " ".join(p2[:2] + [f"यह {src2 or 'आर्टिकल'} से है।"]), "k": "points"})
+    question = "इन खबरों का आप पर क्या असर होगा? Comment करो।" if h2 else "इस खबर का आप पर क्या असर होगा? Comment करो।"
     rows.append({"sec": "cta", "skip_numbers": True, "d": f"{question} {DISCLAIMER}", "t": f"{question} {DISCLAIMER}", "k": "comment"})
     return rows
 

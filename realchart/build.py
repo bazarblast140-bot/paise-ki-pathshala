@@ -10,7 +10,7 @@ from pathlib import Path
 import nifty_day
 from realchart import capture, script
 from realchart.levels import STOCK_UNIVERSE, apply_stock_plan, compute, pick_stock
-from realchart.news import FEEDS, MORNING_FEEDS, biggest, choose, parse_rss
+from realchart.news import FEEDS, MORNING_FEEDS, biggest, choose, top_stories, parse_rss
 from realchart.session import close_matches, dry_session, expected_session, now_ist, started
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -114,6 +114,12 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             from realchart.summarize import SummaryRefused, hindi_summary
             try:
                 article["hindi"] = hindi_summary(article, dry_run=dry_run)
+                if article.get("second"):
+                    try:
+                        article["second"]["hindi"] = hindi_summary(article["second"], dry_run=dry_run)
+                    except SummaryRefused as exc:
+                        print(f"[realchart] second story dropped: {exc}")
+                        article.pop("second")
             except SummaryRefused as exc:
                 raise Hold("news", f"Hindi summary refused: {exc}") from exc
         levels["series_n"] = _series_next(kind)
@@ -388,19 +394,30 @@ def _prepare_news(now, out, articles, article_opener, dry_run):
     real story of the last 24 h (AI, tech, finance, stocks, crypto), shown as real article
     screenshots (zoom + highlight boxes drawn around, never over, the source text)."""
     items = articles if articles is not None else _load_feeds(feeds=MORNING_FEEDS)
-    article = biggest(items, now)
-    if not article:
+    # Top 2 distinct stories (Rajesh, 23-Oct-2026): the main one, then a second from another source.
+    stories = top_stories(items, now, 4)
+    if not stories:
         raise Hold("news", "no qualifying article in the last 24h")
-    if article_opener is not None:
-        shot = capture.capture_article(article["url"], out / "news.png", opener=article_opener)
-    elif os.environ.get("REALCHART_SKIP_BROWSER"):
-        shot = {"ok": False, "reason": "browser skipped"}
-    else:
-        shot = capture.capture_article(article["url"], out / "news.png")
-    article["capture"] = shot
+
+    def grab(story, name):
+        if article_opener is not None:
+            shot = capture.capture_article(story["url"], out / name, opener=article_opener)
+        elif os.environ.get("REALCHART_SKIP_BROWSER"):
+            shot = {"ok": False, "reason": "browser skipped"}
+        else:
+            shot = capture.capture_article(story["url"], out / name)
+        story["capture"] = shot
+        story["body"] = str(shot.get("text") or "")
+        return shot
+
+    article = stories[0]
+    shot = grab(article, "news.png")
     if not shot.get("ok") and not dry_run:
         raise Hold("news", shot.get("reason") or "article capture failed")
-    article["body"] = str(shot.get("text") or "")
+    for extra in stories[1:]:
+        if grab(extra, "news2.png").get("ok") or dry_run:
+            article["second"] = extra
+            break
     day = now.date().isoformat()
     levels = {"symbol": "NEWS", "setup": "news", "last_date": day, "close": None, "chg_pct": 0.0}
     chart = {"path": shot.get("path") if shot.get("ok") else None, "source": "article", "label": article.get("source"),

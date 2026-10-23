@@ -278,3 +278,23 @@ def test_gemini_thumbnail_falls_back_and_never_asks_for_charts(tmp_path):
     assert thumbgen.gemini_background("Jio IPO", tmp_path / "bg.png", keys=["k"], opener=failing) is None
     prompt = thumbgen.prompt_for("Jio IPO").lower()
     assert "no charts" in prompt and "no text" in prompt
+
+
+def test_top_two_stories_are_distinct_and_rows_fit_voice_budget():
+    from datetime import datetime, timedelta, timezone
+    from realchart.news import top_stories
+    from realchart.script import _news_rows
+    now = datetime(2026, 10, 23, 8, 0, tzinfo=timezone.utc)
+    t = "Fri, 23 Oct 2026 11:00:00 +0530"
+    items = [
+        {"title": "Nvidia AI chip stock surges on record demand", "url": "https://a.com/1", "source": "a.com", "published": t},
+        {"title": "Nvidia AI chip stock surges after record demand", "url": "https://b.com/1", "source": "b.com", "published": t},
+        {"title": "Bitcoin crypto price jumps as ETF inflows rise", "url": "https://c.com/1", "source": "c.com", "published": t},
+    ]
+    top = top_stories(items, now, 2)
+    assert len(top) == 2 and top[0]["source"] != top[1]["source"] and "Bitcoin" in top[1]["title"]
+    hindi = {"headline": "एक", "lead": "दो", "points": ["क", "ख", "ग"]}
+    article = {**top[0], "hindi": hindi, "second": {**top[1], "hindi": hindi}}
+    rows = _news_rows({}, article)
+    assert [r["sec"] for r in rows] == ["hook", "news", "points", "key", "news2", "points2", "cta"]
+    assert len(rows) <= 7  # one Gemini voice request per row
