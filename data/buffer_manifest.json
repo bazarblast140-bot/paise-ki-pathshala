@@ -3,7 +3,7 @@
   "items": [
     {
       "id": "buf-intraday_volume-91600de07584",
-      "state": "ready",
+      "state": "used",
       "topic_key": "intraday_volume",
       "title": "Volume 3 गुना, भाव वहीं — कोई चुपचाप बेच रहा?",
       "description": "वओलउमए 3 गुना भाव वहीं, कोई चुपचाप बेच रहा? भारी वॉल्यूम आया, पर प्राइस उसी लेवल पर रुका।\n\n🔗 Zerodha / Upstox demat account (Referral link — account खोलने पर हमें commission मिल सकता है।)\nZerodha: https://zerodha.com/open-account?c=KU3466\nUpstox: https://upstox.onelink.me/0H1s/3T23\n\nVolume Spike — आसान हिंदी में: पहचान, मतलब और traders इसे आमतौर पर कैसे इस्तेमाल करते हैं।\n\n💬 Breakout से पहले volume देखते हो? Comment में हाँ या नहीं लिखो।\n\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nहम SEBI-रजिस्टर्ड सलाहकार नहीं हैं। किसी भी निवेश से पहले रजिस्टर्ड सलाहकार से बात करें।\n\nAccount / referral links\nयह referral link है। इससे account खोलने पर हमें referral benefit मिल सकता है।\nयह किसी broker की सिफ़ारिश नहीं है।\n\nInstagram @rajesh_technical_trader की bio में भी यही links हैं।\n\nस्रोत और नोट्स\n- volume औसत से 3 गुना\n- भाव आगे न बढ़े तो absorption हो सकता है\n- ये संभावना है, पक्का संकेत नहीं\n- ये शिक्षा है, किसी शेयर या ट्रेड की ख़रीद-बिक्री सलाह नहीं\n\nPaise Ki Pathshala — ट्रेडिंग की पाठशाला — चार्ट, पैटर्न, रिस्क और असली डेटा\n\nरोज़ 3 ट्रेडिंग Shorts — कैंडलस्टिक, इंडिकेटर, ऑर्डर, F&O, रिस्क और असली डेटा।\n\n#StockMarketHindi #VolumeSpike #TradingHindi #PaiseKiPathshala #ShareMarket #IntradayTrading #PriceAction",
@@ -18,10 +18,10 @@
       "asset_name": "buf-intraday_volume-91600de07584.mp4",
       "meta_name": "buf-intraday_volume-91600de07584.json",
       "created_at": "2026-10-18T11:44:30Z",
-      "used_at": null,
-      "used_slot": null,
-      "used_date_ist": null,
-      "video_id": null,
+      "used_at": "2026-10-23T16:05:25Z",
+      "used_slot": "08:30",
+      "used_date_ist": "2026-10-24",
+      "video_id": "pyWjYFJniW0",
       "gates": {
         "fallback_narration": {
           "passed": true,
@@ -648,7 +648,8 @@
           "sfx_rms": 0.0008286138584360297
         },
         "captions": "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: T,Noto Sans Devanagari,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,8,60,190,0,1\nStyle: Cap,Noto Sans Devanagari,62,&H00FFFFFF,&H00FFFFFF,&H00101010,&HA0000000,-1,0,0,0,100,100,0,0,3,4,0,2,70,190,520,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 1,0:00:30.21,0:00:42.49,T,,0,0,0,,{\\an8\\pos(540,1604)\\fs39\\c&H00B8A394&\\q2\\fad(150,100)}सिर्फ़ जानकारी, निवेश सलाह नहीं।\n"
-      }
+      },
+      "claimed_at": "2026-10-23T16:05:25Z"
     },
     {
       "id": "buf-pat_double_bottom-71dd3e56a2f2",

@@ -548,5 +548,17 @@
   "ig_media_id": "18150163780504654",
   "content_hash": "45866e2c7d2b09fd",
   "title_norm": "drreddy share analysis today | resistance rejection trade plan 23 oct 2026"
+ },
+ {
+  "date_ist": "2026-10-24",
+  "slot": "08:30",
+  "video_id": "pyWjYFJniW0",
+  "format": "long",
+  "topic_key": "intraday_volume",
+  "source": "buffer",
+  "buffer_id": "buf-intraday_volume-91600de07584",
+  "source_run": "39978723060",
+  "slot_skipped": "beat karein: key cue word \u0926\u0947\u0916\u0947\u0902 is not spoken in this beat; duration 42.5s outside 45-62s",
+  "note": "beat karein: key cue word \u0926\u0947\u0916\u0947\u0902 is not spoken in this beat; duration 42.5s outside 45-62s"
  }
 ]

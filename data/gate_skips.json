@@ -47,6 +47,7 @@
   "opt_sebi_fy25_study",
   "aaj_ka_nifty",
   "option_vega",
-  "opt_expiry_elm"
+  "opt_expiry_elm",
+  "pat_bear_flag"
  ]
 }
