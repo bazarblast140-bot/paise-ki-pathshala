@@ -1450,6 +1450,7 @@
     "risk_leverage",
     "business_cash",
     "aaj_ka_nifty",
-    "pat_bear_flag"
+    "pat_bear_flag",
+    "pat_ema_cross"
   ]
 }
