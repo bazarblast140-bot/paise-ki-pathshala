@@ -602,5 +602,17 @@
   "topic_key": "pat_black_crows",
   "source": "approved-buffer",
   "buffer_id": "ap-pat_black_crows-9ba54fc9eaaf"
+ },
+ {
+  "date_ist": "2026-10-25",
+  "slot": "21:00",
+  "video_id": "Fg5EiZJ-pGI",
+  "format": "long",
+  "topic_key": "pat_double_bottom",
+  "source": "buffer",
+  "buffer_id": "buf-pat_double_bottom-71dd3e56a2f2",
+  "source_run": "40103053896",
+  "slot_skipped": "audio mix evidence missing",
+  "note": "audio mix evidence missing"
  }
 ]

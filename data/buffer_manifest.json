@@ -653,7 +653,7 @@
     },
     {
       "id": "buf-pat_double_bottom-71dd3e56a2f2",
-      "state": "ready",
+      "state": "used",
       "topic_key": "pat_double_bottom",
       "title": "डबल बॉटम आकार",
       "description": "डबल बॉटम आकार पर खरीद कब करें? एंट्री 96 और स्टॉप 78 का प्लान।\n\nडबल बॉटम आकार — आसान हिंदी में: पहचान, मतलब और traders इसे आमतौर पर कैसे इस्तेमाल करते हैं।\n\n💬 यह बात पहले से पता थी? Comment में हाँ या नहीं लिखो।\n\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nहम SEBI-रजिस्टर्ड सलाहकार नहीं हैं। किसी भी निवेश से पहले रजिस्टर्ड सलाहकार से बात करें।\n\nस्रोत और नोट्स\n- पूरा ट्रेड प्लान\n- स्रोत: illustrative teaching chart drawn in this video (example candles, not live market data, not a stock tip). Every plan number below is computed by the channel's trade_plan rules from these candles.\n- Example chart candles: #1 O 120 H 122 L 106 C 108; #2 O 108 H 110 L 80 C 84; #3 O 84 H 96 L 82 C 94; #4 O 94 H 95 L 80 C 90; #5 O 90 H 104 L 88 C 102; #6 O 102 H 118 L 100 C 116; #7 O 116 H 136 L 114 C 134.\n- Plan side: long (buy). Entry 96, stop-loss 78, target 132, support 80.\n- Risk = |entry - stop| = 18; reward = |target - entry| = 36; risk:reward = 1:2 (spoken 1 बटा 2).\n- Other chart levels: bottom 80, neck 96.\n\nPaise Ki Pathshala — ट्रेडिंग की पाठशाला — चार्ट, पैटर्न, रिस्क और असली डेटा\n\nरोज़ 3 ट्रेडिंग Shorts — कैंडलस्टिक, इंडिकेटर, ऑर्डर, F&O, रिस्क और असली डेटा।\n\n#StockMarketHindi #TradingHindi #PaiseKiPathshala #ShareMarket",
@@ -667,10 +667,10 @@
       "asset_name": "buf-pat_double_bottom-71dd3e56a2f2.mp4",
       "meta_name": "buf-pat_double_bottom-71dd3e56a2f2.json",
       "created_at": "2026-10-22T12:33:35Z",
-      "used_at": null,
-      "used_slot": null,
-      "used_date_ist": null,
-      "video_id": null,
+      "used_at": "2026-10-24T14:51:46Z",
+      "used_slot": "21:00",
+      "used_date_ist": "2026-10-25",
+      "video_id": "Fg5EiZJ-pGI",
       "gates": {
         "fallback_narration": {
           "passed": true,
@@ -1434,7 +1434,8 @@
           ]
         },
         "captions": "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: T,Noto Sans Devanagari,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,8,60,190,0,1\nStyle: Cap,Noto Sans Devanagari,62,&H00FFFFFF,&H00FFFFFF,&H00101010,&HA0000000,-1,0,0,0,100,100,0,0,3,4,0,2,70,190,520,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n\n"
-      }
+      },
+      "claimed_at": "2026-10-24T14:51:46Z"
     }
   ],
   "skipped_topics": [
