@@ -578,5 +578,20 @@
   "tts_engine": "gemini",
   "source_run": "40043084691",
   "ig_deferred": "deferred: XRULotgXQtM publishAt=2026-10-24T15:30:00Z run=40043084691"
+ },
+ {
+  "date_ist": "2026-10-24",
+  "slot": "08:19",
+  "video_id": "DTNCZDywlQ8",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "18074990717578363",
+  "content_hash": "0fd3ecf46122c05a",
+  "title_norm": "aaj ki sabse badi khabar | 24 oct 2026 | jio platforms ipo draws record 10 million applications\u2026"
  }
 ]
