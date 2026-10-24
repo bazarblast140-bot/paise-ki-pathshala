@@ -449,5 +449,20 @@
   "ig_media_id": "17934205758143411",
   "content_hash": "ed2dc698a45e07e7",
   "title_norm": "nifty analysis today | nifty close report #1 16 oct 2026"
+ },
+ {
+  "date_ist": "2026-10-24",
+  "slot": "19:04",
+  "video_id": "S94n6D27Hy8",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "17993634726023425",
+  "content_hash": "a2edd5995829ec43",
+  "title_norm": "bpcl share analysis | support bounce trade plan next session (23 oct 2026 close)"
  }
 ]
