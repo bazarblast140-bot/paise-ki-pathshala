@@ -1,6 +1,7 @@
 """Publish a box-built Reel: upload its files to a release, then dispatch publish-artifact.yml.
 
-Refuses (exit 2, HOLD) unless qa.json is a PASS from today's signed-in capture with EMA 20/50.
+Refuses (exit 2, HOLD) unless qa.json is a PASS from a signed-in capture with EMA 20/50
+(today's session on a trading day; previous trading day for weekend/holiday TA).
 YouTube gets final_yt.mp4 (Paise Ki Pathshala end); IG/FB Reel + Story get final_ig.mp4
 (Rajesh Technical Trader intro/outro). --dry checks and prints, uploads nothing.
 """
@@ -13,7 +14,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from override_mp4 import BOX_TAG, box_gate  # noqa: E402
+from override_mp4 import box_gate, box_release_tag  # noqa: E402
 
 REPO = "bazarblast140-bot/paise-ki-pathshala"
 FILES = ("final.mp4", "final_yt.mp4", "final_ig.mp4", "thumbnail.jpg", "script.txt", "qa.json", "publish_meta.json")
@@ -24,6 +25,21 @@ def publish_meta(out):
     tags = [tag.lstrip("#") for tag in meta.get("hashtags") or []]
     description = "\n\n".join(x for x in (meta.get("caption"), " ".join(meta.get("hashtags") or [])) if x)
     return {"title": meta["title"][:100], "description": description, "tags": tags}
+
+
+def _workflow_ref():
+    """Dispatch against the branch that has the gate fix (not always main)."""
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, check=True,
+        )
+        branch = (proc.stdout or "").strip()
+        if branch and branch != "HEAD":
+            return branch
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    return "main"
 
 
 def main(argv):
@@ -43,10 +59,11 @@ def main(argv):
     if missing:
         print(f"HOLD: missing {missing}", file=sys.stderr)
         return 2
-    tag = f"{BOX_TAG}{qa.get('kind')}-{qa.get('session')}"
+    tag = box_release_tag(qa)
     base = f"https://github.com/{REPO}/releases/download/{tag}"
+    ref = _workflow_ref()
     dispatch = [
-        "gh", "workflow", "run", "publish-artifact.yml", "--repo", REPO, "--ref", "main",
+        "gh", "workflow", "run", "publish-artifact.yml", "--repo", REPO, "--ref", ref,
         "-f", "privacy=now", "-f", "skip_ig=false", "-f", "ig_only=false", "-f", "post_story=true", "-f", "post_fb=true",
         "-f", f"override_mp4_url={base}/final.mp4",
         "-f", f"override_thumb_url={base}/thumbnail.jpg",

@@ -337,19 +337,50 @@ def _sibling(url, name):
     return url.rsplit("/", 1)[0] + "/" + name
 
 
-def box_gate(qa, today=None):
-    """A box-built Reel publishes only on a PASS from today's signed-in capture with EMA 20/50."""
+def _ist_today():
     from datetime import datetime, timedelta, timezone
-    today = today or (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).date().isoformat()
+    return (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).date()
+
+
+def box_release_tag(qa, today=None):
+    """Release tag uses the publish calendar date (IST), not qa.session.
+
+    Weekend TA still describes the previous trading session, but the tag must be
+    unique per publish day so it does not collide with Friday's box-reel-ta-<session>.
+    """
+    day = today or _ist_today().isoformat()
+    return f"{BOX_TAG}{qa.get('kind')}-{day}"
+
+
+def box_gate(qa, today=None):
+    """A box-built Reel publishes only on a PASS from a signed-in capture with EMA 20/50.
+
+    On a trading day the QA session must equal today. On a non-trading day (weekend
+    or NSE holiday), kind=="ta" may use the previous finished trading day as session.
+    """
+    from datetime import date
+
+    import nifty_day
+    from realchart.session import _previous_trading_day
+
+    today = today or _ist_today().isoformat()
+    day = date.fromisoformat(today)
     if qa.get("verdict") != "PASS":
         return f"qa verdict {qa.get('verdict')!r}"
     if qa.get("capture_mode") != "box-signed-in":
         return f"capture_mode {qa.get('capture_mode')!r}"
     if qa.get("ema_ok") is not True:
         return "EMA 20/50 not confirmed on the captures"
-    if qa.get("session") != today:
-        return f"session {qa.get('session')} is not today {today}"
-    return ""
+    session = qa.get("session")
+    if session == today:
+        return ""
+    if (
+        not nifty_day.is_trading_day(day)
+        and qa.get("kind") == "ta"
+        and session == (_previous_trading_day(day) or date.min).isoformat()
+    ):
+        return ""
+    return f"session {session} is not today {today}"
 
 
 def box_bundle(mp4_url, dest):

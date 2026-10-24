@@ -126,13 +126,21 @@ def test_single_black_frame_is_caught():
 
 
 def test_box_gate_refuses_anything_but_todays_signed_in_pass():
-    from override_mp4 import box_gate
-    good = {"verdict": "PASS", "capture_mode": "box-signed-in", "ema_ok": True, "session": "2026-10-16"}
+    from override_mp4 import box_gate, box_release_tag
+    good = {"verdict": "PASS", "capture_mode": "box-signed-in", "ema_ok": True, "session": "2026-10-16", "kind": "ta"}
     assert box_gate(good, today="2026-10-16") == ""
     assert box_gate(dict(good, verdict="HOLD"), today="2026-10-16")
     assert box_gate(dict(good, capture_mode="anonymous"), today="2026-10-16")
     assert box_gate(dict(good, ema_ok=False), today="2026-10-16")
-    assert box_gate(good, today="2026-10-17")
+    # Weekday mismatch: previous session on a trading day must fail.
+    assert box_gate(dict(good, session="2026-10-15"), today="2026-10-16")
+    # Weekend TA: previous finished trading day is allowed.
+    assert box_gate(good, today="2026-10-17") == ""
+    assert box_gate(dict(good, kind="close"), today="2026-10-17")
+    assert box_gate(dict(good, session="2026-10-15"), today="2026-10-17")
+    # Release tag uses publish calendar date, not qa.session.
+    assert box_release_tag(good, today="2026-10-17") == "box-reel-ta-2026-10-17"
+    assert box_release_tag(dict(good, session="2026-10-16"), today="2026-10-24") == "box-reel-ta-2026-10-24"
 
 
 def test_runner_capture_is_a_qa_fault(monkeypatch):
