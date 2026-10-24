@@ -196,6 +196,20 @@ PATTERN_HI = {
 TA_SERIES = "Aaj Ka Stock TA"
 
 
+_WEEKDAY_HI = ["सोमवार", "मंगलवार", "बुधवार", "गुरुवार", "शुक्रवार", "शनिवार", "रविवार"]
+
+
+def _session_day_word(levels):
+    """'आज' when the chart's session is today (IST), else the session's weekday, e.g. 'शुक्रवार को'."""
+    from datetime import date, datetime, timedelta, timezone
+    try:
+        day = date.fromisoformat(str(levels.get("last_date"))[:10])
+    except ValueError:
+        return "आज"
+    today = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
+    return "आज" if day == today else f"{_WEEKDAY_HI[day.weekday()]} को"
+
+
 def _ta_rows(levels):
     """Evening TA Reel (Rajesh, 16-Oct-2026): ONE stock. Pattern, support, resistance and the
     full plan (valid zone, entry trigger, SL, target with RR >= 1.5, invalidation). Spoken
@@ -214,10 +228,11 @@ def _ta_rows(levels):
     prev = levels.get("prev_close")
     move = (f"{w(abs(float(levels['close']) - float(prev)))} रुपये {side}" if prev is not None
             else f"{w(abs(chg))} प्रतिशत {side}")
+    day_word = _session_day_word(levels)
     rows = [
         {"sec": "hook", "start": 0.0, "end": 3.0,
          "d": f"{name} {_fmt(levels.get('close'))} ({chg:+.2f}%) · {plan.get('pattern')}",
-         "t": f"{name} {w(levels['close'])} पर, आज {move}! पूरा प्लान देखो।", "k": name},
+         "t": f"{name} {w(levels['close'])} पर, {day_word} {move}! पूरा प्लान देखो।", "k": name},
         {"sec": "chart", "k": "pattern",
          "d": f"Pattern: {plan.get('pattern')} · Support {_fmt(levels.get('support'))} · Resistance {_fmt(levels.get('resistance'))}",
          "t": (f"डेली चार्ट पर {pattern}। सपोर्ट {w(levels['support'])}, "
@@ -575,14 +590,18 @@ def ta_post_meta(levels):
     chg = float(levels.get("chg_pct") or 0)
     rr = levels.get("rr")
     rr_text = f" RR {float(rr):.1f}." if rr else ""
-    title = f"{name} share analysis today | {setup} trade plan {day_text}".strip()
+    from realchart.session import now_ist
+    is_today = day_text and str(levels.get("last_date"))[:10] == now_ist().date().isoformat()
+    title = (f"{name} share analysis today | {setup} trade plan {day_text}" if is_today or not day_text
+             else f"{name} share analysis | {setup} trade plan next session ({day_text} close)").strip()
     caption = (
         f"{name} technical analysis {day_text}: close {inr(levels.get('close'), 2)} ({chg:+.2f}%). "
         f"Setup: {setup}. Support {inr(levels.get('support'), 2)}, resistance {inr(levels.get('resistance'), 2)}. "
         f"Entry trigger {inr(levels.get('entry'), 2)}, SL {inr(levels.get('stop'), 2)}, target {inr(levels.get('target'), 2)}.{rr_text} "
         f"Roz shaam ek stock ka real chart analysis. Educational only, not financial advice."
     )
-    pinned = f"{name} {inr(levels.get('entry'), 0)} पार करेगा या नहीं? Comment करो 👇" if levels.get("entry") else ""
+    verb = "पार करेगा" if (levels.get("plan") or {}).get("side") == "long" else "तोड़ेगा"
+    pinned = f"{name} {inr(levels.get('entry'), 0)} {verb} या नहीं? Comment करो 👇" if levels.get("entry") else ""
     return {
         "title": title,
         "caption": caption,

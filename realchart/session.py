@@ -24,15 +24,14 @@ def now_ist(now=None):
 def expected_session(kind, now=None):
     """The cash session this Reel may talk about, or None when the day is off.
 
-    News runs on weekdays with no close gate. Close and TA need today's
+    News runs every day (weekends too) with no close gate. Close and TA need today's
     session. Saturday recap needs Friday, when Friday was a trading day.
     """
     now = now_ist(now)
     day = now.date()
     kind = str(kind or "")
     if kind == "news":
-        if day.weekday() >= 5:
-            return None
+        # News runs every day, weekends included (owner, 24-Oct-2026).
         return day
     if kind == "recap":
         if day.weekday() != 5:
@@ -42,6 +41,10 @@ def expected_session(kind, now=None):
             return None
         return friday
     if day.weekday() >= 5 or not nifty_day.is_trading_day(day):
+        if kind == "ta":
+            # Evening TA runs every day, weekends included (owner, 24-Oct-2026): on an off day
+            # it describes the last finished session's real daily chart as a next-session plan.
+            return _previous_trading_day(day)
         return None
     return day
 
