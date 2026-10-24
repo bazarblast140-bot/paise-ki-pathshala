@@ -1,3 +1,19 @@
 {
-  "items": []
+  "items": [
+    {
+      "symbol": "NSE:AXISBANK",
+      "setup": "support bounce",
+      "date": "2026-10-22"
+    },
+    {
+      "symbol": "NSE:DRREDDY",
+      "setup": "resistance rejection",
+      "date": "2026-10-23"
+    },
+    {
+      "symbol": "NSE:BPCL",
+      "setup": "support bounce",
+      "date": "2026-10-24"
+    }
+  ]
 }

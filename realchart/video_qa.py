@@ -73,7 +73,7 @@ def empty_frame_faults(video, label):
 
 
 SINGLE_BLACK_ARGS = "blackdetect=d=0:pix_th=0.10:pic_th=0.98"
-PANEL = (20, 184, 1060, 1580)  # the chart panel of a card (x0, y0, x1, y1)
+PANEL = (20, 184, 1060, 1080)  # the chart panel of a card (x0, y0, x1, y1)
 
 
 def frame_lumas(video, crop=None):

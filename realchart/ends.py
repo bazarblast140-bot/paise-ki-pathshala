@@ -184,30 +184,30 @@ def render_end_card(dest, background=None, name="Rajesh Technical Trader", call=
     words = str(name).split()
     lines = [" ".join(words[:1]), " ".join(words[1:])] if len(words) > 2 else [str(name)]
     big = font(132)
-    y = 640
+    y = 220  # safe zone: the whole stack ends above y 1440 (bottom 25%, 23-Oct)
     for line in lines:
         width = draw.textlength(line, font=big)
         draw.text(((1080 - width) / 2 + 4, y + 4), line, fill=(0, 0, 0), font=big)
         draw.text(((1080 - width) / 2, y), line, fill=(255, 255, 255), font=big)
-        y += 160
+        y += 150
     button = font(84)
     width = draw.textlength(call, font=button)
-    top = y + 60
+    top = y + 40
     draw.rounded_rectangle(((1080 - width) / 2 - 60, top, (1080 + width) / 2 + 60, top + 150), 40, fill=(255, 214, 10))
     draw.text(((1080 - width) / 2, top + 22), call, fill=(14, 16, 20), font=button)
     sub = font(44, semi=True)
     note = "Real chart · Real data · Daily"
     width = draw.textlength(note, font=sub)
     draw.text(((1080 - width) / 2, top + 210), note, fill=(230, 236, 242), font=sub)
-    y = top + 300
+    y = top + 290
     for index, text in enumerate(extra or []):
-        size = 70 if index == 0 else 60
+        size = 58 if index == 0 else 50
         face = font(size, semi=True)
         # Wrap to the frame; every line on its own dark pill so it reads over the chart.
         lines, current = [], ""
         for word in str(text).split():
             trial = f"{current} {word}".strip()
-            if current and draw.textlength(trial, font=face) > 960:
+            if current and draw.textlength(trial, font=face) > 820:
                 lines.append(current)
                 current = word
             else:
@@ -218,7 +218,7 @@ def render_end_card(dest, background=None, name="Rajesh Technical Trader", call=
             draw.rounded_rectangle(((1080 - width) / 2 - 28, y - 8, (1080 + width) / 2 + 28, y + size + 22), 22,
                                    fill=(14, 18, 26))
             draw.text(((1080 - width) / 2, y), line, fill=(255, 226, 120) if index == 0 else (245, 247, 250), font=face)
-            y += size + 42
+            y += size + 30
         y += 14
     png = dest.with_suffix(".png")
     image.save(png)

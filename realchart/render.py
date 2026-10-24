@@ -16,9 +16,14 @@ W, H = 1080, 1920
 # Layout after the approved 14-Oct box sample: grid background, a terminal
 # header, a tall media panel and a filled caption panel. No plain black.
 HEAD_TOP, HEAD_H = 40, 128
-MEDIA = (20, 184, 1060, 1580)       # x0, y0, x1, y1: 1040x1396, a tall crop of the chart
-CAP = (20, 1596, 1060, 1856)        # the one caption block
-FOOT_Y = 1868                       # one small dim source line
+# Safe zone (Rajesh, 23-Oct-2026): the bottom ~25% (y >= 1440) belongs to the IG/YT
+# username, follow button and title, and x >= 940 to the right-side icons. Every
+# caption and footer stays above y 1440 and left of x 940.
+SAFE_BOTTOM = 1440
+SAFE_RIGHT = 940
+MEDIA = (20, 184, 1060, 1080)       # x0, y0, x1, y1
+CAP = (20, 1096, SAFE_RIGHT, 1396)  # the one caption block
+FOOT_Y = 1404                       # one small dim source line (ends by ~1430)
 BG = (20, 27, 36)
 GRID = (28, 37, 48)
 PANEL = (27, 37, 50)
@@ -130,12 +135,7 @@ def _card(title, caption, spoken, footer, visual=None, zoom=1.0, anchor_y=0.5, c
     if close_line:
         width = draw.textlength(close_line, font=_font_any(28, True))
         _text(draw, (W - 44 - width, HEAD_TOP + 72), close_line, 28, header.get("close_color") or WHITE, semi=True)
-    # section chip, on the media panel's top edge
-    label, color = section
-    width = draw.textlength(label, font=_font_any(28))
-    draw.rounded_rectangle((36, y0 + 16, 36 + width + 56, y0 + 62), 10, fill=(16, 24, 32), outline=color, width=2)
-    draw.ellipse((52, y0 + 32, 66, y0 + 46), fill=color)
-    _text(draw, (76, y0 + 18), label, 28, color)
+    # No section chip: internal labels (HOOK, CTA, ...) are never shown to viewers (23-Oct).
     if chips:
         x = 36
         rows_y = y1 - 150  # above the IST time axis
