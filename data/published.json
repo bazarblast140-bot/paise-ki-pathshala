@@ -562,5 +562,21 @@
   "note": "beat karein: key cue word \u0926\u0947\u0916\u0947\u0902 is not spoken in this beat; duration 42.5s outside 45-62s",
   "pending_qa": false,
   "ig_deferred": "deferred: pyWjYFJniW0 publishAt=2026-10-24T03:00:00Z run=39978723060"
+ },
+ {
+  "date_ist": "2026-10-24",
+  "slot": "21:00",
+  "video_id": "XRULotgXQtM",
+  "format": "short",
+  "topic_key": "pat_ema_cross",
+  "voice_engine": "gemini",
+  "deepseek_calls": 1,
+  "deepseek_prompt_tokens": 1535,
+  "deepseek_completion_tokens": 431,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": "gemini",
+  "source_run": "40043084691",
+  "ig_deferred": "deferred: XRULotgXQtM publishAt=2026-10-24T15:30:00Z run=40043084691"
  }
 ]
