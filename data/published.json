@@ -638,5 +638,14 @@
   "topic_key": "pat_triangle",
   "source": "approved-buffer",
   "buffer_id": "ap-pat_triangle-8ea8c9a5cd97"
+ },
+ {
+  "date_ist": "2026-10-26",
+  "slot": "21:00",
+  "video_id": "eFgnYM7pYwM",
+  "format": "long",
+  "topic_key": "pat_stop_loss",
+  "source": "approved-buffer",
+  "buffer_id": "ap-pat_stop_loss-4603250108c4"
  }
 ]
