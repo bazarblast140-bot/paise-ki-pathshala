@@ -614,5 +614,20 @@
   "source_run": "40103053896",
   "slot_skipped": "audio mix evidence missing",
   "note": "audio mix evidence missing"
+ },
+ {
+  "date_ist": "2026-10-25",
+  "slot": "08:40",
+  "video_id": "5bcOjW4imQo",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "18128526760630011",
+  "content_hash": "a013a7421289b121",
+  "title_norm": "aaj ki sabse badi khabar | 25 oct 2026 | bitcoin hovers near $80,000 and ethereum at $2,370 as\u2026"
  }
 ]
