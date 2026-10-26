@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-25T15:04:36+00:00",
+ "generated_at": "2026-10-26T17:07:33+00:00",
  "lookback_days": 30,
  "via": "oauth",
  "channels": [
@@ -21,59 +21,57 @@
  ],
  "errors": [],
  "analysis": {
-  "videos_analysed": 84,
+  "videos_analysed": 83,
   "title_patterns": {
    "curiosity_question": {
-    "top_share": 0.57,
-    "rest_share": 0.29,
-    "lift": 1.85
+    "top_share": 0.55,
+    "rest_share": 0.32,
+    "lift": 1.63
    },
    "number_led": {
-    "top_share": 0.38,
+    "top_share": 0.4,
     "rest_share": 0.44,
-    "lift": 0.87
+    "lift": 0.91
    },
    "warning": {
     "top_share": 0.05,
     "rest_share": 0.05,
-    "lift": 1.0
+    "lift": 1.02
    },
    "chart_concept": {
-    "top_share": 0.29,
-    "rest_share": 0.24,
-    "lift": 1.17
+    "top_share": 0.3,
+    "rest_share": 0.22,
+    "lift": 1.29
    },
    "real_data": {
-    "top_share": 0.29,
-    "rest_share": 0.16,
-    "lift": 1.61
+    "top_share": 0.3,
+    "rest_share": 0.14,
+    "lift": 1.81
    },
    "mechanism_explainer": {
-    "top_share": 0.19,
-    "rest_share": 0.11,
-    "lift": 1.49
+    "top_share": 0.15,
+    "rest_share": 0.13,
+    "lift": 1.13
    }
   },
   "winning_keywords": [
+   "nifty",
    "samjhe",
    "kaise",
-   "explained",
-   "liquidity",
-   "psychology",
-   "price",
-   "nishanebaaz",
-   "murarka",
-   "nitin",
-   "entry",
    "sweep",
+   "liquidity",
+   "monday",
+   "price",
+   "psychology",
+   "entry",
    "chart",
    "india",
-   "call"
+   "prediction",
+   "bank"
   ],
   "top_tags": [
    "share market",
    "candlestick analysis",
-   "indian stock market",
    "price action",
    "candlestick pattern",
    "candlestick",
@@ -81,11 +79,12 @@
    "candle psychology",
    "candle chart ko kaise samjhe",
    "chart patterns",
+   "indian stock market",
    "investment tips",
    "market psychology",
-   "options trading",
-   "options trading india",
-   "options trading for beginners"
+   "trading",
+   "share market candle ko kaise samjhe",
+   "trading chart ko kaise samjhe"
   ],
   "best_upload_hours_ist": [
    18,
@@ -94,18 +93,28 @@
    12
   ],
   "top_short_duration_s": {
-   "median": 95,
-   "p25": 58,
-   "p75": 125
+   "median": 93,
+   "p25": 52,
+   "p75": 136
   },
-  "top_title_length_chars": 81,
+  "top_title_length_chars": 82,
   "top_videos": [
+   {
+    "channel": "Stock Menthol",
+    "title": "SL Hunting | How to Take Sweep Entries with 1:5 RR",
+    "views": 4104,
+    "views_per_day": 3515.8,
+    "performance_index": 5.0,
+    "duration_s": 580,
+    "published_ist": "2026-10-25 18:36",
+    "tags": []
+   },
    {
     "channel": "THE WORLD TRADER",
     "title": "Candlestick Patterns का असली Logic समझो 🔥 |Market Psychology & Price Action Explained #stockmarket",
-    "views": 106968,
-    "views_per_day": 23009.7,
-    "performance_index": 5.0,
+    "views": 122076,
+    "views_per_day": 21289.1,
+    "performance_index": 4.8,
     "duration_s": 122,
     "published_ist": "2026-10-21 05:00",
     "tags": [
@@ -124,34 +133,11 @@
     ]
    },
    {
-    "channel": "Nitin Murarka Nifty ke Nishanebaaz",
-    "title": "Portfolio पड़ा है Idle क्या करें? | Option trading | Nitin Murarka Nifty ke Nishanebaaz",
-    "views": 110171,
-    "views_per_day": 8266.9,
-    "performance_index": 2.97,
-    "duration_s": 90,
-    "published_ist": "2026-10-12 12:44",
-    "tags": [
-     "Options Trading",
-     "Options Trading India",
-     "Options Trading for Beginners",
-     "Options Trading Strategy",
-     "Options Trading in Hindi",
-     "Option Trading India",
-     "Options Trading Course",
-     "Options Trading Explained",
-     "Options Trading Basics",
-     "Indian Stock Market",
-     "NSE Options Trading",
-     "Nifty Options Trading"
-    ]
-   },
-   {
     "channel": "Surface Trader",
     "title": "candlestick ko kaise samjhe | candlestick pattern #candlestick #candlestickpattern #trading",
-    "views": 16426,
-    "views_per_day": 682.3,
-    "performance_index": 2.72,
+    "views": 17551,
+    "views_per_day": 697.6,
+    "performance_index": 2.95,
     "duration_s": 35,
     "published_ist": "2026-10-01 18:47",
     "tags": [
@@ -170,11 +156,34 @@
     ]
    },
    {
+    "channel": "Nitin Murarka Nifty ke Nishanebaaz",
+    "title": "Portfolio पड़ा है Idle क्या करें? | Option trading | Nitin Murarka Nifty ke Nishanebaaz",
+    "views": 110278,
+    "views_per_day": 7651.7,
+    "performance_index": 2.85,
+    "duration_s": 90,
+    "published_ist": "2026-10-12 12:44",
+    "tags": [
+     "Options Trading",
+     "Options Trading India",
+     "Options Trading for Beginners",
+     "Options Trading Strategy",
+     "Options Trading in Hindi",
+     "Option Trading India",
+     "Options Trading Course",
+     "Options Trading Explained",
+     "Options Trading Basics",
+     "Indian Stock Market",
+     "NSE Options Trading",
+     "Nifty Options Trading"
+    ]
+   },
+   {
     "channel": "Dr. Mukul Agrawal : Stock Market Coach",
     "title": "Trump vs Indian IT Stocks: Nifty IT Rallies 3%, TCS Jumps 5.5%! 🔥 #Shorts",
-    "views": 377132,
-    "views_per_day": 23516.8,
-    "performance_index": 2.69,
+    "views": 380814,
+    "views_per_day": 22241.1,
+    "performance_index": 2.43,
     "duration_s": 88,
     "published_ist": "2026-10-09 19:41",
     "tags": []
@@ -182,84 +191,18 @@
    {
     "channel": "Stock Menthol",
     "title": "Liquidity Sweep Trading Strategy | 3-Step Entry Model",
-    "views": 13091,
-    "views_per_day": 815.3,
-    "performance_index": 2.19,
+    "views": 13326,
+    "views_per_day": 777.4,
+    "performance_index": 1.87,
     "duration_s": 482,
     "published_ist": "2026-10-09 19:12",
     "tags": []
    },
    {
-    "channel": "Trading Tech (Jitendra Baghel) ",
-    "title": "Monday Market Prediction | Monday Nifty Prediction | #niftyprediction #shortsfeeds #nifty",
-    "views": 21987,
-    "views_per_day": 1375.0,
-    "performance_index": 1.94,
-    "duration_s": 159,
-    "published_ist": "2026-10-09 20:47",
-    "tags": [
-     "12 Oct 2026 market prediction",
-     "Monday Market Prediction",
-     "Monday Market update",
-     "Monday Nifty",
-     "Monday Nifty Prediction",
-     "Nifty Prediction For Monday",
-     "Nifty analysis for Monday",
-     "global market update",
-     "market outlook",
-     "market prediction",
-     "monday market",
-     "nifty"
-    ]
-   },
-   {
-    "channel": "Surface Trader",
-    "title": "trading candle ko kaise samjhe #trading #candlestick",
-    "views": 3423,
-    "views_per_day": 484.0,
-    "performance_index": 1.93,
-    "duration_s": 43,
-    "published_ist": "2026-10-18 18:49",
-    "tags": [
-     "trading candle ko kaise samjhe",
-     "share market candle ko kaise samjhe",
-     "intraday candle ko kaise samjhe",
-     "candle chart ko kaise samjhe",
-     "trading chart ko kaise samjhe",
-     "trading candlestick pattern",
-     "candlestick",
-     "candlestick patterns",
-     "candlestick analysis",
-     "trading",
-     "share market",
-     "candlestick pattern"
-    ]
-   },
-   {
-    "channel": "Stock Menthol",
-    "title": "Liquidity Sweep Strategy: Where to Enter? | Failure Test",
-    "views": 2864,
-    "views_per_day": 704.8,
-    "performance_index": 1.89,
-    "duration_s": 486,
-    "published_ist": "2026-10-21 19:02",
-    "tags": []
-   },
-   {
-    "channel": "Stock Menthol",
-    "title": "Which Zone Is Best for Entry? | Liquidity Trading",
-    "views": 8401,
-    "views_per_day": 695.9,
-    "performance_index": 1.87,
-    "duration_s": 553,
-    "published_ist": "2026-10-13 18:50",
-    "tags": []
-   },
-   {
     "channel": "Surface Trader",
     "title": "trading me candlestick chart ko kaise samjhe | candlestick charts #trading #candlestick #charts",
-    "views": 6571,
-    "views_per_day": 466.4,
+    "views": 6652,
+    "views_per_day": 438.4,
     "performance_index": 1.86,
     "duration_s": 31,
     "published_ist": "2026-10-11 18:28",
@@ -280,33 +223,33 @@
    },
    {
     "channel": "Surface Trader",
-    "title": "share market ko kaise samjhe | trading chart ko kaise samjhe #sharemarket #trading #shares",
-    "views": 3382,
-    "views_per_day": 417.0,
-    "performance_index": 1.66,
-    "duration_s": 52,
-    "published_ist": "2026-10-17 17:56",
+    "title": "trading candle ko kaise samjhe #trading #candlestick",
+    "views": 3480,
+    "views_per_day": 426.6,
+    "performance_index": 1.81,
+    "duration_s": 43,
+    "published_ist": "2026-10-18 18:49",
     "tags": [
-     "share market ko kaise samjhe",
-     "trading chart ko kaise samjhe",
-     "share market chart kaise samjhe",
-     "nifty ka chart kaise samjhe",
-     "trading chart analysis kaise kare",
-     "nifty 50 ka chart kaise samjhe",
+     "trading candle ko kaise samjhe",
+     "share market candle ko kaise samjhe",
+     "intraday candle ko kaise samjhe",
      "candle chart ko kaise samjhe",
-     "candle chart kaise samjhe",
-     "candle studying share market",
-     "share market chart reading",
-     "share market kaise sikhe",
-     "chart Reading"
+     "trading chart ko kaise samjhe",
+     "trading candlestick pattern",
+     "candlestick",
+     "candlestick patterns",
+     "candlestick analysis",
+     "trading",
+     "share market",
+     "candlestick pattern"
     ]
    },
    {
     "channel": "CNBC Awaaz.",
     "title": "शेयर बाजार में फिर क्यों मचा हाहाकार? | Stock Market India | #shorts  N18S",
-    "views": 588596,
-    "views_per_day": 22430.5,
-    "performance_index": 1.58,
+    "views": 588640,
+    "views_per_day": 21541.2,
+    "performance_index": 1.59,
     "duration_s": 125,
     "published_ist": "2026-09-29 14:47",
     "tags": [
@@ -325,11 +268,34 @@
     ]
    },
    {
+    "channel": "Surface Trader",
+    "title": "share market ko kaise samjhe | trading chart ko kaise samjhe #sharemarket #trading #shares",
+    "views": 3425,
+    "views_per_day": 372.5,
+    "performance_index": 1.58,
+    "duration_s": 52,
+    "published_ist": "2026-10-17 17:56",
+    "tags": [
+     "share market ko kaise samjhe",
+     "trading chart ko kaise samjhe",
+     "share market chart kaise samjhe",
+     "nifty ka chart kaise samjhe",
+     "trading chart analysis kaise kare",
+     "nifty 50 ka chart kaise samjhe",
+     "candle chart ko kaise samjhe",
+     "candle chart kaise samjhe",
+     "candle studying share market",
+     "share market chart reading",
+     "share market kaise sikhe",
+     "chart Reading"
+    ]
+   },
+   {
     "channel": "UFL Capital Markets | SEBI RA",
     "title": "Monday Market Crash? | Nifty Tomorrow Prediction | Nifty Analysis Hindi | Nifty Monday Prediction",
-    "views": 26898,
-    "views_per_day": 3753.1,
-    "performance_index": 1.57,
+    "views": 28099,
+    "views_per_day": 3405.0,
+    "performance_index": 1.55,
     "duration_s": 137,
     "published_ist": "2026-10-18 16:34",
     "tags": [
@@ -348,37 +314,70 @@
     ]
    },
    {
-    "channel": "Nitin Murarka Nifty ke Nishanebaaz",
-    "title": "4 Things to Check Before Buying CALL or PUT! | Nitin Murarka Nifty ke Nishanebaaz",
-    "views": 118866,
-    "views_per_day": 4031.8,
-    "performance_index": 1.45,
-    "duration_s": 110,
-    "published_ist": "2026-09-26 09:00",
-    "tags": [
-     "Options Trading",
-     "Options Trading India",
-     "Options Trading for Beginners",
-     "Options Trading Strategy",
-     "Options Trading in Hindi",
-     "Option Trading India",
-     "Options Trading Course",
-     "Options Trading Explained",
-     "Options Trading Basics",
-     "Indian Stock Market",
-     "NSE Options Trading",
-     "Nifty Options Trading"
-    ]
+    "channel": "Stock Menthol",
+    "title": "Which Zone Is Best for Entry? | Liquidity Trading",
+    "views": 8428,
+    "views_per_day": 640.5,
+    "performance_index": 1.54,
+    "duration_s": 553,
+    "published_ist": "2026-10-13 18:50",
+    "tags": []
    },
    {
     "channel": "Stock Menthol",
-    "title": "How to Trade with an AI Trading Bot? | Elirox & Exness",
-    "views": 1146,
-    "views_per_day": 527.7,
-    "performance_index": 1.42,
-    "duration_s": 516,
-    "published_ist": "2026-10-23 16:27",
+    "title": "Liquidity Sweep Strategy: Where to Enter? | Failure Test",
+    "views": 2946,
+    "views_per_day": 572.1,
+    "performance_index": 1.38,
+    "duration_s": 486,
+    "published_ist": "2026-10-21 19:02",
     "tags": []
+   },
+   {
+    "channel": "Trading Tech (Jitendra Baghel) ",
+    "title": "Monday Market Prediction | Monday Nifty Prediction | #niftyprediction #shortsfeeds #nifty",
+    "views": 22052,
+    "views_per_day": 1291.4,
+    "performance_index": 1.31,
+    "duration_s": 159,
+    "published_ist": "2026-10-09 20:47",
+    "tags": [
+     "12 Oct 2026 market prediction",
+     "Monday Market Prediction",
+     "Monday Market update",
+     "Monday Nifty",
+     "Monday Nifty Prediction",
+     "Nifty Prediction For Monday",
+     "Nifty analysis for Monday",
+     "global market update",
+     "market outlook",
+     "market prediction",
+     "monday market",
+     "nifty"
+    ]
+   },
+   {
+    "channel": "niftywala",
+    "title": "Nifty & Bank Nifty Analysis for MONDAY | 12 October 2026 | nifty Tomorrow #nifty",
+    "views": 30356,
+    "views_per_day": 1845.7,
+    "performance_index": 1.21,
+    "duration_s": 20,
+    "published_ist": "2026-10-10 11:54",
+    "tags": [
+     "MONDAY market",
+     "Market MONDAY",
+     "MONDAY nifty",
+     "MONDAY",
+     "Sensex",
+     "MONDAY Sensex",
+     "MONDAY bank nifty",
+     "MONDAY stock market",
+     "Dev Invisible Trading",
+     "Dev Sir",
+     "Market Tariff effect",
+     "Nifty tariff effect"
+    ]
    }
   ]
  },
