@@ -479,5 +479,20 @@
   "ig_media_id": "18112019912222566",
   "content_hash": "38a750057ff939f4",
   "title_norm": "eichermot share analysis | support bounce trade plan next session (23 oct 2026 close)"
+ },
+ {
+  "date_ist": "2026-10-26",
+  "slot": "16:00",
+  "video_id": "wZhdnYX3uao",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "18094585748258651",
+  "content_hash": "4bc4686883e08e7f",
+  "title_norm": "nifty analysis today | nifty close report #3 26 oct 2026"
  }
 ]
