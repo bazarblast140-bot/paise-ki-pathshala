@@ -647,5 +647,20 @@
   "topic_key": "pat_stop_loss",
   "source": "approved-buffer",
   "buffer_id": "ap-pat_stop_loss-4603250108c4"
+ },
+ {
+  "date_ist": "2026-10-26",
+  "slot": "08:49",
+  "video_id": "Yg08pOtk5K0",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "18118473754971160",
+  "content_hash": "5763ce22833ac64a",
+  "title_norm": "aaj ki sabse badi khabar | 26 oct 2026 | us stock markets this week: wall street gears up for fed\u2026"
  }
 ]
