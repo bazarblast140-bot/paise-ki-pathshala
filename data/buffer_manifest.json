@@ -1458,6 +1458,7 @@
     "pat_inside_bar",
     "pat_breakout",
     "pat_bull_engulf",
-    "pat_cup_handle"
+    "pat_cup_handle",
+    "pat_doji"
   ]
 }
