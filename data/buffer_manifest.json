@@ -1459,6 +1459,7 @@
     "pat_breakout",
     "pat_bull_engulf",
     "pat_cup_handle",
-    "pat_doji"
+    "pat_doji",
+    "pat_double"
   ]
 }
