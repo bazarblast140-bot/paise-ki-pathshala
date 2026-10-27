@@ -46,19 +46,19 @@
       "state": "held",
       "topic_key": "pat_doji",
       "owner_approved": false,
-      "created_at": "2026-10-19T05:25:03Z",
+      "created_at": "2026-10-27T05:43:18Z",
       "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
       "voice_engine": "gemini",
-      "duration_s": 43.25
+      "duration_s": 42.76
     },
     {
       "id": "hold-pat_double-20261009T001322Z",
       "state": "held",
       "topic_key": "pat_double",
       "owner_approved": false,
-      "created_at": "2026-10-19T05:24:59Z",
-      "reason": "render rc=1",
-      "voice_engine": "gemini",
+      "created_at": "2026-10-27T05:43:23Z",
+      "reason": "voice_engine=edge is held; gemini_take",
+      "voice_engine": "edge",
       "duration_s": 45.28
     },
     {
@@ -86,10 +86,10 @@
       "state": "held",
       "topic_key": "pat_hammer",
       "owner_approved": false,
-      "created_at": "2026-10-19T05:25:01Z",
+      "created_at": "2026-10-27T05:43:29Z",
       "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
       "voice_engine": "gemini",
-      "duration_s": 40.02
+      "duration_s": 40.2
     },
     {
       "id": "hold-pat_head_shoulders-20261009T035119Z",
