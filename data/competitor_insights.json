@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-26T17:07:33+00:00",
+ "generated_at": "2026-10-27T16:11:52+00:00",
  "lookback_days": 30,
  "via": "oauth",
  "channels": [
@@ -25,13 +25,13 @@
   "title_patterns": {
    "curiosity_question": {
     "top_share": 0.55,
-    "rest_share": 0.32,
-    "lift": 1.63
+    "rest_share": 0.35,
+    "lift": 1.5
    },
    "number_led": {
-    "top_share": 0.4,
-    "rest_share": 0.44,
-    "lift": 0.91
+    "top_share": 0.35,
+    "rest_share": 0.43,
+    "lift": 0.84
    },
    "warning": {
     "top_share": 0.05,
@@ -40,51 +40,53 @@
    },
    "chart_concept": {
     "top_share": 0.3,
-    "rest_share": 0.22,
-    "lift": 1.29
+    "rest_share": 0.21,
+    "lift": 1.37
    },
    "real_data": {
-    "top_share": 0.3,
-    "rest_share": 0.14,
-    "lift": 1.81
+    "top_share": 0.4,
+    "rest_share": 0.13,
+    "lift": 2.54
    },
    "mechanism_explainer": {
-    "top_share": 0.15,
-    "rest_share": 0.13,
-    "lift": 1.13
+    "top_share": 0.1,
+    "rest_share": 0.16,
+    "lift": 0.72
    }
   },
   "winning_keywords": [
    "nifty",
-   "samjhe",
    "kaise",
+   "samjhe",
    "sweep",
+   "candle",
    "liquidity",
    "monday",
+   "take",
    "price",
    "psychology",
+   "करें",
    "entry",
-   "chart",
-   "india",
+   "tomorrow",
    "prediction",
    "bank"
   ],
   "top_tags": [
-   "share market",
    "candlestick analysis",
-   "price action",
-   "candlestick pattern",
+   "candle psychology",
    "candlestick",
    "candlestick patterns",
-   "candle psychology",
-   "candle chart ko kaise samjhe",
+   "price action",
+   "share market candle ko kaise samjhe",
+   "trading",
+   "share market",
+   "candlestick pattern",
+   "candlestick ko kaise samjhe",
+   "trading candle ko kaise samjhe",
+   "trading candlestick",
    "chart patterns",
    "indian stock market",
-   "investment tips",
-   "market psychology",
-   "trading",
-   "share market candle ko kaise samjhe",
-   "trading chart ko kaise samjhe"
+   "investment tips"
   ],
   "best_upload_hours_ist": [
    18,
@@ -93,28 +95,50 @@
    12
   ],
   "top_short_duration_s": {
-   "median": 93,
-   "p25": 52,
-   "p75": 136
+   "median": 90,
+   "p25": 35,
+   "p75": 137
   },
-  "top_title_length_chars": 82,
+  "top_title_length_chars": 84,
   "top_videos": [
    {
     "channel": "Stock Menthol",
     "title": "SL Hunting | How to Take Sweep Entries with 1:5 RR",
-    "views": 4104,
-    "views_per_day": 3515.8,
+    "views": 5436,
+    "views_per_day": 2553.8,
     "performance_index": 5.0,
     "duration_s": 580,
     "published_ist": "2026-10-25 18:36",
     "tags": []
    },
    {
+    "channel": "Surface Trader",
+    "title": "share market candle ko kaise samjhe | candlestick ko kaise samjhe #sharemarket #candlestick",
+    "views": 2204,
+    "views_per_day": 1909.3,
+    "performance_index": 5.0,
+    "duration_s": 34,
+    "published_ist": "2026-10-26 17:59",
+    "tags": [
+     "share market candle ko kaise samjhe",
+     "candlestick ko kaise samjhe",
+     "trading candle ko kaise Samjhe",
+     "trading candlestick",
+     "candle psychology",
+     "candlestick",
+     "candlestick patterns",
+     "candlestick analysis",
+     "price action",
+     "trading",
+     "trading chart"
+    ]
+   },
+   {
     "channel": "THE WORLD TRADER",
     "title": "Candlestick Patterns का असली Logic समझो 🔥 |Market Psychology & Price Action Explained #stockmarket",
-    "views": 122076,
-    "views_per_day": 21289.1,
-    "performance_index": 4.8,
+    "views": 133339,
+    "views_per_day": 19914.6,
+    "performance_index": 4.63,
     "duration_s": 122,
     "published_ist": "2026-10-21 05:00",
     "tags": [
@@ -133,34 +157,11 @@
     ]
    },
    {
-    "channel": "Surface Trader",
-    "title": "candlestick ko kaise samjhe | candlestick pattern #candlestick #candlestickpattern #trading",
-    "views": 17551,
-    "views_per_day": 697.6,
-    "performance_index": 2.95,
-    "duration_s": 35,
-    "published_ist": "2026-10-01 18:47",
-    "tags": [
-     "candlestick ko kaise samjhe",
-     "candlestick pattern",
-     "candlestick",
-     "candlestick patterns",
-     "candlestick analysis",
-     "trading candlestick",
-     "candle reading",
-     "candle psychology",
-     "candle psychology in trading",
-     "trading",
-     "price action",
-     "share market"
-    ]
-   },
-   {
     "channel": "Nitin Murarka Nifty ke Nishanebaaz",
     "title": "Portfolio पड़ा है Idle क्या करें? | Option trading | Nitin Murarka Nifty ke Nishanebaaz",
-    "views": 110278,
-    "views_per_day": 7651.7,
-    "performance_index": 2.85,
+    "views": 110364,
+    "views_per_day": 7178.9,
+    "performance_index": 2.76,
     "duration_s": 90,
     "published_ist": "2026-10-12 12:44",
     "tags": [
@@ -181,121 +182,52 @@
    {
     "channel": "Dr. Mukul Agrawal : Stock Market Coach",
     "title": "Trump vs Indian IT Stocks: Nifty IT Rallies 3%, TCS Jumps 5.5%! 🔥 #Shorts",
-    "views": 380814,
-    "views_per_day": 22241.1,
-    "performance_index": 2.43,
+    "views": 383810,
+    "views_per_day": 21224.4,
+    "performance_index": 2.41,
     "duration_s": 88,
     "published_ist": "2026-10-09 19:41",
     "tags": []
    },
    {
+    "channel": "Surface Trader",
+    "title": "candlestick ko kaise samjhe | candlestick pattern #candlestick #candlestickpattern #trading",
+    "views": 18204,
+    "views_per_day": 696.9,
+    "performance_index": 2.02,
+    "duration_s": 35,
+    "published_ist": "2026-10-01 18:47",
+    "tags": [
+     "candlestick ko kaise samjhe",
+     "candlestick pattern",
+     "candlestick",
+     "candlestick patterns",
+     "candlestick analysis",
+     "trading candlestick",
+     "candle reading",
+     "candle psychology",
+     "candle psychology in trading",
+     "trading",
+     "price action",
+     "share market"
+    ]
+   },
+   {
     "channel": "Stock Menthol",
     "title": "Liquidity Sweep Trading Strategy | 3-Step Entry Model",
-    "views": 13326,
-    "views_per_day": 777.4,
-    "performance_index": 1.87,
+    "views": 13477,
+    "views_per_day": 744.4,
+    "performance_index": 1.85,
     "duration_s": 482,
     "published_ist": "2026-10-09 19:12",
     "tags": []
    },
    {
-    "channel": "Surface Trader",
-    "title": "trading me candlestick chart ko kaise samjhe | candlestick charts #trading #candlestick #charts",
-    "views": 6652,
-    "views_per_day": 438.4,
-    "performance_index": 1.86,
-    "duration_s": 31,
-    "published_ist": "2026-10-11 18:28",
-    "tags": [
-     "trading me candlestick chart ko kaise samjhe",
-     "candlestick charts",
-     "chart pattern",
-     "chart analysis",
-     "trading me candle ko kaise samjhe",
-     "share market candle ko kaise samjhe",
-     "candle chart ko kaise samjhe",
-     "candlestick",
-     "candlestick pattern",
-     "candlestick analysis",
-     "candlestick patterns",
-     "candle psychology"
-    ]
-   },
-   {
-    "channel": "Surface Trader",
-    "title": "trading candle ko kaise samjhe #trading #candlestick",
-    "views": 3480,
-    "views_per_day": 426.6,
-    "performance_index": 1.81,
-    "duration_s": 43,
-    "published_ist": "2026-10-18 18:49",
-    "tags": [
-     "trading candle ko kaise samjhe",
-     "share market candle ko kaise samjhe",
-     "intraday candle ko kaise samjhe",
-     "candle chart ko kaise samjhe",
-     "trading chart ko kaise samjhe",
-     "trading candlestick pattern",
-     "candlestick",
-     "candlestick patterns",
-     "candlestick analysis",
-     "trading",
-     "share market",
-     "candlestick pattern"
-    ]
-   },
-   {
-    "channel": "CNBC Awaaz.",
-    "title": "शेयर बाजार में फिर क्यों मचा हाहाकार? | Stock Market India | #shorts  N18S",
-    "views": 588640,
-    "views_per_day": 21541.2,
-    "performance_index": 1.59,
-    "duration_s": 125,
-    "published_ist": "2026-09-29 14:47",
-    "tags": [
-     "Stock Market",
-     "Stock Market India",
-     "Share Market",
-     "Share Market India",
-     "Stock Market Crash",
-     "Stock Market Today",
-     "Share Market Today",
-     "Nifty",
-     "Nifty 50",
-     "Sensex",
-     "Nifty Today",
-     "Sensex Today"
-    ]
-   },
-   {
-    "channel": "Surface Trader",
-    "title": "share market ko kaise samjhe | trading chart ko kaise samjhe #sharemarket #trading #shares",
-    "views": 3425,
-    "views_per_day": 372.5,
-    "performance_index": 1.58,
-    "duration_s": 52,
-    "published_ist": "2026-10-17 17:56",
-    "tags": [
-     "share market ko kaise samjhe",
-     "trading chart ko kaise samjhe",
-     "share market chart kaise samjhe",
-     "nifty ka chart kaise samjhe",
-     "trading chart analysis kaise kare",
-     "nifty 50 ka chart kaise samjhe",
-     "candle chart ko kaise samjhe",
-     "candle chart kaise samjhe",
-     "candle studying share market",
-     "share market chart reading",
-     "share market kaise sikhe",
-     "chart Reading"
-    ]
-   },
-   {
     "channel": "UFL Capital Markets | SEBI RA",
     "title": "Monday Market Crash? | Nifty Tomorrow Prediction | Nifty Analysis Hindi | Nifty Monday Prediction",
-    "views": 28099,
-    "views_per_day": 3405.0,
-    "performance_index": 1.55,
+    "views": 28482,
+    "views_per_day": 3091.3,
+    "performance_index": 1.53,
     "duration_s": 137,
     "published_ist": "2026-10-18 16:34",
     "tags": [
@@ -316,29 +248,42 @@
    {
     "channel": "Stock Menthol",
     "title": "Which Zone Is Best for Entry? | Liquidity Trading",
-    "views": 8428,
-    "views_per_day": 640.5,
-    "performance_index": 1.54,
+    "views": 8445,
+    "views_per_day": 598.1,
+    "performance_index": 1.49,
     "duration_s": 553,
     "published_ist": "2026-10-13 18:50",
     "tags": []
    },
    {
-    "channel": "Stock Menthol",
-    "title": "Liquidity Sweep Strategy: Where to Enter? | Failure Test",
-    "views": 2946,
-    "views_per_day": 572.1,
-    "performance_index": 1.38,
-    "duration_s": 486,
-    "published_ist": "2026-10-21 19:02",
-    "tags": []
+    "channel": "CNBC Awaaz.",
+    "title": "Stock Market Falls Today! Why Are Sensex & Nifty Falling? | बाजार में अब क्या करें ? | Editor's take",
+    "views": 177813,
+    "views_per_day": 28250.3,
+    "performance_index": 1.36,
+    "duration_s": 225,
+    "published_ist": "2026-10-21 14:38",
+    "tags": [
+     "Anuj Singhal",
+     "Bank Nifty Today",
+     "Market Crash Explained",
+     "Nifty Crash",
+     "Nifty Today",
+     "Sensex Nifty Fall",
+     "Sensex Today",
+     "Share Market Today",
+     "Stock Market Analysis",
+     "Stock Market Crash Today",
+     "Why Stock Market Falling Today",
+     "anuj singhal analysis"
+    ]
    },
    {
     "channel": "Trading Tech (Jitendra Baghel) ",
     "title": "Monday Market Prediction | Monday Nifty Prediction | #niftyprediction #shortsfeeds #nifty",
-    "views": 22052,
-    "views_per_day": 1291.4,
-    "performance_index": 1.31,
+    "views": 22054,
+    "views_per_day": 1222.7,
+    "performance_index": 1.3,
     "duration_s": 159,
     "published_ist": "2026-10-09 20:47",
     "tags": [
@@ -359,9 +304,9 @@
    {
     "channel": "niftywala",
     "title": "Nifty & Bank Nifty Analysis for MONDAY | 12 October 2026 | nifty Tomorrow #nifty",
-    "views": 30356,
-    "views_per_day": 1845.7,
-    "performance_index": 1.21,
+    "views": 30616,
+    "views_per_day": 1758.7,
+    "performance_index": 1.23,
     "duration_s": 20,
     "published_ist": "2026-10-10 11:54",
     "tags": [
@@ -377,6 +322,62 @@
      "Dev Sir",
      "Market Tariff effect",
      "Nifty tariff effect"
+    ]
+   },
+   {
+    "channel": "Stock Menthol",
+    "title": "Liquidity Sweep Strategy: Where to Enter? | Failure Test",
+    "views": 2975,
+    "views_per_day": 486.9,
+    "performance_index": 1.21,
+    "duration_s": 486,
+    "published_ist": "2026-10-21 19:02",
+    "tags": []
+   },
+   {
+    "channel": "Surface Trader",
+    "title": "trading me candlestick chart ko kaise samjhe | candlestick charts #trading #candlestick #charts",
+    "views": 6736,
+    "views_per_day": 417.5,
+    "performance_index": 1.21,
+    "duration_s": 31,
+    "published_ist": "2026-10-11 18:28",
+    "tags": [
+     "trading me candlestick chart ko kaise samjhe",
+     "candlestick charts",
+     "chart pattern",
+     "chart analysis",
+     "trading me candle ko kaise samjhe",
+     "share market candle ko kaise samjhe",
+     "candle chart ko kaise samjhe",
+     "candlestick",
+     "candlestick pattern",
+     "candlestick analysis",
+     "candlestick patterns",
+     "candle psychology"
+    ]
+   },
+   {
+    "channel": "THE WORLD TRADER",
+    "title": "CANDLE PSYCHOLOGY समझ गए तो अगली Candle का Move समझना आसान Trading का जरूरी Secret 📈#stockmarket",
+    "views": 115216,
+    "views_per_day": 5076.6,
+    "performance_index": 1.18,
+    "duration_s": 136,
+    "published_ist": "2026-10-05 05:00",
+    "tags": [
+     "Advanced Trading",
+     "Beginner Trading",
+     "Candle Moves",
+     "Candle Psychology",
+     "Candlestick Analysis",
+     "Chart Patterns",
+     "Investment Tips",
+     "Market Insights",
+     "Market Psychology",
+     "Price Action",
+     "Smart Trading",
+     "Stock Market"
     ]
    }
   ]
