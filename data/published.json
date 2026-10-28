@@ -680,5 +680,20 @@
   "topic_key": "pat_flag",
   "source": "approved-buffer",
   "buffer_id": "ap-pat_flag-8eb62498fbde"
+ },
+ {
+  "date_ist": "2026-10-28",
+  "slot": "18:10",
+  "video_id": "f0qDgX53vTY",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "17994359973104700",
+  "content_hash": "b96a78cbb57ba83d",
+  "title_norm": "aaj ki sabse badi khabar | 28 oct 2026 | ipo listing record! jio platforms becomes india's largest\u2026"
  }
 ]
