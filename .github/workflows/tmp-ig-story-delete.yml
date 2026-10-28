@@ -1,0 +1,50 @@
+name: tmp IG story delete 2026-10-28
+on:
+  workflow_dispatch:
+    inputs:
+      ig_media_id:
+        required: true
+        type: string
+      dry_run:
+        type: boolean
+        default: true
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe tokens and delete Story
+        env:
+          IGT: ${{ secrets.IG_ACCESS_TOKEN }}
+          FBT: ${{ secrets.FB_ACCESS_TOKEN }}
+          APP: ${{ secrets.FB_APP_SECRET }}
+          APPID: ${{ vars.FB_APP_ID }}
+          IGID: ${{ inputs.ig_media_id }}
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          G=https://graph.facebook.com/v21.0
+          # Token types only (no token values)
+          for NAME in IGT FBT; do
+            TOK="${!NAME}"
+            echo "=== $NAME ==="
+            if [ -z "$TOK" ]; then echo missing; continue; fi
+            if [ -n "$APPID" ] && [ -n "$APP" ]; then
+              curl -sS "$G/debug_token?input_token=$TOK&access_token=$APPID|$APP" \
+                | python3 -c "import json,sys;d=(json.load(sys.stdin).get('data') or {});print({k:d.get(k) for k in ['type','is_valid','expires_at','scopes','user_id','profile_id','app_id']})"
+            else
+              curl -sS "$G/me?fields=id,name&access_token=$TOK" | python3 -m json.tool || true
+            fi
+          done
+          echo "=== GET media ==="
+          curl -sS "$G/$IGID?fields=id,media_type,media_product_type,permalink,caption,timestamp&access_token=$IGT" | tee m.json | python3 -m json.tool
+          python3 -c "import json;d=json.load(open('m.json'));assert 'stories' in d.get('permalink','') or d.get('media_product_type')=='STORY' or 'stories' in str(d);print('looks like story ok')"
+          [ "$DRY" = "true" ] && { echo dry run stop; exit 0; }
+          for NAME in FBT IGT; do
+            TOK="${!NAME}"
+            [ -z "$TOK" ] && continue
+            echo "=== DELETE via $NAME ==="
+            curl -sS -w "\nHTTP:%{http_code}\n" -X DELETE "$G/$IGID?access_token=$TOK"
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' "$G/$IGID?fields=id&access_token=$IGT")
+            echo "GET after $NAME: $CODE"
+            [ "$CODE" != "200" ] && { echo DELETE_OK; exit 0; }
+          done
+          echo DELETE_FAILED; exit 1
