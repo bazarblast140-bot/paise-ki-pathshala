@@ -662,5 +662,14 @@
   "ig_media_id": "18118473754971160",
   "content_hash": "5763ce22833ac64a",
   "title_norm": "aaj ki sabse badi khabar | 26 oct 2026 | us stock markets this week: wall street gears up for fed\u2026"
+ },
+ {
+  "date_ist": "2026-10-28",
+  "slot": "21:00",
+  "video_id": "uqcRDPr1XFY",
+  "format": "long",
+  "topic_key": "pat_gap_up",
+  "source": "approved-buffer",
+  "buffer_id": "ap-pat_gap_up-f504c4ab324b"
  }
 ]
