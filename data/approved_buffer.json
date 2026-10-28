@@ -96,10 +96,10 @@
       "state": "held",
       "topic_key": "pat_head_shoulders",
       "owner_approved": false,
-      "created_at": "2026-10-20T05:25:23Z",
-      "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
+      "created_at": "2026-10-28T06:22:50Z",
+      "reason": "render rc=1",
       "voice_engine": "gemini",
-      "duration_s": 46.59
+      "duration_s": 45.18
     },
     {
       "id": "hold-pat_morning_star-20261009T035521Z",
@@ -2350,6 +2350,1076 @@
               "kind": "chart-cta",
               "start": 39.58,
               "end": 42.77
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ap-pat_flag-8eb62498fbde",
+      "state": "ready",
+      "topic_key": "pat_flag",
+      "owner_approved": true,
+      "title": "बुल फ्लैग",
+      "description": "बुल फ्लैग पर खरीद कब करें? एंट्री 130 और स्टॉप 120 का प्लान।\n\nबुल फ्लैग — आसान हिंदी में: पहचान, मतलब और traders इसे आमतौर पर कैसे इस्तेमाल करते हैं।\n\n💬 यह बात पहले से पता थी? Comment में हाँ या नहीं लिखो।\n\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nहम SEBI-रजिस्टर्ड सलाहकार नहीं हैं। किसी भी निवेश से पहले रजिस्टर्ड सलाहकार से बात करें।\n\nस्रोत और नोट्स\n- पूरा ट्रेड प्लान\n- स्रोत: illustrative teaching chart drawn in this video (example candles, not live market data, not a stock tip). Every plan number below is computed by the channel's trade_plan rules from these candles.\n- Example chart candles: #1 O 100 H 108 L 98 C 106; #2 O 106 H 118 L 104 C 116; #3 O 116 H 130 L 114 C 128; #4 O 128 H 130 L 122 C 124; #5 O 124 H 126 L 122 C 123; #6 O 123 H 136 L 122 C 134; #7 O 134 H 162 L 132 C 160.\n- Plan side: long (buy). Entry 130, stop-loss 120, target 160, support 122.\n- Risk = |entry - stop| = 10; reward = |target - entry| = 30; risk:reward = 1:3 (spoken 1 बटा 3).\n- Other chart levels: pole 30, flag 122.\n\nPaise Ki Pathshala — ट्रेडिंग की पाठशाला — चार्ट, पैटर्न, रिस्क और असली डेटा\n\nरोज़ 3 ट्रेडिंग Shorts — कैंडलस्टिक, इंडिकेटर, ऑर्डर, F&O, रिस्क और असली डेटा।\n\n#StockMarketHindi #TradingHindi #PaiseKiPathshala #ShareMarket",
+      "tags": [
+        "hindi",
+        "stock market hindi",
+        "trading hindi",
+        "paise ki pathshala"
+      ],
+      "sha256": "8eb62498fbde03ef4470c2048c6b3c8a9be1d4584aecb37ac71f742358e6bb79",
+      "asset_name": "ap-pat_flag-8eb62498fbde.mp4",
+      "created_at": "2026-10-28T06:23:47Z",
+      "used_at": null,
+      "used_slot": null,
+      "used_date_ist": null,
+      "video_id": null,
+      "voice_engine": "gemini",
+      "duration_s": 40.14,
+      "review_overall": 98.0,
+      "reason": "",
+      "files": {
+        "topic": {
+          "key": "pat_flag"
+        },
+        "script": "TITLE:\nबुल फ्लैग\n\nHOOK (0-3 sec):\nबुल फ्लैग पर खरीद कब करें? एंट्री 130 और स्टॉप 120 का प्लान।\n\nBODY:\n[SEGMENT PEHCHAN]\nपोल 30 पॉइंट। फ्लैग 122 पर रुकता है।\n\n[SEGMENT CONTEXT]\nगिरावट के बाद सपोर्ट 122 पर वैलिड। साइडवेज में कमजोर।\n\n[SEGMENT ENTRY]\nएंट्री 130, अगली कैंडल हाई क्रॉस पर।\n\n[SEGMENT SL]\nस्टॉप 120 लो के नीचे। लो टूटा तो प्लान गलत।\n\n[SEGMENT TARGET]\nटारगेट 160, पोल की हाइट। रिस्क 10, रिवॉर्ड 30, यानी रिस्क-रिवॉर्ड 1 बटा 3।\n\n[SEGMENT INVALIDATION]\nगलती फ्लैग के अंदर एंट्री। लो 120 टूटे तो स्किप।\n\n[SEGMENT CTA]\nबुल फ्लैग के पोल के बाद एंट्री ली? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.\n\nCTA:\nयह बात पहले से पता थी? Comment में हाँ या नहीं लिखो।\n\nDISCLAIMER LINE:\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nFACT LEDGER:\n- पूरा ट्रेड प्लान\n- SOURCE: illustrative teaching chart drawn in this video (example candles, not live market data, not a stock tip). Every plan number below is computed by the channel's trade_plan rules from these candles.\n- Example chart candles: #1 O 100 H 108 L 98 C 106; #2 O 106 H 118 L 104 C 116; #3 O 116 H 130 L 114 C 128; #4 O 128 H 130 L 122 C 124; #5 O 124 H 126 L 122 C 123; #6 O 123 H 136 L 122 C 134; #7 O 134 H 162 L 132 C 160.\n- Plan side: long (buy). Entry 130, stop-loss 120, target 160, support 122.\n- Risk = |entry - stop| = 10; reward = |target - entry| = 30; risk:reward = 1:3 (spoken 1 बटा 3).\n- Other chart levels: pole 30, flag 122.\n",
+        "report": "VERDICT: [READY TO PUBLISH]\n\n✅ Auto-checks pass:\nHook | Facts | Compliance | Coverage | Visuals | Length\n\n♻️ Reused-content risk: LOW\n- 0% stock footage, premium Gemini AI voice, poora script original + 8 original charts/overlays — koi lever chahiye hi nahi, ye already safest bucket hai.\n\n⚠️ Tumhe dekhna hai (judgment calls):\n- Thumbnail: \"बुल फ्लैग\" + entry 130 / SL 120 / target 160 wala clean chart rakho — faceless finance me numbers wala thumb achha click karta hai, par \"guaranteed\" jaisa kuch mat likho.\n- Boring check: 8 segments ~sirf ek hi pattern (bull flag) — visuals charts se chalenge, par hook ke baad energy gir sakti hai; segment 5-6 (SL/invalidation) thoda repetitive lag sakta hai, ek baar dekh lo.\n- Assumption: example chart ke candles illustrative hain — publish se pehle confirm karo ki on-screen \"example, not live data\" text dikh raha hai (0-3s ya chart pe).\n\n🔴 Risks / assumptions:\n- Example candles channel ke trade_plan rules se compute kiye — \"Likely/Assuming\" tag ke saath, live market data nahi. Disclaimer me clearly \"illustrative\" bolo.\n- Entry 130 / SL 120 / target 160 ek teaching example hai, kisi specific stock ka call nahi — compliance theek hai, par CTA me \"kharido/becho\" language mat aane do.\n- Koi tax ya regulatory figure nahi — us front pe clear.\n- Jurisdiction: India, channel SEBI-registered nahi — disclaimer line maujood hai, good.\n\nFAILS this round: none\n",
+        "verify_meta": {
+          "ai_verdict_valid": true,
+          "verdict": "READY",
+          "public_ready": true,
+          "soft_judgment_only": false,
+          "reasons": [],
+          "spoken_words": 116
+        },
+        "self_review": {
+          "parts": {
+            "hook": 100,
+            "visual": 90,
+            "accuracy": 100,
+            "trend": null,
+            "craft": 100,
+            "sync": 100
+          },
+          "overall": 98.0,
+          "passed": true,
+          "public_ok": true,
+          "review_flag": false,
+          "verdict": "PASS",
+          "summary": "overall 98.0 (hook 100, visual 90, accuracy 100, trend skip, craft 100, sync 100)",
+          "notes": [],
+          "bar": {
+            "part": 60,
+            "overall": 75
+          },
+          "chart": {
+            "mode": "schematic",
+            "source": null,
+            "as_of": null
+          },
+          "narration_source": "approved",
+          "sync": {
+            "ok": true,
+            "reason": "",
+            "scenes": [
+              {
+                "start": 0.0,
+                "end": 2.28,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.333,
+                "recall": 0.833,
+                "gate_recall": 0.9,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.9,
+                "shared": [
+                  "बुल",
+                  "फ्लैग",
+                  "खरीद",
+                  "कब",
+                  "करें"
+                ],
+                "script": "बुल फ्लैग पर खरीद कब करें? एंट्री",
+                "heard": "बूल फ्लाग पर खरीद कब करें? अन्ट्री",
+                "passed": true
+              },
+              {
+                "start": 2.28,
+                "end": 4.57,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.273,
+                "recall": 0.833,
+                "gate_recall": 0.9,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.9,
+                "shared": [
+                  "करें"
+                ],
+                "script": "करें? एंट्री 130 और स्टॉप 120 का प्लान।",
+                "heard": "करें? अन्ट्री एकसो तीस और स्टोप एकसो बीस कप रन.",
+                "passed": true
+              },
+              {
+                "start": 4.57,
+                "end": 6.7,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.167,
+                "recall": 0.667,
+                "gate_recall": 0.667,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.667,
+                "shared": [
+                  "पोल",
+                  "पॉइंट"
+                ],
+                "script": "पोल 30 पॉइंट।",
+                "heard": "एकसो बीस कप रन. पोल 30 point",
+                "passed": true
+              },
+              {
+                "start": 6.7,
+                "end": 8.84,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.083,
+                "recall": 0.4,
+                "gate_recall": 0.667,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.667,
+                "shared": [
+                  "पॉइंट",
+                  "फ्लैग",
+                  "रुकता"
+                ],
+                "script": "30 पॉइंट। फ्लैग 122 पर रुकता है।",
+                "heard": "30 point प्लाग एक सवा बाईस पर रुकता",
+                "passed": true
+              },
+              {
+                "start": 8.84,
+                "end": 12.04,
+                "beat": "context",
+                "kind": "chart-context",
+                "jaccard": 0.1,
+                "recall": 0.571,
+                "gate_recall": 0.5,
+                "missing_numbers": [],
+                "asr_sanity": true,
+                "beat_recall": 0.429,
+                "shared": [
+                  "गिरावट",
+                  "बाद",
+                  "सपोर्ट",
+                  "वैलिड",
+                  "साइडवेज",
+                  "कमजोर"
+                ],
+                "script": "गिरावट के बाद सपोर्ट 122 पर वैलिड। साइडवेज में कमजोर।",
+                "heard": "एक सवा बाईस पर रुकता है गिराववध के बाद सपोट एकसो बाईस पर वलिट. Side",
+                "passed": true
+              },
+              {
+                "start": 12.04,
+                "end": 14.13,
+                "beat": "entry",
+                "kind": "chart-entry",
+                "jaccard": 0.0,
+                "recall": 1.0,
+                "gate_recall": 0.667,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.667,
+                "shared": [
+                  "एंट्री"
+                ],
+                "script": "एंट्री",
+                "heard": "बाईस पर वलिट. Side Gerade 했어요. Entry",
+                "passed": true
+              },
+              {
+                "start": 14.13,
+                "end": 16.22,
+                "beat": "entry",
+                "kind": "chart-entry",
+                "jaccard": 0.111,
+                "recall": 0.667,
+                "gate_recall": 0.667,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.667,
+                "shared": [
+                  "एंट्री",
+                  "अगली",
+                  "कैंडल",
+                  "हाई",
+                  "क्रॉस"
+                ],
+                "script": "एंट्री 130, अगली कैंडल हाई क्रॉस पर।",
+                "heard": "Entry 130 अग्ली कन्डल रही",
+                "passed": true
+              },
+              {
+                "start": 16.22,
+                "end": 19.14,
+                "beat": "sl",
+                "kind": "chart-sl",
+                "jaccard": 0.0,
+                "recall": 0.5,
+                "gate_recall": 0.875,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.875,
+                "shared": [
+                  "स्टॉप"
+                ],
+                "script": "स्टॉप 120",
+                "heard": "अग्ली कन्डल रही क्रोस्पर श्वाप 120 लोगे",
+                "passed": true
+              },
+              {
+                "start": 19.14,
+                "end": 22.07,
+                "beat": "sl",
+                "kind": "chart-sl",
+                "jaccard": 0.154,
+                "recall": 1.0,
+                "gate_recall": 0.875,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.875,
+                "shared": [
+                  "लो",
+                  "नीचे",
+                  "लो",
+                  "टूटा",
+                  "प्लान",
+                  "गलती"
+                ],
+                "script": "120 लो के नीचे। लो टूटा तो प्लान गलत।",
+                "heard": "120 लोगे निचे. लो तूटा तो प्लान गलत.",
+                "passed": true
+              },
+              {
+                "start": 22.07,
+                "end": 25.38,
+                "beat": "target",
+                "kind": "chart-target",
+                "jaccard": 0.083,
+                "recall": 0.8,
+                "gate_recall": 0.786,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.786,
+                "shared": [
+                  "टारगेट",
+                  "पोल",
+                  "हाइट"
+                ],
+                "script": "टारगेट 160, पोल की हाइट। रिस्क",
+                "heard": "तो प्लान गलत. तागेट एकसो साथ पोल की हाईट रिस्क",
+                "passed": true
+              },
+              {
+                "start": 25.38,
+                "end": 28.68,
+                "beat": "target",
+                "kind": "chart-target",
+                "jaccard": 0.211,
+                "recall": 0.833,
+                "gate_recall": 0.786,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.786,
+                "shared": [
+                  "पोल",
+                  "हाइट",
+                  "रिस्क",
+                  "रिवॉर्ड",
+                  "यानी",
+                  "रिस्क"
+                ],
+                "script": "पोल की हाइट। रिस्क 10, रिवॉर्ड 30, यानी रिस्क-रिवॉर्ड 1 बटा 3।",
+                "heard": "पोल की हाईट रिस्क दस, रिवोड तीस, यानी रिस्क रिवोड एक बतातीन.",
+                "passed": true
+              },
+              {
+                "start": 28.68,
+                "end": 31.27,
+                "beat": "invalidation",
+                "kind": "chart-invalidation",
+                "jaccard": 0.111,
+                "recall": 0.667,
+                "gate_recall": 0.625,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.625,
+                "shared": [
+                  "रिस्क",
+                  "गलती",
+                  "फ्लैग",
+                  "अंदर"
+                ],
+                "script": "गलती फ्लैग के अंदर",
+                "heard": "रिस्क रिवोड एक बतातीन. गलती प्लाक के अंदर",
+                "passed": true
+              },
+              {
+                "start": 31.27,
+                "end": 33.87,
+                "beat": "invalidation",
+                "kind": "chart-invalidation",
+                "jaccard": 0.143,
+                "recall": 0.571,
+                "gate_recall": 0.625,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.625,
+                "shared": [
+                  "गलती",
+                  "फ्लैग",
+                  "अंदर",
+                  "एंट्री",
+                  "लो",
+                  "टूटे"
+                ],
+                "script": "फ्लैग के अंदर एंट्री। लो 120 टूटे तो स्किप।",
+                "heard": "गलती प्लाक के अंदर ठ्री लो 120 तो श्किप.",
+                "passed": true
+              },
+              {
+                "start": 33.87,
+                "end": 37.0,
+                "beat": "cta",
+                "kind": "chart-cta",
+                "jaccard": 0.188,
+                "recall": 0.375,
+                "gate_recall": 0.571,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.571,
+                "shared": [
+                  "बुल",
+                  "फ्लैग",
+                  "पोल",
+                  "बाद",
+                  "एंट्री",
+                  "ली"
+                ],
+                "script": "बुल फ्लैग के पोल के बाद एंट्री ली? कमेंट करो।",
+                "heard": "तो श्किप. बूल फ्लाक के पोल के बाद अन्ट्रिली कोमन्ट करो.",
+                "passed": true
+              },
+              {
+                "start": 37.0,
+                "end": 40.14,
+                "beat": "cta",
+                "kind": "chart-cta",
+                "jaccard": 0.0,
+                "recall": 0.3,
+                "gate_recall": 0.571,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.571,
+                "shared": [
+                  "कमेंट",
+                  "करो",
+                  "सिर्फ",
+                  "सीखने",
+                  "लिए",
+                  "फाइनेंशिएसएल"
+                ],
+                "script": "एंट्री ली? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.",
+                "heard": "अन्ट्रिली कोमन्ट करो. स्र्फ सीकनके कि लिह तराईँ नाज़्ार बाए़स नहीं.",
+                "passed": true
+              }
+            ],
+            "beats": [
+              {
+                "beat": "hook",
+                "recall": 0.9,
+                "script": "बुल फ्लैग पर खरीद कब करें? एंट्री 130 और स्टॉप 120 का प्लान।",
+                "heard": "बूल फ्लाग पर खरीद कब करें? अन्ट्री एकसो तीस और स्टोप एकसो बीस कप रन."
+              },
+              {
+                "beat": "pehchan",
+                "recall": 0.667,
+                "script": "पोल 30 पॉइंट। फ्लैग 122 पर रुकता है।",
+                "heard": "एकसो बीस कप रन. पोल 30 point प्लाग एक सवा बाईस पर रुकता"
+              },
+              {
+                "beat": "context",
+                "recall": 0.429,
+                "script": "गिरावट के बाद सपोर्ट 122 पर वैलिड। साइडवेज में कमजोर।",
+                "heard": "एक सवा बाईस पर रुकता है गिराववध के बाद सपोट एकसो बाईस पर वलिट. Side"
+              },
+              {
+                "beat": "entry",
+                "recall": 0.667,
+                "script": "एंट्री 130, अगली कैंडल हाई क्रॉस पर।",
+                "heard": "बाईस पर वलिट. Side Gerade 했어요. Entry 130 अग्ली कन्डल रही"
+              },
+              {
+                "beat": "sl",
+                "recall": 0.875,
+                "script": "स्टॉप 120 लो के नीचे। लो टूटा तो प्लान गलत।",
+                "heard": "अग्ली कन्डल रही क्रोस्पर श्वाप 120 लोगे निचे. लो तूटा तो प्लान गलत."
+              },
+              {
+                "beat": "target",
+                "recall": 0.786,
+                "script": "टारगेट 160, पोल की हाइट। रिस्क 10, रिवॉर्ड 30, यानी रिस्क-रिवॉर्ड 1 बटा 3।",
+                "heard": "तो प्लान गलत. तागेट एकसो साथ पोल की हाईट रिस्क दस, रिवोड तीस, यानी रिस्क रिवोड एक बतातीन."
+              },
+              {
+                "beat": "invalidation",
+                "recall": 0.625,
+                "script": "गलती फ्लैग के अंदर एंट्री। लो 120 टूटे तो स्किप।",
+                "heard": "रिस्क रिवोड एक बतातीन. गलती प्लाक के अंदर ठ्री लो 120 तो श्किप."
+              },
+              {
+                "beat": "cta",
+                "recall": 0.571,
+                "script": "बुल फ्लैग के पोल के बाद एंट्री ली? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.",
+                "heard": "तो श्किप. बूल फ्लाक के पोल के बाद अन्ट्रिली कोमन्ट करो. स्र्फ सीकनके कि लिह तराईँ नाज़्ार बाए़स नहीं."
+              }
+            ]
+          },
+          "scenes": [
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 0.0,
+              "end": 2.28
+            },
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 2.28,
+              "end": 4.57
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 4.57,
+              "end": 6.7
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 6.7,
+              "end": 8.84
+            },
+            {
+              "beat": "context",
+              "kind": "chart-context",
+              "start": 8.84,
+              "end": 12.04
+            },
+            {
+              "beat": "entry",
+              "kind": "chart-entry",
+              "start": 12.04,
+              "end": 14.13
+            },
+            {
+              "beat": "entry",
+              "kind": "chart-entry",
+              "start": 14.13,
+              "end": 16.22
+            },
+            {
+              "beat": "sl",
+              "kind": "chart-sl",
+              "start": 16.22,
+              "end": 19.14
+            },
+            {
+              "beat": "sl",
+              "kind": "chart-sl",
+              "start": 19.14,
+              "end": 22.07
+            },
+            {
+              "beat": "target",
+              "kind": "chart-target",
+              "start": 22.07,
+              "end": 25.38
+            },
+            {
+              "beat": "target",
+              "kind": "chart-target",
+              "start": 25.38,
+              "end": 28.68
+            },
+            {
+              "beat": "invalidation",
+              "kind": "chart-invalidation",
+              "start": 28.68,
+              "end": 31.27
+            },
+            {
+              "beat": "invalidation",
+              "kind": "chart-invalidation",
+              "start": 31.27,
+              "end": 33.87
+            },
+            {
+              "beat": "cta",
+              "kind": "chart-cta",
+              "start": 33.87,
+              "end": 37.0
+            },
+            {
+              "beat": "cta",
+              "kind": "chart-cta",
+              "start": 37.0,
+              "end": 40.14
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ap-pat_gap_up-f504c4ab324b",
+      "state": "ready",
+      "topic_key": "pat_gap_up",
+      "owner_approved": true,
+      "title": "गैप अप ओपन",
+      "description": "गैप अप ओपन पर खरीद कब करें? एंट्री 114 और स्टॉप 104 का प्लान।\n\nगैप अप ओपन — आसान हिंदी में: पहचान, मतलब और traders इसे आमतौर पर कैसे इस्तेमाल करते हैं।\n\n💬 यह बात पहले से पता थी? Comment में हाँ या नहीं लिखो।\n\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nहम SEBI-रजिस्टर्ड सलाहकार नहीं हैं। किसी भी निवेश से पहले रजिस्टर्ड सलाहकार से बात करें।\n\nस्रोत और नोट्स\n- पूरा ट्रेड प्लान\n- स्रोत: illustrative teaching chart drawn in this video (example candles, not live market data, not a stock tip). Every plan number below is computed by the channel's trade_plan rules from these candles.\n- Example chart candles: #1 O 96 H 100 L 92 C 98; #2 O 108 H 114 L 106 C 112; #3 O 112 H 120 L 110 C 118; #4 O 118 H 132 L 116 C 130.\n- Plan side: long (buy). Entry 114, stop-loss 104, target 134, support 100.\n- Risk = |entry - stop| = 10; reward = |target - entry| = 20; risk:reward = 1:2 (spoken 1 बटा 2).\n- Other chart levels: prior 100, gap_open 108.\n\nPaise Ki Pathshala — ट्रेडिंग की पाठशाला — चार्ट, पैटर्न, रिस्क और असली डेटा\n\nरोज़ 3 ट्रेडिंग Shorts — कैंडलस्टिक, इंडिकेटर, ऑर्डर, F&O, रिस्क और असली डेटा।\n\n#StockMarketHindi #TradingHindi #PaiseKiPathshala #ShareMarket",
+      "tags": [
+        "hindi",
+        "stock market hindi",
+        "trading hindi",
+        "paise ki pathshala"
+      ],
+      "sha256": "f504c4ab324b210216c3b8163a2bb9ed6c16ae70b7ae7da7f4695134c228db75",
+      "asset_name": "ap-pat_gap_up-f504c4ab324b.mp4",
+      "created_at": "2026-10-28T06:23:35Z",
+      "used_at": null,
+      "used_slot": null,
+      "used_date_ist": null,
+      "video_id": null,
+      "voice_engine": "gemini",
+      "duration_s": 41.97,
+      "review_overall": 98.0,
+      "reason": "",
+      "files": {
+        "topic": {
+          "key": "pat_gap_up"
+        },
+        "script": "TITLE:\nगैप अप ओपन\n\nHOOK (0-3 sec):\nगैप अप ओपन पर खरीद कब करें? एंट्री 114 और स्टॉप 104 का प्लान।\n\nBODY:\n[SEGMENT PEHCHAN]\nपुराना हाई 100 है। अगला ओपन 108 उस हाई के ऊपर खुलता है।\n\n[SEGMENT CONTEXT]\nगैप के बाद ट्रेंड ऊपर, सपोर्ट 100। साइडवेज में गैप भरता है।\n\n[SEGMENT ENTRY]\nएंट्री 114, अगली कैंडल हाई क्रॉस पर।\n\n[SEGMENT SL]\nस्टॉप 104 लो के नीचे। लो टूटा तो प्लान गलत।\n\n[SEGMENT TARGET]\nटारगेट 134, 1:2। रिस्क 10, रिवॉर्ड 20, यानी रिस्क-रिवॉर्ड 1 बटा 2।\n\n[SEGMENT INVALIDATION]\nगलती गैप भरते ही एंट्री। लो 104 टूटे तो स्किप।\n\n[SEGMENT CTA]\nगैप अप के बाद गैप फिल तक रुके? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.\n\nCTA:\nयह बात पहले से पता थी? Comment में हाँ या नहीं लिखो।\n\nDISCLAIMER LINE:\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nFACT LEDGER:\n- पूरा ट्रेड प्लान\n- SOURCE: illustrative teaching chart drawn in this video (example candles, not live market data, not a stock tip). Every plan number below is computed by the channel's trade_plan rules from these candles.\n- Example chart candles: #1 O 96 H 100 L 92 C 98; #2 O 108 H 114 L 106 C 112; #3 O 112 H 120 L 110 C 118; #4 O 118 H 132 L 116 C 130.\n- Plan side: long (buy). Entry 114, stop-loss 104, target 134, support 100.\n- Risk = |entry - stop| = 10; reward = |target - entry| = 20; risk:reward = 1:2 (spoken 1 बटा 2).\n- Other chart levels: prior 100, gap_open 108.\n",
+        "report": "VERDICT: [READY TO PUBLISH]\n\n✅ Auto-checks pass:\nHook | Facts (sab figures illustrative chart se sourced, koi UNVERIFIED nahi) | Compliance (buy/sell/hold tip nahi — generic gap-up teaching plan, disclaimer + \"financial advice nahi\" maujood) | Coverage | Visuals (8/8 chart shots) | Length\n\n♻️ Reused-content risk: LOW\n- Stock footage 0%, 8/8 shots original charts, premium AI voice (Gemini) + original script + overlays always on — do mitigating factors (script_original, original_overlays_always_on) strong hain. Lever: kuch nahi chahiye; premium voice pehle se hai.\n\n⚠️ Tumhe dekhna hai (judgment calls):\n- Thumbnail: \"gap up\" candle diagram + \"Entry 114 / SL 104\" numbers ko bada aur bold dikhao — teaching-video feel aana chahiye, tip-video jaisa nahi.\n- ~0-3s hook mein hi \"kharid kab karein\" — tone educational rakha hai par yeh line sabse zyada tip-jaisi lag sakti hai; dekh lo ki disclaimer screen pe visible ho.\n\n🔴 Risks / assumptions:\n- Poora trade plan ek illustrative example chart par based hai (live market data nahi) — yeh ledger mein clearly noted hai, publish hone se pehle description mein bhi rakhna.\n- \"1:2 risk-reward\" aur entry/SL/target channel ke trade_plan rules se compute hue — assumption hai, real stock tip nahi. Koi tax/regulatory figure use nahi hua, isliye us front pe risk nahi.\n- Channel SEBI-registered nahi hai — ensure karta hoon ki video/description mein \"not investment advice\" wahi disclaimer rahe.\n\nFAILS this round: none\n",
+        "verify_meta": {
+          "ai_verdict_valid": true,
+          "verdict": "READY",
+          "public_ready": true,
+          "soft_judgment_only": false,
+          "reasons": [],
+          "spoken_words": 123
+        },
+        "self_review": {
+          "parts": {
+            "hook": 100,
+            "visual": 90,
+            "accuracy": 100,
+            "trend": null,
+            "craft": 100,
+            "sync": 100
+          },
+          "overall": 98.0,
+          "passed": true,
+          "public_ok": true,
+          "review_flag": false,
+          "verdict": "PASS",
+          "summary": "overall 98.0 (hook 100, visual 90, accuracy 100, trend skip, craft 100, sync 100)",
+          "notes": [],
+          "bar": {
+            "part": 60,
+            "overall": 75
+          },
+          "chart": {
+            "mode": "schematic",
+            "source": null,
+            "as_of": null
+          },
+          "narration_source": "approved",
+          "sync": {
+            "ok": true,
+            "reason": "",
+            "scenes": [
+              {
+                "start": 0.0,
+                "end": 2.65,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.167,
+                "recall": 0.571,
+                "gate_recall": 0.909,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.909,
+                "shared": [
+                  "गैप",
+                  "अप",
+                  "ओपन",
+                  "खरीद",
+                  "कब",
+                  "करें"
+                ],
+                "script": "गैप अप ओपन पर खरीद कब करें? एंट्री",
+                "heard": "गब अप उपन पर खरीद कब करे अंट्री",
+                "passed": true
+              },
+              {
+                "start": 2.65,
+                "end": 5.29,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.273,
+                "recall": 0.5,
+                "gate_recall": 0.909,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.909,
+                "shared": [
+                  "करें"
+                ],
+                "script": "करें? एंट्री 114 और स्टॉप 104 का प्लान।",
+                "heard": "करे अंट्री एक सो चोदा और स्थोप एक सो चार का प्लन.",
+                "passed": true
+              },
+              {
+                "start": 5.29,
+                "end": 8.05,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.2,
+                "recall": 0.75,
+                "gate_recall": 0.9,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.9,
+                "shared": [
+                  "पुराना",
+                  "हाई",
+                  "अगला"
+                ],
+                "script": "पुराना हाई 100 है। अगला",
+                "heard": "एक सो चार का प्लन. पुराना है सो है अगला अपन",
+                "passed": true
+              },
+              {
+                "start": 8.05,
+                "end": 10.81,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.267,
+                "recall": 0.571,
+                "gate_recall": 0.9,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.9,
+                "shared": [
+                  "अगला",
+                  "ओपन",
+                  "उस",
+                  "हाई",
+                  "ऊपर",
+                  "खुलता"
+                ],
+                "script": "है। अगला ओपन 108 उस हाई के ऊपर खुलता है।",
+                "heard": "है अगला अपन एक सो बात उस रही के उपर खुलता है.",
+                "passed": true
+              },
+              {
+                "start": 10.81,
+                "end": 13.61,
+                "beat": "context",
+                "kind": "chart-context",
+                "jaccard": 0.273,
+                "recall": 0.8,
+                "gate_recall": 0.889,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.889,
+                "shared": [
+                  "गैप",
+                  "बाद",
+                  "ट्रेंड",
+                  "ऊपर",
+                  "सपोर्ट"
+                ],
+                "script": "गैप के बाद ट्रेंड ऊपर, सपोर्ट",
+                "heard": "के उपर खुलता है. गआप के बाद ट्रेंड उपर सपोट",
+                "passed": true
+              },
+              {
+                "start": 13.61,
+                "end": 16.41,
+                "beat": "context",
+                "kind": "chart-context",
+                "jaccard": 0.0,
+                "recall": 0.667,
+                "gate_recall": 0.889,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.889,
+                "shared": [
+                  "गैप",
+                  "ऊपर",
+                  "सपोर्ट",
+                  "साइडवेज",
+                  "गैप",
+                  "भरता"
+                ],
+                "script": "ऊपर, सपोर्ट 100। साइडवेज में गैप भरता है।",
+                "heard": "उपर सपोट सो साईट बेज में गआप बरता है",
+                "passed": true
+              },
+              {
+                "start": 16.41,
+                "end": 19.71,
+                "beat": "entry",
+                "kind": "chart-entry",
+                "jaccard": 0.154,
+                "recall": 0.667,
+                "gate_recall": 0.833,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.833,
+                "shared": [
+                  "एंट्री",
+                  "अगली",
+                  "कैंडल",
+                  "हाई",
+                  "क्रॉस"
+                ],
+                "script": "एंट्री 114, अगली कैंडल हाई क्रॉस पर।",
+                "heard": "में गआप बरता है अंट्री एक सो चोदा अगली कन्डल है क्रोस्पर",
+                "passed": true
+              },
+              {
+                "start": 19.71,
+                "end": 22.81,
+                "beat": "sl",
+                "kind": "chart-sl",
+                "jaccard": 0.143,
+                "recall": 1.0,
+                "gate_recall": 0.75,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.75,
+                "shared": [
+                  "स्टॉप"
+                ],
+                "script": "स्टॉप 104",
+                "heard": "अगली कन्डल है क्रोस्पर Stop 104, loke nije.",
+                "passed": true
+              },
+              {
+                "start": 22.81,
+                "end": 25.92,
+                "beat": "sl",
+                "kind": "chart-sl",
+                "jaccard": 0.0,
+                "recall": 0.571,
+                "gate_recall": 0.75,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.75,
+                "shared": [
+                  "लो",
+                  "नीचे",
+                  "लो",
+                  "टूटा",
+                  "प्लान",
+                  "गलती"
+                ],
+                "script": "104 लो के नीचे। लो टूटा तो प्लान गलत।",
+                "heard": "loke nije. लो तूटा तो प्लन खलत. तागेट एक सो चाँटीस",
+                "passed": true
+              },
+              {
+                "start": 25.92,
+                "end": 28.52,
+                "beat": "target",
+                "kind": "chart-target",
+                "jaccard": 0.2,
+                "recall": 0.833,
+                "gate_recall": 0.714,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.714,
+                "shared": [
+                  "टारगेट",
+                  "रिस्क"
+                ],
+                "script": "टारगेट 134, 1:2। रिस्क 10,",
+                "heard": "तागेट एक सो चाँटीस एक अनुपात दो रिस्क दस,",
+                "passed": true
+              },
+              {
+                "start": 28.52,
+                "end": 31.12,
+                "beat": "target",
+                "kind": "chart-target",
+                "jaccard": 0.133,
+                "recall": 0.8,
+                "gate_recall": 0.714,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.714,
+                "shared": [
+                  "रिस्क",
+                  "रिवॉर्ड",
+                  "यानी",
+                  "रिस्क",
+                  "रिवॉर्ड"
+                ],
+                "script": "रिस्क 10, रिवॉर्ड 20, यानी रिस्क-रिवॉर्ड 1 बटा 2।",
+                "heard": "रिस्क दस, रिवाड भीस, यानी रिस्क रिवाड एक बता",
+                "passed": true
+              },
+              {
+                "start": 31.12,
+                "end": 33.27,
+                "beat": "invalidation",
+                "kind": "chart-invalidation",
+                "jaccard": 0.0,
+                "recall": 0.5,
+                "gate_recall": 0.667,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.667,
+                "shared": [
+                  "रिस्क",
+                  "गलती",
+                  "गैप",
+                  "भरते",
+                  "ही"
+                ],
+                "script": "गलती गैप भरते ही",
+                "heard": "रिस्क रिवाड एक बता दो गलती गआब रहते ही",
+                "passed": true
+              },
+              {
+                "start": 33.27,
+                "end": 35.42,
+                "beat": "invalidation",
+                "kind": "chart-invalidation",
+                "jaccard": 0.231,
+                "recall": 0.625,
+                "gate_recall": 0.667,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.667,
+                "shared": [
+                  "गलती",
+                  "गैप",
+                  "भरते",
+                  "ही",
+                  "एंट्री",
+                  "लो"
+                ],
+                "script": "गैप भरते ही एंट्री। लो 104 टूटे तो स्किप।",
+                "heard": "गलती गआब रहते ही अंट्री लो एक सो चार तूटे तो",
+                "passed": true
+              },
+              {
+                "start": 35.42,
+                "end": 38.69,
+                "beat": "cta",
+                "kind": "chart-cta",
+                "jaccard": 0.25,
+                "recall": 0.75,
+                "gate_recall": 0.8,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.8,
+                "shared": [
+                  "गैप",
+                  "अप",
+                  "बाद",
+                  "गैप",
+                  "फिल",
+                  "तक"
+                ],
+                "script": "गैप अप के बाद गैप फिल तक रुके? कमेंट",
+                "heard": "एक सो चार तूटे तो श्किप गआप अप के बाद गआप फिल तक रुके कोमेंट",
+                "passed": true
+              },
+              {
+                "start": 38.69,
+                "end": 41.97,
+                "beat": "cta",
+                "kind": "chart-cta",
+                "jaccard": 0.105,
+                "recall": 0.727,
+                "gate_recall": 0.8,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.8,
+                "shared": [
+                  "फिल",
+                  "तक",
+                  "रुके",
+                  "कमेंट",
+                  "करो",
+                  "सिर्फ"
+                ],
+                "script": "फिल तक रुके? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.",
+                "heard": "फिल तक रुके कोमेंट करो सर सीखने किलिए, फनान्चल अदवाइस नहीं",
+                "passed": true
+              }
+            ],
+            "beats": [
+              {
+                "beat": "hook",
+                "recall": 0.909,
+                "script": "गैप अप ओपन पर खरीद कब करें? एंट्री 114 और स्टॉप 104 का प्लान।",
+                "heard": "गब अप उपन पर खरीद कब करे अंट्री एक सो चोदा और स्थोप एक सो चार का प्लन."
+              },
+              {
+                "beat": "pehchan",
+                "recall": 0.9,
+                "script": "पुराना हाई 100 है। अगला ओपन 108 उस हाई के ऊपर खुलता है।",
+                "heard": "एक सो चार का प्लन. पुराना है सो है अगला अपन एक सो बात उस रही के उपर खुलता है."
+              },
+              {
+                "beat": "context",
+                "recall": 0.889,
+                "script": "गैप के बाद ट्रेंड ऊपर, सपोर्ट 100। साइडवेज में गैप भरता है।",
+                "heard": "के उपर खुलता है. गआप के बाद ट्रेंड उपर सपोट सो साईट बेज में गआप बरता है"
+              },
+              {
+                "beat": "entry",
+                "recall": 0.833,
+                "script": "एंट्री 114, अगली कैंडल हाई क्रॉस पर।",
+                "heard": "में गआप बरता है अंट्री एक सो चोदा अगली कन्डल है क्रोस्पर"
+              },
+              {
+                "beat": "sl",
+                "recall": 0.75,
+                "script": "स्टॉप 104 लो के नीचे। लो टूटा तो प्लान गलत।",
+                "heard": "अगली कन्डल है क्रोस्पर Stop 104, loke nije. लो तूटा तो प्लन खलत. तागेट एक सो चाँटीस"
+              },
+              {
+                "beat": "target",
+                "recall": 0.714,
+                "script": "टारगेट 134, 1:2। रिस्क 10, रिवॉर्ड 20, यानी रिस्क-रिवॉर्ड 1 बटा 2।",
+                "heard": "तागेट एक सो चाँटीस एक अनुपात दो रिस्क दस, रिवाड भीस, यानी रिस्क रिवाड एक बता"
+              },
+              {
+                "beat": "invalidation",
+                "recall": 0.667,
+                "script": "गलती गैप भरते ही एंट्री। लो 104 टूटे तो स्किप।",
+                "heard": "रिस्क रिवाड एक बता दो गलती गआब रहते ही अंट्री लो एक सो चार तूटे तो"
+              },
+              {
+                "beat": "cta",
+                "recall": 0.8,
+                "script": "गैप अप के बाद गैप फिल तक रुके? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.",
+                "heard": "एक सो चार तूटे तो श्किप गआप अप के बाद गआप फिल तक रुके कोमेंट करो सर सीखने किलिए, फनान्चल अदवाइस नहीं"
+              }
+            ]
+          },
+          "scenes": [
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 0.0,
+              "end": 2.65
+            },
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 2.65,
+              "end": 5.29
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 5.29,
+              "end": 8.05
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 8.05,
+              "end": 10.81
+            },
+            {
+              "beat": "context",
+              "kind": "chart-context",
+              "start": 10.81,
+              "end": 13.61
+            },
+            {
+              "beat": "context",
+              "kind": "chart-context",
+              "start": 13.61,
+              "end": 16.41
+            },
+            {
+              "beat": "entry",
+              "kind": "chart-entry",
+              "start": 16.41,
+              "end": 19.71
+            },
+            {
+              "beat": "sl",
+              "kind": "chart-sl",
+              "start": 19.71,
+              "end": 22.81
+            },
+            {
+              "beat": "sl",
+              "kind": "chart-sl",
+              "start": 22.81,
+              "end": 25.92
+            },
+            {
+              "beat": "target",
+              "kind": "chart-target",
+              "start": 25.92,
+              "end": 28.52
+            },
+            {
+              "beat": "target",
+              "kind": "chart-target",
+              "start": 28.52,
+              "end": 31.12
+            },
+            {
+              "beat": "invalidation",
+              "kind": "chart-invalidation",
+              "start": 31.12,
+              "end": 33.27
+            },
+            {
+              "beat": "invalidation",
+              "kind": "chart-invalidation",
+              "start": 33.27,
+              "end": 35.42
+            },
+            {
+              "beat": "cta",
+              "kind": "chart-cta",
+              "start": 35.42,
+              "end": 38.69
+            },
+            {
+              "beat": "cta",
+              "kind": "chart-cta",
+              "start": 38.69,
+              "end": 41.97
             }
           ]
         }
