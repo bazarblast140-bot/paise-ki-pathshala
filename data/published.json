@@ -509,5 +509,20 @@
   "ig_media_id": "18075252761485216",
   "content_hash": "3a0ba8d1b004387f",
   "title_norm": "wipro share analysis today | support bounce trade plan 26 oct 2026"
+ },
+ {
+  "date_ist": "2026-10-29",
+  "slot": "16:03",
+  "video_id": "yq3cxirypTo",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "18029111726697368",
+  "content_hash": "716ed9d6ac5dc7b8",
+  "title_norm": "nifty analysis today | nifty close report #4 29 oct 2026"
  }
 ]
