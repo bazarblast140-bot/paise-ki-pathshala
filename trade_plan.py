@@ -689,6 +689,146 @@ def _ema_cross():
     )
 
 
+# Six owner-approved plan topics (29-Oct-2026).
+def _bull_harami():
+    ohlc = (
+        (130, 132, 120, 122),
+        (122, 124, 112, 114),
+        (114, 116, 104, 106),
+        (106, 107, 90, 92),
+        (95, 101, 94, 99),
+        (99, 108, 98, 106),
+        (106, 120, 104, 118),
+        (118, 132, 116, 130),
+    )
+    mother, baby = ohlc[3], ohlc[4]
+    if not (mother[3] < mother[0] and baby[3] > baby[0]):
+        raise ValueError("harami colours")
+    if not (min(baby[0], baby[3]) > mother[3] and max(baby[0], baby[3]) < mother[0]):
+        raise ValueError("harami body")
+    entry = baby[1]
+    sl = _buffered_stop("long", mother[2], mother[2])
+    return Plan(
+        "pat_bull_harami", "long", ohlc, entry, sl, _target_long(entry, sl), mother[2], "SUPPORT", 4,
+        {"mother_open": mother[0], "mother_close": mother[3], "baby_high": baby[1], "low": mother[2]},
+    )
+
+
+def _tweezer_bottom():
+    ohlc = (
+        (124, 126, 116, 118),
+        (118, 120, 110, 112),
+        (112, 114, 104, 106),
+        (106, 107, 96, 98),
+        (98, 104, 96, 103),
+        (103, 112, 102, 110),
+        (110, 122, 108, 120),
+        (120, 130, 118, 128),
+    )
+    first, second = ohlc[3], ohlc[4]
+    if first[2] != second[2]:
+        raise ValueError("tweezer lows")
+    entry = second[1]
+    sl = _buffered_stop("long", second[2], second[2])
+    return Plan(
+        "pat_tweezer_bottom", "long", ohlc, entry, sl, _target_long(entry, sl), second[2], "SUPPORT", 4,
+        {"low": second[2], "high": second[1]},
+    )
+
+
+def _marubozu():
+    ohlc = (
+        (100, 104, 98, 102),
+        (102, 105, 99, 101),
+        (101, 104, 98, 103),
+        (103, 106, 100, 102),
+        (102, 116, 102, 116),
+        (116, 122, 114, 120),
+        (120, 130, 118, 128),
+        (128, 140, 126, 138),
+    )
+    o, h, l, c = ohlc[4]
+    if not (o == l and c == h and c > o):
+        raise ValueError("marubozu shape")
+    entry = h
+    sl = _buffered_stop("long", (o + c) / 2, l)
+    return Plan(
+        "pat_marubozu", "long", ohlc, entry, sl, _target_long(entry, sl), l, "SUPPORT", 4,
+        {"open": o, "close": c, "mid": (o + c) / 2},
+    )
+
+
+def _hanging_man():
+    ohlc = (
+        (100, 106, 98, 104),
+        (104, 112, 102, 110),
+        (110, 118, 108, 116),
+        (116, 124, 114, 122),
+        (124, 126, 112, 123),
+        (123, 124, 116, 118),
+        (118, 119, 104, 106),
+        (106, 108, 94, 96),
+    )
+    focus = 4
+    o, h, l, c = ohlc[focus]
+    body = abs(c - o)
+    lower = min(o, c) - l
+    if body <= 0 or lower < body * 2 or h - max(o, c) > body * 2:
+        raise ValueError("hanging man shape")
+    entry = l
+    sl = _buffered_stop("short", h, h)
+    return Plan(
+        "pat_hanging_man", "short", ohlc, entry, sl, _target_short(entry, sl), h, "RESIST", focus,
+        {"high": h, "low": l, "mult": 2},
+    )
+
+
+def _dark_cloud():
+    ohlc = (
+        (100, 106, 98, 104),
+        (104, 112, 102, 110),
+        (110, 116, 108, 114),
+        (114, 124, 113, 122),
+        (125, 126, 115, 116),
+        (116, 117, 110, 112),
+        (112, 113, 100, 102),
+        (102, 104, 92, 94),
+    )
+    green, red = ohlc[3], ohlc[4]
+    mid = (green[0] + green[3]) / 2
+    if not (red[0] > green[3] and red[3] < mid and red[3] > green[0]):
+        raise ValueError("dark cloud shape")
+    entry = red[2]
+    sl = _buffered_stop("short", red[1], red[1])
+    return Plan(
+        "pat_dark_cloud", "short", ohlc, entry, sl, _target_short(entry, sl), red[1], "RESIST", 4,
+        {"mid": mid, "red_open": red[0], "red_close": red[3], "high": red[1]},
+    )
+
+
+def _white_soldiers():
+    ohlc = (
+        (120, 122, 112, 114),
+        (114, 116, 106, 108),
+        (108, 110, 100, 102),
+        (102, 110, 101, 109),
+        (108, 117, 107, 116),
+        (115, 124, 114, 123),
+        (123, 130, 122, 128),
+        (128, 146, 126, 144),
+    )
+    soldiers = ohlc[3:6]
+    for prev, cur in zip(soldiers, soldiers[1:]):
+        if not (cur[3] > prev[3] and prev[0] <= cur[0] <= prev[3] + 1e-9):
+            raise ValueError("soldiers order")
+    entry = soldiers[-1][1]
+    sl = _buffered_stop("long", soldiers[1][2], soldiers[1][2])
+    return Plan(
+        "pat_white_soldiers", "long", ohlc, entry, sl, _target_long(entry, sl), soldiers[0][2], "SUPPORT", 5,
+        {"first_low": soldiers[0][2], "mid_low": soldiers[1][2]},
+    )
+
+
 BUILDERS = {
     "pat_hammer": _hammer,
     "pat_doji": _doji,
@@ -714,6 +854,12 @@ BUILDERS = {
     "pat_bear_flag": _bear_flag,
     "pat_inside_bar": _inside_bar,
     "pat_ema_cross": _ema_cross,
+    "pat_bull_harami": _bull_harami,
+    "pat_tweezer_bottom": _tweezer_bottom,
+    "pat_marubozu": _marubozu,
+    "pat_hanging_man": _hanging_man,
+    "pat_dark_cloud": _dark_cloud,
+    "pat_white_soldiers": _white_soldiers,
 }
 KEYS = tuple(BUILDERS)
 

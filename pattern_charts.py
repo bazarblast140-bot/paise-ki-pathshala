@@ -219,6 +219,13 @@ _PLAN_TOPIC_MARKS = {
     "pat_bear_flag": ("BEAR FLAG", "POLE + FLAG"),
     "pat_inside_bar": ("INSIDE BAR", "INSIDE MOTHER BAR"),
     "pat_ema_cross": ("EMA CROSS", "20 OVER 50"),
+    # Six more owner-approved plan topics (29-Oct-2026).
+    "pat_bull_harami": ("BULLISH HARAMI", "BABY INSIDE BODY"),
+    "pat_tweezer_bottom": ("TWEEZER BOTTOM", "TWO SAME LOWS"),
+    "pat_marubozu": ("MARUBOZU", "NO WICK BODY"),
+    "pat_hanging_man": ("HANGING MAN", "LONG LOWER WICK"),
+    "pat_dark_cloud": ("DARK CLOUD", "CLOSE BELOW MID"),
+    "pat_white_soldiers": ("3 WHITE SOLDIERS", "3 GREEN HIGHER"),
 }
 
 

@@ -17,6 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 OWNER_APPROVED_2026_10_22 = (
     "pat_bear_engulf", "pat_shooting_star", "pat_double_bottom", "pat_evening_star",
     "pat_bear_flag", "pat_inside_bar", "pat_ema_cross",
+    # Rajesh approved these six on 29-Oct-2026.
+    "pat_bull_harami", "pat_tweezer_bottom", "pat_marubozu", "pat_hanging_man",
+    "pat_dark_cloud", "pat_white_soldiers",
 )
 
 
