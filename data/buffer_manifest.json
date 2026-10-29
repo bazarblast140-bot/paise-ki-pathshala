@@ -1436,6 +1436,773 @@
         "captions": "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: T,Noto Sans Devanagari,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,8,60,190,0,1\nStyle: Cap,Noto Sans Devanagari,62,&H00FFFFFF,&H00FFFFFF,&H00101010,&HA0000000,-1,0,0,0,100,100,0,0,3,4,0,2,70,190,520,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n\n"
       },
       "claimed_at": "2026-10-24T14:51:46Z"
+    },
+    {
+      "id": "buf-pat_bull_harami-1dcea78fc63f",
+      "state": "ready",
+      "topic_key": "pat_bull_harami",
+      "title": "बुलिश हरामी",
+      "description": "बुलिश हरामी पर खरीद कब करें? एंट्री 101 और स्टॉप 88 का प्लान।\n\nबुलिश हरामी — आसान हिंदी में: पहचान, मतलब और traders इसे आमतौर पर कैसे इस्तेमाल करते हैं।\n\n💬 यह बात पहले से पता थी? Comment में हाँ या नहीं लिखो।\n\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nहम SEBI-रजिस्टर्ड सलाहकार नहीं हैं। किसी भी निवेश से पहले रजिस्टर्ड सलाहकार से बात करें।\n\nस्रोत और नोट्स\n- पूरा ट्रेड प्लान\n- स्रोत: illustrative teaching chart drawn in this video (example candles, not live market data, not a stock tip). Every plan number below is computed by the channel's trade_plan rules from these candles.\n- Example chart candles: #1 O 130 H 132 L 120 C 122; #2 O 122 H 124 L 112 C 114; #3 O 114 H 116 L 104 C 106; #4 O 106 H 107 L 90 C 92; #5 O 95 H 101 L 94 C 99; #6 O 99 H 108 L 98 C 106; #7 O 106 H 120 L 104 C 118; #8 O 118 H 132 L 116 C 130.\n- Plan side: long (buy). Entry 101, stop-loss 88, target 127, support 90.\n- Risk = |entry - stop| = 13; reward = |target - entry| = 26; risk:reward = 1:2 (spoken 1 बटा 2).\n- Other chart levels: mother_open 106, mother_close 92, baby_high 101, low 90.\n\nPaise Ki Pathshala — ट्रेडिंग की पाठशाला — चार्ट, पैटर्न, रिस्क और असली डेटा\n\nरोज़ 3 ट्रेडिंग Shorts — कैंडलस्टिक, इंडिकेटर, ऑर्डर, F&O, रिस्क और असली डेटा।\n\n#StockMarketHindi #TradingHindi #PaiseKiPathshala #ShareMarket",
+      "tags": [
+        "hindi",
+        "stock market hindi",
+        "trading hindi",
+        "paise ki pathshala"
+      ],
+      "sha256": "1dcea78fc63fd7602604cf817146c3e9379be469119f3879d84c100550f748cd",
+      "asset_name": "buf-pat_bull_harami-1dcea78fc63f.mp4",
+      "meta_name": "buf-pat_bull_harami-1dcea78fc63f.json",
+      "created_at": "2026-10-29T15:13:42Z",
+      "used_at": null,
+      "used_slot": null,
+      "used_date_ist": null,
+      "video_id": null,
+      "gates": {
+        "fallback_narration": {
+          "passed": true,
+          "at": "2026-10-29T15:13:42Z",
+          "detail": "llm outline"
+        },
+        "ai_review": {
+          "passed": true,
+          "at": "2026-10-29T15:13:42Z",
+          "detail": "READY"
+        },
+        "sync": {
+          "passed": true,
+          "at": "2026-10-29T15:13:42Z",
+          "detail": "whisper sync passed"
+        },
+        "craft": {
+          "passed": true,
+          "at": "2026-10-29T15:13:42Z",
+          "detail": "craft 100"
+        },
+        "number_match": {
+          "passed": true,
+          "at": "2026-10-29T15:13:42Z",
+          "detail": "numbers match"
+        },
+        "duplicate_text": {
+          "passed": true,
+          "at": "2026-10-29T15:13:42Z",
+          "detail": "no duplicate text"
+        },
+        "freshness": {
+          "passed": true,
+          "at": "2026-10-29T15:13:42Z",
+          "detail": "no live market as-of; 3-trading-day gate does not apply",
+          "mode": "evergreen"
+        }
+      },
+      "files": {
+        "topic": {
+          "key": "pat_bull_harami",
+          "cat": "PATTERN",
+          "topic": "बुलिश हरामी",
+          "thumb": [
+            "BULLISH",
+            "HARAMI"
+          ],
+          "sticker": "हरामी",
+          "beats": {
+            "hook": [
+              "प्लान",
+              "कमेंट"
+            ],
+            "pehchan": [
+              "पहचान",
+              "नियम"
+            ],
+            "context": [
+              "कहाँ वैलिड",
+              "कमजोर"
+            ],
+            "entry": [
+              "एंट्री",
+              "ट्रिगर"
+            ],
+            "sl": [
+              "स्टॉप",
+              "क्यों"
+            ],
+            "target": [
+              "टारगेट",
+              "रिस्क-रिवॉर्ड"
+            ],
+            "invalidation": [
+              "स्किप",
+              "गलती"
+            ],
+            "cta": [
+              "कमेंट",
+              "प्लान"
+            ]
+          },
+          "facts": [
+            "पूरा ट्रेड प्लान"
+          ],
+          "seo": "बुलिश हरामी",
+          "hook_line": "बुलिश हरामी पर खरीद कब करें?",
+          "_spoken_beats": {
+            "hook": "बुलिश हरामी पर खरीद कब करें? एंट्री 101 और स्टॉप 88 का प्लान।",
+            "pehchan": "बड़ी लाल कैंडल 106 से 92, अगली छोटी हरी बॉडी उसके अंदर रहे।",
+            "context": "गिरावट के बाद सपोर्ट 90 पर वैलिड। साइडवेज में कमजोर।",
+            "entry": "एंट्री 101, अगली कैंडल छोटी हरी कैंडल का हाई तोड़े तब।",
+            "sl": "स्टॉप 88, लाल कैंडल के लो 90 के जस्ट नीचे।",
+            "target": "टारगेट 127, 1:2। रिस्क 13, रिवॉर्ड 26, यानी रिस्क-रिवॉर्ड 1 बटा 2।",
+            "invalidation": "गलती जल्दी खरीद। लो 90 टूटे तो स्किप।",
+            "cta": "आपने बुलिश हरामी पर कभी ट्रेड लिया? कमेंट करो। Sirf seekhne ke liye, financial advice nahi."
+          },
+          "_approved_bank": true,
+          "_live_short": true,
+          "_live_beats": "plan",
+          "_voice": {
+            "words_per_second": 1.9
+          }
+        },
+        "script": "TITLE:\nबुलिश हरामी\n\nHOOK (0-3 sec):\nबुलिश हरामी पर खरीद कब करें? एंट्री 101 और स्टॉप 88 का प्लान।\n\nBODY:\n[SEGMENT PEHCHAN]\nबड़ी लाल कैंडल 106 से 92, अगली छोटी हरी बॉडी उसके अंदर रहे।\n\n[SEGMENT CONTEXT]\nगिरावट के बाद सपोर्ट 90 पर वैलिड। साइडवेज में कमजोर।\n\n[SEGMENT ENTRY]\nएंट्री 101, अगली कैंडल छोटी हरी कैंडल का हाई तोड़े तब।\n\n[SEGMENT SL]\nस्टॉप 88, लाल कैंडल के लो 90 के जस्ट नीचे।\n\n[SEGMENT TARGET]\nटारगेट 127, 1:2। रिस्क 13, रिवॉर्ड 26, यानी रिस्क-रिवॉर्ड 1 बटा 2।\n\n[SEGMENT INVALIDATION]\nगलती जल्दी खरीद। लो 90 टूटे तो स्किप।\n\n[SEGMENT CTA]\nआपने बुलिश हरामी पर कभी ट्रेड लिया? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.\n\nCTA:\nयह बात पहले से पता थी? Comment में हाँ या नहीं लिखो।\n\nDISCLAIMER LINE:\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nFACT LEDGER:\n- पूरा ट्रेड प्लान\n- SOURCE: illustrative teaching chart drawn in this video (example candles, not live market data, not a stock tip). Every plan number below is computed by the channel's trade_plan rules from these candles.\n- Example chart candles: #1 O 130 H 132 L 120 C 122; #2 O 122 H 124 L 112 C 114; #3 O 114 H 116 L 104 C 106; #4 O 106 H 107 L 90 C 92; #5 O 95 H 101 L 94 C 99; #6 O 99 H 108 L 98 C 106; #7 O 106 H 120 L 104 C 118; #8 O 118 H 132 L 116 C 130.\n- Plan side: long (buy). Entry 101, stop-loss 88, target 127, support 90.\n- Risk = |entry - stop| = 13; reward = |target - entry| = 26; risk:reward = 1:2 (spoken 1 बटा 2).\n- Other chart levels: mother_open 106, mother_close 92, baby_high 101, low 90.\n",
+        "report": "VERDICT: [READY TO PUBLISH]\n\n✅ Auto-checks pass:\nHook ✓ | Facts ✓ (sab figures illustrative chart se computed, koi UNVERIFIED nahi) | Compliance ✓ (illustrative teaching, disclaimer + \"financial advice nahi\") | Coverage ✓ | Visuals ✓ (8/8 chart shots) | Length ✓\n\n♻️ Reused-content risk: LOW\n- 0% stock footage, 8/8 original chart shots, premium Gemini AI voice — script_original + original_overlays_always_on dono true. Lower karne ka lever: virtually nahi, already clean hai.\n\n⚠️ Tumhe dekhna hai (judgment calls):\n- Thumbnail: title \"बुलिश हरामी\" catchy hai — thumbnail pe 101 entry / 88 stop / 127 target ka clean visual daalo, warna finance audience scroll kar degi.\n- \"बुलिश हरामी\" naam thoda tapori hai — kuch viewers ko off lagega, deliberate choice hai to theek. Ek baar hook (0-3 sec) dekh lo, flow natural lag raha hai?\n\n🔴 Risks / assumptions:\n- Poora plan illustrative example candles par based hai — real tip nahi, par comments mein log isko \"stock pick\" samajh sakte hain. Pin karo ki ye sirf example hai.\n- R:R 1:2 yahan math se sahi hai (13 risk / 26 reward), par ye ek idealized setup hai — koi guaranteed-returns implication nahi hona chahiye, script mein nahi hai. ✓\n- Koi tax/regulatory figure script mein nahi — us front par clean.\n\nFAILS this round: none\n",
+        "verify_meta": {
+          "ai_verdict_valid": true,
+          "verdict": "READY",
+          "public_ready": true,
+          "soft_judgment_only": false,
+          "reasons": [],
+          "spoken_words": 120
+        },
+        "self_review": {
+          "parts": {
+            "hook": 100,
+            "visual": 90,
+            "accuracy": 100,
+            "trend": null,
+            "craft": 100,
+            "sync": 100
+          },
+          "overall": 98.0,
+          "passed": true,
+          "public_ok": true,
+          "review_flag": false,
+          "verdict": "PASS",
+          "summary": "overall 98.0 (hook 100, visual 90, accuracy 100, trend skip, craft 100, sync 100)",
+          "notes": [],
+          "bar": {
+            "part": 60,
+            "overall": 75
+          },
+          "chart": {
+            "mode": "schematic",
+            "source": null,
+            "as_of": null
+          },
+          "narration_source": "approved",
+          "sync": {
+            "ok": true,
+            "reason": "",
+            "scenes": [
+              {
+                "start": 0.0,
+                "end": 3.2,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.3,
+                "recall": 0.833,
+                "gate_recall": 0.9,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.9,
+                "shared": [
+                  "बुलिश",
+                  "हरामी",
+                  "खरीद",
+                  "कब",
+                  "करें"
+                ],
+                "script": "बुलिश हरामी पर खरीद कब करें? एंट्री",
+                "heard": "बूलिश हरामी पर ख़ीद कब करें? अंट्री एक",
+                "passed": true
+              },
+              {
+                "start": 3.2,
+                "end": 6.41,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.273,
+                "recall": 0.833,
+                "gate_recall": 0.9,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.9,
+                "shared": [
+                  "करें"
+                ],
+                "script": "करें? एंट्री 101 और स्टॉप 88 का प्लान।",
+                "heard": "अंट्री एक सो एक और स्थाब अथासी कप्लान बड़ी लाल",
+                "passed": true
+              },
+              {
+                "start": 6.41,
+                "end": 9.36,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.364,
+                "recall": 0.857,
+                "gate_recall": 0.917,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.917,
+                "shared": [
+                  "बडी",
+                  "लाल",
+                  "कैंडल",
+                  "अगली",
+                  "छोटी"
+                ],
+                "script": "बड़ी लाल कैंडल 106 से 92, अगली छोटी",
+                "heard": "बड़ी लाल कंडल एक सो चे से बानवे अगली चोटी",
+                "passed": true
+              },
+              {
+                "start": 9.36,
+                "end": 12.31,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.077,
+                "recall": 0.857,
+                "gate_recall": 0.917,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.917,
+                "shared": [
+                  "अगली",
+                  "छोटी",
+                  "हरी",
+                  "बॉडी",
+                  "उसके",
+                  "अंदर"
+                ],
+                "script": "अगली छोटी हरी बॉडी उसके अंदर रहे।",
+                "heard": "अगली चोटी हरी बोडी उसके अंदर रहें गिराववध के",
+                "passed": true
+              },
+              {
+                "start": 12.31,
+                "end": 15.99,
+                "beat": "context",
+                "kind": "chart-context",
+                "jaccard": 0.111,
+                "recall": 0.714,
+                "gate_recall": 0.571,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.571,
+                "shared": [
+                  "गिरावट",
+                  "बाद",
+                  "सपोर्ट",
+                  "वैलिड",
+                  "साइडवेज",
+                  "कमजोर"
+                ],
+                "script": "गिरावट के बाद सपोर्ट 90 पर वैलिड। साइडवेज में कमजोर।",
+                "heard": "रहें गिराववध के बाद सपोट नभबे पर वलगद साईडवेज में कमजोर अंट्री",
+                "passed": true
+              },
+              {
+                "start": 15.99,
+                "end": 19.0,
+                "beat": "entry",
+                "kind": "chart-entry",
+                "jaccard": 0.0,
+                "recall": 0.75,
+                "gate_recall": 0.9,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.9,
+                "shared": [
+                  "एंट्री",
+                  "अगली",
+                  "कैंडल",
+                  "छोटी",
+                  "हरी",
+                  "कैंडल"
+                ],
+                "script": "एंट्री 101, अगली कैंडल छोटी हरी कैंडल का हाई",
+                "heard": "कमजोर अंट्री एक सो अगली क्यान्डल चोटी हरी क्यान्डल का है",
+                "passed": true
+              },
+              {
+                "start": 19.0,
+                "end": 22.0,
+                "beat": "entry",
+                "kind": "chart-entry",
+                "jaccard": 0.071,
+                "recall": 0.833,
+                "gate_recall": 0.9,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.9,
+                "shared": [
+                  "कैंडल",
+                  "छोटी",
+                  "हरी",
+                  "कैंडल",
+                  "हाई",
+                  "तोडे"
+                ],
+                "script": "छोटी हरी कैंडल का हाई तोड़े तब।",
+                "heard": "चोटी हरी क्यान्डल का है तोडे तब श्टाब अथासी लाल",
+                "passed": true
+              },
+              {
+                "start": 22.0,
+                "end": 24.62,
+                "beat": "sl",
+                "kind": "chart-sl",
+                "jaccard": 0.059,
+                "recall": 0.5,
+                "gate_recall": 0.625,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.625,
+                "shared": [
+                  "स्टॉप",
+                  "लाल",
+                  "कैंडल",
+                  "लो",
+                  "जस्ट",
+                  "नीचे"
+                ],
+                "script": "स्टॉप 88, लाल कैंडल के लो 90 के जस्ट नीचे।",
+                "heard": "अथासी लाल क्यान्डल के लो नभबे के जस्त नीचे तार्गेत",
+                "passed": true
+              },
+              {
+                "start": 24.62,
+                "end": 28.1,
+                "beat": "target",
+                "kind": "chart-target",
+                "jaccard": 0.0,
+                "recall": 0.571,
+                "gate_recall": 0.643,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.643,
+                "shared": [
+                  "टारगेट",
+                  "रिस्क",
+                  "रिवॉर्ड"
+                ],
+                "script": "टारगेट 127, 1:2। रिस्क 13, रिवॉर्ड",
+                "heard": "जस्त नीचे तार्गेत एक सो सत्टीस एक अनुपाद दो रिसक तेरा,",
+                "passed": true
+              },
+              {
+                "start": 28.1,
+                "end": 31.58,
+                "beat": "target",
+                "kind": "chart-target",
+                "jaccard": 0.0,
+                "recall": 0.444,
+                "gate_recall": 0.643,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.643,
+                "shared": [
+                  "रिवॉर्ड",
+                  "यानी",
+                  "रिस्क",
+                  "रिवॉर्ड",
+                  "बटा"
+                ],
+                "script": "13, रिवॉर्ड 26, यानी रिस्क-रिवॉर्ड 1 बटा 2।",
+                "heard": "रिसक तेरा, रिवोट शब्भीस, यानी रिसक रिवोट एक बता दो गलती",
+                "passed": true
+              },
+              {
+                "start": 31.58,
+                "end": 34.97,
+                "beat": "invalidation",
+                "kind": "chart-invalidation",
+                "jaccard": 0.25,
+                "recall": 0.714,
+                "gate_recall": 0.857,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.857,
+                "shared": [
+                  "गलती",
+                  "जल्दी",
+                  "खरीद",
+                  "लो",
+                  "टूटे",
+                  "स्किप"
+                ],
+                "script": "गलती जल्दी खरीद। लो 90 टूटे तो स्किप।",
+                "heard": "एक बता दो गलती जल्दी खरीद. लो नब बे तुटे तो स्किप. आपने बूलिश",
+                "passed": true
+              },
+              {
+                "start": 34.97,
+                "end": 37.55,
+                "beat": "cta",
+                "kind": "chart-cta",
+                "jaccard": 0.111,
+                "recall": 0.778,
+                "gate_recall": 0.929,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.929,
+                "shared": [
+                  "आपने",
+                  "बुलिश",
+                  "हरामी",
+                  "कभी",
+                  "ट्रेड",
+                  "लिया"
+                ],
+                "script": "आपने बुलिश हरामी पर कभी ट्रेड लिया? कमेंट करो। Sirf",
+                "heard": "तो स्किप. आपने बूलिश हरामी पर कभी त्रेट लिया कमश्वेंट करो. सर्फ",
+                "passed": true
+              },
+              {
+                "start": 37.55,
+                "end": 40.14,
+                "beat": "cta",
+                "kind": "chart-cta",
+                "jaccard": 0.143,
+                "recall": 0.75,
+                "gate_recall": 0.929,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.929,
+                "shared": [
+                  "कमेंट",
+                  "करो",
+                  "सिर्फ",
+                  "सीखने",
+                  "लिए",
+                  "फाइनेंशिएसएल"
+                ],
+                "script": "कमेंट करो। Sirf seekhne ke liye, financial advice nahi.",
+                "heard": "कमश्वेंट करो. सर्फ सीखने के लिए फनान्चल अदवाइस नहीं.",
+                "passed": true
+              }
+            ],
+            "beats": [
+              {
+                "beat": "hook",
+                "recall": 0.9,
+                "script": "बुलिश हरामी पर खरीद कब करें? एंट्री 101 और स्टॉप 88 का प्लान।",
+                "heard": "बूलिश हरामी पर ख़ीद कब करें? अंट्री एक सो एक और स्थाब अथासी कप्लान बड़ी लाल"
+              },
+              {
+                "beat": "pehchan",
+                "recall": 0.917,
+                "script": "बड़ी लाल कैंडल 106 से 92, अगली छोटी हरी बॉडी उसके अंदर रहे।",
+                "heard": "बड़ी लाल कंडल एक सो चे से बानवे अगली चोटी हरी बोडी उसके अंदर रहें गिराववध के"
+              },
+              {
+                "beat": "context",
+                "recall": 0.571,
+                "script": "गिरावट के बाद सपोर्ट 90 पर वैलिड। साइडवेज में कमजोर।",
+                "heard": "रहें गिराववध के बाद सपोट नभबे पर वलगद साईडवेज में कमजोर अंट्री"
+              },
+              {
+                "beat": "entry",
+                "recall": 0.9,
+                "script": "एंट्री 101, अगली कैंडल छोटी हरी कैंडल का हाई तोड़े तब।",
+                "heard": "कमजोर अंट्री एक सो अगली क्यान्डल चोटी हरी क्यान्डल का है तोडे तब श्टाब अथासी लाल"
+              },
+              {
+                "beat": "sl",
+                "recall": 0.625,
+                "script": "स्टॉप 88, लाल कैंडल के लो 90 के जस्ट नीचे।",
+                "heard": "अथासी लाल क्यान्डल के लो नभबे के जस्त नीचे तार्गेत"
+              },
+              {
+                "beat": "target",
+                "recall": 0.643,
+                "script": "टारगेट 127, 1:2। रिस्क 13, रिवॉर्ड 26, यानी रिस्क-रिवॉर्ड 1 बटा 2।",
+                "heard": "जस्त नीचे तार्गेत एक सो सत्टीस एक अनुपाद दो रिसक तेरा, रिवोट शब्भीस, यानी रिसक रिवोट एक बता दो गलती"
+              },
+              {
+                "beat": "invalidation",
+                "recall": 0.857,
+                "script": "गलती जल्दी खरीद। लो 90 टूटे तो स्किप।",
+                "heard": "एक बता दो गलती जल्दी खरीद. लो नब बे तुटे तो स्किप. आपने बूलिश"
+              },
+              {
+                "beat": "cta",
+                "recall": 0.929,
+                "script": "आपने बुलिश हरामी पर कभी ट्रेड लिया? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.",
+                "heard": "तो स्किप. आपने बूलिश हरामी पर कभी त्रेट लिया कमश्वेंट करो. सर्फ सीखने के लिए फनान्चल अदवाइस नहीं."
+              }
+            ]
+          },
+          "scenes": [
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 0.0,
+              "end": 3.2
+            },
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 3.2,
+              "end": 6.41
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 6.41,
+              "end": 9.36
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 9.36,
+              "end": 12.31
+            },
+            {
+              "beat": "context",
+              "kind": "chart-context",
+              "start": 12.31,
+              "end": 15.99
+            },
+            {
+              "beat": "entry",
+              "kind": "chart-entry",
+              "start": 15.99,
+              "end": 19.0
+            },
+            {
+              "beat": "entry",
+              "kind": "chart-entry",
+              "start": 19.0,
+              "end": 22.0
+            },
+            {
+              "beat": "sl",
+              "kind": "chart-sl",
+              "start": 22.0,
+              "end": 24.62
+            },
+            {
+              "beat": "target",
+              "kind": "chart-target",
+              "start": 24.62,
+              "end": 28.1
+            },
+            {
+              "beat": "target",
+              "kind": "chart-target",
+              "start": 28.1,
+              "end": 31.58
+            },
+            {
+              "beat": "invalidation",
+              "kind": "chart-invalidation",
+              "start": 31.58,
+              "end": 34.97
+            },
+            {
+              "beat": "cta",
+              "kind": "chart-cta",
+              "start": 34.97,
+              "end": 37.55
+            },
+            {
+              "beat": "cta",
+              "kind": "chart-cta",
+              "start": 37.55,
+              "end": 40.14
+            }
+          ]
+        },
+        "narration": {
+          "title": "बुलिश हरामी",
+          "hook_line": "बुलिश हरामी पर खरीद कब करें?",
+          "beats": {
+            "hook": "बुलिश हरामी पर खरीद कब करें? एंट्री 101 और स्टॉप 88 का प्लान।",
+            "pehchan": "बड़ी लाल कैंडल 106 से 92, अगली छोटी हरी बॉडी उसके अंदर रहे।",
+            "context": "गिरावट के बाद सपोर्ट 90 पर वैलिड। साइडवेज में कमजोर।",
+            "entry": "एंट्री 101, अगली कैंडल छोटी हरी कैंडल का हाई तोड़े तब।",
+            "sl": "स्टॉप 88, लाल कैंडल के लो 90 के जस्ट नीचे।",
+            "target": "टारगेट 127, 1:2। रिस्क 13, रिवॉर्ड 26, यानी रिस्क-रिवॉर्ड 1 बटा 2।",
+            "invalidation": "गलती जल्दी खरीद। लो 90 टूटे तो स्किप।",
+            "cta": "आपने बुलिश हरामी पर कभी ट्रेड लिया? कमेंट करो। Sirf seekhne ke liye, financial advice nahi."
+          },
+          "facts": [
+            "पूरा ट्रेड प्लान"
+          ],
+          "source": "approved",
+          "plan": true,
+          "live_beats": "plan",
+          "narration_fallback": false,
+          "review_attempts": 1,
+          "key": "pat_bull_harami"
+        },
+        "shots": {
+          "shots": [
+            {
+              "shot_id": 1,
+              "beat": "hook",
+              "start_sec": 0.0,
+              "end_sec": 6.41,
+              "visual_type": "chart",
+              "on_screen_text": "एंट्री",
+              "sub_text": "कमेंट",
+              "spoken_line": "बुलिश हरामी पर खरीद कब करें? एंट्री 101 और स्टॉप 88 का प्लान।",
+              "chart_data": {
+                "template": "pat_bull_harami",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": "बुलिश हरामी पर खरीद कब करें?"
+            },
+            {
+              "shot_id": 2,
+              "beat": "pehchan",
+              "start_sec": 6.41,
+              "end_sec": 12.31,
+              "visual_type": "chart",
+              "on_screen_text": "कैंडल",
+              "sub_text": "नियम",
+              "spoken_line": "बड़ी लाल कैंडल 106 से 92, अगली छोटी हरी बॉडी उसके अंदर रहे।",
+              "chart_data": {
+                "template": "pat_bull_harami",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 3,
+              "beat": "context",
+              "start_sec": 12.31,
+              "end_sec": 15.99,
+              "visual_type": "chart",
+              "on_screen_text": "साइडवेज",
+              "sub_text": "कमजोर",
+              "spoken_line": "गिरावट के बाद सपोर्ट 90 पर वैलिड। साइडवेज में कमजोर।",
+              "chart_data": {
+                "template": "pat_bull_harami",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 4,
+              "beat": "entry",
+              "start_sec": 15.99,
+              "end_sec": 22.0,
+              "visual_type": "chart",
+              "on_screen_text": "एंट्री",
+              "sub_text": "ट्रिगर",
+              "spoken_line": "एंट्री 101, अगली कैंडल छोटी हरी कैंडल का हाई तोड़े तब।",
+              "chart_data": {
+                "template": "pat_bull_harami",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 5,
+              "beat": "sl",
+              "start_sec": 22.0,
+              "end_sec": 24.62,
+              "visual_type": "chart",
+              "on_screen_text": "स्टॉप",
+              "sub_text": "क्यों",
+              "spoken_line": "स्टॉप 88, लाल कैंडल के लो 90 के जस्ट नीचे।",
+              "chart_data": {
+                "template": "pat_bull_harami",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 6,
+              "beat": "target",
+              "start_sec": 24.62,
+              "end_sec": 31.58,
+              "visual_type": "chart",
+              "on_screen_text": "रिवॉर्ड",
+              "sub_text": "रिस्क-रिवॉर्ड",
+              "spoken_line": "टारगेट 127, 1:2। रिस्क 13, रिवॉर्ड 26, यानी रिस्क-रिवॉर्ड 1 बटा 2।",
+              "chart_data": {
+                "template": "pat_bull_harami",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 7,
+              "beat": "invalidation",
+              "start_sec": 31.58,
+              "end_sec": 34.97,
+              "visual_type": "chart",
+              "on_screen_text": "जल्दी",
+              "sub_text": "गलती",
+              "spoken_line": "गलती जल्दी खरीद। लो 90 टूटे तो स्किप।",
+              "chart_data": {
+                "template": "pat_bull_harami",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 8,
+              "beat": "cta",
+              "start_sec": 34.97,
+              "end_sec": 40.14,
+              "visual_type": "chart",
+              "on_screen_text": "फाइनेंशिएसएल",
+              "sub_text": "प्लान",
+              "spoken_line": "आपने बुलिश हरामी पर कभी ट्रेड लिया? कमेंट करो। सिर्फ सीखने के लिए, फाइनेंशियल एडवाइस नहीं।",
+              "chart_data": {
+                "template": "pat_bull_harami",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            }
+          ]
+        },
+        "captions": "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: T,Noto Sans Devanagari,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,8,60,190,0,1\nStyle: Cap,Noto Sans Devanagari,62,&H00FFFFFF,&H00FFFFFF,&H00101010,&HA0000000,-1,0,0,0,100,100,0,0,3,4,0,2,70,190,520,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n\n"
+      }
     }
   ],
   "skipped_topics": [
