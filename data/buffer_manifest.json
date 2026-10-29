@@ -1439,7 +1439,7 @@
     },
     {
       "id": "buf-pat_bull_harami-1dcea78fc63f",
-      "state": "ready",
+      "state": "used",
       "topic_key": "pat_bull_harami",
       "title": "बुलिश हरामी",
       "description": "बुलिश हरामी पर खरीद कब करें? एंट्री 101 और स्टॉप 88 का प्लान।\n\nबुलिश हरामी — आसान हिंदी में: पहचान, मतलब और traders इसे आमतौर पर कैसे इस्तेमाल करते हैं।\n\n💬 यह बात पहले से पता थी? Comment में हाँ या नहीं लिखो।\n\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nहम SEBI-रजिस्टर्ड सलाहकार नहीं हैं। किसी भी निवेश से पहले रजिस्टर्ड सलाहकार से बात करें।\n\nस्रोत और नोट्स\n- पूरा ट्रेड प्लान\n- स्रोत: illustrative teaching chart drawn in this video (example candles, not live market data, not a stock tip). Every plan number below is computed by the channel's trade_plan rules from these candles.\n- Example chart candles: #1 O 130 H 132 L 120 C 122; #2 O 122 H 124 L 112 C 114; #3 O 114 H 116 L 104 C 106; #4 O 106 H 107 L 90 C 92; #5 O 95 H 101 L 94 C 99; #6 O 99 H 108 L 98 C 106; #7 O 106 H 120 L 104 C 118; #8 O 118 H 132 L 116 C 130.\n- Plan side: long (buy). Entry 101, stop-loss 88, target 127, support 90.\n- Risk = |entry - stop| = 13; reward = |target - entry| = 26; risk:reward = 1:2 (spoken 1 बटा 2).\n- Other chart levels: mother_open 106, mother_close 92, baby_high 101, low 90.\n\nPaise Ki Pathshala — ट्रेडिंग की पाठशाला — चार्ट, पैटर्न, रिस्क और असली डेटा\n\nरोज़ 3 ट्रेडिंग Shorts — कैंडलस्टिक, इंडिकेटर, ऑर्डर, F&O, रिस्क और असली डेटा।\n\n#StockMarketHindi #TradingHindi #PaiseKiPathshala #ShareMarket",
@@ -1453,10 +1453,10 @@
       "asset_name": "buf-pat_bull_harami-1dcea78fc63f.mp4",
       "meta_name": "buf-pat_bull_harami-1dcea78fc63f.json",
       "created_at": "2026-10-29T15:13:42Z",
-      "used_at": null,
-      "used_slot": null,
-      "used_date_ist": null,
-      "video_id": null,
+      "used_at": "2026-10-29T17:31:28Z",
+      "used_slot": "08:30",
+      "used_date_ist": "2026-10-30",
+      "video_id": "nS2CWzJRmiY",
       "gates": {
         "fallback_narration": {
           "passed": true,
@@ -2202,7 +2202,8 @@
           ]
         },
         "captions": "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: T,Noto Sans Devanagari,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,8,60,190,0,1\nStyle: Cap,Noto Sans Devanagari,62,&H00FFFFFF,&H00FFFFFF,&H00101010,&HA0000000,-1,0,0,0,100,100,0,0,3,4,0,2,70,190,520,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n\n"
-      }
+      },
+      "claimed_at": "2026-10-29T17:31:28Z"
     }
   ],
   "skipped_topics": [

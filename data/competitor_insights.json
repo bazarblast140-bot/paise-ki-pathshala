@@ -1,12 +1,12 @@
 {
- "generated_at": "2026-10-28T17:00:58+00:00",
+ "generated_at": "2026-10-29T17:14:38+00:00",
  "lookback_days": 30,
  "via": "oauth",
  "channels": [
   {
    "id": "UCE3H9pD9owLyPLuC6dgIcuQ",
    "title": "Deepu Maurya",
-   "subscribers": 40200
+   "subscribers": 40300
   },
   {
    "id": "UC5-09Heo3sFRvVyTqWsXy7Q",
@@ -24,14 +24,14 @@
   "videos_analysed": 83,
   "title_patterns": {
    "curiosity_question": {
-    "top_share": 0.65,
-    "rest_share": 0.37,
-    "lift": 1.69
+    "top_share": 0.6,
+    "rest_share": 0.33,
+    "lift": 1.7
    },
    "number_led": {
     "top_share": 0.4,
-    "rest_share": 0.43,
-    "lift": 0.94
+    "rest_share": 0.4,
+    "lift": 1.01
    },
    "warning": {
     "top_share": 0.05,
@@ -40,32 +40,34 @@
    },
    "chart_concept": {
     "top_share": 0.25,
-    "rest_share": 0.25,
-    "lift": 0.99
+    "rest_share": 0.27,
+    "lift": 0.94
    },
    "real_data": {
-    "top_share": 0.3,
-    "rest_share": 0.14,
-    "lift": 1.81
+    "top_share": 0.35,
+    "rest_share": 0.11,
+    "lift": 2.48
    },
    "mechanism_explainer": {
     "top_share": 0.1,
-    "rest_share": 0.17,
-    "lift": 0.67
+    "rest_share": 0.19,
+    "lift": 0.62
    }
   },
   "winning_keywords": [
    "nifty",
    "kaise",
    "samjhe",
+   "बाजार",
    "sweep",
-   "liquidity",
    "take",
+   "candle",
    "price",
-   "monday",
+   "शेयर",
    "करें",
    "entry",
-   "india",
+   "liquidity",
+   "monday",
    "bank"
   ],
   "top_tags": [
@@ -88,22 +90,22 @@
   "best_upload_hours_ist": [
    18,
    19,
-   14,
-   12
+   7,
+   14
   ],
   "top_short_duration_s": {
    "median": 90,
    "p25": 35,
-   "p75": 125
+   "p75": 137
   },
-  "top_title_length_chars": 82,
+  "top_title_length_chars": 88,
   "top_videos": [
    {
     "channel": "Stock Menthol",
     "title": "SL Hunting | How to Take Sweep Entries with 1:5 RR",
-    "views": 6991,
-    "views_per_day": 2210.5,
-    "performance_index": 5.0,
+    "views": 7166,
+    "views_per_day": 1717.6,
+    "performance_index": 4.58,
     "duration_s": 580,
     "published_ist": "2026-10-25 18:36",
     "tags": []
@@ -111,9 +113,9 @@
    {
     "channel": "Surface Trader",
     "title": "share market candle ko kaise samjhe | candlestick ko kaise samjhe #sharemarket #candlestick",
-    "views": 3180,
-    "views_per_day": 1453.1,
-    "performance_index": 4.56,
+    "views": 3912,
+    "views_per_day": 1223.3,
+    "performance_index": 3.9,
     "duration_s": 34,
     "published_ist": "2026-10-26 17:59",
     "tags": [
@@ -133,9 +135,9 @@
    {
     "channel": "THE WORLD TRADER",
     "title": "Candlestick Patterns का असली Logic समझो 🔥 |Market Psychology & Price Action Explained #stockmarket",
-    "views": 138885,
-    "views_per_day": 17967.9,
-    "performance_index": 3.59,
+    "views": 142383,
+    "views_per_day": 16292.6,
+    "performance_index": 3.28,
     "duration_s": 122,
     "published_ist": "2026-10-21 05:00",
     "tags": [
@@ -154,67 +156,67 @@
     ]
    },
    {
-    "channel": "UFL Capital Markets | SEBI RA",
-    "title": "Monday Market Crash? | Nifty Tomorrow Prediction | Nifty Analysis Hindi | Nifty Monday Prediction",
-    "views": 28582,
-    "views_per_day": 2789.1,
-    "performance_index": 3.1,
-    "duration_s": 137,
-    "published_ist": "2026-10-18 16:34",
+    "channel": "Tech Net India",
+    "title": "सोमवार को शेयर बाजार में गिरावट के संकेत? US Market में Nasdaq टूटा! | Stock Market Outlook | Nifty",
+    "views": 189889,
+    "views_per_day": 16291.2,
+    "performance_index": 2.95,
+    "duration_s": 222,
+    "published_ist": "2026-10-18 07:00",
     "tags": [
+     "tech net india",
+     "share market news",
+     "stock market",
+     "share market",
+     "stock market outlook",
+     "stock market tomorrow",
      "nifty today",
-     "nifty 50 today",
-     "nifty levels today",
-     "nifty prediction today",
-     "nifty tomorrow prediction",
-     "nifty 50 prediction",
-     "nifty support resistance",
-     "nifty key levels",
-     "nifty intraday levels",
-     "bank nifty levels today",
-     "bank nifty prediction",
-     "sensex today"
-    ]
-   },
-   {
-    "channel": "Nitin Murarka Nifty ke Nishanebaaz",
-    "title": "Portfolio पड़ा है Idle क्या करें? | Option trading | Nitin Murarka Nifty ke Nishanebaaz",
-    "views": 110450,
-    "views_per_day": 6731.7,
-    "performance_index": 2.67,
-    "duration_s": 90,
-    "published_ist": "2026-10-12 12:44",
-    "tags": [
-     "Options Trading",
-     "Options Trading India",
-     "Options Trading for Beginners",
-     "Options Trading Strategy",
-     "Options Trading in Hindi",
-     "Option Trading India",
-     "Options Trading Course",
-     "Options Trading Explained",
-     "Options Trading Basics",
-     "Indian Stock Market",
-     "NSE Options Trading",
-     "Nifty Options Trading"
+     "nifty prediction",
+     "sensex today",
+     "nasdaq fall",
+     "us market crash",
+     "ai bubble"
     ]
    },
    {
     "channel": "Dr. Mukul Agrawal : Stock Market Coach",
     "title": "Trump vs Indian IT Stocks: Nifty IT Rallies 3%, TCS Jumps 5.5%! 🔥 #Shorts",
-    "views": 386991,
-    "views_per_day": 20242.8,
-    "performance_index": 2.66,
+    "views": 390323,
+    "views_per_day": 19393.0,
+    "performance_index": 2.76,
     "duration_s": 88,
     "published_ist": "2026-10-09 19:41",
     "tags": []
    },
    {
+    "channel": "CNBC Awaaz.",
+    "title": "Stock Market Falls Today! Why Are Sensex & Nifty Falling? | बाजार में अब क्या करें ? | Editor's take",
+    "views": 178170,
+    "views_per_day": 21369.0,
+    "performance_index": 2.59,
+    "duration_s": 225,
+    "published_ist": "2026-10-21 14:38",
+    "tags": [
+     "Anuj Singhal",
+     "Bank Nifty Today",
+     "Market Crash Explained",
+     "Nifty Crash",
+     "Nifty Today",
+     "Sensex Nifty Fall",
+     "Sensex Today",
+     "Share Market Today",
+     "Stock Market Analysis",
+     "Stock Market Crash Today",
+     "Why Stock Market Falling Today",
+     "anuj singhal analysis"
+    ]
+   },
+   {
     "channel": "Surface Trader",
     "title": "candlestick ko kaise samjhe | candlestick pattern #candlestick #candlestickpattern #trading",
-    "views": 19142,
-    "views_per_day": 704.9,
-    "performance_index": 2.21,
+    "views": 20326,
+    "views_per_day": 721.7,
+    "performance_index": 2.3,
     "duration_s": 35,
     "published_ist": "2026-10-01 18:47",
     "tags": [
@@ -235,75 +237,98 @@
    {
     "channel": "Stock Menthol",
     "title": "Liquidity Sweep Trading Strategy | 3-Step Entry Model",
-    "views": 13643,
-    "views_per_day": 712.9,
-    "performance_index": 1.84,
+    "views": 13748,
+    "views_per_day": 682.4,
+    "performance_index": 1.82,
     "duration_s": 482,
     "published_ist": "2026-10-09 19:12",
     "tags": []
    },
    {
-    "channel": "CNBC Awaaz.",
-    "title": "Stock Market Falls Today! Why Are Sensex & Nifty Falling? | बाजार में अब क्या करें ? | Editor's take",
-    "views": 178077,
-    "views_per_day": 24299.9,
-    "performance_index": 1.66,
-    "duration_s": 225,
-    "published_ist": "2026-10-21 14:38",
+    "channel": "Nitin Murarka Nifty ke Nishanebaaz",
+    "title": "Portfolio पड़ा है Idle क्या करें? | Option trading | Nitin Murarka Nifty ke Nishanebaaz",
+    "views": 110515,
+    "views_per_day": 6345.2,
+    "performance_index": 1.56,
+    "duration_s": 90,
+    "published_ist": "2026-10-12 12:44",
     "tags": [
-     "Anuj Singhal",
-     "Bank Nifty Today",
-     "Market Crash Explained",
-     "Nifty Crash",
-     "Nifty Today",
-     "Sensex Nifty Fall",
-     "Sensex Today",
-     "Share Market Today",
-     "Stock Market Analysis",
-     "Stock Market Crash Today",
-     "Why Stock Market Falling Today",
-     "anuj singhal analysis"
+     "Options Trading",
+     "Options Trading India",
+     "Options Trading for Beginners",
+     "Options Trading Strategy",
+     "Options Trading in Hindi",
+     "Option Trading India",
+     "Options Trading Course",
+     "Options Trading Explained",
+     "Options Trading Basics",
+     "Indian Stock Market",
+     "NSE Options Trading",
+     "Nifty Options Trading"
+    ]
+   },
+   {
+    "channel": "UFL Capital Markets | SEBI RA",
+    "title": "Monday Market Crash? | Nifty Tomorrow Prediction | Nifty Analysis Hindi | Nifty Monday Prediction",
+    "views": 28761,
+    "views_per_day": 2554.9,
+    "performance_index": 1.49,
+    "duration_s": 137,
+    "published_ist": "2026-10-18 16:34",
+    "tags": [
+     "nifty today",
+     "nifty 50 today",
+     "nifty levels today",
+     "nifty prediction today",
+     "nifty tomorrow prediction",
+     "nifty 50 prediction",
+     "nifty support resistance",
+     "nifty key levels",
+     "nifty intraday levels",
+     "bank nifty levels today",
+     "bank nifty prediction",
+     "sensex today"
+    ]
+   },
+   {
+    "channel": "Zee Business",
+    "title": "Share Market Taxes पर बड़े बदलाव का समय? Nirmala Sitharaman से बड़ी उम्मीद! | Anil Singhvi",
+    "views": 333114,
+    "views_per_day": 20407.4,
+    "performance_index": 1.42,
+    "duration_s": 167,
+    "published_ist": "2026-10-13 14:59",
+    "tags": [
+     "stock market tax",
+     "share market tax",
+     "stock market tax india",
+     "stock market tax reforms",
+     "share market tax reforms",
+     "nirmala sitharaman",
+     "nirmala sitharaman news",
+     "finance minister india",
+     "stock market taxation",
+     "stt tax",
+     "ltcg tax",
+     "stcg tax"
     ]
    },
    {
     "channel": "Stock Menthol",
     "title": "Which Zone Is Best for Entry? | Liquidity Trading",
-    "views": 8460,
-    "views_per_day": 558.3,
-    "performance_index": 1.44,
+    "views": 8482,
+    "views_per_day": 524.8,
+    "performance_index": 1.4,
     "duration_s": 553,
     "published_ist": "2026-10-13 18:50",
     "tags": []
    },
    {
-    "channel": "CNBC Awaaz.",
-    "title": "शेयर बाजार में फिर क्यों मचा हाहाकार? | Stock Market India | #shorts  N18S",
-    "views": 588761,
-    "views_per_day": 20079.4,
-    "performance_index": 1.38,
-    "duration_s": 125,
-    "published_ist": "2026-09-29 14:47",
-    "tags": [
-     "Stock Market",
-     "Stock Market India",
-     "Share Market",
-     "Share Market India",
-     "Stock Market Crash",
-     "Stock Market Today",
-     "Share Market Today",
-     "Nifty",
-     "Nifty 50",
-     "Sensex",
-     "Nifty Today",
-     "Sensex Today"
-    ]
-   },
-   {
     "channel": "niftywala",
     "title": "Nifty & Bank Nifty Analysis for MONDAY | 12 October 2026 | nifty Tomorrow #nifty",
-    "views": 30739,
-    "views_per_day": 1666.8,
-    "performance_index": 1.24,
+    "views": 30838,
+    "views_per_day": 1585.4,
+    "performance_index": 1.26,
     "duration_s": 20,
     "published_ist": "2026-10-10 11:54",
     "tags": [
@@ -324,9 +349,9 @@
    {
     "channel": "Surface Trader",
     "title": "trading me candlestick chart ko kaise samjhe | candlestick charts #trading #candlestick #charts",
-    "views": 6811,
-    "views_per_day": 396.7,
-    "performance_index": 1.24,
+    "views": 6904,
+    "views_per_day": 379.8,
+    "performance_index": 1.21,
     "duration_s": 31,
     "published_ist": "2026-10-11 18:28",
     "tags": [
@@ -345,38 +370,26 @@
     ]
    },
    {
-    "channel": "StockBox",
-    "title": "Tonbo Imaging India IPO Review 2026: Should You Apply or Avoid? | Price, GMP & Risks #shorts",
-    "views": 88072,
-    "views_per_day": 5467.6,
-    "performance_index": 1.13,
-    "duration_s": 117,
-    "published_ist": "2026-10-12 19:55",
+    "channel": "Tech Net India",
+    "title": "5 अक्टूबर से शेयर बाजार में नए नियम! NSE फ्रीज लिमिट! | F&O Trading New Rule | Stock Market New Rule",
+    "views": 163838,
+    "views_per_day": 6486.1,
+    "performance_index": 1.17,
+    "duration_s": 173,
+    "published_ist": "2026-10-04 16:30",
     "tags": [
-     "tonbo imaging ipo review 2026",
-     "tonbo imaging india ipo",
-     "tonbo imaging ipo gmp today",
-     "tonbo imaging ipo price band 665 700",
-     "tonbo imaging ipo dates 15 to 19 october 2026",
-     "tonbo imaging ipo lot size 21 shares",
-     "tonbo imaging ipo listing date 23 october 2026",
-     "tonbo imaging ipo financials",
-     "tonbo imaging ipo valuation",
-     "tonbo imaging ipo apply or avoid",
-     "tonbo imaging ipo analysis",
-     "tonbo imaging revenue and profit"
-    ]
-   },
-   {
-    "channel": "The Trading Femme",
-    "title": "Nifty Expiry Profit Reveal! 🚀 Call Side Jackpot & Trading Strategy 🔥",
-    "views": 49621,
-    "views_per_day": 3993.5,
-    "performance_index": 1.13,
-    "duration_s": 58,
-    "published_ist": "2026-10-16 12:18",
-    "tags": [
-     "hindi video"
+     "tech net india",
+     "share market news",
+     "stock market",
+     "nse freeze limit",
+     "quantity freeze limit",
+     "nifty freeze limit",
+     "bank nifty freeze limit",
+     "f&o new rule",
+     "nse circular",
+     "nse new rule",
+     "stock market new rule",
+     "nifty options"
     ]
    }
   ]

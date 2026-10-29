@@ -725,5 +725,17 @@
   "ig_media_id": "18014502479987432",
   "content_hash": "9bdd70fb8fe61d44",
   "title_norm": "aaj ki sabse badi khabar | 29 oct 2026 | fed holds rates steady despite concerns over inflation"
+ },
+ {
+  "date_ist": "2026-10-30",
+  "slot": "08:30",
+  "video_id": "nS2CWzJRmiY",
+  "format": "long",
+  "topic_key": "pat_bull_harami",
+  "source": "buffer",
+  "buffer_id": "buf-pat_bull_harami-1dcea78fc63f",
+  "source_run": "40918127825",
+  "slot_skipped": "audio mix evidence missing",
+  "note": "audio mix evidence missing"
  }
 ]
