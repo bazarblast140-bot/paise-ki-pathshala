@@ -344,3 +344,10 @@ def pattern_marks_exist(key):
     import pattern_charts
     marks = pattern_charts.marks_for(key)
     return all(marks.get(beat) for beat in trade_plan.BEATS)
+
+
+class DarkCloudPehchanTests(unittest.TestCase):
+    def test_pehchan_speaks_one_number(self):
+        # 30-Oct: three prices in one beat ran into the context beat and failed sync.
+        script = approved_bank.by_key("pat_dark_cloud")
+        self.assertEqual(trade_plan._PLACEHOLDER.findall(script["beats"]["pehchan"]), ["mid"])
