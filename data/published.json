@@ -554,5 +554,20 @@
   "ig_media_id": "18104117027652089",
   "content_hash": "e437de672a5feabb",
   "title_norm": "nifty analysis today | nifty close report #4 30 oct 2026"
+ },
+ {
+  "date_ist": "2026-10-30",
+  "slot": "18:49",
+  "video_id": "m4lxAuTjM5I",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "17908702608579318",
+  "content_hash": "35dfa4c2aaf46ed5",
+  "title_norm": "ultracemco share analysis today | resistance rejection trade plan 30 oct 2026"
  }
 ]
