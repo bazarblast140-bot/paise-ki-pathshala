@@ -2230,6 +2230,7 @@
     "pat_doji",
     "pat_double",
     "pat_dark_cloud",
-    "pat_marubozu"
+    "pat_marubozu",
+    "pat_tweezer_bottom"
   ]
 }
