@@ -539,5 +539,20 @@
   "ig_media_id": "18630533602003222",
   "content_hash": "4ffc29a1778a255f",
   "title_norm": "infy share analysis today | support bounce trade plan 29 oct 2026"
+ },
+ {
+  "date_ist": "2026-10-30",
+  "slot": "16:02",
+  "video_id": "2yQUEf4s2uk",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "18104117027652089",
+  "content_hash": "e437de672a5feabb",
+  "title_norm": "nifty analysis today | nifty close report #4 30 oct 2026"
  }
 ]
