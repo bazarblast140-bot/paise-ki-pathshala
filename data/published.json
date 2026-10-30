@@ -737,5 +737,20 @@
   "source_run": "40918127825",
   "slot_skipped": "audio mix evidence missing",
   "note": "audio mix evidence missing"
+ },
+ {
+  "date_ist": "2026-10-30",
+  "slot": "08:41",
+  "video_id": "w-BFk540c2E",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "17912162850561057",
+  "content_hash": "0a31ded86ad7d999",
+  "title_norm": "aaj ki sabse badi khabar | 30 oct 2026 | bulls return as fed rate pause, dip in us yields lift\u2026"
  }
 ]
