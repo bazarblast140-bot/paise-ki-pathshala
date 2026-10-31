@@ -2,7 +2,9 @@
 
 Run 41199355446 (Sat 31-Oct-2026) published a 14-Oct artifact from branch
 cursor/reel-concat-path-00e1 with Nifty data from 09-Oct. A build may only be
-published when its data date is today's IST trading session and its source run
+published when its data date is the right session (close: today's trading
+session, weekdays only; news/TA/recap: the latest completed session, or today
+for news, any day) and its source run
 is on the default branch and was created today (IST).
 """
 import json
@@ -21,6 +23,19 @@ DATED_KINDS = {"close", "ta", "recap", "news"}
 
 def today_ist(now=None):
     return (now or datetime.now(IST)).astimezone(IST).date()
+
+
+def latest_completed_session(now=None):
+    now = (now or datetime.now(IST)).astimezone(IST)
+    day = now.date()
+    if nifty_day.is_trading_day(day) and (now.hour, now.minute) >= nifty_day.CASH_CLOSE:
+        return day
+    cursor = day - timedelta(days=1)
+    for _ in range(14):
+        if nifty_day.is_trading_day(cursor):
+            return cursor
+        cursor -= timedelta(days=1)
+    return None
 
 
 def data_date(run_dir):
@@ -60,11 +75,20 @@ def check(run_dir, run_meta=None, default_branch="main", now=None):
     if d is None:
         if kind in DATED_KINDS:
             problems.append(f"{kind} build has no data date (levels.json/source.md)")
-    else:
+    elif kind == "close":
+        # The close Reel is weekdays only: data must be today's trading session.
         if not nifty_day.is_trading_day(today):
-            problems.append(f"today {today} is not an NSE trading session; data date {d}")
+            problems.append(f"today {today} is not an NSE trading session; close data date {d}")
         elif d != today.isoformat():
             problems.append(f"data date {d} is not today's IST session {today}")
+    else:
+        # News, TA and recap run every day: data must be the latest completed
+        # session (news may also carry today's date).
+        valid = {latest_completed_session(now).isoformat()}
+        if kind == "news":
+            valid.add(today.isoformat())
+        if d not in valid:
+            problems.append(f"data date {d} is not the latest session {sorted(valid)} for {kind or 'build'}")
     if run_meta:
         branch = run_meta.get("head_branch")
         if branch != default_branch:
