@@ -1,6 +1,6 @@
 {
  "schema_version": 1,
- "updated_at": "2026-10-30",
+ "updated_at": "2026-10-31",
  "source": "vidIQ public Shorts snapshot; sample uses recent uploads with reported breakout scores. Titles and video identifiers are intentionally omitted.",
  "notes": "Aggregate observations only. performance_index is vidIQ's breakout score relative to that creator's typical videos, capped during scoring. Use normalized labels: mistake_prevention, mechanism_explainer, real_data, chart_concept, curiosity_question, number_led, warning, fast_paced, deep_dive, whiteboard_chart, or an exact topic-bank category. At least two rows per label are needed. No titles, scripts, thumbnails, or trade calls.",
  "observations": [
@@ -99,6 +99,13 @@
    "channel": "Stock Menthol",
    "source": "yt_api_auto",
    "pacing": "deep_dive",
+   "performance_index": 0.45,
+   "hook_style": "number_led"
+  },
+  {
+   "channel": "Stock Menthol",
+   "source": "yt_api_auto",
+   "pacing": "deep_dive",
    "performance_index": 5.0,
    "hook_style": "curiosity_question"
   },
@@ -106,43 +113,57 @@
    "channel": "Stock Menthol",
    "source": "yt_api_auto",
    "pacing": "deep_dive",
-   "performance_index": 0.73,
+   "performance_index": 1.0,
    "hook_style": "curiosity_question"
   },
   {
    "channel": "Stock Menthol",
    "source": "yt_api_auto",
    "pacing": "deep_dive",
-   "performance_index": 1.27,
+   "performance_index": 1.77,
    "hook_style": "curiosity_question"
   },
   {
    "channel": "Stock Menthol",
    "source": "yt_api_auto",
    "pacing": "deep_dive",
-   "performance_index": 0.34,
+   "performance_index": 0.5,
    "hook_style": "number_led"
   },
   {
    "channel": "Stock Menthol",
    "source": "yt_api_auto",
    "pacing": "deep_dive",
-   "performance_index": 1.87,
+   "performance_index": 2.72,
    "hook_style": "curiosity_question"
   },
   {
    "channel": "Stock Menthol",
    "source": "yt_api_auto",
    "pacing": "deep_dive",
-   "performance_index": 2.49,
+   "performance_index": 3.69,
    "hook_style": "number_led"
   },
   {
    "channel": "Stock Menthol",
    "source": "yt_api_auto",
    "pacing": "deep_dive",
-   "performance_index": 0.38,
+   "performance_index": 0.56,
    "hook_style": "number_led"
+  },
+  {
+   "channel": "CNBC Awaaz.",
+   "source": "yt_api_auto",
+   "pacing": "fast_paced",
+   "performance_index": 1.0,
+   "hook_style": "curiosity_question"
+  },
+  {
+   "channel": "Sagar Sinha Podcast",
+   "source": "yt_api_auto",
+   "pacing": "fast_paced",
+   "performance_index": 1.0,
+   "hook_style": "curiosity_question"
   },
   {
    "channel": "Money Talk",
@@ -153,14 +174,6 @@
    "topic_type": "mistake_prevention"
   },
   {
-   "channel": "Dr. Mukul Agrawal : Stock Market Coach",
-   "source": "yt_api_auto",
-   "pacing": "fast_paced",
-   "performance_index": 2.85,
-   "hook_style": "number_led",
-   "topic_type": "real_data"
-  },
-  {
    "channel": "INDmoney",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
@@ -168,17 +181,18 @@
    "hook_style": "curiosity_question"
   },
   {
-   "channel": "Finance with SKT",
+   "channel": "Dr. Mukul Agrawal : Stock Market Coach",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 1.06,
-   "hook_style": "number_led"
+   "performance_index": 1.52,
+   "hook_style": "number_led",
+   "topic_type": "real_data"
   },
   {
    "channel": "Finance with SKT",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 1.0,
+   "performance_index": 1.05,
    "hook_style": "number_led"
   },
   {
@@ -189,17 +203,46 @@
    "hook_style": "curiosity_question"
   },
   {
+   "channel": "Finance with SKT",
+   "source": "yt_api_auto",
+   "pacing": "fast_paced",
+   "performance_index": 1.0,
+   "hook_style": "number_led"
+  },
+  {
    "channel": "Zee Business",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 1.43,
+   "performance_index": 2.3,
    "hook_style": "curiosity_question"
   },
   {
-   "channel": "Tech Net India",
+   "channel": "Zee Business",
    "source": "yt_api_auto",
-   "pacing": "deep_dive",
-   "performance_index": 2.39,
+   "pacing": "fast_paced",
+   "performance_index": 1.0,
+   "hook_style": "curiosity_question"
+  },
+  {
+   "channel": "Dr. Mukul Agrawal : Stock Market Coach",
+   "source": "yt_api_auto",
+   "pacing": "fast_paced",
+   "performance_index": 2.01,
+   "hook_style": "curiosity_question"
+  },
+  {
+   "channel": "Finance With Sharan",
+   "source": "yt_api_auto",
+   "pacing": "fast_paced",
+   "performance_index": 1.0,
+   "hook_style": "curiosity_question",
+   "topic_type": "real_data"
+  },
+  {
+   "channel": "Aryan Chaudhary",
+   "source": "yt_api_auto",
+   "pacing": "fast_paced",
+   "performance_index": 1.0,
    "hook_style": "curiosity_question"
   },
   {
@@ -213,7 +256,7 @@
    "channel": "Dr. Mukul Agrawal : Stock Market Coach",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 0.89,
+   "performance_index": 0.48,
    "hook_style": "curiosity_question",
    "topic_type": "mistake_prevention"
   },
@@ -225,34 +268,11 @@
    "hook_style": "curiosity_question"
   },
   {
-   "channel": "Aryan Chaudhary",
-   "source": "yt_api_auto",
-   "pacing": "fast_paced",
-   "performance_index": 1.0,
-   "hook_style": "curiosity_question"
-  },
-  {
-   "channel": "CA Rachana Ranade (Marathi)",
-   "source": "yt_api_auto",
-   "pacing": "fast_paced",
-   "performance_index": 1.0,
-   "hook_style": "number_led",
-   "topic_type": "real_data"
-  },
-  {
    "channel": "Grow Utkarsh ",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
    "performance_index": 1.0,
    "hook_style": "curiosity_question"
-  },
-  {
-   "channel": "Dr. Mukul Agrawal : Stock Market Coach",
-   "source": "yt_api_auto",
-   "pacing": "fast_paced",
-   "performance_index": 1.15,
-   "hook_style": "number_led",
-   "topic_type": "mechanism_explainer"
   },
   {
    "channel": "Aaj Tak",
@@ -265,38 +285,22 @@
    "channel": "Dr. Mukul Agrawal : Stock Market Coach",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 0.73,
+   "performance_index": 0.39,
    "hook_style": "curiosity_question"
   },
   {
    "channel": "StockBox",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 0.87,
-   "hook_style": "curiosity_question",
-   "topic_type": "mistake_prevention"
-  },
-  {
-   "channel": "StockBox",
-   "source": "yt_api_auto",
-   "pacing": "fast_paced",
-   "performance_index": 1.13,
-   "hook_style": "curiosity_question",
-   "topic_type": "mistake_prevention"
-  },
-  {
-   "channel": "Dr. Mukul Agrawal : Stock Market Coach",
-   "source": "yt_api_auto",
-   "pacing": "fast_paced",
    "performance_index": 1.0,
    "hook_style": "curiosity_question",
-   "topic_type": "mechanism_explainer"
+   "topic_type": "mistake_prevention"
   },
   {
    "channel": "Tech Net India",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 1.0,
+   "performance_index": 1.68,
    "hook_style": "number_led"
   },
   {
@@ -312,13 +316,6 @@
    "pacing": "fast_paced",
    "performance_index": 1.0,
    "hook_style": "curiosity_question",
-   "topic_type": "real_data"
-  },
-  {
-   "channel": "The Millionaires Mind",
-   "source": "yt_api_auto",
-   "pacing": "fast_paced",
-   "performance_index": 1.0,
    "topic_type": "real_data"
   },
   {
@@ -354,9 +351,16 @@
    "channel": "Nitin Murarka Nifty ke Nishanebaaz",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 0.44,
+   "performance_index": 0.45,
    "hook_style": "curiosity_question",
    "topic_type": "real_data"
+  },
+  {
+   "channel": "Malkansview",
+   "source": "yt_api_auto",
+   "pacing": "fast_paced",
+   "performance_index": 1.02,
+   "hook_style": "number_led"
   },
   {
    "channel": "niftywala",
@@ -370,16 +374,9 @@
    "channel": "UFL Capital Markets | SEBI RA",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 1.48,
+   "performance_index": 1.47,
    "hook_style": "curiosity_question",
    "topic_type": "real_data"
-  },
-  {
-   "channel": "Malkansview",
-   "source": "yt_api_auto",
-   "pacing": "fast_paced",
-   "performance_index": 1.02,
-   "hook_style": "number_led"
   },
   {
    "channel": "Malkansview",
@@ -392,7 +389,7 @@
    "channel": "UFL Capital Markets | SEBI RA",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 0.52,
+   "performance_index": 0.53,
    "hook_style": "curiosity_question",
    "topic_type": "real_data"
   },
@@ -407,22 +404,21 @@
    "channel": "UFL Capital Markets | SEBI RA",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 2.76,
+   "performance_index": 2.67,
    "topic_type": "real_data"
   },
   {
-   "channel": "Surface Trader",
+   "channel": "Trading with Groww",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 2.4,
-   "hook_style": "curiosity_question",
-   "topic_type": "chart_concept"
+   "performance_index": 1.0,
+   "hook_style": "curiosity_question"
   },
   {
    "channel": "Nitin Murarka Nifty ke Nishanebaaz",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 1.56,
+   "performance_index": 1.55,
    "hook_style": "curiosity_question",
    "topic_type": "real_data"
   },
@@ -438,7 +434,7 @@
    "channel": "UFL Capital Markets | SEBI RA",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 0.36,
+   "performance_index": 0.37,
    "hook_style": "curiosity_question",
    "topic_type": "real_data"
   },
@@ -458,10 +454,18 @@
    "topic_type": "chart_concept"
   },
   {
+   "channel": "Surface Trader",
+   "source": "yt_api_auto",
+   "pacing": "fast_paced",
+   "performance_index": 1.47,
+   "hook_style": "curiosity_question",
+   "topic_type": "chart_concept"
+  },
+  {
    "channel": "THE WORLD TRADER",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 3.03,
+   "performance_index": 2.83,
    "topic_type": "chart_concept"
   },
   {
@@ -496,7 +500,7 @@
    "channel": "Surface Trader",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 1.19,
+   "performance_index": 0.8,
    "hook_style": "curiosity_question",
    "topic_type": "chart_concept"
   },
@@ -504,7 +508,7 @@
    "channel": "Surface Trader",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 3.19,
+   "performance_index": 3.49,
    "hook_style": "curiosity_question",
    "topic_type": "chart_concept"
   },
@@ -512,7 +516,7 @@
    "channel": "Surface Trader",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 0.65,
+   "performance_index": 1.2,
    "hook_style": "curiosity_question",
    "topic_type": "chart_concept"
   },
@@ -520,15 +524,7 @@
    "channel": "Surface Trader",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 1.0,
-   "hook_style": "curiosity_question",
-   "topic_type": "chart_concept"
-  },
-  {
-   "channel": "Surface Trader",
-   "source": "yt_api_auto",
-   "pacing": "fast_paced",
-   "performance_index": 0.42,
+   "performance_index": 0.52,
    "topic_type": "chart_concept"
   },
   {
@@ -565,7 +561,7 @@
    "channel": "Surface Trader",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
-   "performance_index": 0.47,
+   "performance_index": 0.58,
    "topic_type": "chart_concept"
   },
   {
@@ -574,6 +570,13 @@
    "pacing": "fast_paced",
    "performance_index": 1.0,
    "topic_type": "mechanism_explainer"
+  },
+  {
+   "channel": "Super trade of pankaj ",
+   "source": "yt_api_auto",
+   "pacing": "fast_paced",
+   "performance_index": 1.0,
+   "topic_type": "chart_concept"
   },
   {
    "channel": "BEGINNER TRADER HELPER",
@@ -623,7 +626,7 @@
    "topic_type": "chart_concept"
   },
   {
-   "channel": "tradematt ",
+   "channel": "MarketPulse121",
    "source": "yt_api_auto",
    "pacing": "fast_paced",
    "performance_index": 1.0,

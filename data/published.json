@@ -791,5 +791,21 @@
   "ig_media_id": "17980281803918311",
   "content_hash": "e9c0e453983e9e7b",
   "title_norm": "\u0939\u092b\u094d\u0924\u0947 \u0915\u093e \u0915\u094d\u0932\u094b\u091c\u093c 22,520.45"
+ },
+ {
+  "date_ist": "2026-11-01",
+  "slot": "08:30",
+  "video_id": "qduV4xpoBVo",
+  "format": "short",
+  "topic_key": "pat_breakout",
+  "voice_engine": "gemini",
+  "deepseek_calls": 1,
+  "deepseek_prompt_tokens": 1494,
+  "deepseek_completion_tokens": 510,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": "gemini",
+  "source_run": "41218027727",
+  "ig_deferred": "deferred: qduV4xpoBVo publishAt=2026-11-01T03:00:00Z run=41218027727"
  }
 ]

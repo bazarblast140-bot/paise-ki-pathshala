@@ -1,22 +1,22 @@
 {
  "schema_version": 1,
- "updated_at": "2026-10-30",
+ "updated_at": "2026-10-31",
  "notes": "Optional normalized outcome lift by existing topic-bank key; keep values between -1 and 1.",
  "topics": {
   "intraday_risk_reward": -1.0,
   "atr_sl": -1.0,
   "risk_daily_loss_limit": -1.0,
   "intraday_gap": -1.0,
-  "pat_bear_engulf": 0.138,
-  "intraday_volume": -0.737,
+  "pat_bear_engulf": 0.0,
+  "intraday_volume": -1.0,
   "pat_ema_cross": 1.0,
-  "pat_black_crows": -0.515,
+  "pat_black_crows": -0.322,
   "pat_double_bottom": -1.0,
   "pat_triangle": 1.0,
   "pat_stop_loss": 1.0,
   "pat_gap_up": -1.0,
-  "pat_flag": -0.737,
+  "pat_flag": -1.0,
   "pat_bull_harami": -1.0,
-  "pat_hanging_man": -1.0
+  "pat_hanging_man": 1.0
  }
 }
