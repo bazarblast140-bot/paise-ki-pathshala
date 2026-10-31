@@ -2219,19 +2219,6 @@
     "stock_turnaround",
     "risk_leverage",
     "business_cash",
-    "aaj_ka_nifty",
-    "pat_bear_flag",
-    "pat_evening_star",
-    "pat_shooting_star",
-    "pat_inside_bar",
-    "pat_breakout",
-    "pat_bull_engulf",
-    "pat_cup_handle",
-    "pat_doji",
-    "pat_double",
-    "pat_dark_cloud",
-    "pat_marubozu",
-    "pat_tweezer_bottom",
-    "pat_white_soldiers"
+    "aaj_ka_nifty"
   ]
 }
