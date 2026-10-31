@@ -841,3 +841,46 @@ class MainTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WarnOnlyExitTests(unittest.TestCase):
+    """A warn-only run opens the issue but does not turn the Action red."""
+
+    def _checks(self, status):
+        return [
+            H.Check(name="Kimi", status=status, detail="available_balance=0 (backup LLM)"),
+            H.Check(name="Buffer", status="warn", detail="only 0 ready buffer Short(s)"),
+        ]
+
+    def test_warn_only_is_a_problem_but_not_red(self):
+        checks = self._checks("warn")
+        self.assertTrue(H.has_problem(checks))
+        self.assertFalse(H.is_red(checks))
+        self.assertTrue(H.is_red(self._checks("fail")))
+
+    def test_main_exits_zero_on_warn_only_and_still_syncs_the_issue(self):
+        import io
+        from contextlib import redirect_stdout
+        synced = {}
+
+        def fake_sync(http, repo, token, title, body, problem, secrets):
+            synced["problem"] = problem
+            return H.SyncResult("updated", number=27)
+
+        now = datetime(2026, 10, 31, 6, 21, tzinfo=IST)
+        with mock.patch.object(H, "run_checks", return_value=self._checks("warn")), \
+                mock.patch.object(H, "sync_issue", side_effect=fake_sync), \
+                redirect_stdout(io.StringIO()):
+            code = H.main(http=FakeHttp([]), env={"GITHUB_REPOSITORY": "acme/widgets"}, now=now)
+        self.assertEqual(code, 0)
+        self.assertTrue(synced["problem"])
+
+    def test_main_exits_one_on_a_failed_check(self):
+        import io
+        from contextlib import redirect_stdout
+        now = datetime(2026, 10, 31, 6, 21, tzinfo=IST)
+        with mock.patch.object(H, "run_checks", return_value=self._checks("fail")), \
+                mock.patch.object(H, "sync_issue", return_value=H.SyncResult("updated", number=27)), \
+                redirect_stdout(io.StringIO()):
+            code = H.main(http=FakeHttp([]), env={}, now=now)
+        self.assertEqual(code, 1)

@@ -962,6 +962,15 @@ def has_problem(checks):
     return any(c.status in ("fail", "warn") for c in checks)
 
 
+def is_red(checks):
+    """A red run means a real failure: a check failed or something is blocked.
+
+    Warnings (low backup balance, empty buffer, few future slots) still open or
+    update the health-alert issue, but they do not turn the Action red.
+    """
+    return any(c.status == "fail" or getattr(c, "blocks", None) for c in checks)
+
+
 def impact(checks):
     youtube = "AT RISK" if any(c.blocks == "youtube" for c in checks) else "ok"
     if any(c.blocks == "instagram" for c in checks):
@@ -1243,7 +1252,7 @@ def main(http=None, env=None, now=None):
     if _env(env, "HEALTH_DRY_RUN") == "1":
         print("[health] dry-run — GitHub issue not touched", flush=True)
         print(body, flush=True)
-        return 1 if problem else 0
+        return 1 if is_red(checks) else 0
 
     result = sync_issue(
         http,
@@ -1257,7 +1266,7 @@ def main(http=None, env=None, now=None):
     print(f"[health] issue {result.action}" + (f" #{result.number}" if result.number else ""), flush=True)
     if result.error:
         print(redact(f"[health] issue error: {result.error}", secrets), flush=True)
-    if problem or result.action == "error":
+    if is_red(checks) or result.action == "error":
         return 1
     return 0
 
