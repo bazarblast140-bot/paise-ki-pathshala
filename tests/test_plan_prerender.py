@@ -41,7 +41,7 @@ class PreRenderTests(unittest.TestCase):
             words = sum(len(str(spoken[beat]).split()) for beat in trade_plan.BEATS)
             self.assertGreaterEqual(words, trade_plan.TOTAL_WORDS[0], key)
             self.assertLessEqual(words, trade_plan.TOTAL_WORDS[1], key)
-            estimate = words / 1.9
+            estimate = words / trade_plan.CHARON_WPS
             self.assertGreaterEqual(estimate, trade_plan.VOICE_SECONDS[0], key)
             self.assertLessEqual(estimate, trade_plan.VOICE_REVIEW_MAX, key)
             self.assertEqual(board_short.check_narration(narration, topic), [], key)

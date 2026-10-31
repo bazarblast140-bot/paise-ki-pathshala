@@ -18,9 +18,12 @@ DISCLAIMER_PX = 40
 # The topic the owner asked for is 40–50s. A take up to 55s is a review, not a block.
 VOICE_SECONDS = (40.0, 50.0)
 VOICE_REVIEW_MAX = 55.0
-# 40s at 1.9 words/s is 76 words. 50s is 95. 55s is 104. Scripts aim inside 40–50s.
-TOTAL_WORDS = (84, 100)
-WORD_TARGET = (88, 96)
+# Measured Gemini Charon takes run ~2.6 words/s (91 words -> 35.2s, 92 -> 37.3s on
+# 31-Oct-2026), so 84-100 words always landed under the 40s floor. 104 words is
+# ~40s, 128 is ~49s. Scripts aim at ~110-122 words (~43-47s).
+CHARON_WPS = 2.5  # measured Charon pace, used by tests to estimate a take
+TOTAL_WORDS = (104, 128)
+WORD_TARGET = (110, 122)
 WORD_TARGETS = {beat: 14 for beat in BEATS}
 BANNED = (
     "नतीजा", "हिसाब", "बत्ती", "हद", "पूँजी", "क्षमता", "तय करो", "पलटवार", "चीरती",
