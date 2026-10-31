@@ -310,3 +310,14 @@ def test_box_gate_skips_ema_only_for_article_news():
     assert box_gate(dict(news, kind="ta", chart="tradingview"), today="2026-11-01")
     assert box_gate(dict(news, verdict="HOLD"), today="2026-11-01")
     assert box_gate(dict(news, session="2026-10-31"), today="2026-11-01")
+
+
+def test_box_gate_weekend_ta_and_recap_use_latest_session_close_today_only():
+    from override_mp4 import box_gate
+    ta = {"verdict": "PASS", "capture_mode": "box-signed-in", "ema_ok": True,
+          "kind": "ta", "chart": "tradingview", "session": "2026-10-30"}
+    assert box_gate(ta, today="2026-11-01") == ""          # Sunday TA, Friday session
+    assert box_gate(dict(ta, kind="recap"), today="2026-10-31") == ""
+    assert box_gate(dict(ta, session="2026-10-29"), today="2026-11-01")
+    assert box_gate(dict(ta, kind="close"), today="2026-11-01")   # Sunday close refused
+    assert box_gate(ta, today="2026-11-02")                 # Monday needs Monday
