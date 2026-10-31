@@ -263,6 +263,8 @@ class VoiceTests(unittest.TestCase):
         self.assertEqual(board_short.live_voice_bounds(topic), (40.0, 55.0))
         self.assertEqual(board_short._output_bounds(topic, engine="gemini"), (40.0, 55.0))
         self.assertEqual(board_short._output_bounds(topic, engine="edge"), (40.0, 55.0))
+        self.assertEqual(board_short._output_bounds(topic, engine="edge", proof=True), (40.0, 65.0))
+        self.assertEqual(board_short._output_bounds(topic, engine="gemini", proof=True), (40.0, 55.0))
         self.assertEqual(board_short._gemini_pace_window(topic), (40.0, 50.0))
         self.assertEqual(board_short.gemini_accepts(46.0, trade_plan.VOICE_SECONDS), "target")
         self.assertEqual(board_short.gemini_accepts(52.0, trade_plan.VOICE_SECONDS), "review")
@@ -282,6 +284,7 @@ class VoiceTests(unittest.TestCase):
         self.assertEqual(board_short._output_bounds(four, engine="gemini"), (34.0, 65.0))
         self.assertEqual(board_short._gemini_pace_window(four), (34.0, 65.0))
         self.assertEqual(board_short._output_bounds(four, engine="edge"), (45.0, 65.0))
+        self.assertEqual(board_short._output_bounds(four, engine="edge", proof=True), (45.0, 65.0))
         self.assertFalse(board_short._gemini_stop(37.0, (34.0, 65.0), 0))
         nifty = {"key": "aaj_ka_nifty", "_live_short": True, "_live_beats": "four"}
         self.assertEqual(board_short.live_voice_bounds(nifty), (45.0, 59.0))

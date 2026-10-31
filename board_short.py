@@ -5532,7 +5532,8 @@ def prepare_spoken(spoken, narration, topic, c, spec):
             die(f"voice duration outside 42-62s; refusing artificial speed change: {total:.1f}s — {detail}")
         audio = {beat: RUN / f"voice_clean_{beat}.wav" for beat in order}
         return spoken, narration, audio, raw, beat_times, total
-    lo, hi = _output_bounds(topic, engine=engine)
+    edge_proof = os.environ.get("PROOF_FREE_AUDIO", "").strip().lower() == "edge"
+    lo, hi = _output_bounds(topic, engine=engine, proof=edge_proof)
     label = f"{lo:.0f}-{hi:.0f}"
     if _approved_narration(narration, topic) and not (lo <= total <= hi):
         die(
@@ -5864,8 +5865,16 @@ def gemini_min_seconds():
     return float(gemini_voice.GEMINI_MIN_SECONDS)
 
 
-def _output_bounds(topic, engine=None):
-    """Seconds final.mp4 must land in. A live short uses its voice window."""
+EDGE_PROOF_BOUNDS = (40.0, 65.0)
+
+
+def _output_bounds(topic, engine=None, proof=False):
+    """Seconds final.mp4 must land in. A live short uses its voice window.
+
+    `proof=True` with engine "edge" is the free Edge pre-render of a 40-55s
+    plan short: Edge speaks slower than Charon, so it gets 40-65s. The final
+    Gemini/Charon window is unchanged.
+    """
     if str((topic or {}).get("key") or "") == "aaj_ka_nifty":
         lo, hi = 45.0, 59.0
     elif (topic or {}).get("_live_short"):
@@ -5874,6 +5883,9 @@ def _output_bounds(topic, engine=None):
         lo, hi = 45.0, 62.0
     if engine is None:
         engine = (eleven_voice.load_voice_record(RUN).get("engine") or "")
+    if (proof and str(engine or "").strip().lower() == "edge"
+            and (float(lo), float(hi)) == (40.0, 55.0)):
+        return EDGE_PROOF_BOUNDS
     return apply_gemini_floor(lo, hi, engine)
 
 
