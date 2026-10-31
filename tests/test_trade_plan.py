@@ -354,3 +354,19 @@ class DarkCloudPehchanTests(unittest.TestCase):
         # 30-Oct: three prices in one beat ran into the context beat and failed sync.
         script = approved_bank.by_key("pat_dark_cloud")
         self.assertEqual(trade_plan._PLACEHOLDER.findall(script["beats"]["pehchan"]), ["mid"])
+
+
+class EdgeProofFinalWindowTests(unittest.TestCase):
+    def test_final_mp4_check_uses_edge_proof_window_only_in_proof(self):
+        import inspect
+        src = inspect.getsource(board_short)
+        i = src.index("refusing post-render speed change: {final_dur")
+        block = src[max(0, i - 900):i]
+        self.assertIn("_output_bounds(topic, proof=edge_proof)", block)
+        self.assertIn('PROOF_FREE_AUDIO', block)
+        topic = _topic("pat_hammer")
+        with mock.patch.object(board_short.eleven_voice, "load_voice_record", return_value={"engine": "edge"}):
+            self.assertEqual(board_short._output_bounds(topic, proof=True), (40.0, 65.0))
+            self.assertEqual(board_short._output_bounds(topic), (40.0, 55.0))
+        with mock.patch.object(board_short.eleven_voice, "load_voice_record", return_value={"engine": "gemini"}):
+            self.assertEqual(board_short._output_bounds(topic, proof=True), (40.0, 55.0))

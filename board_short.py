@@ -5810,7 +5810,9 @@ def _render_short(topic, n, c, spec, source="llm", beat_pngs=None):
     final_path = RUN / "final.mp4"
     final_dur = duration(final_path)
     if topic.get("_live_short"):
-        lo, hi = _output_bounds(topic)
+        # Free Edge pre-render only: same 40-65s proof window as the voice check.
+        edge_proof = os.environ.get("PROOF_FREE_AUDIO", "").strip().lower() == "edge"
+        lo, hi = _output_bounds(topic, proof=edge_proof)
         label = f"{lo:.0f}-{hi:.0f}"
         if final_dur < lo or final_dur > hi:
             _hold_hard(review)
