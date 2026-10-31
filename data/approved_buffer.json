@@ -684,10 +684,10 @@
       "state": "held",
       "topic_key": "pat_bear_flag",
       "owner_approved": false,
-      "created_at": "2026-10-22T05:28:43Z",
+      "created_at": "2026-10-31T06:23:01Z",
       "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
       "voice_engine": "gemini",
-      "duration_s": 42.11
+      "duration_s": 41.61
     },
     {
       "id": "hold-pat_double_bottom-20261022T052838Z",
@@ -4006,6 +4006,26 @@
       "reason": "voice_engine=edge is held; gemini_take",
       "voice_engine": "edge",
       "duration_s": 45.03
+    },
+    {
+      "id": "hold-pat_tweezer_bottom-20261031T062241Z",
+      "state": "held",
+      "topic_key": "pat_tweezer_bottom",
+      "owner_approved": false,
+      "created_at": "2026-10-31T06:22:41Z",
+      "reason": "render rc=1",
+      "voice_engine": "gemini",
+      "duration_s": 42.34
+    },
+    {
+      "id": "hold-pat_white_soldiers-20261031T062242Z",
+      "state": "held",
+      "topic_key": "pat_white_soldiers",
+      "owner_approved": false,
+      "created_at": "2026-10-31T06:22:42Z",
+      "reason": "self-review missing; chart scenes missing; audio mix evidence missing; numbers and maths gate missing; spoken beats missing for the leak gate; sync gate did not pass; duration evidence missing; narration missing; hook score missing; visual score missing; accuracy score missing; craft score missing; sync score missing; self-review None is under 75; voice_engine=missing is held",
+      "voice_engine": "",
+      "duration_s": null
     }
   ]
 }
