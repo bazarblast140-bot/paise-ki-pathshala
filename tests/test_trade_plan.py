@@ -335,8 +335,8 @@ class OwnerApprovedSevenTests(unittest.TestCase):
             plan = trade_plan.plan_for(key)
             self.assertGreaterEqual(plan.rr, 1.5, key)
             words = sum(len(narration["beats"][beat].split()) for beat in trade_plan.BEATS)
-            self.assertLessEqual(words / 1.9, trade_plan.VOICE_SECONDS[1] + 1e-9, key)
-            self.assertGreaterEqual(words / 1.9, trade_plan.VOICE_SECONDS[0], key)
+            self.assertLessEqual(words / trade_plan.CHARON_WPS, trade_plan.VOICE_SECONDS[1] + 1e-9, key)
+            self.assertGreaterEqual(words / trade_plan.CHARON_WPS, trade_plan.VOICE_SECONDS[0], key)
             self.assertTrue(pattern_marks_exist(key), key)
 
 
