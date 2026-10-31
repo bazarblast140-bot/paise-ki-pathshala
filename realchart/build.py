@@ -138,7 +138,7 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             key_prefix=_voice_key(kind, levels, ""),
         )
         from realchart.render import assemble, frames
-        pics = frames(out / "cards", kind, levels, rows, chart.get("path"), article, intraday)
+        pics = frames(out / "cards", kind, levels, rows, chart.get("path"), article, intraday, durations=beats)
         spoken = sum(beats)
         if spoken > 50.0 and dry_run:
             beats = [b * 45.0 / spoken for b in beats]  # silent placeholder voice; real reads are timed
@@ -161,9 +161,9 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
         # TA: the end card speaks the follow line over music (16-Oct review: a silent card at 0:47).
         say = script.end_card_voice(kind) if not dry_run else {}
         outro_rtt = render_end_card(ends_dir / "outro_rtt.mp4", chart.get("path"), "Rajesh Technical Trader", "follow करो", extra=extra,
-                                    voice_text=say.get("rtt"))
+                                    voice_text=say.get("rtt"), plan=_end_plan(kind, levels))
         outro_pkp = render_end_card(ends_dir / "outro_pkp.mp4", chart.get("path"), "Paise Ki Pathshala", "follow करो", extra=extra,
-                                    voice_text=say.get("pkp"))
+                                    voice_text=say.get("pkp"), plan=_end_plan(kind, levels))
         try:
             attach(out / "final.mp4", out, outro_rtt=outro_rtt, outro_pkp=outro_pkp)
         except FileNotFoundError as exc:
@@ -289,7 +289,11 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
         if not ranked:
             raise Hold("scan", "no stock with a clear pattern at support/resistance and RR >= 1.5")
         tried = []
+        from realchart.levels import trigger_ok
         for levels, plan in ranked[:8]:
+            if not trigger_ok(plan.get("side", "long"), plan["entry"], levels["close"]):
+                tried.append(f"{levels.get('symbol')}: entry {plan['entry']} already hit at close {levels['close']}")
+                continue
             levels = apply_stock_plan(dict(levels), plan)
             try:
                 return _prepare_rest(levels, *rest)
@@ -665,3 +669,12 @@ def _alert(kind, reason, detail, now):
     )
     print(f"[realchart] health-alert {result.action}", flush=True)
 
+
+
+def _end_plan(kind, levels):
+    """TA end card plan rows (entry / SL / target from the same plan the voice reads)."""
+    if kind != "ta":
+        return None
+    plan = levels.get("plan") or {}
+    return {"symbol": levels.get("symbol"), "entry": plan.get("entry", levels.get("entry")),
+            "stop": plan.get("stop", levels.get("stop")), "target": plan.get("target", levels.get("target"))}

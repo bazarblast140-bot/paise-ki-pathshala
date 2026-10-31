@@ -83,7 +83,9 @@ class TaScript(unittest.TestCase):
 
     def test_end_card_follow_line(self):
         lines = script.end_card_lines("ta", self.levels)
-        self.assertTrue(any("follow karo" in line for line in lines))
+        self.assertTrue(lines)
+        # Devanagari only on the TA end card (1-Nov review); the follow button is drawn by ta_end_image.
+        self.assertFalse(any(ch.isascii() and ch.isalpha() for line in lines for ch in line))
 
     def test_next_candidate_is_tried_when_capture_holds(self):
         levels = compute(_bounce_bars(), "NSE:TEST", "TEST.NS")
