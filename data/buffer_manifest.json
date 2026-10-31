@@ -2204,6 +2204,853 @@
         "captions": "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: T,Noto Sans Devanagari,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,8,60,190,0,1\nStyle: Cap,Noto Sans Devanagari,62,&H00FFFFFF,&H00FFFFFF,&H00101010,&HA0000000,-1,0,0,0,100,100,0,0,3,4,0,2,70,190,520,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n\n"
       },
       "claimed_at": "2026-10-29T17:31:28Z"
+    },
+    {
+      "id": "buf-pat_bear_flag-52747a95b65a",
+      "state": "ready",
+      "topic_key": "pat_bear_flag",
+      "title": "बेयर फ्लैग",
+      "description": "बेयर फ्लैग पर शॉर्ट कब करें? एंट्री 131 और स्टॉप 141 का प्लान।\n\nबेयर फ्लैग — आसान हिंदी में: पहचान, मतलब और traders इसे आमतौर पर कैसे इस्तेमाल करते हैं।\n\n💬 यह बात पहले से पता थी? Comment में हाँ या नहीं लिखो।\n\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nहम SEBI-रजिस्टर्ड सलाहकार नहीं हैं। किसी भी निवेश से पहले रजिस्टर्ड सलाहकार से बात करें।\n\nस्रोत और नोट्स\n- पूरा ट्रेड प्लान\n- स्रोत: illustrative teaching chart drawn in this video (example candles, not live market data, not a stock tip). Every plan number below is computed by the channel's trade_plan rules from these candles.\n- Example chart candles: #1 O 160 H 162 L 150 C 152; #2 O 152 H 154 L 140 C 142; #3 O 142 H 144 L 130 C 132; #4 O 132 H 138 L 131 C 136; #5 O 136 H 139 L 134 C 135; #6 O 135 H 136 L 124 C 126; #7 O 126 H 128 L 100 C 102.\n- Plan side: short (sell). Entry 131, stop-loss 141, target 102, resist 139.\n- Risk = |entry - stop| = 10; reward = |target - entry| = 29; risk:reward = 1:2.9 (spoken 1 बटा 2.9).\n- Other chart levels: pole 29, flag 139.\n\nPaise Ki Pathshala — ट्रेडिंग की पाठशाला — चार्ट, पैटर्न, रिस्क और असली डेटा\n\nरोज़ 3 ट्रेडिंग Shorts — कैंडलस्टिक, इंडिकेटर, ऑर्डर, F&O, रिस्क और असली डेटा।\n\n#StockMarketHindi #TradingHindi #PaiseKiPathshala #ShareMarket",
+      "tags": [
+        "hindi",
+        "stock market hindi",
+        "trading hindi",
+        "paise ki pathshala"
+      ],
+      "sha256": "52747a95b65ac02b467055c7f815f4609b4d8a72d6ce9a87e8265d935eab6375",
+      "asset_name": "buf-pat_bear_flag-52747a95b65a.mp4",
+      "meta_name": "buf-pat_bear_flag-52747a95b65a.json",
+      "created_at": "2026-10-31T16:21:02Z",
+      "used_at": null,
+      "used_slot": null,
+      "used_date_ist": null,
+      "video_id": null,
+      "gates": {
+        "fallback_narration": {
+          "passed": true,
+          "at": "2026-10-31T16:21:02Z",
+          "detail": "llm outline"
+        },
+        "ai_review": {
+          "passed": true,
+          "at": "2026-10-31T16:21:02Z",
+          "detail": "READY"
+        },
+        "sync": {
+          "passed": true,
+          "at": "2026-10-31T16:21:02Z",
+          "detail": "whisper sync passed"
+        },
+        "craft": {
+          "passed": true,
+          "at": "2026-10-31T16:21:02Z",
+          "detail": "craft 100"
+        },
+        "number_match": {
+          "passed": true,
+          "at": "2026-10-31T16:21:02Z",
+          "detail": "numbers match"
+        },
+        "duplicate_text": {
+          "passed": true,
+          "at": "2026-10-31T16:21:02Z",
+          "detail": "no duplicate text"
+        },
+        "freshness": {
+          "passed": true,
+          "at": "2026-10-31T16:21:02Z",
+          "detail": "no live market as-of; 3-trading-day gate does not apply",
+          "mode": "evergreen"
+        }
+      },
+      "files": {
+        "topic": {
+          "key": "pat_bear_flag",
+          "cat": "PATTERN",
+          "topic": "बेयर फ्लैग",
+          "thumb": [
+            "BEAR",
+            "FLAG"
+          ],
+          "sticker": "बेयर फ्लैग",
+          "beats": {
+            "hook": [
+              "प्लान",
+              "कमेंट"
+            ],
+            "pehchan": [
+              "पहचान",
+              "नियम"
+            ],
+            "context": [
+              "कहाँ वैलिड",
+              "कमजोर"
+            ],
+            "entry": [
+              "एंट्री",
+              "ट्रिगर"
+            ],
+            "sl": [
+              "स्टॉप",
+              "क्यों"
+            ],
+            "target": [
+              "टारगेट",
+              "रिस्क-रिवॉर्ड"
+            ],
+            "invalidation": [
+              "स्किप",
+              "गलती"
+            ],
+            "cta": [
+              "कमेंट",
+              "प्लान"
+            ]
+          },
+          "facts": [
+            "पूरा ट्रेड प्लान"
+          ],
+          "seo": "बेयर फ्लैग",
+          "hook_line": "बेयर फ्लैग पर शॉर्ट कब करें?",
+          "_spoken_beats": {
+            "hook": "बेयर फ्लैग पर शॉर्ट कब करें? एंट्री 131 और स्टॉप 141 का प्लान।",
+            "pehchan": "तेज गिरावट का पोल 29 पॉइंट। फ्लैग 139 तक धीरे ऊपर जाता है।",
+            "context": "चार्ट पर रेसिस्टेंस लाइन 139 देखो, सेटअप इसी लेवल पर वैलिड।",
+            "entry": "एंट्री 131, फ्लैग का लो ब्रेकडाउन क्लोज पर।",
+            "sl": "स्टॉप 141 फ्लैग हाई के ऊपर। हाई टूटा तो प्लान गलत। एंट्री के साथ ही स्टॉप लॉस 141 लगाओ।",
+            "target": "टारगेट 102, पोल की हाइट। यानी रिस्क-रिवॉर्ड 1 बटा 2.9, चार्ट पर लिखा है। टारगेट 102 आते ही प्रॉफिट बुक करो।",
+            "invalidation": "गलती ब्रेकडाउन से पहले शॉर्ट। हाई 141 टूटे तो स्किप। प्लान फेल तो अगला सेटअप देखो।",
+            "cta": "बेयर फ्लैग का ब्रेकडाउन कभी पकड़ा? कमेंट करो। Sirf seekhne ke liye, financial advice nahi."
+          },
+          "_approved_bank": true,
+          "_live_short": true,
+          "_live_beats": "plan",
+          "_voice": {
+            "words_per_second": 1.9
+          }
+        },
+        "script": "TITLE:\nबेयर फ्लैग\n\nHOOK (0-3 sec):\nबेयर फ्लैग पर शॉर्ट कब करें? एंट्री 131 और स्टॉप 141 का प्लान।\n\nBODY:\n[SEGMENT PEHCHAN]\nतेज गिरावट का पोल 29 पॉइंट। फ्लैग 139 तक धीरे ऊपर जाता है।\n\n[SEGMENT CONTEXT]\nचार्ट पर रेसिस्टेंस लाइन 139 देखो, सेटअप इसी लेवल पर वैलिड।\n\n[SEGMENT ENTRY]\nएंट्री 131, फ्लैग का लो ब्रेकडाउन क्लोज पर।\n\n[SEGMENT SL]\nस्टॉप 141 फ्लैग हाई के ऊपर। हाई टूटा तो प्लान गलत। एंट्री के साथ ही स्टॉप लॉस 141 लगाओ।\n\n[SEGMENT TARGET]\nटारगेट 102, पोल की हाइट। यानी रिस्क-रिवॉर्ड 1 बटा 2.9, चार्ट पर लिखा है। टारगेट 102 आते ही प्रॉफिट बुक करो।\n\n[SEGMENT INVALIDATION]\nगलती ब्रेकडाउन से पहले शॉर्ट। हाई 141 टूटे तो स्किप। प्लान फेल तो अगला सेटअप देखो।\n\n[SEGMENT CTA]\nबेयर फ्लैग का ब्रेकडाउन कभी पकड़ा? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.\n\nCTA:\nयह बात पहले से पता थी? Comment में हाँ या नहीं लिखो।\n\nDISCLAIMER LINE:\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nFACT LEDGER:\n- पूरा ट्रेड प्लान\n- SOURCE: illustrative teaching chart drawn in this video (example candles, not live market data, not a stock tip). Every plan number below is computed by the channel's trade_plan rules from these candles.\n- Example chart candles: #1 O 160 H 162 L 150 C 152; #2 O 152 H 154 L 140 C 142; #3 O 142 H 144 L 130 C 132; #4 O 132 H 138 L 131 C 136; #5 O 136 H 139 L 134 C 135; #6 O 135 H 136 L 124 C 126; #7 O 126 H 128 L 100 C 102.\n- Plan side: short (sell). Entry 131, stop-loss 141, target 102, resist 139.\n- Risk = |entry - stop| = 10; reward = |target - entry| = 29; risk:reward = 1:2.9 (spoken 1 बटा 2.9).\n- Other chart levels: pole 29, flag 139.\n",
+        "report": "VERDICT: [READY TO PUBLISH]\n\n✅ Auto-checks pass:\nHook | Facts (sab figures illustrative chart se sourced, koi UNVERIFIED nahi) | Compliance (educational framing + disclaimer + \"financial advice nahi\", koi stock/fund/guaranteed-return claim nahi, koi tax figure nahi) | Coverage (pehchan→context→entry→SL→target→invalidation→CTA) | Visuals (8/8 chart shots, overlays on) | Length (short, tight)\n\n♻️ Reused-content risk: LOW\n- 0% stock footage, 8/8 original charts, premium Gemini AI voice, original script + overlays always-on — asli lever yahi hai, isliye LOW; aage bhi stock footage 0 rakho.\n\n⚠️ Tumhe dekhna hai (judgment calls):\n- Thumbnail: \"बेयर फ्लैग\" + entry 131 / SL 141 / target 102 ke saath ek saaf arrow wala chart — numbers dikhao, face nahi. Text mobile pe bada readable ho.\n- Taste: \"रिस्क-रिवॉर्ड 1 बटा 2.9\" thoda dry lag sakta hai (~TARGET segment) — visual pe 1:2.9 bada likho. CTA \"हाँ या नहीं\" aur \"ब्रेकडाउन पकड़ा?\" dono parallel hain, ek hi rakho.\n- Assumption: poora plan illustrative example candles pe hai (live market nahi) — yeh on-screen chhote text mein bhi dikhe, sirf voice mein nahi.\n\n🔴 Risks / assumptions:\n- Saare numbers illustrative teaching chart se (example candles, not live data) — \"Likely/Assuming\" tag factual accuracy ke liye theek, par viewer ko clear karna zaroori.\n- India jurisdiction, non-SEBI-registered channel — disclaimer line maujood, isliye compliance pass; koi buy/sell/hold recommendation nahi diya, sirf setup sikhaaya.\n- Koi tax ya regulatory figure nahi, isliye FY-naming risk zero.\n\nFAILS this round: none\n",
+        "verify_meta": {
+          "ai_verdict_valid": true,
+          "verdict": "READY",
+          "public_ready": true,
+          "soft_judgment_only": false,
+          "reasons": [],
+          "spoken_words": 143
+        },
+        "self_review": {
+          "parts": {
+            "hook": 100,
+            "visual": 90,
+            "accuracy": 100,
+            "trend": null,
+            "craft": 100,
+            "sync": 100
+          },
+          "overall": 98.0,
+          "passed": true,
+          "public_ok": true,
+          "review_flag": false,
+          "verdict": "PASS",
+          "summary": "overall 98.0 (hook 100, visual 90, accuracy 100, trend skip, craft 100, sync 100)",
+          "notes": [],
+          "bar": {
+            "part": 60,
+            "overall": 75
+          },
+          "chart": {
+            "mode": "schematic",
+            "source": null,
+            "as_of": null
+          },
+          "narration_source": "approved",
+          "sync": {
+            "ok": true,
+            "reason": "",
+            "scenes": [
+              {
+                "start": 0.0,
+                "end": 2.43,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.167,
+                "recall": 0.5,
+                "gate_recall": 0.5,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.5,
+                "shared": [
+                  "बेयर",
+                  "फ्लैग",
+                  "शॉर्ट",
+                  "कब",
+                  "करें"
+                ],
+                "script": "बेयर फ्लैग पर शॉर्ट कब करें? एंट्री",
+                "heard": "बेर फ्लाक पर शोड़ कब करें? अंट्री एकसो एकतीस",
+                "passed": true
+              },
+              {
+                "start": 2.43,
+                "end": 4.85,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.062,
+                "recall": 0.5,
+                "gate_recall": 0.5,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.5,
+                "shared": [
+                  "करें"
+                ],
+                "script": "करें? एंट्री 131 और स्टॉप 141 का प्लान।",
+                "heard": "अंट्री एकसो एकतीस और स्थोब एकसो एकतालीस का प्लान. तेस गिरावेट",
+                "passed": true
+              },
+              {
+                "start": 4.85,
+                "end": 7.09,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.0,
+                "recall": 0.444,
+                "gate_recall": 0.636,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.636,
+                "shared": [
+                  "तेज",
+                  "गिरावट",
+                  "पोल",
+                  "पॉइंट",
+                  "फ्लैग",
+                  "तक"
+                ],
+                "script": "तेज गिरावट का पोल 29 पॉइंट। फ्लैग 139 तक धीरे",
+                "heard": "एकतालीस का प्लान. तेस गिरावेट कापोल उन्तीस पूंट, फलाग एकसवुन्तालीस तक",
+                "passed": true
+              },
+              {
+                "start": 7.09,
+                "end": 9.33,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.154,
+                "recall": 0.833,
+                "gate_recall": 0.636,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.636,
+                "shared": [
+                  "तक",
+                  "धीरे",
+                  "ऊपर",
+                  "जाता"
+                ],
+                "script": "फ्लैग 139 तक धीरे ऊपर जाता है।",
+                "heard": "फलाग एकसवुन्तालीस तक दीरे उपर जाता है। चाट चाट पर",
+                "passed": true
+              },
+              {
+                "start": 9.33,
+                "end": 11.96,
+                "beat": "context",
+                "kind": "chart-context",
+                "jaccard": 0.0,
+                "recall": 0.5,
+                "gate_recall": 0.556,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.556,
+                "shared": [
+                  "चार्ट",
+                  "रेसिस्टेंस",
+                  "लाइन",
+                  "देखो",
+                  "सेटअप"
+                ],
+                "script": "चार्ट पर रेसिस्टेंस लाइन 139 देखो, सेटअप",
+                "heard": "चाट चाट पर रेजिस्टिटन्स लाईन एकसो उन्तालीस देखो. सेटाप",
+                "passed": true
+              },
+              {
+                "start": 11.96,
+                "end": 14.59,
+                "beat": "context",
+                "kind": "chart-context",
+                "jaccard": 0.0,
+                "recall": 0.6,
+                "gate_recall": 0.556,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.556,
+                "shared": [
+                  "देखो",
+                  "सेटअप",
+                  "इसी",
+                  "लेवल",
+                  "वैलिड",
+                  "एंट्री"
+                ],
+                "script": "देखो, सेटअप इसी लेवल पर वैलिड।",
+                "heard": "देखो. सेटाप इसी लविЛपिर य�E एंट्री सो एक दिस",
+                "passed": true
+              },
+              {
+                "start": 14.59,
+                "end": 18.21,
+                "beat": "entry",
+                "kind": "chart-entry",
+                "jaccard": 0.0,
+                "recall": 0.5,
+                "gate_recall": 0.667,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.667,
+                "shared": [
+                  "एंट्री",
+                  "फ्लैग",
+                  "लो",
+                  "ब्रेकडाउन",
+                  "क्लोज",
+                  "फ्लैग"
+                ],
+                "script": "एंट्री 131, फ्लैग का लो ब्रेकडाउन क्लोज पर।",
+                "heard": "एंट्री सो एक दिस फ्लाग का लोग ब्रेग्डाउन ख्लोस पर. स्तो सो एक तालीस",
+                "passed": true
+              },
+              {
+                "start": 18.21,
+                "end": 21.35,
+                "beat": "sl",
+                "kind": "chart-sl",
+                "jaccard": 0.0,
+                "recall": 0.438,
+                "gate_recall": 0.812,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.812,
+                "shared": [
+                  "स्टॉप",
+                  "फ्लैग",
+                  "हाई",
+                  "ऊपर",
+                  "हाई",
+                  "टूटा"
+                ],
+                "script": "स्टॉप 141 फ्लैग हाई के ऊपर। हाई टूटा तो प्लान गलत। एंट्री के साथ ही स्टॉप लॉस 141 लगाओ।",
+                "heard": "स्तो सो एक तालीस प्लाग हाँके अपर, हाँक तूटा तो प्लन गलत.",
+                "passed": true
+              },
+              {
+                "start": 21.35,
+                "end": 24.5,
+                "beat": "sl",
+                "kind": "chart-sl",
+                "jaccard": 0.0,
+                "recall": 1.0,
+                "gate_recall": 0.812,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.812,
+                "shared": [
+                  "गलती"
+                ],
+                "script": "लगाओ।",
+                "heard": "तूटा तो प्लन गलत. अंट्रीके साथ ही स्थ्टोप लोस एकसो एक तालीस लगाओ.",
+                "passed": true
+              },
+              {
+                "start": 24.5,
+                "end": 27.57,
+                "beat": "target",
+                "kind": "chart-target",
+                "jaccard": 0.25,
+                "recall": 1.0,
+                "gate_recall": 0.895,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.895,
+                "shared": [
+                  "टारगेट",
+                  "पोल",
+                  "हाइट"
+                ],
+                "script": "टारगेट 102, पोल की हाइट। यानी रिस्क-रिवॉर्ड",
+                "heard": "एकसो एक तालीस लगाओ. तर्गेट 102 पोल की हाइट, यहनी",
+                "passed": true
+              },
+              {
+                "start": 27.57,
+                "end": 30.65,
+                "beat": "target",
+                "kind": "chart-target",
+                "jaccard": 0.158,
+                "recall": 0.778,
+                "gate_recall": 0.895,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.895,
+                "shared": [
+                  "पोल",
+                  "हाइट",
+                  "यानी",
+                  "रिस्क",
+                  "रिवॉर्ड",
+                  "बटा"
+                ],
+                "script": "पोल की हाइट। यानी रिस्क-रिवॉर्ड 1 बटा 2.9, चार्ट पर",
+                "heard": "पोल की हाइट, यहनी रिस्क रिवाड एक बटा दो दशमलाव नाँ चाट पर",
+                "passed": true
+              },
+              {
+                "start": 30.65,
+                "end": 33.73,
+                "beat": "target",
+                "kind": "chart-target",
+                "jaccard": 0.158,
+                "recall": 0.8,
+                "gate_recall": 0.895,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.895,
+                "shared": [
+                  "2.9",
+                  "चार्ट",
+                  "लिखा",
+                  "टारगेट",
+                  "आते",
+                  "ही"
+                ],
+                "script": "2.9, चार्ट पर लिखा है। टारगेट 102 आते ही प्रॉफिट बुक करो।",
+                "heard": "दशमलाव नाँ चाट पर लिखाईग. तार्गेट 102 आते ही प्रोफिट बुक करो.",
+                "passed": true
+              },
+              {
+                "start": 33.73,
+                "end": 37.36,
+                "beat": "invalidation",
+                "kind": "chart-invalidation",
+                "jaccard": 0.062,
+                "recall": 0.571,
+                "gate_recall": 0.769,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.769,
+                "shared": [
+                  "गलती",
+                  "ब्रेकडाउन",
+                  "पहले",
+                  "शॉर्ट",
+                  "हाई"
+                ],
+                "script": "गलती ब्रेकडाउन से पहले शॉर्ट। हाई 141 टूटे",
+                "heard": "ही प्रोफिट बुक करो. गलती. ब्रेग्डाउन से पहले शोट. रहें 141",
+                "passed": true
+              },
+              {
+                "start": 37.36,
+                "end": 41.0,
+                "beat": "invalidation",
+                "kind": "chart-invalidation",
+                "jaccard": 0.05,
+                "recall": 0.5,
+                "gate_recall": 0.769,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.769,
+                "shared": [
+                  "हाई",
+                  "टूटे",
+                  "स्किप",
+                  "प्लान",
+                  "फेल",
+                  "अगला"
+                ],
+                "script": "शॉर्ट। हाई 141 टूटे तो स्किप। प्लान फेल तो अगला सेटअप देखो।",
+                "heard": "रहें 141 तो तो श्किप. प्लान फिल तो अगला सटब देखो.",
+                "passed": true
+              },
+              {
+                "start": 41.0,
+                "end": 43.95,
+                "beat": "cta",
+                "kind": "chart-cta",
+                "jaccard": 0.0,
+                "recall": 0.571,
+                "gate_recall": 0.692,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.692,
+                "shared": [
+                  "बेयर",
+                  "फ्लैग",
+                  "ब्रेकडाउन",
+                  "कभी",
+                  "पकडा",
+                  "कमेंट"
+                ],
+                "script": "बेयर फ्लैग का ब्रेकडाउन कभी पकड़ा? कमेंट करो।",
+                "heard": "अगला सटब देखो. बेर फलाक का ब्रिक्डाउन कभी पड़ा कोमेंग करो",
+                "passed": true
+              },
+              {
+                "start": 43.95,
+                "end": 46.89,
+                "beat": "cta",
+                "kind": "chart-cta",
+                "jaccard": 0.125,
+                "recall": 0.556,
+                "gate_recall": 0.692,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.692,
+                "shared": [
+                  "कमेंट",
+                  "करो",
+                  "सिर्फ",
+                  "सीखने",
+                  "लिए",
+                  "फाइनेंशिएसएल"
+                ],
+                "script": "पकड़ा? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.",
+                "heard": "पड़ा कोमेंग करो स्रिव सीखने के लिए, फैनाजल अदवाईस नहीं",
+                "passed": true
+              }
+            ],
+            "beats": [
+              {
+                "beat": "hook",
+                "recall": 0.5,
+                "script": "बेयर फ्लैग पर शॉर्ट कब करें? एंट्री 131 और स्टॉप 141 का प्लान।",
+                "heard": "बेर फ्लाक पर शोड़ कब करें? अंट्री एकसो एकतीस और स्थोब एकसो एकतालीस का प्लान. तेस गिरावेट"
+              },
+              {
+                "beat": "pehchan",
+                "recall": 0.636,
+                "script": "तेज गिरावट का पोल 29 पॉइंट। फ्लैग 139 तक धीरे ऊपर जाता है।",
+                "heard": "एकतालीस का प्लान. तेस गिरावेट कापोल उन्तीस पूंट, फलाग एकसवुन्तालीस तक दीरे उपर जाता है। चाट चाट पर"
+              },
+              {
+                "beat": "context",
+                "recall": 0.556,
+                "script": "चार्ट पर रेसिस्टेंस लाइन 139 देखो, सेटअप इसी लेवल पर वैलिड।",
+                "heard": "चाट चाट पर रेजिस्टिटन्स लाईन एकसो उन्तालीस देखो. सेटाप इसी लविЛपिर य�E एंट्री सो एक दिस"
+              },
+              {
+                "beat": "entry",
+                "recall": 0.667,
+                "script": "एंट्री 131, फ्लैग का लो ब्रेकडाउन क्लोज पर।",
+                "heard": "एंट्री सो एक दिस फ्लाग का लोग ब्रेग्डाउन ख्लोस पर. स्तो सो एक तालीस"
+              },
+              {
+                "beat": "sl",
+                "recall": 0.812,
+                "script": "स्टॉप 141 फ्लैग हाई के ऊपर। हाई टूटा तो प्लान गलत। एंट्री के साथ ही स्टॉप लॉस 141 लगाओ।",
+                "heard": "स्तो सो एक तालीस प्लाग हाँके अपर, हाँक तूटा तो प्लन गलत. अंट्रीके साथ ही स्थ्टोप लोस एकसो एक तालीस लगाओ."
+              },
+              {
+                "beat": "target",
+                "recall": 0.895,
+                "script": "टारगेट 102, पोल की हाइट। यानी रिस्क-रिवॉर्ड 1 बटा 2.9, चार्ट पर लिखा है। टारगेट 102 आते ही प्रॉफिट बुक करो।",
+                "heard": "एकसो एक तालीस लगाओ. तर्गेट 102 पोल की हाइट, यहनी रिस्क रिवाड एक बटा दो दशमलाव नाँ चाट पर लिखाईग. तार्गेट 102 आते ही प्रोफिट बुक करो."
+              },
+              {
+                "beat": "invalidation",
+                "recall": 0.769,
+                "script": "गलती ब्रेकडाउन से पहले शॉर्ट। हाई 141 टूटे तो स्किप। प्लान फेल तो अगला सेटअप देखो।",
+                "heard": "ही प्रोफिट बुक करो. गलती. ब्रेग्डाउन से पहले शोट. रहें 141 तो तो श्किप. प्लान फिल तो अगला सटब देखो."
+              },
+              {
+                "beat": "cta",
+                "recall": 0.692,
+                "script": "बेयर फ्लैग का ब्रेकडाउन कभी पकड़ा? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.",
+                "heard": "अगला सटब देखो. बेर फलाक का ब्रिक्डाउन कभी पड़ा कोमेंग करो स्रिव सीखने के लिए, फैनाजल अदवाईस नहीं"
+              }
+            ]
+          },
+          "scenes": [
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 0.0,
+              "end": 2.43
+            },
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 2.43,
+              "end": 4.85
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 4.85,
+              "end": 7.09
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 7.09,
+              "end": 9.33
+            },
+            {
+              "beat": "context",
+              "kind": "chart-context",
+              "start": 9.33,
+              "end": 11.96
+            },
+            {
+              "beat": "context",
+              "kind": "chart-context",
+              "start": 11.96,
+              "end": 14.59
+            },
+            {
+              "beat": "entry",
+              "kind": "chart-entry",
+              "start": 14.59,
+              "end": 18.21
+            },
+            {
+              "beat": "sl",
+              "kind": "chart-sl",
+              "start": 18.21,
+              "end": 21.35
+            },
+            {
+              "beat": "sl",
+              "kind": "chart-sl",
+              "start": 21.35,
+              "end": 24.5
+            },
+            {
+              "beat": "target",
+              "kind": "chart-target",
+              "start": 24.5,
+              "end": 27.57
+            },
+            {
+              "beat": "target",
+              "kind": "chart-target",
+              "start": 27.57,
+              "end": 30.65
+            },
+            {
+              "beat": "target",
+              "kind": "chart-target",
+              "start": 30.65,
+              "end": 33.73
+            },
+            {
+              "beat": "invalidation",
+              "kind": "chart-invalidation",
+              "start": 33.73,
+              "end": 37.36
+            },
+            {
+              "beat": "invalidation",
+              "kind": "chart-invalidation",
+              "start": 37.36,
+              "end": 41.0
+            },
+            {
+              "beat": "cta",
+              "kind": "chart-cta",
+              "start": 41.0,
+              "end": 43.95
+            },
+            {
+              "beat": "cta",
+              "kind": "chart-cta",
+              "start": 43.95,
+              "end": 46.89
+            }
+          ]
+        },
+        "narration": {
+          "title": "बेयर फ्लैग",
+          "hook_line": "बेयर फ्लैग पर शॉर्ट कब करें?",
+          "beats": {
+            "hook": "बेयर फ्लैग पर शॉर्ट कब करें? एंट्री 131 और स्टॉप 141 का प्लान।",
+            "pehchan": "तेज गिरावट का पोल 29 पॉइंट। फ्लैग 139 तक धीरे ऊपर जाता है।",
+            "context": "चार्ट पर रेसिस्टेंस लाइन 139 देखो, सेटअप इसी लेवल पर वैलिड।",
+            "entry": "एंट्री 131, फ्लैग का लो ब्रेकडाउन क्लोज पर।",
+            "sl": "स्टॉप 141 फ्लैग हाई के ऊपर। हाई टूटा तो प्लान गलत। एंट्री के साथ ही स्टॉप लॉस 141 लगाओ।",
+            "target": "टारगेट 102, पोल की हाइट। यानी रिस्क-रिवॉर्ड 1 बटा 2.9, चार्ट पर लिखा है। टारगेट 102 आते ही प्रॉफिट बुक करो।",
+            "invalidation": "गलती ब्रेकडाउन से पहले शॉर्ट। हाई 141 टूटे तो स्किप। प्लान फेल तो अगला सेटअप देखो।",
+            "cta": "बेयर फ्लैग का ब्रेकडाउन कभी पकड़ा? कमेंट करो। Sirf seekhne ke liye, financial advice nahi."
+          },
+          "facts": [
+            "पूरा ट्रेड प्लान"
+          ],
+          "source": "approved",
+          "plan": true,
+          "live_beats": "plan",
+          "narration_fallback": false,
+          "review_attempts": 1,
+          "key": "pat_bear_flag"
+        },
+        "shots": {
+          "shots": [
+            {
+              "shot_id": 1,
+              "beat": "hook",
+              "start_sec": 0.0,
+              "end_sec": 4.85,
+              "visual_type": "chart",
+              "on_screen_text": "एंट्री",
+              "sub_text": "कमेंट",
+              "spoken_line": "बेयर फ्लैग पर शॉर्ट कब करें? एंट्री 131 और स्टॉप 141 का प्लान।",
+              "chart_data": {
+                "template": "pat_bear_flag",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": "बेयर फ्लैग पर शॉर्ट कब करें?"
+            },
+            {
+              "shot_id": 2,
+              "beat": "pehchan",
+              "start_sec": 4.85,
+              "end_sec": 9.33,
+              "visual_type": "chart",
+              "on_screen_text": "गिरावट",
+              "sub_text": "नियम",
+              "spoken_line": "तेज गिरावट का पोल 29 पॉइंट। फ्लैग 139 तक धीरे ऊपर जाता है।",
+              "chart_data": {
+                "template": "pat_bear_flag",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 3,
+              "beat": "context",
+              "start_sec": 9.33,
+              "end_sec": 14.59,
+              "visual_type": "chart",
+              "on_screen_text": "रेसिस्टेंस",
+              "sub_text": "कमजोर",
+              "spoken_line": "चार्ट पर रेसिस्टेंस लाइन 139 देखो, सेटअप इसी लेवल पर वैलिड।",
+              "chart_data": {
+                "template": "pat_bear_flag",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 4,
+              "beat": "entry",
+              "start_sec": 14.59,
+              "end_sec": 18.21,
+              "visual_type": "chart",
+              "on_screen_text": "ब्रेकडाउन",
+              "sub_text": "ट्रिगर",
+              "spoken_line": "एंट्री 131, फ्लैग का लो ब्रेकडाउन क्लोज पर।",
+              "chart_data": {
+                "template": "pat_bear_flag",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 5,
+              "beat": "sl",
+              "start_sec": 18.21,
+              "end_sec": 24.5,
+              "visual_type": "chart",
+              "on_screen_text": "एंट्री",
+              "sub_text": "क्यों",
+              "spoken_line": "स्टॉप 141 फ्लैग हाई के ऊपर। हाई टूटा तो प्लान गलत। एंट्री के साथ ही स्टॉप लॉस 141 लगाओ।",
+              "chart_data": {
+                "template": "pat_bear_flag",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 6,
+              "beat": "target",
+              "start_sec": 24.5,
+              "end_sec": 33.73,
+              "visual_type": "chart",
+              "on_screen_text": "रिवॉर्ड",
+              "sub_text": "रिस्क-रिवॉर्ड",
+              "spoken_line": "टारगेट 102, पोल की हाइट। यानी रिस्क-रिवॉर्ड 1 बटा 2.9, चार्ट पर लिखा है। टारगेट 102 आते ही प्रॉफिट बुक करो।",
+              "chart_data": {
+                "template": "pat_bear_flag",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 7,
+              "beat": "invalidation",
+              "start_sec": 33.73,
+              "end_sec": 41.0,
+              "visual_type": "chart",
+              "on_screen_text": "ब्रेकडाउन",
+              "sub_text": "गलती",
+              "spoken_line": "गलती ब्रेकडाउन से पहले शॉर्ट। हाई 141 टूटे तो स्किप। प्लान फेल तो अगला सेटअप देखो।",
+              "chart_data": {
+                "template": "pat_bear_flag",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            },
+            {
+              "shot_id": 8,
+              "beat": "cta",
+              "start_sec": 41.0,
+              "end_sec": 46.89,
+              "visual_type": "chart",
+              "on_screen_text": "फाइनेंशिएसएल",
+              "sub_text": "प्लान",
+              "spoken_line": "बेयर फ्लैग का ब्रेकडाउन कभी पकड़ा? कमेंट करो। सिर्फ सीखने के लिए, फाइनेंशियल एडवाइस नहीं।",
+              "chart_data": {
+                "template": "pat_bear_flag",
+                "mode": "schematic",
+                "source": null,
+                "as_of": null
+              },
+              "source_asset_query": null,
+              "emphasis": "neutral",
+              "hook_line": null
+            }
+          ]
+        },
+        "captions": "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: T,Noto Sans Devanagari,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,2,8,60,190,0,1\nStyle: Cap,Noto Sans Devanagari,62,&H00FFFFFF,&H00FFFFFF,&H00101010,&HA0000000,-1,0,0,0,100,100,0,0,3,4,0,2,70,190,520,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n\n"
+      }
     }
   ],
   "skipped_topics": [
