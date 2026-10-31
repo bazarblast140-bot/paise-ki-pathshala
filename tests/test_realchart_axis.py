@@ -298,3 +298,15 @@ def test_top_two_stories_are_distinct_and_rows_fit_voice_budget():
     rows = _news_rows({}, article)
     assert [r["sec"] for r in rows] == ["hook", "news", "points", "key", "news2", "points2", "cta"]
     assert len(rows) <= 7  # one Gemini voice request per row
+
+
+def test_box_gate_skips_ema_only_for_article_news():
+    from override_mp4 import box_gate
+    news = {"verdict": "PASS", "capture_mode": "box-signed-in", "session": "2026-11-01",
+            "kind": "news", "chart": "article", "ema_ok": False}
+    assert box_gate(news, today="2026-11-01") == ""
+    assert box_gate(dict(news, ema_ok=None), today="2026-11-01") == ""
+    assert box_gate(dict(news, chart="tradingview"), today="2026-11-01")
+    assert box_gate(dict(news, kind="ta", chart="tradingview"), today="2026-11-01")
+    assert box_gate(dict(news, verdict="HOLD"), today="2026-11-01")
+    assert box_gate(dict(news, session="2026-10-31"), today="2026-11-01")
