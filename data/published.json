@@ -569,5 +569,20 @@
   "ig_media_id": "17908702608579318",
   "content_hash": "35dfa4c2aaf46ed5",
   "title_norm": "ultracemco share analysis today | resistance rejection trade plan 30 oct 2026"
+ },
+ {
+  "date_ist": "2026-10-31",
+  "slot": "18:40",
+  "video_id": "7yB1on4Cyis",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "18106688792572406",
+  "content_hash": "8169c37561f5a322",
+  "title_norm": "jswsteel share analysis | resistance rejection trade plan next session (30 oct 2026 close)"
  }
 ]
