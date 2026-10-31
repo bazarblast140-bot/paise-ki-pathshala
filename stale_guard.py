@@ -40,6 +40,14 @@ def latest_completed_session(now=None):
 
 def data_date(run_dir):
     run = pathlib.Path(run_dir)
+    qa = next(iter(run.rglob("qa.json")), None)
+    if qa:
+        try:
+            d = json.loads(qa.read_text(encoding="utf-8")).get("session")
+            if d:
+                return str(d)[:10]
+        except ValueError:
+            pass
     lv = next(iter(run.rglob("levels.json")), None)
     if lv:
         try:
@@ -66,10 +74,21 @@ def build_kind(run_dir):
     return None
 
 
-def check(run_dir, run_meta=None, default_branch="main", now=None):
-    """Return a list of problems; empty means fresh."""
+BOX_TAG_DATE = re.compile(r"/releases/download/box-reel-[a-z]+-(\d{4}-\d{2}-\d{2})/")
+
+
+def check(run_dir, run_meta=None, default_branch="main", now=None, bundle_url=""):
+    """Return a list of problems; empty means fresh.
+
+    run_meta is the source Actions run (source_run_id path). bundle_url is the
+    override mp4 release URL (box release-bundle path, no source run); a
+    box-reel-<kind>-<date> tag must be dated today IST.
+    """
     today = today_ist(now)
     problems = []
+    m = BOX_TAG_DATE.search(bundle_url or "")
+    if m and m.group(1) != today.isoformat():
+        problems.append(f"box release tag dated {m.group(1)}, not today {today}")
     kind = build_kind(run_dir)
     d = data_date(run_dir)
     if d is None:
@@ -115,7 +134,7 @@ def main():
     repo = os.environ.get("GITHUB_REPOSITORY", "bazarblast140-bot/paise-ki-pathshala")
     default = os.environ.get("DEFAULT_BRANCH", "main")
     meta = fetch_run(run_id, repo) if run_id else None
-    problems = check(run_dir, meta, default)
+    problems = check(run_dir, meta, default, bundle_url=os.environ.get("OVERRIDE_MP4_URL", "") if not run_id else "")
     if problems:
         for p in problems:
             print(f"[STOP] stale build: {p}")
