@@ -256,7 +256,7 @@ def _caption(kind, row, levels):
     return str(row.get("d") or "")
 
 
-def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
+def frames(out, kind, levels, rows, chart_path, article=None, intraday=None, durations=None):
     """One card per script beat, in narration order. Every card has a real visual."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -288,6 +288,8 @@ def frames(out, kind, levels, rows, chart_path, article=None, intraday=None):
         "close_line": f"Close {day_text}: {inr(levels.get('close'), 0)} ({chg:+.2f}%)",
         "close_color": GREEN if chg >= 0 else RED,
     }
+    if kind == "ta" and chart_path and Path(chart_path).is_file() and levels.get("chart_source") == "tradingview":
+        return _ta_frames(out, levels, rows, chart_path, intraday, header, src, durations)
     pivot_chips = [
         (f"{name} {inr(levels.get(key), 0)}", fill, ink)
         for name, key, fill, ink in (
@@ -830,3 +832,34 @@ def assemble(frame_paths, voice, dest, seconds=45.0, durations=None, thumb_text=
         else:
             make_thumbnail(thumb, thumb, thumb_text, thumb_tag)
     return dest
+
+
+def _ta_frames(out, levels, rows, chart_path, intraday, header, src, durations):
+    """TA Reel (1-Nov fix): tall chart, top captions, 5m entry beat, camera motion. See ta_layout."""
+    from realchart import ta_layout
+    for row in rows:
+        spoken = re.sub(r"(?<![\d.,])(\d{4,})(?![\d]|[.,]\d)", lambda m: inr(int(m.group(1)), 0), str(row.get("t") or ""))
+        row["_spoken"] = danda(spoken)
+    if not durations:
+        durations = beat_seconds(rows, 45.0)
+    interval = str((intraday or {}).get("interval") or "5")
+    def title_for(tf):
+        return f"Source: {(intraday or {}).get('label') or src} · {interval}m · IST" if tf == "5m" else f"Source: {src} · 1D"
+    axis_report = {}
+    try:
+        made, variants, ranges = ta_layout.render_ta(out, levels, rows, chart_path, intraday, header, title_for,
+                                                     durations, DRAWN, axis_report)
+    finally:
+        for row in rows:
+            row.pop("_spoken", None)
+    (out.parent / "axis.json").write_text(json.dumps(axis_report, indent=2) + "\n", encoding="utf-8")
+    (out.parent / "variants.json").write_text(json.dumps(variants, indent=1) + "\n", encoding="utf-8")
+    must = {"close": (intraday or {}).get("bars", [{}])[-1].get("c") if (intraday or {}).get("bars") else None,
+            "entry": levels.get("entry")}
+    (out.parent / "frame_ranges.json").write_text(json.dumps({
+        "must": {k: v for k, v in must.items() if v is not None},
+        "shot_ok": bool((axis_report.get("intraday") or {}).get("ok")) if intraday else None,
+        "cards": ranges,
+    }, indent=1) + "\n", encoding="utf-8")
+    (out / "overlay_text.json").write_text(json.dumps(list(DRAWN), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return made

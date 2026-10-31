@@ -157,14 +157,17 @@ def end_card_audio(dest, voice_text):
     return mixed, seconds
 
 
-def render_end_card(dest, background=None, name="Rajesh Technical Trader", call="follow करो", seconds=OUTRO_SECONDS, extra=None, voice_text=None):
+def render_end_card(dest, background=None, name="Rajesh Technical Trader", call="follow करो", seconds=OUTRO_SECONDS, extra=None, voice_text=None,
+                    plan=None):
     """Full-frame end card: the chart blurred behind, the big channel name, a follow button.
     With voice_text the card is as long as the spoken follow line plus music; otherwise silent."""
     from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
     from realchart.fonts import font
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    if background and Path(background).is_file():
+    if plan is not None:
+        image = ta_end_image(background, name, plan, extra)
+    elif background and Path(background).is_file():
         with Image.open(background) as opened:
             shot = opened.convert("RGB")
         scale = max(1080 / shot.width, 1920 / shot.height)
@@ -181,8 +184,10 @@ def render_end_card(dest, background=None, name="Rajesh Technical Trader", call=
         for x in range(0, 1080, 60):
             draw.line([(x, 0), (x, 1920)], fill=(40, 50, 66))
     draw = ImageDraw.Draw(image)
-    words = str(name).split()
+    words = str(name).split() if plan is None else []
     lines = [" ".join(words[:1]), " ".join(words[1:])] if len(words) > 2 else [str(name)]
+    if plan is not None:
+        lines = []  # ta_end_image already drew the Devanagari brand
     big = font(132)
     y = 420  # safe zone: everything ends above the bottom 25% (23-Oct)
     for line in lines:
@@ -190,15 +195,18 @@ def render_end_card(dest, background=None, name="Rajesh Technical Trader", call=
         draw.text(((1080 - width) / 2 + 4, y + 4), line, fill=(0, 0, 0), font=big)
         draw.text(((1080 - width) / 2, y), line, fill=(255, 255, 255), font=big)
         y += 160
+    if plan is not None:
+        extra, call = [], None
     button = font(84)
-    width = draw.textlength(call, font=button)
+    width = draw.textlength(call or "", font=button)
     top = y + 60
-    draw.rounded_rectangle(((1080 - width) / 2 - 60, top, (1080 + width) / 2 + 60, top + 150), 40, fill=(255, 214, 10))
-    draw.text(((1080 - width) / 2, top + 22), call, fill=(14, 16, 20), font=button)
-    sub = font(44, semi=True)
-    note = "Real chart · Real data · Daily"
-    width = draw.textlength(note, font=sub)
-    draw.text(((1080 - width) / 2, top + 210), note, fill=(230, 236, 242), font=sub)
+    if call:
+        draw.rounded_rectangle(((1080 - width) / 2 - 60, top, (1080 + width) / 2 + 60, top + 150), 40, fill=(255, 214, 10))
+        draw.text(((1080 - width) / 2, top + 22), call, fill=(14, 16, 20), font=button)
+        sub = font(44, semi=True)
+        note = "Real chart · Real data · Daily"
+        width = draw.textlength(note, font=sub)
+        draw.text(((1080 - width) / 2, top + 210), note, fill=(230, 236, 242), font=sub)
     y = top + 300
     for index, text in enumerate(extra or []):
         size = 70 if index == 0 else 60
@@ -257,3 +265,76 @@ def attach(main, directory, outro_rtt=None, outro_pkp=None):
     yt = concat_copy([main, outro_pkp or OUTRO_PKP], directory / "final_yt.mp4")
     ig = concat_copy([INTRO_RTT, main, outro_rtt or OUTRO_RTT], directory / "final_ig.mp4")
     return yt, ig
+
+
+TA_BRAND_HI = {"Paise Ki Pathshala": "पैसे की पाठशाला", "Rajesh Technical Trader": "राजेश टेक्निकल ट्रेडर"}
+
+
+def ta_end_image(background, name, plan, extra=None):
+    """TA end card (1-Nov fix): dark, crisp, big Devanagari; no blur, no empty half.
+
+    Brand, the plan (entry / SL / target chips), the daily promise, a big follow button
+    and the sign-off all sit above y 1420; a dimmed (not blurred) chart strip fills the bottom.
+    """
+    from PIL import Image, ImageDraw, ImageEnhance
+    from realchart.fonts import font
+    from realchart.fmt import inr
+    W, H = 1080, 1920
+    image = Image.new("RGB", (W, H), (16, 22, 30))
+    draw = ImageDraw.Draw(image)
+    for y in range(0, H, 60):
+        draw.line([(0, y), (W, y)], fill=(24, 32, 42))
+    for x in range(0, W, 60):
+        draw.line([(x, 0), (x, H)], fill=(24, 32, 42))
+    if background and Path(background).is_file():
+        with Image.open(background) as opened:
+            shot = opened.convert("RGB")
+        scale = W / shot.width
+        shot = shot.resize((W, round(shot.height * scale)), Image.LANCZOS)
+        strip = shot.crop((0, max(0, shot.height - 470), W, shot.height))
+        strip = ImageEnhance.Brightness(strip).enhance(0.35)
+        image.paste(strip, (0, H - strip.height))
+        draw.rectangle((0, H - strip.height - 4, W, H - strip.height), fill=(255, 214, 10))
+
+    def centre(text, y, size, fill, semi=False, shadow=True):
+        face = font(size, semi)
+        width = draw.textlength(text, font=face)
+        if shadow:
+            draw.text(((W - width) / 2 + 3, y + 3), text, fill=(0, 0, 0), font=face)
+        draw.text(((W - width) / 2, y), text, fill=fill, font=face)
+        return width
+
+    brand = TA_BRAND_HI.get(str(name), str(name))
+    size = 120
+    while draw.textlength(brand, font=font(size)) > 980 and size > 72:
+        size -= 6
+    centre(brand, 110, size, (255, 255, 255))
+    symbol = str(plan.get("symbol") or "").split(":")[-1]
+    centre(f"{symbol} · आज का प्लान", 300, 56, (0, 209, 255), semi=True)
+    rows = [("एंट्री", plan.get("entry"), (255, 214, 10)), ("स्टॉप लॉस", plan.get("stop"), (255, 77, 90)),
+            ("टारगेट", plan.get("target"), (38, 222, 129))]
+    y = 400
+    draw.rounded_rectangle((70, y, W - 70, y + 3 * 118 + 30), 28, fill=(27, 37, 50), outline=(46, 62, 80), width=3)
+    y += 24
+    for label, value, color in rows:
+        draw.text((120, y + 14), label, fill=(236, 240, 244), font=font(64))
+        text = inr(value, 0) if value is not None else "—"
+        face = font(66)
+        width = draw.textlength(text, font=face)
+        draw.rounded_rectangle((W - 120 - width - 48, y + 6, W - 120, y + 104), 22, fill=color)
+        draw.text((W - 120 - width - 24, y + 12), text, fill=(14, 16, 20), font=face)
+        y += 118
+    y += 60
+    lines = [t for t in (extra or []) if t]
+    promise = lines[0] if lines else "रोज़ शाम एक स्टॉक का पूरा प्लान"
+    centre(promise, y, 58, (255, 226, 120), semi=True)
+    y += 110
+    call = "फ़ॉलो करो"
+    face = font(104)
+    width = draw.textlength(call, font=face)
+    draw.rounded_rectangle(((W - width) / 2 - 80, y, (W + width) / 2 + 80, y + 180), 48, fill=(255, 214, 10))
+    draw.text(((W - width) / 2, y + 22), call, fill=(14, 16, 20), font=face)
+    y += 230
+    centre(lines[1] if len(lines) > 1 else "कल मिलते हैं", y, 64, (245, 247, 250))
+    centre("सिर्फ़ सीखने के लिए · निवेश सलाह नहीं", y + 100, 36, (150, 165, 180), semi=True, shadow=False)
+    return image

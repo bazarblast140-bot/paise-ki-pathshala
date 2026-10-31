@@ -477,8 +477,8 @@ def end_card_lines(kind, levels):
         from realchart.fmt import inr
         plan = levels.get("plan") or {}
         name = str(levels.get("symbol") or "").split(":")[-1]
-        lines = [f"{name}: entry {inr(plan.get('entry'), 0)} · SL {inr(plan.get('stop'), 0)} · target {inr(plan.get('target'), 0)}"] if plan else []
-        return lines + ["Roz shaam ek stock ka TA ke liye follow karo", "Kal milte hain"]
+        # Devanagari only (1-Nov review); the plan rows are drawn by ends.ta_end_image.
+        return ["रोज़ शाम एक स्टॉक का पूरा प्लान", "कल मिलते हैं"]
     if kind != "close":
         return []
     key = levels.get("next_pivot") or next_pivot(levels)

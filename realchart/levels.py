@@ -456,9 +456,16 @@ def stock_plan(levels, lookback=120):
     lows = _swings(hist, "l")
     highs = _swings(hist, "h")
     buf = 0.25 * atr
+    trig = trigger_gap(close, atr)
     plans = []
 
     def build(pattern, side, level, level_date, zone, entry, stop, targets):
+        # 31-Oct JSWSTEEL: entry 1,245 vs close 1,246 was a trigger already hit. The
+        # trigger sits beyond today's candle AND at least `trig` past the last close.
+        entry = (max(entry, close) + trig) if side == "long" else (min(entry, close) - trig)
+        entry = round(entry, 2)
+        if not trigger_ok(side, entry, close, trig):
+            return
         risk = (entry - stop) if side == "long" else (stop - entry)
         if risk <= 0:
             return
@@ -519,6 +526,19 @@ def stock_plan(levels, lookback=120):
         plan["resistance"] = plan["level"]
         plan["support"] = plan["target"]
     return plan
+
+
+def trigger_gap(close, atr):
+    """Minimum distance between the last close and the entry trigger."""
+    return max(0.1 * float(atr or 0), 0.002 * float(close))
+
+
+def trigger_ok(side, entry, close, gap=0.0):
+    """True only when the trigger is not yet hit: above the close for a long, below for a short."""
+    entry, close = float(entry), float(close)
+    if side == "long":
+        return entry >= close + gap - 1e-6
+    return entry <= close - gap + 1e-6
 
 
 def apply_stock_plan(levels, plan):
