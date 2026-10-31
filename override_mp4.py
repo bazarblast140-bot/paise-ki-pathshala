@@ -345,8 +345,10 @@ def box_gate(qa, today=None):
         return f"qa verdict {qa.get('verdict')!r}"
     if qa.get("capture_mode") != "box-signed-in":
         return f"capture_mode {qa.get('capture_mode')!r}"
+    # Article-screenshot news Reels have no EMA lines; skip EMA gate for those.
     if qa.get("ema_ok") is not True:
-        return "EMA 20/50 not confirmed on the captures"
+        if not (qa.get("kind") == "news" and qa.get("chart") == "article"):
+            return "EMA 20/50 not confirmed on the captures"
     if qa.get("session") != today:
         return f"session {qa.get('session')} is not today {today}"
     return ""
