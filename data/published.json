@@ -761,5 +761,20 @@
   "topic_key": "pat_hanging_man",
   "source": "approved-buffer",
   "buffer_id": "ap-pat_hanging_man-8e9e4ec29a99"
+ },
+ {
+  "date_ist": "2026-10-31",
+  "slot": "08:30",
+  "video_id": "dcd_wKTIrq8",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "17994303554851817",
+  "content_hash": "9c9c63f438e9c40c",
+  "title_norm": "aaj ki sabse badi khabar | 31 oct 2026 | reddit stock plunges 30% as google's ai search threatens\u2026"
  }
 ]
