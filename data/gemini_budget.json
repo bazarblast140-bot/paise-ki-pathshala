@@ -174,7 +174,7 @@
           "realchart": 0,
           "nifty": 0,
           "buffer": 1,
-          "other": 1,
+          "other": 2,
           "news": 0,
           "close": 0,
           "ta": 0,
@@ -349,6 +349,12 @@
     },
     {
       "id": "52d59f3ef36d4e4a9b7253e34f203672",
+      "date": "2026-10-31",
+      "caller": "other",
+      "key": "1"
+    },
+    {
+      "id": "0abdc158b45d4b89b894342542f4b2a0",
       "date": "2026-10-31",
       "caller": "other",
       "key": "1"

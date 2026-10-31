@@ -807,5 +807,17 @@
   "tts_engine": "gemini",
   "source_run": "41218027727",
   "ig_deferred": "deferred: qduV4xpoBVo publishAt=2026-11-01T03:00:00Z run=41218027727"
+ },
+ {
+  "date_ist": "2026-11-01",
+  "slot": "21:00",
+  "video_id": "5lt10nI_FyM",
+  "format": "long",
+  "topic_key": "pat_bear_flag",
+  "source": "buffer",
+  "buffer_id": "buf-pat_bear_flag-52747a95b65a",
+  "source_run": "41225446601",
+  "slot_skipped": "audio mix evidence missing",
+  "note": "audio mix evidence missing"
  }
 ]

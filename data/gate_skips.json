@@ -49,6 +49,7 @@
   "option_vega",
   "opt_expiry_elm",
   "pat_bear_flag",
-  "pat_double_bottom"
+  "pat_double_bottom",
+  "pat_bull_engulf"
  ]
 }
