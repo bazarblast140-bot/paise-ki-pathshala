@@ -26,6 +26,17 @@ def publish_meta(out):
     return {"title": meta["title"][:100], "description": description, "tags": tags}
 
 
+def release_tag(qa, today=None):
+    """Tag by today's IST publish date, not the data session.
+
+    A weekend TA/recap carries Friday's session; tagging by session would clash
+    with Friday's own release and fail stale_guard's tag-is-today check.
+    """
+    from datetime import datetime, timedelta, timezone
+    today = today or (datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)).date().isoformat()
+    return f"{BOX_TAG}{qa.get('kind')}-{today}"
+
+
 def main(argv):
     dry = "--dry" in argv
     fb_only = "--fb-only" in argv  # the session is already on YT/IG: add only the Facebook Reel
@@ -43,7 +54,7 @@ def main(argv):
     if missing:
         print(f"HOLD: missing {missing}", file=sys.stderr)
         return 2
-    tag = f"{BOX_TAG}{qa.get('kind')}-{qa.get('session')}"
+    tag = release_tag(qa)
     base = f"https://github.com/{REPO}/releases/download/{tag}"
     dispatch = [
         "gh", "workflow", "run", "publish-artifact.yml", "--repo", REPO, "--ref", "main",
