@@ -349,9 +349,22 @@ def box_gate(qa, today=None):
     if qa.get("ema_ok") is not True:
         if not (qa.get("kind") == "news" and qa.get("chart") == "article"):
             return "EMA 20/50 not confirmed on the captures"
-    if qa.get("session") != today:
-        return f"session {qa.get('session')} is not today {today}"
-    return ""
+    session = qa.get("session")
+    if session == today:
+        return ""
+    # Weekend/NSE holiday: TA and recap may use the latest completed session.
+    # Close stays today-only.
+    from datetime import date
+    import nifty_day
+    from realchart.session import _previous_trading_day
+    day = date.fromisoformat(today)
+    if (
+        not nifty_day.is_trading_day(day)
+        and qa.get("kind") in ("ta", "recap")
+        and session == (_previous_trading_day(day) or date.min).isoformat()
+    ):
+        return ""
+    return f"session {session} is not today {today}"
 
 
 def box_bundle(mp4_url, dest):
