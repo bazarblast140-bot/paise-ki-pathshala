@@ -107,3 +107,40 @@ def test_main_prints_stop(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("SOURCE_RUN", raising=False)
     assert g.main() == 1
     assert "[STOP] stale build" in capsys.readouterr().out
+
+
+# Real box release bundles published Sat 31-Oct (runs 41162408979 news, 41204304888 TA).
+import pathlib
+FIX = pathlib.Path(__file__).parent / "fixtures" / "box_2026-10-31"
+REL = "https://github.com/bazarblast140-bot/paise-ki-pathshala/releases/download/box-reel-{k}-{d}/final.mp4"
+
+
+def test_box_news_bundle_accepted():
+    now = datetime(2026, 10, 31, 8, 30, tzinfo=g.IST)
+    assert g.check(FIX / "news", None, now=now, bundle_url=REL.format(k="news", d="2026-10-31")) == []
+
+
+def test_box_ta_bundle_accepted():
+    now = datetime(2026, 10, 31, 18, 39, tzinfo=g.IST)
+    assert g.check(FIX / "ta", None, now=now, bundle_url=REL.format(k="ta", d="2026-10-31")) == []
+
+
+def test_box_bundle_old_tag_refused():
+    now = datetime(2026, 11, 1, 8, 30, tzinfo=g.IST)
+    p = g.check(FIX / "news", None, now=now, bundle_url=REL.format(k="news", d="2026-10-31"))
+    assert any("box release tag dated 2026-10-31" in x for x in p)
+
+
+def test_box_ta_stale_session_refused_on_monday():
+    now = datetime(2026, 11, 2, 18, 30, tzinfo=g.IST)
+    p = g.check(FIX / "ta", None, now=now, bundle_url=REL.format(k="ta", d="2026-11-02"))
+    assert any("data date 2026-10-30" in x for x in p)
+
+
+def test_main_bundle_path(tmp_path, monkeypatch, capsys):
+    mk(tmp_path, kind="close", d="2026-10-09")
+    monkeypatch.setenv("RUN_DIR", str(tmp_path))
+    monkeypatch.delenv("SOURCE_RUN", raising=False)
+    monkeypatch.setenv("OVERRIDE_MP4_URL", REL.format(k="close", d="2026-10-14"))
+    assert g.main() == 1
+    assert "box release tag dated 2026-10-14" in capsys.readouterr().out

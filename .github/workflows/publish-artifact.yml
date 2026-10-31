@@ -171,6 +171,11 @@ jobs:
           OVERRIDE_META_URL: ${{ inputs.override_meta_url }}
           GH_TOKEN: ${{ github.token }}
         run: python override_mp4.py --bundle
+      - name: Refuse a stale release bundle
+        if: inputs.source_run_id == ''
+        env:
+          OVERRIDE_MP4_URL: ${{ inputs.override_mp4_url }}
+        run: python stale_guard.py
       - name: Replace final.mp4 from a release asset
         if: inputs.override_mp4_url != '' && inputs.source_run_id != ''
         env:
