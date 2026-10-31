@@ -11,8 +11,6 @@ on:
     - cron: "45 10 * * 1-5"  # close publish 16:15 IST Mon-Fri
     - cron: "35 12 * * 1-5"  # ta build 18:05 IST Mon-Fri
     - cron: "0 13 * * 1-5"   # ta publish 18:30 IST Mon-Fri
-    - cron: "35 5 * * 6"     # recap build 11:05 IST Saturday
-    - cron: "0 6 * * 6"      # recap publish 11:30 IST Saturday
   workflow_dispatch:
     inputs:
       kind:
@@ -75,8 +73,6 @@ jobs:
               "45 10 * * 1-5") KIND=close; PHASE=publish ;;
               "35 12 * * 1-5") KIND=ta; PHASE=build ;;
               "0 13 * * 1-5") KIND=ta; PHASE=publish ;;
-              "35 5 * * 6") KIND=recap; PHASE=build ;;
-              "0 6 * * 6") KIND=recap; PHASE=publish ;;
               *) echo "Unknown schedule"; exit 1 ;;
             esac
           fi
@@ -168,7 +164,6 @@ jobs:
               news) CRON="50 2 * * 1-5" ;;
               close) CRON="20 10 * * 1-5" ;;
               ta) CRON="35 12 * * 1-5" ;;
-              recap) CRON="35 5 * * 6" ;;
             esac
             SOURCE="$(gh run list --workflow daily-reels.yml --limit 40 --json databaseId,displayTitle,conclusion \
               --jq "[.[] | select(.conclusion==\"success\") | select(.displayTitle == \"daily-reel $KIND build\" or .displayTitle == \"daily-reel $CRON cron\")] | .[0].databaseId")"

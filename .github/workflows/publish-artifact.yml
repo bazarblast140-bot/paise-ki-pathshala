@@ -141,6 +141,13 @@ jobs:
               fi
             fi
           done
+      - name: Refuse a stale build
+        if: inputs.source_run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run_id }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: python stale_guard.py
       - name: Refuse a chart Reel not captured on the signed-in box
         if: inputs.source_run_id != ''
         run: |
