@@ -873,5 +873,21 @@
   "ig_media_id": "17915871792499758",
   "content_hash": "8fd7ead230e0da1e",
   "title_norm": "powergrid share analysis | breakout trade plan next session (30 oct 2026 close)"
+ },
+ {
+  "date_ist": "2026-11-02",
+  "slot": "21:00",
+  "video_id": "pHSjkbaj4mI",
+  "format": "short",
+  "topic_key": "pat_cup_handle",
+  "voice_engine": "gemini",
+  "deepseek_calls": 1,
+  "deepseek_prompt_tokens": 1732,
+  "deepseek_completion_tokens": 402,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": "gemini",
+  "source_run": "41329840688",
+  "ig_deferred": "deferred: pHSjkbaj4mI publishAt=2026-11-02T15:30:00Z run=41329840688"
  }
 ]

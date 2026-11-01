@@ -189,7 +189,7 @@
           "realchart": 0,
           "nifty": 0,
           "buffer": 3,
-          "other": 0,
+          "other": 1,
           "news": 0,
           "close": 0,
           "ta": 0,
@@ -200,24 +200,6 @@
     }
   },
   "charges": [
-    {
-      "id": "b3d41b29024043dd8a62e5248981b258",
-      "date": "2026-10-17",
-      "caller": "buffer",
-      "key": "1"
-    },
-    {
-      "id": "e8c0948dc3b74a6ca533a578e3ae135a",
-      "date": "2026-10-17",
-      "caller": "buffer",
-      "key": "1"
-    },
-    {
-      "id": "94ba67e9d7b9468096595fe59dc48248",
-      "date": "2026-10-17",
-      "caller": "buffer",
-      "key": "1"
-    },
     {
       "id": "5f9835caa62e4987b66b6d351d25984c",
       "date": "2026-10-18",
@@ -390,6 +372,12 @@
       "id": "3528762ede804469b42505036be21289",
       "date": "2026-11-01",
       "caller": "buffer",
+      "key": "1"
+    },
+    {
+      "id": "a6989ae34d784319a486b51a926c00d9",
+      "date": "2026-11-01",
+      "caller": "other",
       "key": "1"
     }
   ]

@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-31T16:13:58+00:00",
+ "generated_at": "2026-11-01T17:16:22+00:00",
  "lookback_days": 30,
  "via": "oauth",
  "channels": [
@@ -25,18 +25,18 @@
   "title_patterns": {
    "curiosity_question": {
     "top_share": 0.6,
-    "rest_share": 0.35,
-    "lift": 1.63
+    "rest_share": 0.4,
+    "lift": 1.45
    },
    "number_led": {
-    "top_share": 0.4,
-    "rest_share": 0.4,
-    "lift": 1.01
+    "top_share": 0.45,
+    "rest_share": 0.37,
+    "lift": 1.2
    },
    "warning": {
-    "top_share": 0.0,
+    "top_share": 0.05,
     "rest_share": 0.06,
-    "lift": 0.44
+    "lift": 0.88
    },
    "chart_concept": {
     "top_share": 0.2,
@@ -50,21 +50,23 @@
    },
    "mechanism_explainer": {
     "top_share": 0.05,
-    "rest_share": 0.16,
-    "lift": 0.48
+    "rest_share": 0.14,
+    "lift": 0.52
    }
   },
   "winning_keywords": [
-   "sweep",
-   "liquidity",
-   "samjhe",
-   "kaise",
    "crash",
    "entry",
-   "candle",
-   "असली",
+   "sweep",
+   "samjhe",
+   "kaise",
+   "step",
+   "high",
+   "share",
+   "price",
    "prediction",
    "monday",
+   "liquidity",
    "gold",
    "india"
   ],
@@ -89,41 +91,41 @@
    18,
    19,
    16,
-   10
+   9
   ],
   "top_short_duration_s": {
-   "median": 95,
-   "p25": 43,
-   "p75": 137
+   "median": 100,
+   "p25": 34,
+   "p75": 126
   },
-  "top_title_length_chars": 75,
+  "top_title_length_chars": 79,
   "top_videos": [
    {
     "channel": "Stock Menthol",
-    "title": "SL Hunting | How to Take Sweep Entries with 1:5 RR",
-    "views": 7421,
-    "views_per_day": 1210.6,
+    "title": "3-Step Sweep Entry Strategy | High RR Trading Setup",
+    "views": 3581,
+    "views_per_day": 3341.4,
     "performance_index": 5.0,
+    "duration_s": 530,
+    "published_ist": "2026-10-31 21:03",
+    "tags": []
+   },
+   {
+    "channel": "Stock Menthol",
+    "title": "SL Hunting | How to Take Sweep Entries with 1:5 RR",
+    "views": 7505,
+    "views_per_day": 1046.2,
+    "performance_index": 3.74,
     "duration_s": 580,
     "published_ist": "2026-10-25 18:36",
     "tags": []
    },
    {
-    "channel": "Stock Menthol",
-    "title": "Liquidity Sweep Trading Strategy | 3-Step Entry Model",
-    "views": 14101,
-    "views_per_day": 637.9,
-    "performance_index": 3.69,
-    "duration_s": 482,
-    "published_ist": "2026-10-09 19:12",
-    "tags": []
-   },
-   {
     "channel": "Surface Trader",
     "title": "share market candle ko kaise samjhe | candlestick ko kaise samjhe #sharemarket #candlestick",
-    "views": 4305,
-    "views_per_day": 835.0,
-    "performance_index": 3.49,
+    "views": 4450,
+    "views_per_day": 717.8,
+    "performance_index": 3.17,
     "duration_s": 34,
     "published_ist": "2026-10-26 17:59",
     "tags": [
@@ -143,9 +145,9 @@
    {
     "channel": "THE WORLD TRADER",
     "title": "Candlestick Patterns का असली Logic समझो 🔥 |Market Psychology & Price Action Explained #stockmarket",
-    "views": 147316,
-    "views_per_day": 13771.7,
-    "performance_index": 2.83,
+    "views": 149926,
+    "views_per_day": 12770.2,
+    "performance_index": 2.66,
     "duration_s": 122,
     "published_ist": "2026-10-21 05:00",
     "tags": [
@@ -164,97 +166,74 @@
     ]
    },
    {
-    "channel": "Stock Menthol",
-    "title": "Which Zone Is Best for Entry? | Liquidity Trading",
-    "views": 8509,
-    "views_per_day": 469.6,
-    "performance_index": 2.72,
-    "duration_s": 553,
-    "published_ist": "2026-10-13 18:50",
-    "tags": []
-   },
-   {
     "channel": "UFL Capital Markets | SEBI RA",
     "title": "Monday Market Prediction | Nifty Tomorrow Prediction | Nifty & Bank Nifty Analysis |  Hindi",
-    "views": 25082,
-    "views_per_day": 4030.8,
-    "performance_index": 2.67,
+    "views": 27146,
+    "views_per_day": 3736.1,
+    "performance_index": 2.62,
     "duration_s": 100,
     "published_ist": "2026-10-25 16:23",
     "tags": []
    },
    {
-    "channel": "Zee Business",
-    "title": "Gold-Silver Crash: सोना-चांदी में भारी गिरावट! क्या अब खरीदारी का सही मौका? Anil Singhvi",
-    "views": 375298,
-    "views_per_day": 44231.0,
-    "performance_index": 2.3,
-    "duration_s": 126,
-    "published_ist": "2026-10-23 10:05",
+    "channel": "Tech Net India",
+    "title": "Share Market: सोमवार CRASH का खतरा? RBI ने फोड़ा बम! Daily CRR 90% से 99% | Stock Market News",
+    "views": 291903,
+    "views_per_day": 13530.6,
+    "performance_index": 2.33,
+    "duration_s": 215,
+    "published_ist": "2026-10-11 09:00",
     "tags": [
-     "zee business",
-     "stock market news",
+     "tech net india",
      "share market news",
-     "stock market news live",
-     "live share market news",
-     "sensex",
-     "nifty",
-     "stock market updates",
-     "gold price today",
-     "silver price today",
-     "gold silver crash",
-     "gold silver price"
+     "stock market",
+     "RBI CRR",
+     "RBI daily CRR 99 percent",
+     "CRR kya hota hai",
+     "cash reserve ratio",
+     "RBI new rule",
+     "RBI liquidity",
+     "banking liquidity surplus",
+     "Bank Nifty",
+     "banking stocks"
     ]
+   },
+   {
+    "channel": "Stock Menthol",
+    "title": "Liquidity Sweep Trading Strategy | 3-Step Entry Model",
+    "views": 14308,
+    "views_per_day": 618.1,
+    "performance_index": 2.21,
+    "duration_s": 482,
+    "published_ist": "2026-10-09 19:12",
+    "tags": []
    },
    {
     "channel": "Dr. Mukul Agrawal : Stock Market Coach",
     "title": "Scientists Turn Mercury Into Gold! 😱 Will Gold Prices Crash? | #shorts",
-    "views": 201589,
-    "views_per_day": 23537.1,
-    "performance_index": 2.01,
+    "views": 201942,
+    "views_per_day": 21018.0,
+    "performance_index": 1.86,
     "duration_s": 104,
     "published_ist": "2026-10-23 08:10",
     "tags": []
    },
    {
     "channel": "Stock Menthol",
-    "title": "Liquidity Sweep Strategy: Where to Enter? | Failure Test",
-    "views": 3093,
-    "views_per_day": 305.9,
-    "performance_index": 1.77,
-    "duration_s": 486,
-    "published_ist": "2026-10-21 19:02",
+    "title": "Which Zone Is Best for Entry? | Liquidity Trading",
+    "views": 8519,
+    "views_per_day": 444.5,
+    "performance_index": 1.59,
+    "duration_s": 553,
+    "published_ist": "2026-10-13 18:50",
     "tags": []
-   },
-   {
-    "channel": "Tech Net India",
-    "title": "5 अक्टूबर से शेयर बाजार में नए नियम! NSE फ्रीज लिमिट! | F&O Trading New Rule | Stock Market New Rule",
-    "views": 163878,
-    "views_per_day": 6021.0,
-    "performance_index": 1.68,
-    "duration_s": 173,
-    "published_ist": "2026-10-04 16:30",
-    "tags": [
-     "tech net india",
-     "share market news",
-     "stock market",
-     "nse freeze limit",
-     "quantity freeze limit",
-     "nifty freeze limit",
-     "bank nifty freeze limit",
-     "f&o new rule",
-     "nse circular",
-     "nse new rule",
-     "stock market new rule",
-     "nifty options"
-    ]
    },
    {
     "channel": "Nitin Murarka Nifty ke Nishanebaaz",
     "title": "Portfolio पड़ा है Idle क्या करें? | Option trading | Nitin Murarka Nifty ke Nishanebaaz",
-    "views": 110803,
-    "views_per_day": 5718.9,
-    "performance_index": 1.55,
+    "views": 110989,
+    "views_per_day": 5435.8,
+    "performance_index": 1.54,
     "duration_s": 90,
     "published_ist": "2026-10-12 12:44",
     "tags": [
@@ -275,42 +254,19 @@
    {
     "channel": "Dr. Mukul Agrawal : Stock Market Coach",
     "title": "Trump vs Indian IT Stocks: Nifty IT Rallies 3%, TCS Jumps 5.5%! 🔥 #Shorts",
-    "views": 394937,
-    "views_per_day": 17882.7,
+    "views": 397423,
+    "views_per_day": 17183.5,
     "performance_index": 1.52,
     "duration_s": 88,
     "published_ist": "2026-10-09 19:41",
     "tags": []
    },
    {
-    "channel": "UFL Capital Markets | SEBI RA",
-    "title": "Monday Market Crash? | Nifty Tomorrow Prediction | Nifty Analysis Hindi | Nifty Monday Prediction",
-    "views": 29229,
-    "views_per_day": 2211.8,
-    "performance_index": 1.47,
-    "duration_s": 137,
-    "published_ist": "2026-10-18 16:34",
-    "tags": [
-     "nifty today",
-     "nifty 50 today",
-     "nifty levels today",
-     "nifty prediction today",
-     "nifty tomorrow prediction",
-     "nifty 50 prediction",
-     "nifty support resistance",
-     "nifty key levels",
-     "nifty intraday levels",
-     "bank nifty levels today",
-     "bank nifty prediction",
-     "sensex today"
-    ]
-   },
-   {
     "channel": "Surface Trader",
     "title": "trading me candlestick chart ko kaise samjhe | candlestick charts #trading #candlestick #charts",
-    "views": 7069,
-    "views_per_day": 351.1,
-    "performance_index": 1.47,
+    "views": 7159,
+    "views_per_day": 338.0,
+    "performance_index": 1.49,
     "duration_s": 31,
     "published_ist": "2026-10-11 18:28",
     "tags": [
@@ -329,26 +285,72 @@
     ]
    },
    {
-    "channel": "Surface Trader",
-    "title": "trading candle ko kaise samjhe #trading #candlestick",
-    "views": 3766,
-    "views_per_day": 287.0,
-    "performance_index": 1.2,
-    "duration_s": 43,
-    "published_ist": "2026-10-18 18:49",
+    "channel": "UFL Capital Markets | SEBI RA",
+    "title": "Monday Market Crash? | Nifty Tomorrow Prediction | Nifty Analysis Hindi | Nifty Monday Prediction",
+    "views": 29573,
+    "views_per_day": 2074.1,
+    "performance_index": 1.45,
+    "duration_s": 137,
+    "published_ist": "2026-10-18 16:34",
     "tags": [
-     "trading candle ko kaise samjhe",
-     "share market candle ko kaise samjhe",
-     "intraday candle ko kaise samjhe",
-     "candle chart ko kaise samjhe",
-     "trading chart ko kaise samjhe",
-     "trading candlestick pattern",
-     "candlestick",
-     "candlestick patterns",
-     "candlestick analysis",
-     "trading",
-     "share market",
-     "candlestick pattern"
+     "nifty today",
+     "nifty 50 today",
+     "nifty levels today",
+     "nifty prediction today",
+     "nifty tomorrow prediction",
+     "nifty 50 prediction",
+     "nifty support resistance",
+     "nifty key levels",
+     "nifty intraday levels",
+     "bank nifty levels today",
+     "bank nifty prediction",
+     "sensex today"
+    ]
+   },
+   {
+    "channel": "Zee Business",
+    "title": "Gold-Silver Crash: सोना-चांदी में भारी गिरावट! क्या अब खरीदारी का सही मौका? Anil Singhvi",
+    "views": 413708,
+    "views_per_day": 43418.9,
+    "performance_index": 1.4,
+    "duration_s": 126,
+    "published_ist": "2026-10-23 10:05",
+    "tags": [
+     "zee business",
+     "stock market news",
+     "share market news",
+     "stock market news live",
+     "live share market news",
+     "sensex",
+     "nifty",
+     "stock market updates",
+     "gold price today",
+     "silver price today",
+     "gold silver crash",
+     "gold silver price"
+    ]
+   },
+   {
+    "channel": "CNBC Awaaz.",
+    "title": "Jio IPO की डिटेल्स आईं सामने! क्या आप Subscribe करेंगे ? | Anuj Singhal | N18S",
+    "views": 1743727,
+    "views_per_day": 96432.8,
+    "performance_index": 1.33,
+    "duration_s": 30,
+    "published_ist": "2026-10-14 20:47",
+    "tags": [
+     "Jio IPO",
+     "Jio IPO 2026",
+     "Reliance Jio IPO",
+     "Jio Platforms IPO",
+     "Jio IPO Details",
+     "Jio IPO Price Band",
+     "Jio IPO Subscription",
+     "Jio IPO Date",
+     "Jio IPO News",
+     "Jio IPO Latest News",
+     "Jio IPO Analysis",
+     "Should You Subscribe Jio IPO"
     ]
    }
   ]
