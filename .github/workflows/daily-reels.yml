@@ -38,7 +38,36 @@ permissions:
   actions: write
 
 jobs:
+  # Kill switch: repo Actions variable PAUSE_KINDS (comma list, e.g. "close,ta")
+  # skips those kinds cleanly. Unset or empty = everything runs.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.g.outputs.skip }}
+    steps:
+      - id: g
+        env:
+          PAUSE_KINDS: ${{ vars.PAUSE_KINDS }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            KIND="${{ inputs.kind }}"
+          else
+            case "${{ github.event.schedule }}" in
+              "50 2 * * 1-5"|"15 3 * * 1-5") KIND=news ;;
+              "20 10 * * 1-5"|"45 10 * * 1-5") KIND=close ;;
+              "35 12 * * 1-5"|"0 13 * * 1-5") KIND=ta ;;
+              *) KIND=unknown ;;
+            esac
+          fi
+          SKIP=0
+          for k in $(echo "$PAUSE_KINDS" | tr ',' ' '); do
+            if [ "$k" = "$KIND" ]; then SKIP=1; fi
+          done
+          echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
+          echo "[gate] kind=$KIND PAUSE_KINDS='$PAUSE_KINDS' skip=$SKIP"
   reel:
+    needs: gate
+    if: needs.gate.outputs.skip != '1'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
