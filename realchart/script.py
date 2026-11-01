@@ -235,6 +235,9 @@ def _ta_rows(levels):
 
 
 def _chunks_for(kind, levels, article=None):
+    if levels.get("format") == "story" and kind in ("ta", "close"):
+        from realchart.story_script import rows_for
+        return rows_for(kind, levels)
     if kind == "news" and article and article.get("hindi"):
         return _news_rows(levels, article)
     if kind == "ta" and levels.get("plan"):
@@ -416,6 +419,9 @@ def lint(rows):
     for phrase in FORBIDDEN_FOLLOW:
         if phrase.lower() in lowered:
             faults.append(f"channel follow line: {phrase}")
+    if any(row.get("story") for row in rows):
+        from realchart.story_script import compliance_faults
+        faults.extend(compliance_faults(rows))
     hook = next((row for row in rows if row.get("sec") == "hook"), None)
     if hook is None or float(hook.get("end") if hook.get("end") is not None else 99) > 3.0:
         faults.append("hook is outside 0-3s")
@@ -456,13 +462,61 @@ def number_faults(rows, levels):
                 allowed.append(float(item))
     if levels.get("chg_pct") is not None:
         allowed.append(abs(float(levels["chg_pct"])))
+    for fig in levels.get("story_figures") or []:
+        for key in ("value", "display"):
+            val = fig.get(key)
+            if isinstance(val, (int, float)):
+                allowed.append(float(val))
+                allowed.append(abs(float(val)))
     faults = []
     for row in rows:
+        if row.get("story") and row.get("sec") == "news":
+            faults.extend(_news_numbers_from_source(row, levels))
+            continue
         if row.get("sec") in ("news", "key") or row.get("skip_numbers"):
             continue
-        for value in price_numbers(row.get("d")):
-            if not any(abs(value - item) <= 0.05 or abs(value - round(item)) <= 0.5 for item in allowed):
+        values = _all_numbers(row.get("d")) if row.get("story") else price_numbers(row.get("d"))
+        for value in values:
+            ok = _story_match(value, allowed) if row.get("story") else any(
+                abs(value - item) <= 0.05 or abs(value - round(item)) <= 0.5 for item in allowed
+            )
+            if not ok:
                 faults.append(f"caption number {value} is not a computed level")
+    return faults
+
+
+def _story_match(value, allowed):
+    """A caption number must be the fetched figure, or the whole-rupee form of a price."""
+    for item in allowed:
+        if abs(value - item) <= 0.05 or abs(value - abs(item)) <= 0.05:
+            return True
+        rounded = round(abs(item))
+        if abs(item) >= 50 and abs(value - rounded) <= 0.05:
+            return True
+    return False
+
+
+def _all_numbers(text):
+    found = []
+    for match in re.finditer(r"\d[\d,]*\.?\d*", str(text or "")):
+        raw = match.group(0).replace(",", "")
+        if not raw or raw == ".":
+            continue
+        try:
+            found.append(float(raw))
+        except ValueError:
+            continue
+    return found
+
+
+def _news_numbers_from_source(row, levels):
+    """A news caption may only repeat digits that were in the fetched article."""
+    blob = str(levels.get("news_text") or "").replace(",", "")
+    faults = []
+    for match in re.finditer(r"\d[\d,]*\.?\d*", str(row.get("d") or "")):
+        plain = match.group(0).replace(",", "")
+        if plain and plain not in blob:
+            faults.append(f"news number {match.group(0)} is not in the fetched article")
     return faults
 
 
@@ -471,6 +525,11 @@ FOLLOW_LINE = "Roz 4 baje Nifty analysis ke liye follow karo"
 
 def end_card_lines(kind, levels):
     """Extra end-card lines: tomorrow's real key level, the daily follow promise, sign-off."""
+    if levels.get("format") == "story":
+        if kind == "ta":
+            return ["रोज़ एक स्टॉक का उदाहरण", "कल मिलते हैं"]
+        if kind == "close":
+            return ["रोज़ निफ्टी का क्लोज़", "कल मिलते हैं"]
     if kind == "news":
         return ["Roz subah 8 baje sabse badi khabar", "4 baje milte hain: Nifty Close Report"]
     if kind == "ta":

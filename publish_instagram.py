@@ -1012,7 +1012,8 @@ def main() -> None:
     print("\n=== Instagram Reel cross-post ===")
     # The Chart Board cover is already inside the safe area and the grid crop.
     thumb = RUN / "thumbnail.jpg"
-    cover = thumb if thumb.exists() else None
+    grid = RUN / "ig_cover.jpg"
+    cover = grid if grid.is_file() else (thumb if thumb.exists() else None)
     url = host_mp4(mp4)
     cover_url = ""
     if cover is not None and cover.exists():
