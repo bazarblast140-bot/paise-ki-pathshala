@@ -843,5 +843,17 @@
   "topic_key": "pat_shooting_star",
   "source": "approved-buffer",
   "buffer_id": "ap-pat_shooting_star-93f92b864c56"
+ },
+ {
+  "date_ist": "2026-11-01",
+  "slot": "17:50",
+  "video_id": "ZEGpSfMslQc",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null
  }
 ]
