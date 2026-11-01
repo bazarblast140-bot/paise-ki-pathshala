@@ -497,3 +497,32 @@ def files_allow_public(run_dir, fmt):
         ):
             return False
     return True
+
+
+_TICKER = re.compile(r"\b[A-Z][A-Z&]{2,}\b")
+_TICKER_OK = {"SEBI", "NSE", "BSE", "RSI", "EMA", "SMA", "MACD", "ATR", "FII", "DII", "NIFTY", "SL", "CTA", "RBI", "YPP"}
+
+
+def educational_example_plan(topic, script):
+    """True for a teaching plan on an illustrative chart, clearly labelled.
+
+    The topic must be a trade_plan topic (example candles, no live symbol), the
+    spoken script must say उदाहरण and use no order words, and must not name a
+    stock ticker. A real tip on a named stock never qualifies.
+    """
+    import trade_plan
+    topic = topic or {}
+    key = str(topic.get("key") or "")
+    try:
+        trade_plan.plan_for(key)
+    except KeyError:
+        return False
+    if topic.get("symbol") or topic.get("ticker") or topic.get("real_chart"):
+        return False
+    text = script or ""
+    if "उदाहरण" not in text:
+        return False
+    if any(word in text for word in trade_plan.PLAN_IMPERATIVES):
+        return False
+    tickers = {t for t in _TICKER.findall(text) if t not in _TICKER_OK}
+    return not tickers

@@ -4795,6 +4795,14 @@ def write_motion_mix_evidence(run_dir, info):
 
 
 # ---------------------------------------------------------------- compat files
+def disclaimer_for(topic, plan_lines=None):
+    """Plan topics carry the educational-example label in the description line."""
+    if plan_lines:
+        import trade_plan
+        return f"{trade_plan.EDU_LABEL}। {DISCLAIMER}"
+    return DISCLAIMER
+
+
 def plan_fact_lines(topic):
     """FACT LEDGER rows for a trade-plan Short: where every plan figure comes from.
 
@@ -4869,9 +4877,10 @@ def write_compat(topic, n, spoken, beat_times):
         if x == "hook":
             continue
         segments.append(f"[SEGMENT {x.upper()}]\n{b.get(x, '')}")
+    disclaimer_line = disclaimer_for(topic, plan_lines)
     script = (f"TITLE:\n{n['title']}\n\nHOOK (0-3 sec):\n{b['hook']}\n\nBODY:\n"
               + "\n\n".join(segments)
-              + f"\n\nCTA:\n{cta}\n\nDISCLAIMER LINE:\n{DISCLAIMER}\n\n"
+              + f"\n\nCTA:\n{cta}\n\nDISCLAIMER LINE:\n{disclaimer_line}\n\n"
               f"FACT LEDGER:\n{facts}\n")
     save("script.txt", script)
     save("spoken.txt", " ".join(spoken[x] for x in body_beats))
