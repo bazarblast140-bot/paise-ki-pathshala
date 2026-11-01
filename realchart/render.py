@@ -258,6 +258,9 @@ def _caption(kind, row, levels):
 
 def frames(out, kind, levels, rows, chart_path, article=None, intraday=None, durations=None):
     """One card per script beat, in narration order. Every card has a real visual."""
+    if levels.get("format") == "story" and kind in ("ta", "close"):
+        from realchart.story_layout import story_frames
+        return story_frames(out, kind, levels, rows)
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     del DRAWN[:]

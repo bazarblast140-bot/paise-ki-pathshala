@@ -5,12 +5,13 @@ import yaml
 WF = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "daily-reels.yml"
 
 
-def _gate_script(event, schedule="", kind=""):
+def _gate_script(event, schedule="", kind="", sample="false"):
     wf = yaml.safe_load(WF.read_text(encoding="utf-8"))
     run = wf["jobs"]["gate"]["steps"][0]["run"]
     return (run.replace("${{ github.event_name }}", event)
                .replace("${{ github.event.schedule }}", schedule)
-               .replace("${{ inputs.kind }}", kind))
+               .replace("${{ inputs.kind }}", kind)
+               .replace("${{ inputs.sample }}", sample))
 
 
 def _skip(pause, **kw):
@@ -35,6 +36,13 @@ def test_pause_close_ta_keeps_news():
         assert _skip(p, event="schedule", schedule=s)
     assert _skip(p, event="workflow_dispatch", kind="ta")
     assert not _skip(p, event="workflow_dispatch", kind="news")
+
+
+def test_sample_dispatch_does_not_lift_a_live_pause():
+    # A fixture sample is allowed through. A normal ta dispatch stays paused.
+    assert _skip("close,ta", event="workflow_dispatch", kind="ta")
+    assert not _skip("close,ta", event="workflow_dispatch", kind="ta", sample="true")
+    assert _skip("close,ta", event="schedule", schedule="0 13 * * 1-5")
 
 
 def test_empty_pauses_nothing():

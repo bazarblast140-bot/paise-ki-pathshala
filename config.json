@@ -124,6 +124,11 @@
     "_note": "grid_safe_cover: IG-only cover copy (run/ig_cover.jpg) that keeps the thumbnail title inside the 3:4 profile-grid crop. YouTube thumbnail unchanged.",
     "grid_safe_cover": true
   },
+  "realchart": {
+    "_note": "story replaces the classic support/resistance Reel for that kind. Env REALCHART_TA_FORMAT or REALCHART_CLOSE_FORMAT overrides this. classic keeps the previous layout.",
+    "ta_format": "story",
+    "close_format": "story"
+  },
   "research": {
     "_note": "competitor_research.py (optional, read-only). Needs secret YT_DATA_API_KEY, or falls back to the channel OAuth token. Missing creds = step skipped, pipeline unaffected.",
     "enabled": true,

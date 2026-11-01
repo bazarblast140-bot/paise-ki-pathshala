@@ -120,7 +120,31 @@ def main():
         link = "https://www.facebook.com" + link
     print(f"[fb] reel {video_id} {link}")
     (RUN / "fb_reel.json").write_text(json.dumps({"video_id": video_id, "permalink": link}) + "\n", encoding="utf-8")
+    set_cover(video_id)
     return 0
+
+
+def set_cover(video_id):
+    """Use run/thumbnail.jpg as the Reel cover when that file exists."""
+    thumb = RUN / "thumbnail.jpg"
+    if not thumb.is_file() or thumb.stat().st_size < 100:
+        print("[fb] no thumbnail.jpg; cover left unset")
+        return False
+    boundary = "----pkpcover"
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="source"; filename="thumbnail.jpg"\r\n'
+        f"Content-Type: image/jpeg\r\n\r\n"
+    ).encode() + thumb.read_bytes() + f"\r\n--{boundary}--\r\n".encode()
+    try:
+        call("POST", f"{GRAPH}/{video_id}/thumbnails", data=body, headers={
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        })
+    except Exception as exc:  # noqa: BLE001
+        print(f"[fb] cover not set ({exc})")
+        return False
+    print("[fb] cover set from thumbnail.jpg")
+    return True
 
 
 if __name__ == "__main__":
