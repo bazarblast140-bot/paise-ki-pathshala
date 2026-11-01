@@ -13,7 +13,11 @@ BEATS = (
 REQUIRED = ("context", "entry", "sl", "target", "invalidation")
 DISCLAIMER = "Sirf seekhne ke liye, financial advice nahi."
 # One burned line. The Latin sentence stays in the script; it is not painted.
-ON_SCREEN_DISCLAIMER = "सिर्फ सीखने के लिए, फाइनेंशियल एडवाइस नहीं"
+# Plan Shorts teach on an illustrative chart. The burned line says so plainly.
+EDU_LABEL = "शैक्षिक उदाहरण, स्टॉक टिप नहीं"
+ON_SCREEN_DISCLAIMER = EDU_LABEL
+# Order words that turn a teaching plan into a call. Plan beats describe, never order.
+PLAN_IMPERATIVES = ("प्रॉफिट बुक करो", "लगाओ", "खरीदो", "बेचो", "पर लो", "अभी लो", "abhi kharido")
 DISCLAIMER_PX = 40
 # The topic the owner asked for is 40–50s. A take up to 55s is a review, not a block.
 VOICE_SECONDS = (40.0, 50.0)

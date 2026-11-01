@@ -107,7 +107,7 @@ def _plan_overlay(topic, beat_times, hook_line, cta):
         "start": max(float(t0), float(t1) - 2.8), "end": float(t1),
     })
     events.append({
-        "role": "disclaimer", "beat": "cta", "text": trade_plan.DISCLAIMER,
+        "role": "disclaimer", "beat": "cta", "text": trade_plan.EDU_LABEL,
         "start": float(t0), "end": float(t1),
     })
     return events

@@ -25,6 +25,14 @@ Re-check the three critical nodes one last time using the provided artifacts:
    selling or holding any specific stock / fund scheme / bank product / insurance plan / app,
    promises or implies guaranteed returns, or gives a tax figure without naming the financial
    year. Tax and regulatory numbers not clearly sourced must be listed under Risks.
+   EDUCATIONAL EXAMPLE PLANS: when <educational_example_plan> is true, the video teaches a
+   pattern on an ILLUSTRATIVE teaching chart (example candles, no named stock) and is labelled
+   on screen "शैक्षिक उदाहरण, स्टॉक टिप नहीं". Its entry / stop-loss / target / invalidation
+   numbers are the lesson, described ("इस उदाहरण में एंट्री ... होगी"). Do NOT fail Compliance
+   for that plan, and do not list it under "fails this round". Still FAIL Compliance if it orders
+   the viewer to trade ("खरीदो", "लगाओ", "प्रॉफिट बुक करो"), names a real stock/fund with a
+   buy/sell/hold, entry or target, or promises returns. When the flag is false, a specific
+   buy/sell plan on a named stock is a non-SEBI call and FAILS.
 3. Subtitles: were subtitles generated? (assume yes if a subs file was produced — stated below.)
 
 Then surface JUDGMENT calls the human must decide (thumbnail appeal, "is this boring?", any assumption like an illustrative return rate).
@@ -235,6 +243,13 @@ def fetch_review(c, system, user):
         return claude(system, user, model=model, max_tokens=second, raise_on_truncate=True)
 
 
+def _topic():
+    try:
+        return json.loads((RUN / "topic.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
 def main():
     c = cfg()
     script = read("script.txt")
@@ -260,6 +275,7 @@ def main():
     subs_made = (RUN / "subs.ass").exists()
     video_made = (RUN / "final.mp4").exists()
     signals = reused_content_signals(c, shots)
+    edu_plan = review_gate.educational_example_plan(_topic(), script)
 
     user = f"""<artifacts>
 <script_with_fact_ledger>
@@ -267,6 +283,7 @@ def main():
 </script_with_fact_ledger>
 <visual_checks>{json.dumps(shots.get('checks', {}))}</visual_checks>
 <reused_content_signals>{json.dumps(signals)}</reused_content_signals>
+<educational_example_plan>{edu_plan}</educational_example_plan>
 <subtitles_generated>{subs_made}</subtitles_generated>
 <video_built>{video_made}</video_built>
 </artifacts>
