@@ -1,6 +1,6 @@
 name: Daily Reels
 
-# News, close, TA and Saturday recap. Build and publish are separate crons.
+# News, close and TA (Mon-Fri). Recap is manual-only. Build and publish are separate crons.
 # A dry_run does not call Gemini and does not publish.
 # Live runs start Mon 12 Oct 2026 (recap Sat 10 Oct). A hard gate is a HOLD.
 on:
