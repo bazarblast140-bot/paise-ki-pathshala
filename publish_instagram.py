@@ -1016,8 +1016,14 @@ def main() -> None:
     url = host_mp4(mp4)
     cover_url = ""
     if cover is not None and cover.exists():
-        cover_url = host_cover(cover)
-        print(f"  cover: {cover_url}")
+        try:
+            cover_url = host_cover(cover)
+            print(f"  cover: {cover_url}")
+        except Exception as e:  # noqa: BLE001  never block a Reel on its cover
+            print(f"[warn] cover hosting failed ({type(e).__name__}: {redact_text(str(e))}); Reel posts with the auto frame")
+            cover_url = ""
+    else:
+        print("[warn] run/thumbnail.jpg missing; Reel posts with the auto frame")
     caption = build_caption()
     marker = caption_marker(ident)
     if marker not in caption:
