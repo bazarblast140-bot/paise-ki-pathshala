@@ -3068,6 +3068,7 @@
     "risk_leverage",
     "business_cash",
     "aaj_ka_nifty",
-    "pat_bull_engulf"
+    "pat_bull_engulf",
+    "pat_cup_handle"
   ]
 }
