@@ -56,6 +56,38 @@ def video_path():
     raise FileNotFoundError("run/final_ig.mp4 missing")
 
 
+def cover_path():
+    """Same topic thumbnail YouTube and the IG Reel use (run/thumbnail.jpg, else run/ig_cover.jpg)."""
+    for name in ("thumbnail.jpg", "ig_cover.jpg"):
+        if (RUN / name).is_file() and (RUN / name).stat().st_size > 0:
+            return RUN / name
+    return None
+
+
+def set_thumbnail(video_id, path):
+    """POST /{video-id}/thumbnails (multipart source + is_preferred). Never raises: a failed
+    cover is a warning and the Reel still posts."""
+    if path is None:
+        print("[fb] warning: no run/thumbnail.jpg; Facebook Reel keeps the auto frame")
+        return False
+    try:
+        boundary = "----pkpcover" + str(int(time.time() * 1000))
+        body = b"".join([
+            f'--{boundary}\r\nContent-Disposition: form-data; name="is_preferred"\r\n\r\ntrue\r\n'.encode(),
+            (f'--{boundary}\r\nContent-Disposition: form-data; name="source"; filename="{path.name}"\r\n'
+             "Content-Type: image/jpeg\r\n\r\n").encode(),
+            path.read_bytes(),
+            f"\r\n--{boundary}--\r\n".encode(),
+        ])
+        res = call("POST", f"{GRAPH}/{video_id}/thumbnails", data=body,
+                   headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+        print(f"[fb] custom cover set from {path.name}: {res}")
+        return True
+    except Exception as exc:  # noqa: BLE001
+        print(f"[fb] warning: custom cover upload failed ({exc}); Reel posted anyway")
+        return False
+
+
 def already_posted(title):
     data = call("GET", f"{GRAPH}/{PAGE}/video_reels", {"fields": "id,description,created_time,permalink_url", "limit": "25"})
     for item in data.get("data") or []:
@@ -104,6 +136,7 @@ def main():
         raise RuntimeError(f"upload not accepted: {up}")
     call("POST", f"{GRAPH}/{PAGE}/video_reels", {"upload_phase": "finish", "video_id": video_id,
                                               "video_state": "PUBLISHED", "description": text})
+    set_thumbnail(video_id, cover_path())
     link = ""
     for _ in range(40):
         info = call("GET", f"{GRAPH}/{video_id}", {"fields": "status,permalink_url"})
