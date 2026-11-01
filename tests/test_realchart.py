@@ -692,10 +692,11 @@ class WorkflowTests(unittest.TestCase):
             '"45 10 * * 1-5"',
             '"35 12 * * 1-5"',
             '"0 13 * * 1-5"',
-            '"35 5 * * 6"',
-            '"0 6 * * 6"',
         ):
             self.assertIn(cron, daily)
+        # Saturday recap crons were removed in #163 (recap is manual-only now).
+        self.assertNotIn('"35 5 * * 6"', daily)
+        self.assertNotIn('"0 6 * * 6"', daily)
         self.assertIn("kind:", daily)
         self.assertIn("dry_run:", daily)
         self.assertIn("playwright install chromium", daily)
