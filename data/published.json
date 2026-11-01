@@ -858,5 +858,20 @@
   "ig_media_id": "18100300001341048",
   "content_hash": "24bc678c6b8de551",
   "title_norm": "\u0915\u094b\u091f\u0915 \u092e\u0939\u093f\u0902\u0926\u094d\u0930\u093e \u092c\u0948\u0902\u0915 q2 \u0928\u0924\u0940\u091c\u0947: \u092a\u094d\u0930\u0949\u092b\u093f\u091f 26% \u092c\u0922\u093c\u093e, 52 \u0939\u092b\u094d\u0924\u0947 \u0915\u093e \u0939\u093e\u0908 | \u092c\u094d\u0930\u0947\u0915\u0906\u0909\u091f \u092a\u094d\u0932\u093e\u0928"
+ },
+ {
+  "date_ist": "2026-11-01",
+  "slot": "18:47",
+  "video_id": "hQp_2eatksY",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "17915871792499758",
+  "content_hash": "8fd7ead230e0da1e",
+  "title_norm": "powergrid share analysis | breakout trade plan next session (30 oct 2026 close)"
  }
 ]
