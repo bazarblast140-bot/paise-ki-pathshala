@@ -194,8 +194,13 @@ jobs:
               close) CRON="20 10 * * 1-5" ;;
               ta) CRON="35 12 * * 1-5" ;;
             esac
-            SOURCE="$(gh run list --workflow daily-reels.yml --limit 40 --json databaseId,displayTitle,conclusion \
-              --jq "[.[] | select(.conclusion==\"success\") | select(.displayTitle == \"daily-reel $KIND build\" or .displayTitle == \"daily-reel $CRON cron\")] | .[0].databaseId")"
+            # Today-only (IST): never publish a stale build (30-Oct tried the 14-Oct news build).
+            SOURCE="$(gh run list --workflow daily-reels.yml --limit 40 --json databaseId,displayTitle,conclusion,createdAt \
+              | python3 scripts/pick_fresh_build.py "$KIND" "$CRON")"
+            if [ -z "$SOURCE" ] || [ "$SOURCE" = "null" ]; then
+              echo "No successful $KIND build from today to publish"
+              exit 0
+            fi
           fi
           if [ -z "$SOURCE" ] || [ "$SOURCE" = "null" ]; then
             echo "No successful $KIND build to publish"
