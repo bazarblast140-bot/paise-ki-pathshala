@@ -182,6 +182,21 @@
           "exhausted": false
         }
       }
+    },
+    "2026-11-01": {
+      "keys": {
+        "1": {
+          "realchart": 0,
+          "nifty": 0,
+          "buffer": 3,
+          "other": 0,
+          "news": 0,
+          "close": 0,
+          "ta": 0,
+          "recap": 0,
+          "exhausted": false
+        }
+      }
     }
   },
   "charges": [
@@ -357,6 +372,24 @@
       "id": "0abdc158b45d4b89b894342542f4b2a0",
       "date": "2026-10-31",
       "caller": "other",
+      "key": "1"
+    },
+    {
+      "id": "385556aebbe8464c90b3cb60e2a3c6f8",
+      "date": "2026-11-01",
+      "caller": "buffer",
+      "key": "1"
+    },
+    {
+      "id": "13a9119da8e9499085ca316669fe3fe5",
+      "date": "2026-11-01",
+      "caller": "buffer",
+      "key": "1"
+    },
+    {
+      "id": "3528762ede804469b42505036be21289",
+      "date": "2026-11-01",
+      "caller": "buffer",
       "key": "1"
     }
   ]

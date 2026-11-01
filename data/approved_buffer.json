@@ -714,20 +714,20 @@
       "state": "held",
       "topic_key": "pat_evening_star",
       "owner_approved": false,
-      "created_at": "2026-10-23T05:48:51Z",
-      "reason": "render rc=1",
+      "created_at": "2026-11-01T06:54:55Z",
+      "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
       "voice_engine": "gemini",
-      "duration_s": 47.62
+      "duration_s": 43.63
     },
     {
       "id": "hold-pat_inside_bar-20261023T055451Z",
       "state": "held",
       "topic_key": "pat_inside_bar",
       "owner_approved": false,
-      "created_at": "2026-10-23T05:54:51Z",
-      "reason": "self-review sync 0 is below 60; sync gate did not pass; sync 0 is below 60",
-      "voice_engine": "gemini",
-      "duration_s": 40.06
+      "created_at": "2026-11-01T06:55:12Z",
+      "reason": "self-review sync 0 is below 60; sync gate did not pass; duration 59.8s outside 40-55s; sync 0 is below 60; voice_engine=edge is held; gemini_take",
+      "voice_engine": "edge",
+      "duration_s": 59.8
     },
     {
       "id": "ap-pat_black_crows-9ba54fc9eaaf",
@@ -4026,6 +4026,612 @@
       "reason": "self-review missing; chart scenes missing; audio mix evidence missing; numbers and maths gate missing; spoken beats missing for the leak gate; sync gate did not pass; duration evidence missing; narration missing; hook score missing; visual score missing; accuracy score missing; craft score missing; sync score missing; self-review None is under 75; voice_engine=missing is held",
       "voice_engine": "",
       "duration_s": null
+    },
+    {
+      "id": "ap-pat_shooting_star-93f92b864c56",
+      "state": "ready",
+      "topic_key": "pat_shooting_star",
+      "owner_approved": true,
+      "title": "शूटिंग स्टार कैंडल",
+      "description": "शूटिंग स्टार कैंडल पर शॉर्ट कब करें? एंट्री 127 और स्टॉप 142 का प्लान।\n\nशूटिंग स्टार कैंडल — आसान हिंदी में: पहचान, मतलब और traders इसे आमतौर पर कैसे इस्तेमाल करते हैं।\n\n💬 यह बात पहले से पता थी? Comment में हाँ या नहीं लिखो।\n\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nहम SEBI-रजिस्टर्ड सलाहकार नहीं हैं। किसी भी निवेश से पहले रजिस्टर्ड सलाहकार से बात करें।\n\nस्रोत और नोट्स\n- पूरा ट्रेड प्लान\n- स्रोत: illustrative teaching chart drawn in this video (example candles, not live market data, not a stock tip). Every plan number below is computed by the channel's trade_plan rules from these candles.\n- Example chart candles: #1 O 106 H 112 L 104 C 110; #2 O 110 H 118 L 108 C 116; #3 O 116 H 124 L 114 C 122; #4 O 122 H 130 L 120 C 128; #5 O 128 H 140 L 127 C 130; #6 O 130 H 131 L 120 C 122; #7 O 122 H 124 L 108 C 110; #8 O 110 H 112 L 94 C 96.\n- Plan side: short (sell). Entry 127, stop-loss 142, target 97, resist 140.\n- Risk = |entry - stop| = 15; reward = |target - entry| = 30; risk:reward = 1:2 (spoken 1 बटा 2).\n- Other chart levels: mult 2, body 2, wick 10, high 140, low 127.\n\nPaise Ki Pathshala — ट्रेडिंग की पाठशाला — चार्ट, पैटर्न, रिस्क और असली डेटा\n\nरोज़ 3 ट्रेडिंग Shorts — कैंडलस्टिक, इंडिकेटर, ऑर्डर, F&O, रिस्क और असली डेटा।\n\n#StockMarketHindi #TradingHindi #PaiseKiPathshala #ShareMarket",
+      "tags": [
+        "hindi",
+        "stock market hindi",
+        "trading hindi",
+        "paise ki pathshala"
+      ],
+      "sha256": "93f92b864c565f602aae66e4995675ef3bbe0ae2d53a936febcba74157e74c75",
+      "asset_name": "ap-pat_shooting_star-93f92b864c56.mp4",
+      "created_at": "2026-11-01T06:54:58Z",
+      "used_at": null,
+      "used_slot": null,
+      "used_date_ist": null,
+      "video_id": null,
+      "voice_engine": "gemini",
+      "duration_s": 49.21,
+      "review_overall": 98.3,
+      "reason": "",
+      "files": {
+        "topic": {
+          "key": "pat_shooting_star"
+        },
+        "script": "TITLE:\nशूटिंग स्टार कैंडल\n\nHOOK (0-3 sec):\nशूटिंग स्टार कैंडल पर शॉर्ट कब करें? एंट्री 127 और स्टॉप 142 का प्लान।\n\nBODY:\n[SEGMENT PEHCHAN]\nऊपर की विक बॉडी से 2 गुना हो, नीचे की विक छोटी हो।\n\n[SEGMENT CONTEXT]\nचार्ट पर रेसिस्टेंस लाइन 140 देखो, सेटअप इसी लेवल पर वैलिड।\n\n[SEGMENT ENTRY]\nएंट्री 127, अगली कैंडल लो के नीचे जाए तब।\n\n[SEGMENT SL]\nस्टॉप 142, हाई 140 के जस्ट ऊपर। हाई टूटा तो प्लान गलत। एंट्री के साथ ही स्टॉप लॉस 142 लगाओ।\n\n[SEGMENT TARGET]\nटारगेट 97, 1:2। यानी रिस्क-रिवॉर्ड 1 बटा 2, चार्ट पर लिखा है। टारगेट 97 आते ही प्रॉफिट बुक करो।\n\n[SEGMENT INVALIDATION]\nगलती अकेली विक देखकर शॉर्ट। स्टॉप 142 टूटे तो स्किप। प्लान फेल तो अगला सेटअप देखो।\n\n[SEGMENT CTA]\nआपने शूटिंग स्टार पर कभी स्टॉप लॉस हिट किया? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.\n\nCTA:\nयह बात पहले से पता थी? Comment में हाँ या नहीं लिखो।\n\nDISCLAIMER LINE:\nसिर्फ़ जानकारी, निवेश सलाह नहीं।\n\nFACT LEDGER:\n- पूरा ट्रेड प्लान\n- SOURCE: illustrative teaching chart drawn in this video (example candles, not live market data, not a stock tip). Every plan number below is computed by the channel's trade_plan rules from these candles.\n- Example chart candles: #1 O 106 H 112 L 104 C 110; #2 O 110 H 118 L 108 C 116; #3 O 116 H 124 L 114 C 122; #4 O 122 H 130 L 120 C 128; #5 O 128 H 140 L 127 C 130; #6 O 130 H 131 L 120 C 122; #7 O 122 H 124 L 108 C 110; #8 O 110 H 112 L 94 C 96.\n- Plan side: short (sell). Entry 127, stop-loss 142, target 97, resist 140.\n- Risk = |entry - stop| = 15; reward = |target - entry| = 30; risk:reward = 1:2 (spoken 1 बटा 2).\n- Other chart levels: mult 2, body 2, wick 10, high 140, low 127.\n",
+        "report": "VERDICT: [READY TO PUBLISH]\n\n✅ Auto-checks pass:\nHook (0-3s plan clear) | Facts (sab numbers illustrative chart se sourced, koi UNVERIFIED nahi) | Compliance (educational framing + disclaimer + koi buy/sell/hold tip nahi) | Coverage (entry/SL/target/R:R/invalidation sab covered) | Visuals (8/8 chart shots, overlays on) | Length (short, tight)\n\n♻️ Reused-content risk: LOW\n- Stock footage 0%, premium Gemini AI voice, original script + 8 original chart overlays — yeh teen mitigating factors risk ko neeche rakhte hain.\n\n⚠️ Tumhe dekhna hai (judgment calls):\n- Thumbnail: \"Entry 127 / SL 142 / Target 97\" ko bada dikhao — appeal strong, par faceless finance me clickbait-free rakho.\n- 0-3s hook me numbers sahi lag rahe hain, par kya awaaz \"premium\" feel deti hai — ek baar sunlo.\n- \"1:2\" R:R assumption teaching ke liye theek hai, par koi bhi viewer isse guaranteed samajh sakta hai — tone check karo.\n\n🔴 Risks / assumptions:\n- Poora plan illustrative teaching chart par (Likely), live market data nahi — video me clearly bola gaya hai, achha.\n- Tax/regulatory figures: koi nahi diya gaya, FY naming ka issue nahi.\n- Disclaimer line \"sirf jankari, nivsh salah nahi\" present — SEBI non-registered channel ke liye theek.\n\nFAILS this round: none\n",
+        "verify_meta": {
+          "ai_verdict_valid": true,
+          "verdict": "READY",
+          "public_ready": true,
+          "soft_judgment_only": false,
+          "reasons": [],
+          "spoken_words": 148
+        },
+        "self_review": {
+          "parts": {
+            "hook": 100,
+            "visual": 90,
+            "accuracy": 100,
+            "trend": 100,
+            "craft": 100,
+            "sync": 100
+          },
+          "overall": 98.3,
+          "passed": true,
+          "public_ok": true,
+          "review_flag": false,
+          "verdict": "PASS",
+          "summary": "overall 98.3 (hook 100, visual 90, accuracy 100, trend 100, craft 100, sync 100)",
+          "notes": [],
+          "bar": {
+            "part": 60,
+            "overall": 75
+          },
+          "chart": {
+            "mode": "schematic",
+            "source": null,
+            "as_of": null
+          },
+          "narration_source": "approved",
+          "sync": {
+            "ok": true,
+            "reason": "",
+            "scenes": [
+              {
+                "start": 0.0,
+                "end": 2.73,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.5,
+                "recall": 0.857,
+                "gate_recall": 0.818,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.818,
+                "shared": [
+                  "शूटिंग",
+                  "स्टार",
+                  "कैंडल",
+                  "शॉर्ट",
+                  "कब",
+                  "करें"
+                ],
+                "script": "शूटिंग स्टार कैंडल पर शॉर्ट कब करें? एंट्री",
+                "heard": "शूटिंग स्टार कंडल पर शोट कब करें अंट्री एकसो",
+                "passed": true
+              },
+              {
+                "start": 2.73,
+                "end": 5.45,
+                "beat": "hook",
+                "kind": "chart-hook",
+                "jaccard": 0.071,
+                "recall": 0.5,
+                "gate_recall": 0.818,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.818,
+                "shared": [
+                  "करें"
+                ],
+                "script": "करें? एंट्री 127 और स्टॉप 142 का प्लान।",
+                "heard": "अंट्री एकसो सबताइस और स्थाब एकसो ब्यालिस का प्लन.",
+                "passed": true
+              },
+              {
+                "start": 5.45,
+                "end": 8.35,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.143,
+                "recall": 0.8,
+                "gate_recall": 0.75,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.75,
+                "shared": [
+                  "ऊपर",
+                  "विक",
+                  "बॉडी",
+                  "गुना",
+                  "नीचे",
+                  "विक"
+                ],
+                "script": "ऊपर की विक बॉडी से 2 गुना",
+                "heard": "ब्यालिस का प्लन. उपर की विक बाडी से दोगुना हूँ? नीचे",
+                "passed": true
+              },
+              {
+                "start": 8.35,
+                "end": 11.24,
+                "beat": "pehchan",
+                "kind": "chart-pehchan",
+                "jaccard": 0.0,
+                "recall": 0.8,
+                "gate_recall": 0.75,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.75,
+                "shared": [
+                  "गुना",
+                  "नीचे",
+                  "विक",
+                  "छोटी"
+                ],
+                "script": "से 2 गुना हो, नीचे की विक छोटी हो।",
+                "heard": "से दोगुना हूँ? नीचे किविक चोटी हो. चाट पर रसिस्टन्स",
+                "passed": true
+              },
+              {
+                "start": 11.24,
+                "end": 14.52,
+                "beat": "context",
+                "kind": "chart-context",
+                "jaccard": 0.095,
+                "recall": 0.556,
+                "gate_recall": 0.889,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.889,
+                "shared": [
+                  "चार्ट",
+                  "रेसिस्टेंस",
+                  "लाइन",
+                  "देखो",
+                  "सेटअप",
+                  "इसी"
+                ],
+                "script": "चार्ट पर रेसिस्टेंस लाइन 140 देखो, सेटअप इसी लेवल पर वैलिड।",
+                "heard": "चाट पर रसिस्टन्स लाईन एक सो चालेस देखो. जुएदाटेद्र सेतप इसी लेवल पर वलिद. आआरईः",
+                "passed": true
+              },
+              {
+                "start": 14.52,
+                "end": 17.03,
+                "beat": "entry",
+                "kind": "chart-entry",
+                "jaccard": 0.0,
+                "recall": 0.5,
+                "gate_recall": 0.625,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.625,
+                "shared": [
+                  "एंट्री",
+                  "अगली",
+                  "कैंडल",
+                  "लो",
+                  "नीचे"
+                ],
+                "script": "एंट्री 127, अगली कैंडल लो के नीचे",
+                "heard": "पर वलिद. आआरईः ढ़ुद. अगली कन्डल लोके नीचे",
+                "passed": true
+              },
+              {
+                "start": 17.03,
+                "end": 19.54,
+                "beat": "entry",
+                "kind": "chart-entry",
+                "jaccard": 0.0,
+                "recall": 0.6,
+                "gate_recall": 0.625,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.625,
+                "shared": [
+                  "अगली",
+                  "कैंडल",
+                  "लो",
+                  "नीचे",
+                  "जाए",
+                  "तब"
+                ],
+                "script": "कैंडल लो के नीचे जाए तब।",
+                "heard": "अगली कन्डल लोके नीचे जाएत तब. Stop, 100, 122,",
+                "passed": true
+              },
+              {
+                "start": 19.54,
+                "end": 22.83,
+                "beat": "sl",
+                "kind": "chart-sl",
+                "jaccard": 0.062,
+                "recall": 0.625,
+                "gate_recall": 0.765,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.765,
+                "shared": [
+                  "स्टॉप",
+                  "हाई",
+                  "जस्ट",
+                  "ऊपर",
+                  "हाई",
+                  "टूटा"
+                ],
+                "script": "स्टॉप 142, हाई 140 के जस्ट ऊपर। हाई टूटा तो",
+                "heard": "Stop, 100, 122, High, 140, just over आई तूटा तो",
+                "passed": true
+              },
+              {
+                "start": 22.83,
+                "end": 26.11,
+                "beat": "sl",
+                "kind": "chart-sl",
+                "jaccard": 0.143,
+                "recall": 0.7,
+                "gate_recall": 0.765,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.765,
+                "shared": [
+                  "हाई",
+                  "टूटा",
+                  "प्लान",
+                  "गलती",
+                  "एंट्री",
+                  "ही"
+                ],
+                "script": "हाई टूटा तो प्लान गलत। एंट्री के साथ ही स्टॉप लॉस 142",
+                "heard": "आई तूटा तो प्लान गलात. अन्ट्री के साथ ही स्थोप लोस एक सुब आलेस",
+                "passed": true
+              },
+              {
+                "start": 26.11,
+                "end": 29.4,
+                "beat": "sl",
+                "kind": "chart-sl",
+                "jaccard": 0.0,
+                "recall": 0.6,
+                "gate_recall": 0.765,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.765,
+                "shared": [
+                  "ही",
+                  "स्टॉप",
+                  "लॉस",
+                  "लगाओ"
+                ],
+                "script": "ही स्टॉप लॉस 142 लगाओ।",
+                "heard": "ही स्थोप लोस एक सुब आलेस लगाओ. तार्गिट सत्तान्वे एक अनुपात्दो",
+                "passed": true
+              },
+              {
+                "start": 29.4,
+                "end": 32.13,
+                "beat": "target",
+                "kind": "chart-target",
+                "jaccard": 0.05,
+                "recall": 0.818,
+                "gate_recall": 0.947,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.947,
+                "shared": [
+                  "टारगेट",
+                  "यानी",
+                  "रिस्क",
+                  "रिवॉर्ड",
+                  "बटा"
+                ],
+                "script": "टारगेट 97, 1:2। यानी रिस्क-रिवॉर्ड 1 बटा 2, चार्ट पर",
+                "heard": "सत्तान्वे एक अनुपात्दो यानी रिस्क रिवाड एक बता दो चाट पर",
+                "passed": true
+              },
+              {
+                "start": 32.13,
+                "end": 34.87,
+                "beat": "target",
+                "kind": "chart-target",
+                "jaccard": 0.19,
+                "recall": 0.846,
+                "gate_recall": 0.947,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.947,
+                "shared": [
+                  "बटा",
+                  "चार्ट",
+                  "लिखा",
+                  "टारगेट",
+                  "आते",
+                  "ही"
+                ],
+                "script": "रिस्क-रिवॉर्ड 1 बटा 2, चार्ट पर लिखा है। टारगेट 97 आते ही प्रॉफिट बुक",
+                "heard": "बता दो चाट पर लिखा है. तार्गेट सत्तानवे आते ही प्रोफिट बुक",
+                "passed": true
+              },
+              {
+                "start": 34.87,
+                "end": 37.6,
+                "beat": "target",
+                "kind": "chart-target",
+                "jaccard": 0.25,
+                "recall": 1.0,
+                "gate_recall": 0.947,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.947,
+                "shared": [
+                  "आते",
+                  "ही",
+                  "प्रॉफिट",
+                  "बुक",
+                  "करो"
+                ],
+                "script": "97 आते ही प्रॉफिट बुक करो।",
+                "heard": "सत्तानवे आते ही प्रोफिट बुक करो. गलती अकेली विक देक कर",
+                "passed": true
+              },
+              {
+                "start": 37.6,
+                "end": 40.19,
+                "beat": "invalidation",
+                "kind": "chart-invalidation",
+                "jaccard": 0.056,
+                "recall": 0.556,
+                "gate_recall": 0.714,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.714,
+                "shared": [
+                  "अकेली",
+                  "विक",
+                  "देखकर",
+                  "शॉर्ट",
+                  "स्टॉप",
+                  "टूटे"
+                ],
+                "script": "अकेली विक देखकर शॉर्ट। स्टॉप 142 टूटे तो स्किप। प्लान",
+                "heard": "अकेली विक देक कर शोट स्तोब एक सो बायालिस तूटे तो श्किप",
+                "passed": true
+              },
+              {
+                "start": 40.19,
+                "end": 42.79,
+                "beat": "invalidation",
+                "kind": "chart-invalidation",
+                "jaccard": 0.188,
+                "recall": 0.714,
+                "gate_recall": 0.714,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.714,
+                "shared": [
+                  "टूटे",
+                  "स्किप",
+                  "प्लान",
+                  "फेल",
+                  "अगला",
+                  "सेटअप"
+                ],
+                "script": "टूटे तो स्किप। प्लान फेल तो अगला सेटअप देखो।",
+                "heard": "बायालिस तूटे तो श्किप प्लान फेल तो अगला सेट अप देख हो.",
+                "passed": true
+              },
+              {
+                "start": 42.79,
+                "end": 46.0,
+                "beat": "cta",
+                "kind": "chart-cta",
+                "jaccard": 0.045,
+                "recall": 0.556,
+                "gate_recall": 0.625,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.625,
+                "shared": [
+                  "आपने",
+                  "शूटिंग",
+                  "स्टार",
+                  "कभी",
+                  "स्टॉप",
+                  "लॉस"
+                ],
+                "script": "आपने शूटिंग स्टार पर कभी स्टॉप लॉस हिट किया? कमेंट",
+                "heard": "अगला सेट अप देख हो. आपने शूटिंच स्वार पर कभी स्वार बाँज बाँग बाँग कोमेंट",
+                "passed": true
+              },
+              {
+                "start": 46.0,
+                "end": 49.21,
+                "beat": "cta",
+                "kind": "chart-cta",
+                "jaccard": 0.05,
+                "recall": 0.455,
+                "gate_recall": 0.625,
+                "missing_numbers": [],
+                "asr_sanity": false,
+                "beat_recall": 0.625,
+                "shared": [
+                  "लॉस",
+                  "हिट",
+                  "किया",
+                  "कमेंट",
+                  "करो",
+                  "सिर्फ"
+                ],
+                "script": "लॉस हिट किया? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.",
+                "heard": "बाँग बाँग कोमेंट करो, सिवज सीखनी के लिए, फनधशल अदवाईस नहीं",
+                "passed": true
+              }
+            ],
+            "beats": [
+              {
+                "beat": "hook",
+                "recall": 0.818,
+                "script": "शूटिंग स्टार कैंडल पर शॉर्ट कब करें? एंट्री 127 और स्टॉप 142 का प्लान।",
+                "heard": "शूटिंग स्टार कंडल पर शोट कब करें अंट्री एकसो सबताइस और स्थाब एकसो ब्यालिस का प्लन."
+              },
+              {
+                "beat": "pehchan",
+                "recall": 0.75,
+                "script": "ऊपर की विक बॉडी से 2 गुना हो, नीचे की विक छोटी हो।",
+                "heard": "ब्यालिस का प्लन. उपर की विक बाडी से दोगुना हूँ? नीचे किविक चोटी हो. चाट पर रसिस्टन्स"
+              },
+              {
+                "beat": "context",
+                "recall": 0.889,
+                "script": "चार्ट पर रेसिस्टेंस लाइन 140 देखो, सेटअप इसी लेवल पर वैलिड।",
+                "heard": "चाट पर रसिस्टन्स लाईन एक सो चालेस देखो. जुएदाटेद्र सेतप इसी लेवल पर वलिद. आआरईः"
+              },
+              {
+                "beat": "entry",
+                "recall": 0.625,
+                "script": "एंट्री 127, अगली कैंडल लो के नीचे जाए तब।",
+                "heard": "पर वलिद. आआरईः ढ़ुद. अगली कन्डल लोके नीचे जाएत तब. Stop, 100, 122,"
+              },
+              {
+                "beat": "sl",
+                "recall": 0.765,
+                "script": "स्टॉप 142, हाई 140 के जस्ट ऊपर। हाई टूटा तो प्लान गलत। एंट्री के साथ ही स्टॉप लॉस 142 लगाओ।",
+                "heard": "Stop, 100, 122, High, 140, just over आई तूटा तो प्लान गलात. अन्ट्री के साथ ही स्थोप लोस एक सुब आलेस लगाओ. तार्गिट सत्तान्वे एक अनुपात्दो"
+              },
+              {
+                "beat": "target",
+                "recall": 0.947,
+                "script": "टारगेट 97, 1:2। यानी रिस्क-रिवॉर्ड 1 बटा 2, चार्ट पर लिखा है। टारगेट 97 आते ही प्रॉफिट बुक करो।",
+                "heard": "सत्तान्वे एक अनुपात्दो यानी रिस्क रिवाड एक बता दो चाट पर लिखा है. तार्गेट सत्तानवे आते ही प्रोफिट बुक करो. गलती अकेली विक देक कर"
+              },
+              {
+                "beat": "invalidation",
+                "recall": 0.714,
+                "script": "गलती अकेली विक देखकर शॉर्ट। स्टॉप 142 टूटे तो स्किप। प्लान फेल तो अगला सेटअप देखो।",
+                "heard": "अकेली विक देक कर शोट स्तोब एक सो बायालिस तूटे तो श्किप प्लान फेल तो अगला सेट अप देख हो."
+              },
+              {
+                "beat": "cta",
+                "recall": 0.625,
+                "script": "आपने शूटिंग स्टार पर कभी स्टॉप लॉस हिट किया? कमेंट करो। Sirf seekhne ke liye, financial advice nahi.",
+                "heard": "अगला सेट अप देख हो. आपने शूटिंच स्वार पर कभी स्वार बाँज बाँग बाँग कोमेंट करो, सिवज सीखनी के लिए, फनधशल अदवाईस नहीं"
+              }
+            ]
+          },
+          "scenes": [
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 0.0,
+              "end": 2.73
+            },
+            {
+              "beat": "hook",
+              "kind": "chart-hook",
+              "start": 2.73,
+              "end": 5.45
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 5.45,
+              "end": 8.35
+            },
+            {
+              "beat": "pehchan",
+              "kind": "chart-pehchan",
+              "start": 8.35,
+              "end": 11.24
+            },
+            {
+              "beat": "context",
+              "kind": "chart-context",
+              "start": 11.24,
+              "end": 14.52
+            },
+            {
+              "beat": "entry",
+              "kind": "chart-entry",
+              "start": 14.52,
+              "end": 17.03
+            },
+            {
+              "beat": "entry",
+              "kind": "chart-entry",
+              "start": 17.03,
+              "end": 19.54
+            },
+            {
+              "beat": "sl",
+              "kind": "chart-sl",
+              "start": 19.54,
+              "end": 22.83
+            },
+            {
+              "beat": "sl",
+              "kind": "chart-sl",
+              "start": 22.83,
+              "end": 26.11
+            },
+            {
+              "beat": "sl",
+              "kind": "chart-sl",
+              "start": 26.11,
+              "end": 29.4
+            },
+            {
+              "beat": "target",
+              "kind": "chart-target",
+              "start": 29.4,
+              "end": 32.13
+            },
+            {
+              "beat": "target",
+              "kind": "chart-target",
+              "start": 32.13,
+              "end": 34.87
+            },
+            {
+              "beat": "target",
+              "kind": "chart-target",
+              "start": 34.87,
+              "end": 37.6
+            },
+            {
+              "beat": "invalidation",
+              "kind": "chart-invalidation",
+              "start": 37.6,
+              "end": 40.19
+            },
+            {
+              "beat": "invalidation",
+              "kind": "chart-invalidation",
+              "start": 40.19,
+              "end": 42.79
+            },
+            {
+              "beat": "cta",
+              "kind": "chart-cta",
+              "start": 42.79,
+              "end": 46.0
+            },
+            {
+              "beat": "cta",
+              "kind": "chart-cta",
+              "start": 46.0,
+              "end": 49.21
+            }
+          ]
+        }
+      }
     }
   ]
 }
