@@ -4754,7 +4754,8 @@ def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, h
     import motion_lib
     reveals = motion_lib.unique_reveals(frames)
     if reveals:
-        motion_lib.mix_under(RUN / "voice.wav", reveals, mixed)
+        info = motion_lib.mix_under(RUN / "voice.wav", reveals, mixed)
+        write_motion_mix_evidence(RUN, info)
     else:
         bed_audio.mix_into(RUN / "voice.wav", scenes, mixed)
     if str(hook_line or "").strip():
@@ -4766,6 +4767,31 @@ def assemble(beat_pngs, beat_audio, beat_times, ass_text, fps=30, switch=None, h
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "silent.mp4", "-i", "audio.m4a",
                     "-vf", f"fps={fps},ass=subs.ass", *X264, "-c:a", "copy", "-shortest", "final.mp4"],
                    cwd=RUN, check=True)
+
+
+def write_motion_mix_evidence(run_dir, info):
+    """audio_mix.json for the motion_lib whoosh path.
+
+    bed_audio.mix_into writes this file itself; mix_under only returns its
+    numbers. Without it the buffer stores no evidence and the slot gate says
+    "audio mix evidence missing". sfx_under_db is peak-to-voice-RMS, so it is
+    never more lenient than the RMS figure bed_audio records.
+    """
+    info = info if isinstance(info, dict) else {}
+    under = info.get("under_db")
+    peak = float(info.get("sfx_peak") or 0.0)
+    record = {
+        "bed_mixed": False,
+        "background": False,
+        "sfx_present": bool(peak > 0.0 and under is not None),
+        "sfx_under_db": under,
+        "voice_rms": info.get("voice_rms"),
+        "sfx_rms": peak,
+        "source": "motion_lib.mix_under",
+    }
+    import pathlib
+    pathlib.Path(run_dir, "audio_mix.json").write_text(json.dumps(record) + "\n", encoding="utf-8")
+    return record
 
 
 # ---------------------------------------------------------------- compat files
