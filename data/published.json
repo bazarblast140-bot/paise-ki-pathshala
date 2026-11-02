@@ -920,5 +920,21 @@
   "tts_engine": "gemini",
   "source_run": "41422387292",
   "ig_deferred": "deferred: _bJMUKM2Fwo publishAt=2026-11-03T03:00:00Z run=41422387292"
+ },
+ {
+  "date_ist": "2026-11-03",
+  "slot": "21:00",
+  "video_id": "KJ95qL2vjy8",
+  "format": "short",
+  "topic_key": "pat_evening_star",
+  "voice_engine": "gemini",
+  "deepseek_calls": 1,
+  "deepseek_prompt_tokens": 1743,
+  "deepseek_completion_tokens": 401,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": "gemini",
+  "source_run": "41519922131",
+  "ig_deferred": "deferred: KJ95qL2vjy8 publishAt=2026-11-03T15:30:00Z run=41519922131"
  }
 ]

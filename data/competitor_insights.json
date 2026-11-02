@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-01T17:16:22+00:00",
+ "generated_at": "2026-11-02T20:47:26+00:00",
  "lookback_days": 30,
  "via": "oauth",
  "channels": [
@@ -21,275 +21,121 @@
  ],
  "errors": [],
  "analysis": {
-  "videos_analysed": 83,
+  "videos_analysed": 84,
   "title_patterns": {
    "curiosity_question": {
-    "top_share": 0.6,
-    "rest_share": 0.4,
-    "lift": 1.45
+    "top_share": 0.62,
+    "rest_share": 0.43,
+    "lift": 1.4
    },
    "number_led": {
-    "top_share": 0.45,
-    "rest_share": 0.37,
-    "lift": 1.2
+    "top_share": 0.48,
+    "rest_share": 0.35,
+    "lift": 1.32
    },
    "warning": {
-    "top_share": 0.05,
+    "top_share": 0.0,
     "rest_share": 0.06,
-    "lift": 0.88
+    "lift": 0.44
    },
    "chart_concept": {
-    "top_share": 0.2,
-    "rest_share": 0.3,
-    "lift": 0.71
+    "top_share": 0.19,
+    "rest_share": 0.32,
+    "lift": 0.65
    },
    "real_data": {
-    "top_share": 0.2,
+    "top_share": 0.19,
     "rest_share": 0.16,
-    "lift": 1.2
+    "lift": 1.15
    },
    "mechanism_explainer": {
     "top_share": 0.05,
-    "rest_share": 0.14,
-    "lift": 0.52
+    "rest_share": 0.13,
+    "lift": 0.55
    }
   },
   "winning_keywords": [
+   "strategy",
    "crash",
    "entry",
    "sweep",
-   "samjhe",
-   "kaise",
    "step",
    "high",
-   "share",
-   "price",
    "prediction",
    "monday",
+   "samjhe",
+   "share",
    "liquidity",
    "gold",
-   "india"
+   "should",
+   "you"
   ],
   "top_tags": [
+   "jio ipo 2026",
+   "indian stock market",
+   "price action",
    "share market candle ko kaise samjhe",
+   "candle psychology",
    "candlestick",
    "candlestick patterns",
    "candlestick analysis",
-   "trading candle ko kaise samjhe",
-   "candle psychology",
-   "price action",
-   "trading",
-   "indian stock market",
-   "share market",
    "share market news",
-   "candle chart ko kaise samjhe",
-   "candlestick pattern",
-   "candlestick ko kaise samjhe",
-   "trading candlestick"
+   "jio ipo",
+   "reliance jio ipo",
+   "jio platforms ipo",
+   "jio ipo analysis",
+   "nifty today",
+   "nifty 50 today"
   ],
   "best_upload_hours_ist": [
    18,
-   19,
+   21,
    16,
-   9
+   19
   ],
   "top_short_duration_s": {
-   "median": 100,
-   "p25": 34,
-   "p75": 126
+   "median": 102,
+   "p25": 61,
+   "p75": 137
   },
-  "top_title_length_chars": 79,
+  "top_title_length_chars": 78,
   "top_videos": [
    {
     "channel": "Stock Menthol",
     "title": "3-Step Sweep Entry Strategy | High RR Trading Setup",
-    "views": 3581,
-    "views_per_day": 3341.4,
+    "views": 6252,
+    "views_per_day": 2818.4,
     "performance_index": 5.0,
     "duration_s": 530,
     "published_ist": "2026-10-31 21:03",
     "tags": []
    },
    {
-    "channel": "Stock Menthol",
-    "title": "SL Hunting | How to Take Sweep Entries with 1:5 RR",
-    "views": 7505,
-    "views_per_day": 1046.2,
-    "performance_index": 3.74,
-    "duration_s": 580,
-    "published_ist": "2026-10-25 18:36",
-    "tags": []
-   },
-   {
-    "channel": "Surface Trader",
-    "title": "share market candle ko kaise samjhe | candlestick ko kaise samjhe #sharemarket #candlestick",
-    "views": 4450,
-    "views_per_day": 717.8,
-    "performance_index": 3.17,
-    "duration_s": 34,
-    "published_ist": "2026-10-26 17:59",
-    "tags": [
-     "share market candle ko kaise samjhe",
-     "candlestick ko kaise samjhe",
-     "trading candle ko kaise Samjhe",
-     "trading candlestick",
-     "candle psychology",
-     "candlestick",
-     "candlestick patterns",
-     "candlestick analysis",
-     "price action",
-     "trading",
-     "trading chart"
-    ]
-   },
-   {
-    "channel": "THE WORLD TRADER",
-    "title": "Candlestick Patterns का असली Logic समझो 🔥 |Market Psychology & Price Action Explained #stockmarket",
-    "views": 149926,
-    "views_per_day": 12770.2,
-    "performance_index": 2.66,
-    "duration_s": 122,
-    "published_ist": "2026-10-21 05:00",
-    "tags": [
-     "Candlestick Chart",
-     "Candlestick Logic",
-     "Chart Patterns",
-     "Crypto Trading",
-     "Day Trading",
-     "Financial Markets",
-     "Forex Trading",
-     "Indian Stock Market",
-     "Investment Tips",
-     "Market Psychology",
-     "Price Action",
-     "Share Market"
-    ]
-   },
-   {
     "channel": "UFL Capital Markets | SEBI RA",
     "title": "Monday Market Prediction | Nifty Tomorrow Prediction | Nifty & Bank Nifty Analysis |  Hindi",
-    "views": 27146,
-    "views_per_day": 3736.1,
-    "performance_index": 2.62,
+    "views": 28408,
+    "views_per_day": 3376.9,
+    "performance_index": 4.51,
     "duration_s": 100,
     "published_ist": "2026-10-25 16:23",
     "tags": []
    },
    {
-    "channel": "Tech Net India",
-    "title": "Share Market: सोमवार CRASH का खतरा? RBI ने फोड़ा बम! Daily CRR 90% से 99% | Stock Market News",
-    "views": 291903,
-    "views_per_day": 13530.6,
-    "performance_index": 2.33,
-    "duration_s": 215,
-    "published_ist": "2026-10-11 09:00",
-    "tags": [
-     "tech net india",
-     "share market news",
-     "stock market",
-     "RBI CRR",
-     "RBI daily CRR 99 percent",
-     "CRR kya hota hai",
-     "cash reserve ratio",
-     "RBI new rule",
-     "RBI liquidity",
-     "banking liquidity surplus",
-     "Bank Nifty",
-     "banking stocks"
-    ]
-   },
-   {
     "channel": "Stock Menthol",
-    "title": "Liquidity Sweep Trading Strategy | 3-Step Entry Model",
-    "views": 14308,
-    "views_per_day": 618.1,
-    "performance_index": 2.21,
-    "duration_s": 482,
-    "published_ist": "2026-10-09 19:12",
+    "title": "SL Hunting | How to Take Sweep Entries with 1:5 RR",
+    "views": 7549,
+    "views_per_day": 907.3,
+    "performance_index": 3.55,
+    "duration_s": 580,
+    "published_ist": "2026-10-25 18:36",
     "tags": []
-   },
-   {
-    "channel": "Dr. Mukul Agrawal : Stock Market Coach",
-    "title": "Scientists Turn Mercury Into Gold! 😱 Will Gold Prices Crash? | #shorts",
-    "views": 201942,
-    "views_per_day": 21018.0,
-    "performance_index": 1.86,
-    "duration_s": 104,
-    "published_ist": "2026-10-23 08:10",
-    "tags": []
-   },
-   {
-    "channel": "Stock Menthol",
-    "title": "Which Zone Is Best for Entry? | Liquidity Trading",
-    "views": 8519,
-    "views_per_day": 444.5,
-    "performance_index": 1.59,
-    "duration_s": 553,
-    "published_ist": "2026-10-13 18:50",
-    "tags": []
-   },
-   {
-    "channel": "Nitin Murarka Nifty ke Nishanebaaz",
-    "title": "Portfolio पड़ा है Idle क्या करें? | Option trading | Nitin Murarka Nifty ke Nishanebaaz",
-    "views": 110989,
-    "views_per_day": 5435.8,
-    "performance_index": 1.54,
-    "duration_s": 90,
-    "published_ist": "2026-10-12 12:44",
-    "tags": [
-     "Options Trading",
-     "Options Trading India",
-     "Options Trading for Beginners",
-     "Options Trading Strategy",
-     "Options Trading in Hindi",
-     "Option Trading India",
-     "Options Trading Course",
-     "Options Trading Explained",
-     "Options Trading Basics",
-     "Indian Stock Market",
-     "NSE Options Trading",
-     "Nifty Options Trading"
-    ]
-   },
-   {
-    "channel": "Dr. Mukul Agrawal : Stock Market Coach",
-    "title": "Trump vs Indian IT Stocks: Nifty IT Rallies 3%, TCS Jumps 5.5%! 🔥 #Shorts",
-    "views": 397423,
-    "views_per_day": 17183.5,
-    "performance_index": 1.52,
-    "duration_s": 88,
-    "published_ist": "2026-10-09 19:41",
-    "tags": []
-   },
-   {
-    "channel": "Surface Trader",
-    "title": "trading me candlestick chart ko kaise samjhe | candlestick charts #trading #candlestick #charts",
-    "views": 7159,
-    "views_per_day": 338.0,
-    "performance_index": 1.49,
-    "duration_s": 31,
-    "published_ist": "2026-10-11 18:28",
-    "tags": [
-     "trading me candlestick chart ko kaise samjhe",
-     "candlestick charts",
-     "chart pattern",
-     "chart analysis",
-     "trading me candle ko kaise samjhe",
-     "share market candle ko kaise samjhe",
-     "candle chart ko kaise samjhe",
-     "candlestick",
-     "candlestick pattern",
-     "candlestick analysis",
-     "candlestick patterns",
-     "candle psychology"
-    ]
    },
    {
     "channel": "UFL Capital Markets | SEBI RA",
     "title": "Monday Market Crash? | Nifty Tomorrow Prediction | Nifty Analysis Hindi | Nifty Monday Prediction",
-    "views": 29573,
-    "views_per_day": 2074.1,
-    "performance_index": 1.45,
+    "views": 29779,
+    "views_per_day": 1933.1,
+    "performance_index": 2.58,
     "duration_s": 137,
     "published_ist": "2026-10-18 16:34",
     "tags": [
@@ -308,11 +154,99 @@
     ]
    },
    {
+    "channel": "THE WORLD TRADER",
+    "title": "Candlestick Patterns का असली Logic समझो 🔥 |Market Psychology & Price Action Explained #stockmarket",
+    "views": 154346,
+    "views_per_day": 11977.0,
+    "performance_index": 2.51,
+    "duration_s": 122,
+    "published_ist": "2026-10-21 05:00",
+    "tags": [
+     "Candlestick Chart",
+     "Candlestick Logic",
+     "Chart Patterns",
+     "Crypto Trading",
+     "Day Trading",
+     "Financial Markets",
+     "Forex Trading",
+     "Indian Stock Market",
+     "Investment Tips",
+     "Market Psychology",
+     "Price Action",
+     "Share Market"
+    ]
+   },
+   {
+    "channel": "Surface Trader",
+    "title": "share market candle ko kaise samjhe | candlestick ko kaise samjhe #sharemarket #candlestick",
+    "views": 4571,
+    "views_per_day": 622.3,
+    "performance_index": 2.46,
+    "duration_s": 34,
+    "published_ist": "2026-10-26 17:59",
+    "tags": [
+     "share market candle ko kaise samjhe",
+     "candlestick ko kaise samjhe",
+     "trading candle ko kaise Samjhe",
+     "trading candlestick",
+     "candle psychology",
+     "candlestick",
+     "candlestick patterns",
+     "candlestick analysis",
+     "price action",
+     "trading",
+     "trading chart"
+    ]
+   },
+   {
+    "channel": "Stock Menthol",
+    "title": "Liquidity Sweep Trading Strategy | 3-Step Entry Model",
+    "views": 14494,
+    "views_per_day": 596.6,
+    "performance_index": 2.33,
+    "duration_s": 482,
+    "published_ist": "2026-10-09 19:12",
+    "tags": []
+   },
+   {
+    "channel": "Stock Menthol",
+    "title": "Which Zone Is Best for Entry? | Liquidity Trading",
+    "views": 8537,
+    "views_per_day": 420.3,
+    "performance_index": 1.64,
+    "duration_s": 553,
+    "published_ist": "2026-10-13 18:50",
+    "tags": []
+   },
+   {
+    "channel": "Nitin Murarka Nifty ke Nishanebaaz",
+    "title": "Portfolio पड़ा है Idle क्या करें? | Option trading | Nitin Murarka Nifty ke Nishanebaaz",
+    "views": 111140,
+    "views_per_day": 5153.8,
+    "performance_index": 1.53,
+    "duration_s": 90,
+    "published_ist": "2026-10-12 12:44",
+    "tags": [
+     "Options Trading",
+     "Options Trading India",
+     "Options Trading for Beginners",
+     "Options Trading Strategy",
+     "Options Trading in Hindi",
+     "Option Trading India",
+     "Options Trading Course",
+     "Options Trading Explained",
+     "Options Trading Basics",
+     "Indian Stock Market",
+     "NSE Options Trading",
+     "Nifty Options Trading"
+    ]
+   },
+   {
     "channel": "Zee Business",
     "title": "Gold-Silver Crash: सोना-चांदी में भारी गिरावट! क्या अब खरीदारी का सही मौका? Anil Singhvi",
-    "views": 413708,
-    "views_per_day": 43418.9,
-    "performance_index": 1.4,
+    "views": 471859,
+    "views_per_day": 44202.8,
+    "performance_index": 1.43,
     "duration_s": 126,
     "published_ist": "2026-10-23 10:05",
     "tags": [
@@ -331,26 +265,92 @@
     ]
    },
    {
-    "channel": "CNBC Awaaz.",
-    "title": "Jio IPO की डिटेल्स आईं सामने! क्या आप Subscribe करेंगे ? | Anuj Singhal | N18S",
-    "views": 1743727,
-    "views_per_day": 96432.8,
-    "performance_index": 1.33,
-    "duration_s": 30,
-    "published_ist": "2026-10-14 20:47",
+    "channel": "Tech Net India",
+    "title": "Share Market: सोमवार CRASH का खतरा? RBI ने फोड़ा बम! Daily CRR 90% से 99% | Stock Market News",
+    "views": 291921,
+    "views_per_day": 12848.6,
+    "performance_index": 1.39,
+    "duration_s": 215,
+    "published_ist": "2026-10-11 09:00",
     "tags": [
-     "Jio IPO",
-     "Jio IPO 2026",
-     "Reliance Jio IPO",
-     "Jio Platforms IPO",
-     "Jio IPO Details",
-     "Jio IPO Price Band",
-     "Jio IPO Subscription",
-     "Jio IPO Date",
-     "Jio IPO News",
-     "Jio IPO Latest News",
-     "Jio IPO Analysis",
-     "Should You Subscribe Jio IPO"
+     "tech net india",
+     "share market news",
+     "stock market",
+     "RBI CRR",
+     "RBI daily CRR 99 percent",
+     "CRR kya hota hai",
+     "cash reserve ratio",
+     "RBI new rule",
+     "RBI liquidity",
+     "banking liquidity surplus",
+     "Bank Nifty",
+     "banking stocks"
+    ]
+   },
+   {
+    "channel": "Surface Trader",
+    "title": "trading me candlestick chart ko kaise samjhe | candlestick charts #trading #candlestick #charts",
+    "views": 7252,
+    "views_per_day": 324.8,
+    "performance_index": 1.28,
+    "duration_s": 31,
+    "published_ist": "2026-10-11 18:28",
+    "tags": [
+     "trading me candlestick chart ko kaise samjhe",
+     "candlestick charts",
+     "chart pattern",
+     "chart analysis",
+     "trading me candle ko kaise samjhe",
+     "share market candle ko kaise samjhe",
+     "candle chart ko kaise samjhe",
+     "candlestick",
+     "candlestick pattern",
+     "candlestick analysis",
+     "candlestick patterns",
+     "candle psychology"
+    ]
+   },
+   {
+    "channel": "Equity2Commodity",
+    "title": "VWAP EMA SCALPING STRATEGY | VWAP EMA TRADING STRATEGY | VWAP EMA INDICATOR #indicatorsfordaytrading",
+    "views": 49741,
+    "views_per_day": 5347.9,
+    "performance_index": 1.21,
+    "duration_s": 110,
+    "published_ist": "2026-10-24 19:03",
+    "tags": []
+   },
+   {
+    "channel": "Dr. Mukul Agrawal : Stock Market Coach",
+    "title": "Scientists Turn Mercury Into Gold! 😱 Will Gold Prices Crash? | #shorts",
+    "views": 202182,
+    "views_per_day": 18799.5,
+    "performance_index": 1.14,
+    "duration_s": 104,
+    "published_ist": "2026-10-23 08:10",
+    "tags": []
+   },
+   {
+    "channel": "Finance with SKT",
+    "title": "अमीर बनाने वाली 5 High-Income Skills!🔥 | Finance With SKT #shorts",
+    "views": 351253,
+    "views_per_day": 14814.6,
+    "performance_index": 1.05,
+    "duration_s": 149,
+    "published_ist": "2026-10-10 09:15",
+    "tags": [
+     "Finance with SKT",
+     "Finance",
+     "Hindi Finance",
+     "Business Case Study",
+     "Startup Story",
+     "Company Story",
+     "Business Analysis",
+     "Finance Explained",
+     "Financial Education",
+     "Personal Finance",
+     "Money Management",
+     "Wealth Creation"
     ]
    }
   ]
