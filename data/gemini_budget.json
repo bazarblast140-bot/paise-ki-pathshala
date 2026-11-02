@@ -197,27 +197,24 @@
           "exhausted": false
         }
       }
+    },
+    "2026-11-02": {
+      "keys": {
+        "1": {
+          "realchart": 0,
+          "nifty": 0,
+          "buffer": 0,
+          "other": 1,
+          "news": 0,
+          "close": 0,
+          "ta": 0,
+          "recap": 0,
+          "exhausted": false
+        }
+      }
     }
   },
   "charges": [
-    {
-      "id": "5f9835caa62e4987b66b6d351d25984c",
-      "date": "2026-10-18",
-      "caller": "buffer",
-      "key": "1"
-    },
-    {
-      "id": "97396445d84544f6aa35519cd320cafe",
-      "date": "2026-10-18",
-      "caller": "buffer",
-      "key": "1"
-    },
-    {
-      "id": "0eccf04f513b4529a98d0a59c133927e",
-      "date": "2026-10-18",
-      "caller": "buffer",
-      "key": "1"
-    },
     {
       "id": "941110b97bd3478fb97017ebc6019ee9",
       "date": "2026-10-19",
@@ -377,6 +374,12 @@
     {
       "id": "a6989ae34d784319a486b51a926c00d9",
       "date": "2026-11-01",
+      "caller": "other",
+      "key": "1"
+    },
+    {
+      "id": "7cbc14d0af254abaa58a4518a529be7d",
+      "date": "2026-11-02",
       "caller": "other",
       "key": "1"
     }

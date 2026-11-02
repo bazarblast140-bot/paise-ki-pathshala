@@ -50,6 +50,7 @@
   "opt_expiry_elm",
   "pat_bear_flag",
   "pat_double_bottom",
-  "pat_bull_engulf"
+  "pat_bull_engulf",
+  "pat_dark_cloud"
  ]
 }
