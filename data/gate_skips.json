@@ -51,6 +51,7 @@
   "pat_bear_flag",
   "pat_double_bottom",
   "pat_bull_engulf",
-  "pat_dark_cloud"
+  "pat_dark_cloud",
+  "pat_doji"
  ]
 }
