@@ -9,7 +9,9 @@ from __future__ import annotations
 from datetime import timedelta
 
 from realchart.levels import compute
-from realchart.story_facts import BREADTH_URL, FII_URL, SECTOR_URL, YAHOO, build_figures, detect_reversal, example_plan
+from realchart.story_facts import (
+    BREADTH_URL, FII_URL, SECTOR_URL, YAHOO, build_figures, detect_reversal, pattern_plan, stamp_plan,
+)
 
 
 def _days(session, count):
@@ -77,7 +79,7 @@ def build_sample(kind, session, out):
     story = {
         "sample": True,
         "reversal": detect_reversal(bars),
-        "plan": example_plan(bars),
+        "plan": pattern_plan(bars, detect_reversal(bars), atr=levels.get("atr14")),
         "fundamentals": {
             "profit_yoy_q": 18.5,
             "revenue_yoy_q": 11.2,
@@ -115,6 +117,7 @@ def build_sample(kind, session, out):
             "source": "sample fixture", "url": SECTOR_URL,
         }
     levels["story"] = story
+    stamp_plan(levels)
     levels["story_figures"] = build_figures(levels, story)
     levels["news_text"] = f"{news['title']} {news['summary']}"
     chart = {

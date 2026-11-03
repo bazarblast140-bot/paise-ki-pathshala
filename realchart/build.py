@@ -37,28 +37,124 @@ def _save_history(items):
     HISTORY.write_text(json.dumps({"items": items[-400:]}, indent=2) + "\n", encoding="utf-8")
 
 
+def _finite(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return False
+    return number == number and number not in (float("inf"), float("-inf"))
+
+
+def _cell(row, key):
+    try:
+        value = row[key]
+    except (KeyError, TypeError, IndexError):
+        return None
+    if hasattr(value, "iloc"):
+        try:
+            value = value.iloc[0]
+        except Exception:  # noqa: BLE001
+            return None
+    return value
+
+
+def _stamp_date(index):
+    from datetime import date, datetime
+    if index is None:
+        return None
+    if isinstance(index, datetime):
+        return index.date()
+    if isinstance(index, date):
+        return index
+    raw = getattr(index, "date", None)
+    if callable(raw):
+        try:
+            got = raw()
+        except Exception:  # noqa: BLE001
+            got = None
+        if isinstance(got, datetime):
+            return got.date()
+        if isinstance(got, date):
+            return got
+    text = str(index)[:10]
+    try:
+        year, month, day = (int(part) for part in text.split("-"))
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
+def rows_from_records(records):
+    """OHLC rows. A bar whose prices are NaN is dropped.
+
+    Returns (rows, last valid stamp, empty_latest_date). empty_latest_date is
+    the date of the final record when that bar was empty, else None.
+    """
+    items = list(records or [])
+    rows = []
+    stamp = None
+    empty_latest = None
+    for i, (index, row) in enumerate(items):
+        prices = [_cell(row, key) for key in ("Open", "High", "Low", "Close")]
+        if not all(_finite(value) for value in prices):
+            if i == len(items) - 1:
+                empty_latest = _stamp_date(index)
+            continue
+        opened, high, low, close = (float(value) for value in prices)
+        when = getattr(index, "date", None)
+        if callable(when):
+            day = str(when())[:10]
+        else:
+            day = str(index)[:10]
+        rows.append({"date": day, "o": opened, "h": high, "l": low, "c": close})
+        stamp = index
+    return rows, stamp, empty_latest
+
+
+def _fallback_session(rows, session, empty_latest):
+    """When the latest daily bar is empty, use the previous trading session."""
+    if session is None or empty_latest is None or not rows:
+        return session
+    if empty_latest < session:
+        return session
+    last = _stamp_date(rows[-1].get("date"))
+    if last is None or last >= session:
+        return session
+    from realchart.session import _previous_trading_day
+    prev = _previous_trading_day(session)
+    if prev is not None and last == prev:
+        return prev
+    return session
+
+
+def _load_daily(ticker, bars_for):
+    if bars_for is not None:
+        got = bars_for(ticker)
+        if isinstance(got, tuple) and len(got) >= 3:
+            return got[0], got[1], got[2]
+        rows, stamp = got[0], got[1]
+        return rows, stamp, None
+    return _bars_from_yahoo(ticker)
+
+
+def _bars_for_session(ticker, bars_for, session, now, dry_run):
+    rows, stamp, empty_latest = _load_daily(ticker, bars_for)
+    used = _fallback_session(rows, session, empty_latest)
+    rows, stamp = _on_session(rows, stamp, used, now, dry_run)
+    return rows, stamp, used
+
+
 def _bars_from_yahoo(ticker):
     import yfinance as yf
     frame = yf.download(ticker, period="3y", interval="1d", progress=False, auto_adjust=False)
     if frame is None or frame.empty:
-        return [], None
+        return [], None, None
     if hasattr(frame.columns, "levels"):
         try:
             frame.columns = frame.columns.get_level_values(0)
         except Exception:  # noqa: BLE001
             pass
-    rows = []
-    stamp = None
-    for index, row in frame.dropna(subset=["Close"]).iterrows():
-        rows.append({
-            "date": str(getattr(index, "date", lambda: index)()),
-            "o": float(row["Open"]),
-            "h": float(row["High"]),
-            "l": float(row["Low"]),
-            "c": float(row["Close"]),
-        })
-        stamp = index
-    return rows, stamp
+    return rows_from_records(frame.iterrows())
 
 
 def _load_feeds(loader=None, feeds=FEEDS):
@@ -119,6 +215,12 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
                 chart_opener=chart_opener, article_opener=article_opener, dry_run=dry_run,
                 bars_intraday=bars_intraday, chain_for=chain_for, facts_for=facts_for,
             )
+        if levels.get("session_fallback"):
+            from datetime import date as _date
+            try:
+                session = _date.fromisoformat(str(levels.get("last_date") or "")[:10])
+            except ValueError:
+                pass
         if kind == "news" and article:
             from realchart.summarize import SummaryRefused, hindi_summary
             try:
@@ -180,6 +282,10 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             from realchart.story_layout import write_thumbnail
             write_thumbnail(out / "thumbnail.jpg", kind, levels)
             _write_ig_cover(out / "thumbnail.jpg", out / "ig_cover.jpg")
+            if levels.get("host") and (out / "levels.json").is_file():
+                dumped = json.loads((out / "levels.json").read_text(encoding="utf-8"))
+                dumped["host"] = levels["host"]
+                (out / "levels.json").write_text(json.dumps(dumped, indent=2) + "\n", encoding="utf-8")
         from realchart.ends import FOLLOW_PKP, FOLLOW_RTT, attach, render_end_card
         ends_dir = out / "ends"
         extra = script.end_card_lines(kind, levels)
@@ -301,50 +407,59 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
     if kind == "news":
         return _prepare_news(now, out, articles, article_opener, dry_run)
     symbol, ticker = ("NSE:NIFTY", "^NSEI")
-    rest = (kind, session, now, out, articles, chart_opener, article_opener, dry_run, bars_intraday, chain_for)
+    asked = session
     if kind == "ta":
         # ONE liquid NSE stock a day, never Nifty (the 4 PM close Reel has Nifty).
         # Try candidates until one has a clear real pattern at support/resistance
         # with an RR >= 1.5 plan AND a verified TradingView capture of today.
         candidates = []
         for name, yf in STOCK_UNIVERSE:
-            rows, stamp = (bars_for(yf) if bars_for else _bars_from_yahoo(yf))
-            rows, stamp = _on_session(rows, stamp, session, now, dry_run)
+            rows, stamp, used = _bars_for_session(yf, bars_for, asked, now, dry_run)
             if not rows or len(rows) < 30 or stamp is None:
                 continue
-            candidates.append(compute(rows, name, yf))
+            levels = compute(rows, name, yf)
+            levels["session_fallback"] = used != asked
+            levels["resolved_session"] = used.isoformat()
+            candidates.append(levels)
         if not candidates:
-            raise Hold("session", f"Yahoo close is not {session}")
+            raise Hold("session", f"Yahoo close is not {asked}")
         ranked = pick_stock(candidates, _history(), now.date())
         if not ranked:
             raise Hold("scan", "no stock with a clear pattern at support/resistance and RR >= 1.5")
         tried = []
+        from datetime import date as _date
         from realchart.levels import trigger_ok
         for levels, plan in ranked[:8]:
             if not trigger_ok(plan.get("side", "long"), plan["entry"], levels["close"]):
                 tried.append(f"{levels.get('symbol')}: entry {plan['entry']} already hit at close {levels['close']}")
                 continue
             levels = apply_stock_plan(dict(levels), plan)
+            resolved = _date.fromisoformat(str(levels.get("resolved_session") or asked.isoformat()))
             try:
-                return _prepare_rest(levels, *rest)
+                return _prepare_rest(
+                    levels, kind, resolved, now, out, articles, chart_opener, article_opener,
+                    dry_run, bars_intraday, chain_for,
+                )
             except Hold as exc:
                 tried.append(f"{levels['symbol']}: {exc}")
                 print(f"[ta] skip {levels['symbol']}: {exc}", flush=True)
         raise Hold("scan", "no candidate passed capture: " + "; ".join(tried))
-    rows, stamp = (bars_for(ticker) if bars_for else _bars_from_yahoo(ticker))
+    rows, stamp, used = _bars_for_session(ticker, bars_for, asked, now, dry_run)
     if kind in ("close", "recap"):
-        rows, stamp = _on_session(rows, stamp, session, now, dry_run)
-        if not rows or not close_matches(stamp, session, now):
-            raise Hold("session", f"Yahoo close is not {session}")
+        if not rows or not close_matches(stamp, used, now):
+            raise Hold("session", f"Yahoo close is not {asked}")
     if not rows or len(rows) < 20:
         raise Hold("data", "Nifty bars missing")
     levels = compute(rows, symbol, ticker)
+    levels["session_fallback"] = used != asked
     if kind == "recap" and len(rows) > 5:
         week = float(rows[-6]["c"])
         levels["week_ago"] = week
         levels["chg_pct"] = 100.0 * (levels["close"] / week - 1.0) if week else levels["chg_pct"]
     levels["setup"] = "weekly recap" if kind == "recap" else "close"
-    return _prepare_rest(levels, *rest)
+    return _prepare_rest(
+        levels, kind, used, now, out, articles, chart_opener, article_opener, dry_run, bars_intraday, chain_for,
+    )
 
 
 def _dump_levels(out, levels):
@@ -363,46 +478,51 @@ def _write_ig_cover(src, dest):
 
 def _prepare_story(kind, session, now, out, bars_for, articles, dry_run, facts_for):
     """Story Reel: OHLC candles plus fetched fundamentals, flows and news. No TradingView shot."""
-    from realchart.levels import STOCK_UNIVERSE, compute, stock_plan
-    from realchart.story_facts import build_figures, collect, detect_reversal
+    from realchart.levels import STOCK_UNIVERSE, compute
+    from realchart.story_facts import build_figures, collect, detect_reversal, direction_ok, pattern_plan, stamp_plan
     items = articles if articles is not None else _load_feeds()
+    asked = session
     if kind == "ta":
         ranked = []
+        saw_bars = False
         for name, yf in STOCK_UNIVERSE:
-            rows, stamp = (bars_for(yf) if bars_for else _bars_from_yahoo(yf))
-            rows, stamp = _on_session(rows, stamp, session, now, dry_run)
+            rows, stamp, used = _bars_for_session(yf, bars_for, asked, now, dry_run)
             if not rows or len(rows) < 30 or stamp is None:
                 continue
+            saw_bars = True
             levels = compute(rows, name, yf)
             levels["bars"] = rows
-            try:
-                plan = stock_plan(levels)
-            except Exception:  # noqa: BLE001
-                plan = None
-            score = (1 if detect_reversal(rows) else 0, 1 if plan else 0, abs(float(levels.get("chg_pct") or 0)))
-            ranked.append((score, levels))
+            plan = pattern_plan(rows, detect_reversal(rows), atr=levels.get("atr14"))
+            if not direction_ok(plan):
+                continue
+            ranked.append((float(plan["rr"]), abs(float(levels.get("chg_pct") or 0)), levels, used))
         if not ranked:
-            raise Hold("session", f"Yahoo close is not {session}")
-        ranked.sort(key=lambda item: item[0], reverse=True)
-        levels = ranked[0][1]
+            if not saw_bars:
+                raise Hold("session", f"Yahoo close is not {asked}")
+            raise Hold("scan", "no stock with a reversal plan and RR >= 1.5")
+        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        levels, used = ranked[0][2], ranked[0][3]
     else:
-        rows, stamp = (bars_for("^NSEI") if bars_for else _bars_from_yahoo("^NSEI"))
-        rows, stamp = _on_session(rows, stamp, session, now, dry_run)
-        if not rows or not close_matches(stamp, session, now):
-            raise Hold("session", f"Yahoo close is not {session}")
+        rows, stamp, used = _bars_for_session("^NSEI", bars_for, asked, now, dry_run)
+        if not rows or not close_matches(stamp, used, now):
+            raise Hold("session", f"Yahoo close is not {asked}")
         levels = compute(rows, "NSE:NIFTY", "^NSEI")
         levels["bars"] = rows
         levels["setup"] = "close"
     levels["format"] = "story"
+    levels["session_fallback"] = used != asked
     story = facts_for(kind, levels, items, now) if facts_for else collect(kind, levels, items, now)
     levels["story"] = story or {}
+    if kind == "ta" and not direction_ok((levels["story"] or {}).get("plan")):
+        raise Hold("scan", "no stock with a reversal plan and RR >= 1.5")
+    stamp_plan(levels)
     levels["story_figures"] = build_figures(levels, levels["story"])
     news = levels["story"].get("news")
     if news:
         levels["news_text"] = f"{news.get('title') or ''} {news.get('summary') or ''}"
     got = str(levels.get("last_date") or "")[:10]
-    if got != session.isoformat():
-        raise Hold("session", f"last bar {got or 'unknown'} is not {session.isoformat()}")
+    if got != used.isoformat():
+        raise Hold("session", f"last bar {got or 'unknown'} is not {used.isoformat()}")
     chart = {
         "path": str(Path(out) / "chart.png"),
         "source": "ohlc",

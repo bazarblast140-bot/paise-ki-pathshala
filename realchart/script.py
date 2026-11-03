@@ -407,16 +407,27 @@ def lint(rows):
         if word in text:
             faults.append(f"banned word: {word}")
     blob = spoken_text(rows)
+    story = any(row.get("story") for row in rows)
     # The scenario line belongs to the trade view. News has no entry, stop, or target.
     if any(row.get("sec") == "view" for row in rows):
         if "possible" not in blob and "scenario" not in blob and "हो सकता" not in blob:
             faults.append("scenario wording missing")
-    if CTA not in blob and "Comment करो" not in blob:
+    if story:
+        if "Follow करो" not in blob:
+            faults.append("cta missing")
+        low_blob = blob.lower()
+        for phrase in ("comment करो", "comment karo", "कमेंट करो", "कमेंट करें"):
+            if phrase in low_blob:
+                faults.append("story cta must be Follow करो")
+    elif CTA not in blob and "Comment करो" not in blob:
         faults.append("cta missing")
     if DISCLAIMER not in blob:
         faults.append("disclaimer missing")
     lowered = text.lower()
     for phrase in FORBIDDEN_FOLLOW:
+        # The story Reel's only ask is "Follow करो". Channel-name follow lines stay on the end card.
+        if story and phrase.lower() in ("follow करो", "फॉलो करो"):
+            continue
         if phrase.lower() in lowered:
             faults.append(f"channel follow line: {phrase}")
     if any(row.get("story") for row in rows):

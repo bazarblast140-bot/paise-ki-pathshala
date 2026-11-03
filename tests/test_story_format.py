@@ -120,7 +120,10 @@ def _story_levels():
     levels = _levels(bars)
     levels["story"] = {
         "reversal": detect_reversal(bars),
-        "plan": {"stop": 90.0, "target": 120.0, "source": "computed from daily OHLC"},
+        "plan": {
+            "side": "long", "pattern_side": "bullish", "entry": 102.0, "sl": 90.0, "stop": 90.0,
+            "target": 120.0, "rr": 1.5, "source": "computed from daily OHLC",
+        },
         "fundamentals": {
             "profit_yoy_q": 18.5, "revenue_yoy_q": 11.2, "profit_yoy_y": 15.0,
             "revenue_yoy_y": 9.4, "future_growth": 8.0,
@@ -142,6 +145,12 @@ class ScriptTests(unittest.TestCase):
         spoken = " ".join(row["t"] for row in rows)
         self.assertIn(EDU, spoken)
         self.assertIn("हैमर", spoken)
+        self.assertIn("एंट्री", spoken)
+        self.assertIn("स्टॉप लॉस", spoken)
+        self.assertIn("टारगेट", spoken)
+        self.assertIn("Follow करो", spoken)
+        self.assertNotIn("Comment करो", spoken)
+        self.assertNotIn("कमेंट", spoken)
         self.assertNotIn("खरीदो", spoken)
         self.assertNotIn("बेचो", spoken)
         self.assertEqual(lint(rows), [])
@@ -247,6 +256,17 @@ class ImagineRenderTests(unittest.TestCase):
             self.assertIn("fii_net_cr", names)
             self.assertIn("reversal_low", names)
             self.assertEqual(sources["imagine"]["used"], [])
+            script_txt = (out / "script.txt").read_text(encoding="utf-8")
+            self.assertIn("Follow करो", script_txt)
+            self.assertNotIn("Comment", script_txt)
+            self.assertNotIn("कमेंट", script_txt)
+            stored = json.loads((out / "levels.json").read_text(encoding="utf-8"))
+            self.assertEqual(stored["side"], "long")
+            self.assertLess(stored["sl"], stored["entry"])
+            self.assertLess(stored["entry"], stored["target"])
+            self.assertGreaterEqual(stored["rr"], 1.5)
+            self.assertIn(stored["host"]["source"], ("character", "fallback", "photo"))
+            self.assertNotEqual(stored["host"]["outfit"], "blue")
             qa = json.loads((out / "qa.json").read_text(encoding="utf-8"))
             self.assertEqual(qa["verdict"], "DRY-OK")
             self.assertEqual(qa["chart"], "ohlc")

@@ -58,23 +58,140 @@ def detect_reversal(bars):
     return None
 
 
-def example_plan(bars):
-    """Stop and target from the last 20 bars' own high and low. Not a call."""
-    window = list(bars or [])[-20:]
-    if len(window) < 5:
+def _min_rr():
+    from realchart.levels import MIN_RR
+    return float(MIN_RR)
+
+
+def _round2(value):
+    return round(float(value) + 0.0, 2)
+
+
+def pattern_plan(bars, reversal=None, atr=None):
+    """Educational entry, SL and target in the direction of the reversal candle.
+
+    A bullish candle (hammer, bullish engulfing) is long: stop under the low,
+    target above the entry. A bearish candle (shooting star, bearish engulfing)
+    is short: stop over the high, target under the entry. The target is a real
+    prior high or low. None when that print cannot pay at least 1.5R — the
+    caller then skips the stock.
+    """
+    rows = list(bars or [])
+    found = reversal if reversal is not None else detect_reversal(rows)
+    if not found or len(rows) < 8:
         return None
-    stop = min(float(row["l"]) for row in window)
-    target = max(float(row["h"]) for row in window)
-    close = float(window[-1]["c"])
-    if abs(close - stop) < 1e-6 or abs(target - close) < 1e-6:
+    bias = str(found.get("side") or "")
+    if bias == "bullish":
+        side = "long"
+    elif bias == "bearish":
+        side = "short"
+    else:
         return None
-    return {
-        "stop": stop,
+    last = rows[-1]
+    try:
+        high, low, close = (float(last[key]) for key in ("h", "l", "c"))
+    except (KeyError, TypeError, ValueError):
+        return None
+    span = high - low
+    if span <= 0:
+        return None
+    buf = max(0.08 * float(atr or span), 0.001 * abs(close), 0.05)
+    if side == "long":
+        entry, sl = high + buf, low - buf
+    else:
+        entry, sl = low - buf, high + buf
+    entry, sl = _round2(entry), _round2(sl)
+    risk = (entry - sl) if side == "long" else (sl - entry)
+    if risk <= 0:
+        return None
+    raw = _structure_target(rows[:-1], side, entry, risk)
+    if raw is None:
+        return None
+    need = _min_rr() * risk
+    if side == "long":
+        target = max(_round2(raw), _ceil2(entry + need))
+    else:
+        target = min(_round2(raw), _floor2(entry - need))
+    reward = (target - entry) if side == "long" else (entry - target)
+    if reward <= 0:
+        return None
+    rr = reward / risk
+    plan = {
+        "side": side,
+        "pattern_side": bias,
+        "pattern": found.get("name") or "",
+        "entry": entry,
+        "sl": sl,
+        "stop": sl,
         "target": target,
-        "close": close,
+        "rr": round(rr, 4),
+        "close": _round2(close),
         "source": "computed from daily OHLC",
         "url": "",
     }
+    if not direction_ok(plan):
+        return None
+    return plan
+
+
+def example_plan(bars, reversal=None, atr=None):
+    """Directional plan for the story Reel. Replaces the old 20-bar high/low pair."""
+    found = reversal if reversal is not None else detect_reversal(bars)
+    return pattern_plan(bars, found, atr=atr)
+
+
+def direction_ok(plan):
+    """Long stops below and targets above. Short stops above and targets below."""
+    if not plan:
+        return False
+    try:
+        side = plan["side"]
+        entry, sl, target = float(plan["entry"]), float(plan["sl"]), float(plan["target"])
+        risk = (entry - sl) if side == "long" else (sl - entry)
+        reward = (target - entry) if side == "long" else (entry - target)
+    except (KeyError, TypeError, ValueError):
+        return False
+    if risk <= 0 or reward / risk < _min_rr() - 1e-9:
+        return False
+    if side == "long":
+        return sl < entry < target
+    if side == "short":
+        return target < entry < sl
+    return False
+
+
+def stamp_plan(levels):
+    """Copy side, entry, SL and target onto the levels dict written to levels.json."""
+    plan = ((levels.get("story") or {}).get("plan")) or None
+    if not plan or not direction_ok(plan):
+        return levels
+    levels["side"] = plan["side"]
+    levels["entry"] = plan["entry"]
+    levels["sl"] = plan["sl"]
+    levels["stop"] = plan["sl"]
+    levels["target"] = plan["target"]
+    levels["rr"] = plan["rr"]
+    return levels
+
+
+def _ceil2(value):
+    import math
+    return math.ceil(float(value) * 100.0 - 1e-9) / 100.0
+
+
+def _floor2(value):
+    import math
+    return math.floor(float(value) * 100.0 + 1e-9) / 100.0
+
+
+def _structure_target(prior, side, entry, risk):
+    """Nearest prior high (long) or low (short) that pays at least 1.5R."""
+    need = _min_rr() * float(risk)
+    if side == "long":
+        highs = [float(row["h"]) for row in prior if float(row["h"]) >= float(entry) + need - 1e-6]
+        return min(highs) if highs else None
+    lows = [float(row["l"]) for row in prior if float(row["l"]) <= float(entry) - need + 1e-6]
+    return max(lows) if lows else None
 
 
 def _num(value):
@@ -319,7 +436,7 @@ def collect(kind, levels, articles, now, fetchers=None):
         if sectors:
             story["sectors"] = sectors
     story["reversal"] = detect_reversal(levels.get("bars"))
-    story["plan"] = example_plan(levels.get("bars"))
+    story["plan"] = pattern_plan(levels.get("bars"), story["reversal"], atr=levels.get("atr14"))
     story["news"] = _pick_news(articles, now, levels, kind)
     return story
 
@@ -401,7 +518,8 @@ def build_figures(levels, story, source_note=""):
     if sectors.get("worst"):
         add("sector_worst_pct", sectors["worst"].get("pct"), sectors.get("source") or "NSE sectors", sectors.get("url") or "", "percent")
     plan = (story or {}).get("plan") or {}
-    add("plan_stop", plan.get("stop"), plan.get("source") or "computed from daily OHLC", unit="INR")
+    add("plan_entry", plan.get("entry"), plan.get("source") or "computed from daily OHLC", unit="INR")
+    add("plan_stop", plan.get("sl", plan.get("stop")), plan.get("source") or "computed from daily OHLC", unit="INR")
     add("plan_target", plan.get("target"), plan.get("source") or "computed from daily OHLC", unit="INR")
     try:
         from realchart.script import next_pivot
