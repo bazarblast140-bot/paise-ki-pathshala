@@ -219,7 +219,7 @@
           "realchart": 0,
           "nifty": 0,
           "buffer": 0,
-          "other": 1,
+          "other": 2,
           "news": 0,
           "close": 0,
           "ta": 0,
@@ -412,6 +412,12 @@
     },
     {
       "id": "531069a10a3b424cad13ee4d41252271",
+      "date": "2026-11-03",
+      "caller": "other",
+      "key": "1"
+    },
+    {
+      "id": "10992248e68540c7901d9c6ebc2d0dc2",
       "date": "2026-11-03",
       "caller": "other",
       "key": "1"
