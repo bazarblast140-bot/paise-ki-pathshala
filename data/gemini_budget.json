@@ -218,7 +218,7 @@
         "1": {
           "realchart": 0,
           "nifty": 0,
-          "buffer": 0,
+          "buffer": 3,
           "other": 2,
           "news": 0,
           "close": 0,
@@ -420,6 +420,24 @@
       "id": "10992248e68540c7901d9c6ebc2d0dc2",
       "date": "2026-11-03",
       "caller": "other",
+      "key": "1"
+    },
+    {
+      "id": "f3109d76e9db45e8ad66537b869c6193",
+      "date": "2026-11-03",
+      "caller": "buffer",
+      "key": "1"
+    },
+    {
+      "id": "e802ef9b7ae34448a1d24fdf51756fae",
+      "date": "2026-11-03",
+      "caller": "buffer",
+      "key": "1"
+    },
+    {
+      "id": "496fa88bec7040b1b44f459b228d2eed",
+      "date": "2026-11-03",
+      "caller": "buffer",
       "key": "1"
     }
   ]
