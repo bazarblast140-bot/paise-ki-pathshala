@@ -1,4 +1,5 @@
 """Evening TA Reel = ONE liquid NSE stock with a real pattern and an RR >= 1.5 plan (Rajesh, 16-Oct-2026)."""
+import os
 import unittest
 from datetime import date
 from unittest import mock
@@ -102,7 +103,8 @@ class TaScript(unittest.TestCase):
         with mock.patch.object(build, "pick_stock", return_value=[(levels, plan), (other, plan)]), \
              mock.patch.object(build, "_prepare_rest", side_effect=rest), \
              mock.patch.object(build, "_history", return_value=[]), \
-             mock.patch.object(build, "_on_session", side_effect=lambda rows, stamp, *_a: (rows, "stamp")):
+             mock.patch.object(build, "_on_session", side_effect=lambda rows, stamp, *_a: (rows, "stamp")), \
+             mock.patch.dict(os.environ, {"REALCHART_TA_FORMAT": "classic"}):
             got = build._prepare("ta", date(2026, 10, 16), build.now_ist(), None,
                                  bars_for=lambda _t: (_bounce_bars(), None), dry_run=True)
         self.assertEqual(calls, ["NSE:TEST", "NSE:OTHER"])

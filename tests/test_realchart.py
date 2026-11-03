@@ -499,7 +499,7 @@ class BuildTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "run"
-            with mock.patch.dict(os.environ, {"REALCHART_NO_ALERT": "1"}), \
+            with mock.patch.dict(os.environ, {"REALCHART_NO_ALERT": "1", "REALCHART_CLOSE_FORMAT": "classic"}), \
                  mock.patch("gemini_voice.write_speech", side_effect=AssertionError("no gemini")):
                 run(
                     "close", out, now=FRIDAY, dry_run=True,
@@ -522,7 +522,7 @@ class BuildTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "run"
-            with mock.patch.dict(os.environ, {"REALCHART_NO_ALERT": "1"}), \
+            with mock.patch.dict(os.environ, {"REALCHART_NO_ALERT": "1", "REALCHART_TA_FORMAT": "classic"}), \
                  mock.patch("gemini_voice.write_speech", side_effect=AssertionError("no gemini")):
                 code = run(
                     "ta", out, now=FRIDAY, dry_run=True,
@@ -610,6 +610,7 @@ class BuildTests(unittest.TestCase):
             trim_intro(source, intro)
             with mock.patch("realchart.build.HISTORY", history), \
                  mock.patch("realchart.ends.INTRO_RTT", intro), \
+                 mock.patch.dict(os.environ, {"REALCHART_CLOSE_FORMAT": "classic"}), \
                  mock.patch("gemini_voice.write_speech", side_effect=AssertionError("no gemini")):
                 code = run(
                     "close", out, now=FRIDAY, dry_run=True,
@@ -672,7 +673,7 @@ class BuildTests(unittest.TestCase):
             hist = Path(tmp) / "history.json"
             hist.write_text(json.dumps({"items": history}), encoding="utf-8")
             with mock.patch("realchart.build.HISTORY", hist), \
-                 mock.patch.dict(os.environ, {"REALCHART_NO_ALERT": "1"}):
+                 mock.patch.dict(os.environ, {"REALCHART_NO_ALERT": "1", "REALCHART_TA_FORMAT": "classic"}):
                 code = run(
                     "ta", out, now=now,
                     bars_for=lambda _t: (bars, stamp), articles=[],

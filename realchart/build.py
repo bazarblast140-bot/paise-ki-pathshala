@@ -91,7 +91,9 @@ def _on_session(rows, stamp, session, now, dry_run):
     return kept, closed
 
 
-def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_opener=None, article_opener=None, bars_intraday=None, chain_for=None):
+def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_opener=None, article_opener=None, bars_intraday=None, chain_for=None, sample=False, facts_for=None):
+    if sample:
+        dry_run = True
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     now = now_ist(now)
@@ -105,11 +107,18 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
         (out / "SKIP").write_text("no session\n", encoding="utf-8")
         return 0
     try:
-        levels, article, chart, intraday = _prepare(
-            kind, session, now, out, bars_for=bars_for, articles=articles,
-            chart_opener=chart_opener, article_opener=article_opener, dry_run=dry_run,
-            bars_intraday=bars_intraday, chain_for=chain_for,
-        )
+        if sample:
+            if kind not in ("ta", "close"):
+                raise Hold("sample", "sample render is only for ta and close")
+            dry_run = True
+            from realchart.sample_facts import build_sample
+            levels, article, chart, intraday = build_sample(kind, session, out)
+        else:
+            levels, article, chart, intraday = _prepare(
+                kind, session, now, out, bars_for=bars_for, articles=articles,
+                chart_opener=chart_opener, article_opener=article_opener, dry_run=dry_run,
+                bars_intraday=bars_intraday, chain_for=chain_for, facts_for=facts_for,
+            )
         if kind == "news" and article:
             from realchart.summarize import SummaryRefused, hindi_summary
             try:
@@ -123,6 +132,8 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             except SummaryRefused as exc:
                 raise Hold("news", f"Hindi summary refused: {exc}") from exc
         levels["series_n"] = _series_next(kind)
+        if levels.get("format") == "story":
+            _dump_levels(out, levels)
         rows = script.chunks_for(kind, levels, article)
         faults = script.lint(rows) + script.number_faults(rows, levels)
         if faults:
@@ -131,6 +142,13 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             est = script.estimate_seconds(rows)
             if est < script.NEWS_FLOOR_SEC:
                 raise Hold("script", f"news script estimate {est:.1f}s below {script.NEWS_FLOOR_SEC:.0f}s floor (article too short)")
+        if levels.get("format") == "story":
+            from realchart.imagine import load_imagine
+            levels["imagine"] = load_imagine(
+                date=str(levels.get("last_date") or "")[:10],
+                ticker=str(levels.get("symbol") or ""),
+                cache_dir=out / "imagine_cache",
+            )
         from realchart.voice import speak_segments
         # One clip per card: each card is on screen exactly while its own line is spoken.
         voice, beats = speak_segments(
@@ -139,12 +157,14 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
         )
         from realchart.render import assemble, frames
         pics = frames(out / "cards", kind, levels, rows, chart.get("path"), article, intraday, durations=beats)
+        cap = 55.0 if levels.get("format") == "story" else 50.0
         spoken = sum(beats)
-        if spoken > 50.0 and dry_run:
-            beats = [b * 45.0 / spoken for b in beats]  # silent placeholder voice; real reads are timed
-            spoken = 45.0
-        elif spoken > 50.0:
-            raise Hold("voice", f"narration is {spoken:.1f}s, over the 50s limit")
+        if spoken > cap and dry_run:
+            target = min(48.0, cap - 1.0)
+            beats = [b * target / spoken for b in beats]  # silent placeholder voice; real reads are timed
+            spoken = target
+        elif spoken > cap:
+            raise Hold("voice", f"narration is {spoken:.1f}s, over the {cap:.0f}s limit")
         length = max(40.0, spoken)
         beats[-1] += length - spoken  # a short read holds the CTA card over the silent tail
         card_faults = []
@@ -152,9 +172,14 @@ def run(kind, out, now=None, dry_run=False, bars_for=None, articles=None, chart_
             if kind == "news" and row.get("sec") == "news" and sec_len > 6.0:
                 card_faults.append(f"article card on screen {sec_len:.1f}s (max 6s)")
         pics, beats = _with_variants(pics, beats, out / "variants.json")
+        story = levels.get("format") == "story"
         assemble(pics, out / "voice.wav", out / "final.mp4", seconds=length, durations=beats,
-                 thumb_text=script.thumb_text(kind, levels, article), thumb_tag="Paise Ki Pathshala",
-                 thumb_topic=None if dry_run else script.thumb_topic(kind, levels, article))
+                 thumb_text=None if story else script.thumb_text(kind, levels, article), thumb_tag="Paise Ki Pathshala",
+                 thumb_topic=None if story or dry_run else script.thumb_topic(kind, levels, article))
+        if story:
+            from realchart.story_layout import write_thumbnail
+            write_thumbnail(out / "thumbnail.jpg", kind, levels)
+            _write_ig_cover(out / "thumbnail.jpg", out / "ig_cover.jpg")
         from realchart.ends import FOLLOW_PKP, FOLLOW_RTT, attach, render_end_card
         ends_dir = out / "ends"
         extra = script.end_card_lines(kind, levels)
@@ -267,7 +292,12 @@ def _download_intraday(ticker, session, interval):
     return rows
 
 
-def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener=None, article_opener=None, dry_run=False, bars_intraday=None, chain_for=None):
+def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener=None, article_opener=None, dry_run=False, bars_intraday=None, chain_for=None, facts_for=None):
+    from realchart.format_flag import story_on
+    if kind in ("ta", "close") and story_on(kind):
+        return _prepare_story(
+            kind, session, now, out, bars_for=bars_for, articles=articles, dry_run=dry_run, facts_for=facts_for,
+        )
     if kind == "news":
         return _prepare_news(now, out, articles, article_opener, dry_run)
     symbol, ticker = ("NSE:NIFTY", "^NSEI")
@@ -315,6 +345,82 @@ def _prepare(kind, session, now, out, bars_for=None, articles=None, chart_opener
         levels["chg_pct"] = 100.0 * (levels["close"] / week - 1.0) if week else levels["chg_pct"]
     levels["setup"] = "weekly recap" if kind == "recap" else "close"
     return _prepare_rest(levels, *rest)
+
+
+def _dump_levels(out, levels):
+    payload = {key: value for key, value in levels.items() if key not in ("bars", "imagine")}
+    (Path(out) / "levels.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _write_ig_cover(src, dest):
+    """IG grid cover from the same thumbnail, when the helper is importable."""
+    try:
+        from publish_instagram import grid_safe_cover
+        grid_safe_cover(Path(src), Path(dest))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[realchart] ig cover skipped: {type(exc).__name__}", flush=True)
+
+
+def _prepare_story(kind, session, now, out, bars_for, articles, dry_run, facts_for):
+    """Story Reel: OHLC candles plus fetched fundamentals, flows and news. No TradingView shot."""
+    from realchart.levels import STOCK_UNIVERSE, compute, stock_plan
+    from realchart.story_facts import build_figures, collect, detect_reversal
+    items = articles if articles is not None else _load_feeds()
+    if kind == "ta":
+        ranked = []
+        for name, yf in STOCK_UNIVERSE:
+            rows, stamp = (bars_for(yf) if bars_for else _bars_from_yahoo(yf))
+            rows, stamp = _on_session(rows, stamp, session, now, dry_run)
+            if not rows or len(rows) < 30 or stamp is None:
+                continue
+            levels = compute(rows, name, yf)
+            levels["bars"] = rows
+            try:
+                plan = stock_plan(levels)
+            except Exception:  # noqa: BLE001
+                plan = None
+            score = (1 if detect_reversal(rows) else 0, 1 if plan else 0, abs(float(levels.get("chg_pct") or 0)))
+            ranked.append((score, levels))
+        if not ranked:
+            raise Hold("session", f"Yahoo close is not {session}")
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        levels = ranked[0][1]
+    else:
+        rows, stamp = (bars_for("^NSEI") if bars_for else _bars_from_yahoo("^NSEI"))
+        rows, stamp = _on_session(rows, stamp, session, now, dry_run)
+        if not rows or not close_matches(stamp, session, now):
+            raise Hold("session", f"Yahoo close is not {session}")
+        levels = compute(rows, "NSE:NIFTY", "^NSEI")
+        levels["bars"] = rows
+        levels["setup"] = "close"
+    levels["format"] = "story"
+    story = facts_for(kind, levels, items, now) if facts_for else collect(kind, levels, items, now)
+    levels["story"] = story or {}
+    levels["story_figures"] = build_figures(levels, levels["story"])
+    news = levels["story"].get("news")
+    if news:
+        levels["news_text"] = f"{news.get('title') or ''} {news.get('summary') or ''}"
+    got = str(levels.get("last_date") or "")[:10]
+    if got != session.isoformat():
+        raise Hold("session", f"last bar {got or 'unknown'} is not {session.isoformat()}")
+    chart = {
+        "path": str(Path(out) / "chart.png"),
+        "source": "ohlc",
+        "label": "OHLC candles (Yahoo Finance)",
+        "url": f"https://finance.yahoo.com/quote/{levels.get('yf')}/",
+        "last_candle_date": got,
+        "reason": "",
+    }
+    article = None
+    if news and news.get("url"):
+        article = {
+            "title": news.get("title") or "",
+            "url": news.get("url") or "",
+            "source": news.get("source") or "",
+            "published": news.get("published") or "",
+            "summary": news.get("summary") or "",
+        }
+    return levels, article, chart, None
 
 
 def _prepare_rest(levels, kind, session, now, out, articles, chart_opener, article_opener, dry_run, bars_intraday, chain_for):
@@ -506,6 +612,9 @@ def _with_variants(pics, beats, variants_file):
 
 def _ta_faults(out, kind, chart, intraday, dry_run=False):
     """TradingView's own EMA 20/50 must show on every TradingView shot; level lines must be drawn."""
+    if (chart or {}).get("source") == "ohlc":
+        # Story Reels draw candles from the fetched bars. There is no TradingView shot to grade.
+        return []
     faults = []
     if kind not in ("close", "ta"):
         return faults
@@ -542,6 +651,11 @@ def _ta_faults(out, kind, chart, intraday, dry_run=False):
 
 
 def _write_post_meta(out, kind, levels, rows, article=None):
+    if levels.get("format") == "story" and kind in ("ta", "close"):
+        from realchart.story_script import post_meta
+        meta = post_meta(kind, levels)
+        (Path(out) / "post_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return
     if kind == "news" and article:
         meta = script.news_post_meta(levels, article)
     elif kind == "close":
@@ -597,7 +711,10 @@ def _apply_technicals(levels, chart):
 
 
 def _write_sources(out, kind, levels, article, chart, rows, voice, now, intraday=None):
-    if kind == "close":
+    if levels.get("format") == "story" and kind in ("ta", "close"):
+        from realchart.story_script import post_meta
+        title = post_meta(kind, levels)["title"]
+    elif kind == "close":
         title = script.post_meta(levels)["title"]
     elif kind == "news" and article and article.get("hindi"):
         title = script.news_post_meta(levels, article)["title"]
@@ -636,7 +753,29 @@ def _write_sources(out, kind, levels, article, chart, rows, voice, now, intraday
         lines.append(f"- news {article.get('url')} {article.get('published')} {article.get('title')}")
     else:
         lines.append("- news none")
+    if levels.get("format") == "story":
+        lines.append("- format story")
+        lines.append("- sources sources.json")
     (out / "source.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if levels.get("format") == "story":
+        imagine = levels.get("imagine") or {}
+        payload = {
+            "kind": kind,
+            "format": "story",
+            "symbol": levels.get("symbol"),
+            "session": str(levels.get("last_date") or "")[:10],
+            "sample": bool(levels.get("sample")),
+            "chart": {"source": chart.get("source"), "label": chart.get("label"), "url": chart.get("url")},
+            "imagine": {
+                "dir": imagine.get("dir"),
+                "used": imagine.get("used") or [],
+                "rejected": imagine.get("rejected") or [],
+                "note": "Imagine files are decorative backgrounds or the thumbnail photo only. Charts, figures and news text are the entries below, from fetched or computed data.",
+            },
+            "news": (levels.get("story") or {}).get("news"),
+            "figures": levels.get("story_figures") or [],
+        }
+        (out / "sources.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def _hold(out, kind, reason, detail, now, dry_run=False):
@@ -673,7 +812,7 @@ def _alert(kind, reason, detail, now):
 
 def _end_plan(kind, levels):
     """TA end card plan rows (entry / SL / target from the same plan the voice reads)."""
-    if kind != "ta":
+    if levels.get("format") == "story" or kind != "ta":
         return None
     plan = levels.get("plan") or {}
     return {"symbol": levels.get("symbol"), "entry": plan.get("entry", levels.get("entry")),

@@ -151,7 +151,7 @@ class CaptureDateTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "run"
-            with mock.patch.dict(os.environ, {"REALCHART_NO_ALERT": "1", "REALCHART_SKIP_BROWSER": "1"}):
+            with mock.patch.dict(os.environ, {"REALCHART_NO_ALERT": "1", "REALCHART_SKIP_BROWSER": "1", "REALCHART_CLOSE_FORMAT": "classic"}):
                 code = run("close", out, now=now, dry_run=True, bars_for=lambda _t: (bars, stamp_), articles=[],
                            chart_opener=opener, chain_for=lambda _s: {"ok": False, "reason": "held"})
             self.assertEqual(code, 2)

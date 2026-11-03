@@ -23,6 +23,19 @@ class FacebookReelTest(unittest.TestCase):
         self.run_dir.stop()
         self.tmp.cleanup()
 
+    def test_cover_uses_thumbnail_when_the_file_exists(self):
+        run = Path(self.tmp.name)
+        (run / "thumbnail.jpg").write_bytes(b"\xff\xd8\xff" + b"y" * 200)
+        with mock.patch.object(fb, "call", return_value={"success": True}) as call:
+            self.assertTrue(fb.set_cover("vid1"))
+        self.assertIn("/vid1/thumbnails", call.call_args.args[1])
+        self.assertIn(b"thumbnail.jpg", call.call_args.kwargs["data"])
+
+    def test_cover_is_skipped_when_the_thumbnail_is_missing(self):
+        with mock.patch.object(fb, "call") as call:
+            self.assertFalse(fb.set_cover("vid1"))
+        call.assert_not_called()
+
     def test_wrong_page_is_refused(self):
         with mock.patch.object(fb, "call", return_value={"id": "1", "name": "Some Other Page"}) as call:
             self.assertEqual(fb.main(), 2)

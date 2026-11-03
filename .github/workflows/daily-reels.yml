@@ -29,6 +29,11 @@ on:
         type: choice
         options: [build, publish, both]
         default: build
+      sample:
+        description: "true = fixture story Reel, no network fetch, no Gemini, no upload"
+        required: false
+        type: boolean
+        default: false
 
 run-name: daily-reel ${{ github.event_name == 'workflow_dispatch' && inputs.kind || github.event.schedule }} ${{ github.event_name == 'workflow_dispatch' && inputs.phase || 'cron' }}
 
@@ -59,12 +64,20 @@ jobs:
               *) KIND=unknown ;;
             esac
           fi
-          SKIP=0
-          for k in $(echo "$PAUSE_KINDS" | tr ',' ' '); do
-            if [ "$k" = "$KIND" ]; then SKIP=1; fi
-          done
+          # A sample dispatch is a no-upload render. It does not lift the kill
+          # switch for scheduled or live runs. Plan forces dry_run and phase=build.
+          SAMPLE="${{ inputs.sample }}"
+          if [ "$SAMPLE" = "true" ]; then
+            SKIP=0
+            echo "[gate] sample render is not a paused live Reel"
+          else
+            SKIP=0
+            for k in $(echo "$PAUSE_KINDS" | tr ',' ' '); do
+              if [ "$k" = "$KIND" ]; then SKIP=1; fi
+            done
+          fi
           echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
-          echo "[gate] kind=$KIND PAUSE_KINDS='$PAUSE_KINDS' skip=$SKIP"
+          echo "[gate] kind=$KIND PAUSE_KINDS='$PAUSE_KINDS' sample='$SAMPLE' skip=$SKIP"
   reel:
     needs: gate
     if: needs.gate.outputs.skip != '1'
@@ -93,6 +106,8 @@ jobs:
             KIND="${{ inputs.kind }}"
             PHASE="${{ inputs.phase }}"
             if [ "${{ inputs.dry_run }}" = "true" ]; then DRY=1; else DRY=0; fi
+            # sample never publishes, even if dry_run was left unchecked
+            if [ "${{ inputs.sample }}" = "true" ]; then DRY=1; PHASE=build; fi
           else
             DRY=0
             case "${{ github.event.schedule }}" in
@@ -108,7 +123,12 @@ jobs:
           echo "kind=$KIND" >> "$GITHUB_OUTPUT"
           echo "phase=$PHASE" >> "$GITHUB_OUTPUT"
           echo "dry=$DRY" >> "$GITHUB_OUTPUT"
-          echo "[realchart] kind=$KIND phase=$PHASE dry=$DRY"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.sample }}" = "true" ]; then
+            echo "sample=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sample=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "[realchart] kind=$KIND phase=$PHASE dry=$DRY sample=${{ inputs.sample }}"
       - name: Build the Reel
         id: build
         if: steps.plan.outputs.phase != 'publish'
@@ -122,7 +142,9 @@ jobs:
           GEMINI_API_KEY_4: ${{ steps.plan.outputs.dry == '1' && '' || secrets.GEMINI_API_KEY_4 }}
         run: |
           set +e
-          if [ "${{ steps.plan.outputs.dry }}" = "1" ]; then
+          if [ "${{ steps.plan.outputs.sample }}" = "true" ]; then
+            python -m realchart run --kind "${{ steps.plan.outputs.kind }}" --dry-run --sample --out run
+          elif [ "${{ steps.plan.outputs.dry }}" = "1" ]; then
             python -m realchart run --kind "${{ steps.plan.outputs.kind }}" --dry-run --out run
           else
             python -m realchart run --kind "${{ steps.plan.outputs.kind }}" --out run
@@ -167,6 +189,8 @@ jobs:
             run/final_ig.mp4
             run/script.txt
             run/thumbnail.jpg
+            run/ig_cover.jpg
+            run/sources.json
             run/source.md
             run/qa.json
             run/levels.json
@@ -179,7 +203,7 @@ jobs:
             run/HOLD
             run/SKIP
       - name: Publish via publish-artifact
-        if: steps.plan.outputs.dry != '1' && steps.plan.outputs.phase != 'build' && (steps.plan.outputs.phase == 'publish' || steps.build.outputs.code == '0')
+        if: steps.plan.outputs.sample != 'true' && steps.plan.outputs.dry != '1' && steps.plan.outputs.phase != 'build' && (steps.plan.outputs.phase == 'publish' || steps.build.outputs.code == '0')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KIND: ${{ steps.plan.outputs.kind }}

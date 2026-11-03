@@ -39,8 +39,9 @@ def check(out, rows, levels, voice_engine, dry_run=False, capture_dates=None, ex
         if info.get("width") != 1080 or info.get("height") != 1920:
             faults.append(f"frame is {info.get('width')}x{info.get('height')}")
         duration = float(info.get("duration") or 0)
-        if not 40.0 <= duration <= 50.0:
-            faults.append(f"duration {duration:.2f}s outside 40-50s")
+        hi = 55.0 if (levels or {}).get("format") == "story" else 50.0
+        if not 40.0 <= duration <= hi:
+            faults.append(f"duration {duration:.2f}s outside 40-{hi:.0f}s")
         if info.get("codec") not in ("h264", "avc1"):
             faults.append(f"codec {info.get('codec') or 'missing'}")
     if voice_engine == "elevenlabs":
