@@ -967,5 +967,20 @@
   "ig_media_id": "18116150009169137",
   "content_hash": "9da7733fac447997",
   "title_norm": "crude 7% \u0927\u0921\u093c\u093e\u092e! bpcl, hpcl, ioc \u0915\u094b \u092b\u093e\u092f\u0926\u093e? | us-iran \u092c\u093e\u0924\u091a\u0940\u0924 | share market news today"
+ },
+ {
+  "date_ist": "2026-11-04",
+  "slot": "08:33",
+  "video_id": "b7cSpA91kKs",
+  "format": "short",
+  "deepseek_calls": 0,
+  "deepseek_prompt_tokens": 0,
+  "deepseek_completion_tokens": 0,
+  "elevenlabs_characters_sent": 0,
+  "elevenlabs_characters_remaining": null,
+  "tts_engine": null,
+  "ig_media_id": "17962183689238778",
+  "content_hash": "d7502df479a285a3",
+  "title_norm": "sbi \u092e\u0941\u0928\u093e\u092b\u093e +14%, \u092b\u093f\u0930 \u092d\u0940 \u0936\u0947\u092f\u0930 \u0915\u094d\u092f\u094b\u0902 \u0917\u093f\u0930\u093e? | sbi q2 results | share market news today"
  }
 ]
