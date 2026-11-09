@@ -1,0 +1,33 @@
+name: One-off IG thumbnails dump 2026-11-09
+on:
+  workflow_dispatch:
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump IG media thumbs
+        env:
+          IG_USER_ID: ${{ vars.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+        run: |
+          python - <<'PY'
+          import os, json, urllib.request, urllib.parse
+          from pathlib import Path
+          IG=os.environ["IG_USER_ID"]; T=os.environ["IG_ACCESS_TOKEN"]
+          q=urllib.parse.urlencode({
+            "fields":"id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,media_url",
+            "limit":"9",
+            "access_token":T,
+          })
+          url=f"https://graph.facebook.com/v23.0/{IG}/media?{q}"
+          data=json.loads(urllib.request.urlopen(url, timeout=60).read())
+          Path("ig_media.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+          print("count", len(data.get("data") or []))
+          for i,m in enumerate(data.get("data") or []):
+            cap=(m.get("caption") or "").replace("\n"," ")[:60]
+            print(i, m.get("id"), m.get("media_product_type"), cap, bool(m.get("thumbnail_url")))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ig-media-thumbs
+          path: ig_media.json
