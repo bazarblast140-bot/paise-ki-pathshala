@@ -168,12 +168,14 @@ def _ta_rows(levels, story):
         ))
         rows[-1]["skip_numbers"] = True
     plan = story.get("plan") or {}
-    stop, target = _whole(levels, "plan_stop"), _whole(levels, "plan_target")
-    if stop and target:
+    entry, stop, target = _whole(levels, "plan_entry"), _whole(levels, "plan_stop"), _whole(levels, "plan_target")
+    if entry and stop and target and plan.get("entry") is not None:
+        side = "लॉन्ग" if plan.get("side") == "long" else "शॉर्ट" if plan.get("side") == "short" else "उदाहरण"
         rows.append(_row(
             "plan",
-            f"उदाहरण स्टॉप {inr(plan.get('stop'), 2)} · टारगेट {inr(plan.get('target'), 2)}",
-            f"उदाहरण: स्टॉप {stop}, टारगेट {target}। यह scenario है।",
+            (f"{side} · एंट्री {inr(plan.get('entry'), 2)} · स्टॉप {inr(plan.get('sl', plan.get('stop')), 2)} · "
+             f"टारगेट {inr(plan.get('target'), 2)}"),
+            f"{side} उदाहरण: एंट्री {entry}, स्टॉप लॉस {stop}, टारगेट {target}। यह scenario है।",
             plan.get("source") or "computed from daily OHLC",
         ))
     rows.append(_cta())
@@ -263,9 +265,10 @@ def _sector(name):
 
 
 def _cta():
-    question = "आप क्या देखते हो? Comment करो।"
-    spoken = f"{question} {EDU}। {DISCLAIMER}"
-    return _row("cta", f"{question} {EDU}। {DISCLAIMER}", spoken, "")
+    """The only ask on a story Reel. No comment prompt."""
+    question = "Follow करो"
+    spoken = f"{question}। {EDU}। {DISCLAIMER}"
+    return _row("cta", f"{question}। {EDU}। {DISCLAIMER}", spoken, "")
 
 
 def compliance_faults(rows):
@@ -311,15 +314,23 @@ def post_meta(kind, levels):
         "title": title,
         "caption": caption,
         "hashtags": [f"#{tag}", "#stockmarket", "#nifty50", "#sharemarkethindi", "#paisekipathshala"],
-        "pinned_comment": "आप क्या देखते हो? कमेंट करो।",
+        "pinned_comment": "Follow करो",
         "series": "Aaj Ka Stock" if kind == "ta" else "Nifty Close",
     }
 
 
 def thumb_headline(kind, levels):
+    """Big Devanagari line. The English ticker is not the headline."""
     story = levels.get("story") or {}
     if kind == "ta":
         rev = (story.get("reversal") or {}).get("name_hi") or "रिवर्सल"
-        return f"{_name(levels)}\n{rev}?"
+        bias = (story.get("reversal") or {}).get("side") or (story.get("plan") or {}).get("pattern_side")
+        if bias == "bearish":
+            hint = "नीचे का संकेत"
+        elif bias == "bullish":
+            hint = "ऊपर का संकेत"
+        else:
+            hint = "चार्ट पर नज़र"
+        return f"{rev}\n{hint}"
     word = "चढ़ा" if float(levels.get("chg_pct") or 0) >= 0 else "गिरा"
     return f"निफ्टी {word}\nवजह क्या?"
