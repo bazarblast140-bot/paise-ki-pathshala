@@ -30,41 +30,163 @@ _COMPANIONS = (
 )
 
 
-def beat_bounds(beats, words, duration):
-    """(start, end) for each beat from whisper times of the source script.
+def _script_tokens(text):
+    """Per-word tokens, the same normalisation whisper words go through."""
+    out = []
+    for word in str(text or "").split():
+        out.extend(sync_gate.tokens(word))
+    return out
 
-    The first beat starts at 0 so the opening breath is kept. The next beat
-    starts at its first matched word.
-    """
-    pieces = []
-    owners = []
-    for beat in ORDER:
-        for word in str((beats or {}).get(beat) or "").split():
-            pieces.append(word)
-            owners.append(beat)
-    if not pieces:
-        die("source script has no words to align")
-    duration = float(duration or 0)
-    starts = board_short._align_starts(pieces, words or [], 0.0, duration)
-    first = {}
-    for index, beat in enumerate(owners):
-        if beat in first:
+
+def _opening_tokens(text, n=3):
+    return _script_tokens(text)[:n]
+
+
+def _whisper_stream(words):
+    stream = []
+    for word in words or []:
+        start = float(word.get("start") or 0)
+        for tok in sync_gate.tokens(word.get("word") or ""):
+            stream.append((start, tok))
+    return stream
+
+
+def _phrase_found(stream, index, want):
+    """want matches at index, in order, with a few inserted whisper tokens."""
+    cursor = index
+    for tok in want:
+        hit = None
+        for j in range(cursor, min(len(stream), cursor + 4)):
+            if sync_gate._near_token(tok, stream[j][1]):
+                hit = j
+                break
+        if hit is None:
+            return False
+        cursor = hit + 1
+    return True
+
+
+def _find_opening(stream, after, want):
+    """Start time of want, the first time it occurs at or after `after`."""
+    if not want:
+        return None
+    for index, (start, tok) in enumerate(stream):
+        if start + 1e-3 < after:
             continue
-        start = starts[index] if index < len(starts) else None
-        if start is None:
-            die(f"whisper has no timestamp for the start of {beat}")
-        first[beat] = float(start)
-    missing = [beat for beat in ORDER if beat not in first]
-    if missing:
-        die("whisper beat boundary missing for " + ", ".join(missing))
+        if not sync_gate._near_token(want[0], tok):
+            continue
+        if _phrase_found(stream, index, want):
+            return start
+    return None
+
+
+def _word_counts(beats):
+    return [max(1, len(str((beats or {}).get(beat) or "").split())) for beat in ORDER]
+
+
+def _proportional_time(words, counts, index, prev):
+    """Whisper-word timestamp at this beat's share of the script word count."""
+    total = sum(counts) or 1
+    done = sum(counts[: index + 1])
+    if not words:
+        return None
+    k = int(round(done / total * len(words)))
+    k = min(max(k, 0), len(words) - 1)
+    while k < len(words) and float(words[k].get("start") or 0) <= prev + 0.05:
+        k += 1
+    if k >= len(words):
+        return None
+    return float(words[k].get("start") or 0)
+
+
+def _usable_cut(cut, prev, duration):
+    return cut is not None and (prev + 0.05) < float(cut) < (float(duration) - 0.05)
+
+
+def beat_bounds(beats, words, duration):
+    """(start, end) for each beat on the source whisper timeline.
+
+    Beat i ends where beat i+1's first three normalised words are first found
+    after beat i starts. A miss uses that beat's share of the whisper word
+    timestamps and logs the fallback. The opening of the file stays at 0.
+    """
+    if not any(str((beats or {}).get(beat) or "").split() for beat in ORDER):
+        die("source script has no words to align")
+    words = list(words or [])
+    if not words:
+        die("whisper beat boundary missing: no words")
+    duration = float(duration or 0)
+    if duration <= 0:
+        duration = max(float(word.get("end") or 0) for word in words)
+    stream = _whisper_stream(words)
+    counts = _word_counts(beats)
+    edges = [0.0]
+    for index in range(len(ORDER) - 1):
+        prev = edges[-1]
+        nxt = ORDER[index + 1]
+        found = _find_opening(stream, prev, _opening_tokens((beats or {}).get(nxt)))
+        if _usable_cut(found, prev, duration):
+            edges.append(float(found))
+            continue
+        cut = _proportional_time(words, counts, index, prev)
+        if not _usable_cut(cut, prev, duration):
+            shown = 0.0 if cut is None else float(cut)
+            die(f"whisper beat boundary for {ORDER[index]} is empty ({prev:.2f}-{shown:.2f}s)")
+        print(
+            f"[respin] proportional word-count boundary for {nxt} at {cut:.2f}s "
+            f"(opening not found after {prev:.2f}s)"
+        )
+        edges.append(float(cut))
+    edges.append(duration)
     bounds = {}
     for index, beat in enumerate(ORDER):
-        start = 0.0 if index == 0 else first[beat]
-        end = first[ORDER[index + 1]] if index + 1 < len(ORDER) else duration
+        start, end = edges[index], edges[index + 1]
         if end <= start + 0.05:
             die(f"whisper beat boundary for {beat} is empty ({start:.2f}-{end:.2f}s)")
         bounds[beat] = (start, end)
     return bounds
+
+
+def window_text(words, start, end):
+    parts = []
+    for word in words or []:
+        stamp = float(word.get("start") or 0)
+        if stamp < float(start) - 1e-3 or stamp >= float(end) - 1e-3:
+            continue
+        raw = str(word.get("word") or "").strip()
+        if raw:
+            parts.append(raw)
+    return " ".join(parts)
+
+
+def kept_recall(beats, words, bounds, skip):
+    """Recall of each beat we will keep, against the whisper words inside its cut."""
+    scores = {}
+    for beat in ORDER:
+        if beat == skip:
+            continue
+        start, end = bounds[beat]
+        heard = window_text(words, start, end)
+        scores[beat] = sync_gate.recall(str((beats or {}).get(beat) or ""), heard)
+    return scores
+
+
+def require_kept_recall(beats, words, bounds, skip):
+    """Hard-fail before any paid voice when a kept slice does not match its text."""
+    scores = kept_recall(beats, words, bounds, skip)
+    low = [
+        f"{beat} {score:.2f}"
+        for beat, score in scores.items()
+        if score + 1e-9 < sync_gate.MIN_RECALL
+    ]
+    if low:
+        die(
+            "kept beat recall below "
+            f"{sync_gate.MIN_RECALL:g} before paid TTS: " + ", ".join(low)
+        )
+    detail = ", ".join(f"{beat} {scores[beat]:.2f}" for beat in ORDER if beat in scores)
+    print(f"[respin] kept beat recall {detail}")
+    return scores
 
 
 def load_beats(directory):
@@ -331,6 +453,7 @@ def respin(source, beat, text, run_dir=None):
         die("transcription failed on the source video")
     duration = board_short.duration(mp4)
     bounds = beat_bounds(old, words, duration)
+    require_kept_recall(old, words, bounds, beat)
     spoken = dict(old)
     spoken[beat] = str(text)
     _copy_companions(source, run_dir)
