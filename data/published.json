@@ -812,6 +812,8 @@
   "date_ist": "2026-11-01",
   "slot": "21:00",
   "video_id": "5lt10nI_FyM",
+  "status": "withdrawn",
+  "withdrawn_note": "gate skip caused by missing audio_mix evidence bug (#176); buffer item re-queued",
   "format": "long",
   "topic_key": "pat_bear_flag",
   "source": "buffer",
