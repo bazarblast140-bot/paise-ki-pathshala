@@ -1,0 +1,166 @@
+name: One-off RBI DMT IG FB publish 2026-11-12
+on:
+  workflow_dispatch:
+    inputs:
+      release_authorized:
+        description: "Only after direct owner approval, exact-video QA, last-post/duplicate checks for EACH destination; no automatic resume"
+        type: boolean
+        required: true
+        default: false
+jobs:
+  publish:
+    if: ${{ inputs.release_authorized }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Fetch media + caption
+        run: |
+          mkdir -p run
+          curl -fsSL -L -o run/final.mp4 "https://github.com/bazarblast140-bot/HEYGEN--INSTAGRAM-/releases/download/ig-reel-2026-11-12-rbidmt/paise-rbidmt-2026-11-12.mp4"
+          curl -fsSL -L -o run/final_ig.mp4 "https://github.com/bazarblast140-bot/HEYGEN--INSTAGRAM-/releases/download/ig-reel-2026-11-12-rbidmt/paise-rbidmt-2026-11-12.mp4"
+          curl -fsSL -L -o run/thumbnail.jpg "https://github.com/bazarblast140-bot/HEYGEN--INSTAGRAM-/releases/download/ig-reel-2026-11-12-rbidmt/paise-rbidmt-2026-11-12-cover.jpg"
+          curl -fsSL -L -o run/caption.txt "https://github.com/bazarblast140-bot/HEYGEN--INSTAGRAM-/releases/download/ig-reel-2026-11-12-rbidmt/rbidmt_caption.txt"
+          cp run/caption.txt run/script.txt
+          python - <<'PY'
+          from pathlib import Path
+          cap=Path("run/caption.txt").read_text(encoding="utf-8")
+          title=cap.splitlines()[0][:100]
+          import json
+          Path("run/topic.json").write_text(json.dumps({"thumb":[title],"title":title},ensure_ascii=False),encoding="utf-8")
+          print("caption", len(cap), "title", title)
+          PY
+      - name: Instagram Reel + Story via Graph
+        env:
+          IG_USER_ID: ${{ vars.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+        run: |
+          python - <<'PY'
+          import os, json, time, urllib.parse, urllib.request, urllib.error
+          from pathlib import Path
+          IG=os.environ["IG_USER_ID"]; T=os.environ["IG_ACCESS_TOKEN"]
+          V="https://github.com/bazarblast140-bot/HEYGEN--INSTAGRAM-/releases/download/ig-reel-2026-11-12-rbidmt/paise-rbidmt-2026-11-12.mp4"; C="https://github.com/bazarblast140-bot/HEYGEN--INSTAGRAM-/releases/download/ig-reel-2026-11-12-rbidmt/paise-rbidmt-2026-11-12-cover.jpg"
+          cap=Path("run/caption.txt").read_text(encoding="utf-8")
+          def post(path, data):
+            body=urllib.parse.urlencode(data).encode()
+            req=urllib.request.Request(f"https://graph.facebook.com/v23.0/{path}", data=body, method="POST")
+            try:
+              return json.loads(urllib.request.urlopen(req, timeout=180).read())
+            except urllib.error.HTTPError as e:
+              raise SystemExit(f"HTTP {e.code}: {e.read().decode()[:800]}")
+          def get(path):
+            return json.loads(urllib.request.urlopen(f"https://graph.facebook.com/v23.0/{path}", timeout=60).read())
+          params={"media_type":"REELS","video_url":V,"caption":cap,"access_token":T,"cover_url":C}
+          cont=post(f"{IG}/media", params); print("container", cont); cid=cont["id"]
+          st={}
+          for i in range(48):
+            st=get(f"{cid}?fields=status_code,status&access_token={T}"); print("status", st)
+            if st.get("status_code")=="FINISHED": break
+            if st.get("status_code")=="ERROR": raise SystemExit(st)
+            time.sleep(5)
+          else:
+            raise SystemExit("timeout waiting FINISHED")
+          pub=post(f"{IG}/media_publish", {"creation_id":cid,"access_token":T}); print("published", pub)
+          mid=pub["id"]
+          info=get(f"{mid}?fields=id,permalink,caption,timestamp,media_type,media_product_type&access_token={T}")
+          print("IG_READBACK", json.dumps(info, ensure_ascii=False))
+          Path("run/ig_readback.json").write_text(json.dumps(info,ensure_ascii=False,indent=2),encoding="utf-8")
+          # Story
+          try:
+            scont=post(f"{IG}/media", {"media_type":"STORIES","video_url":V,"access_token":T}); print("story container", scont); scid=scont["id"]
+            for i in range(48):
+              st=get(f"{scid}?fields=status_code,status&access_token={T}"); print("story status", st)
+              if st.get("status_code")=="FINISHED": break
+              if st.get("status_code")=="ERROR":
+                print("STORY_FAIL", st); Path("run/ig_story.json").write_text(json.dumps({"error":st},ensure_ascii=False,indent=2),encoding="utf-8"); scid=None; break
+              time.sleep(5)
+            if scid and st.get("status_code")=="FINISHED":
+              spub=post(f"{IG}/media_publish", {"creation_id":scid,"access_token":T}); print("story published", spub)
+              Path("run/ig_story.json").write_text(json.dumps(spub,ensure_ascii=False,indent=2),encoding="utf-8")
+          except SystemExit as e:
+            print("STORY_BLOCKED", e)
+            Path("run/ig_story.json").write_text(json.dumps({"error":str(e)},ensure_ascii=False,indent=2),encoding="utf-8")
+          PY
+      - name: Facebook Page Reel via Graph
+        if: ${{ always() && inputs.release_authorized }}
+        env:
+          FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN || secrets.IG_ACCESS_TOKEN }}
+          FB_PAGE_ID: ${{ vars.FB_PAGE_ID }}
+        run: |
+          python - <<'PY'
+          import os, json, time, urllib.parse, urllib.request, urllib.error, subprocess
+          from pathlib import Path
+          T=os.environ.get("FB_ACCESS_TOKEN"); PAGE=os.environ.get("FB_PAGE_ID","").strip()
+          V="https://github.com/bazarblast140-bot/HEYGEN--INSTAGRAM-/releases/download/ig-reel-2026-11-12-rbidmt/paise-rbidmt-2026-11-12.mp4"; C="https://github.com/bazarblast140-bot/HEYGEN--INSTAGRAM-/releases/download/ig-reel-2026-11-12-rbidmt/paise-rbidmt-2026-11-12-cover.jpg"
+          cap=Path("run/caption.txt").read_text(encoding="utf-8")
+          def call(method, url, data=None):
+            if data is not None:
+              body=urllib.parse.urlencode(data).encode(); req=urllib.request.Request(url, data=body, method=method)
+            else:
+              req=urllib.request.Request(url, method=method)
+            try:
+              return json.loads(urllib.request.urlopen(req, timeout=180).read())
+            except urllib.error.HTTPError as e:
+              raise SystemExit(f"HTTP {e.code}: {e.read().decode()[:800]}")
+          me=call("GET", f"https://graph.facebook.com/v23.0/me?fields=id,name&access_token={T}"); print("token page", me)
+          PAGE=PAGE or me["id"]
+          try:
+            recent=call("GET", f"https://graph.facebook.com/v23.0/{PAGE}/video_reels?fields=id,description,created_time,permalink_url&limit=5&access_token={T}")
+            print("recent", json.dumps(recent, ensure_ascii=False)[:1000])
+          except SystemExit as e:
+            print("recent fail", e)
+          # Prefer file_url finish path used by some Page tokens
+          start=call("POST", f"https://graph.facebook.com/v23.0/{PAGE}/video_reels", {"upload_phase":"start","access_token":T})
+          print("start", start); vid=start["video_id"]
+          # Upload binary to Facebook resumable host if upload_url present
+          up=start.get("upload_url")
+          if up:
+            subprocess.check_call(["curl","-fsSL","-L","-o","/tmp/fb.mp4",V])
+            size=str(Path("/tmp/fb.mp4").stat().st_size)
+            # rupload
+            import urllib.request as ur
+            req=ur.Request(up, data=Path("/tmp/fb.mp4").read_bytes(), method="POST", headers={
+              "Authorization":f"OAuth {T}",
+              "offset":"0",
+              "file_size":size,
+              "Content-Type":"application/octet-stream",
+            })
+            print("rupload", ur.urlopen(req, timeout=600).read()[:200])
+            fin=call("POST", f"https://graph.facebook.com/v23.0/{PAGE}/video_reels", {
+              "upload_phase":"finish","video_id":vid,"video_state":"PUBLISHED","description":cap,"access_token":T
+            })
+          else:
+            fin=call("POST", f"https://graph.facebook.com/v23.0/{PAGE}/video_reels", {
+              "upload_phase":"finish","video_id":vid,"video_state":"PUBLISHED","description":cap,"access_token":T,"file_url":V
+            })
+          print("finish", fin)
+          info={}
+          for i in range(48):
+            info=call("GET", f"https://graph.facebook.com/v23.0/{vid}?fields=status,permalink_url&access_token={T}"); print("status", info)
+            st=info.get("status") or {}
+            phase=(st.get("publishing_phase") or {}).get("status") if isinstance(st, dict) else None
+            if info.get("permalink_url") and phase in ("complete", None) and i>3:
+              if phase=="complete" or (info.get("permalink_url") and i>8):
+                break
+            time.sleep(5)
+          # custom cover
+          try:
+            # Graph thumbs.set style for videos
+            cov=call("POST", f"https://graph.facebook.com/v23.0/{vid}", {"thumb":C,"access_token":T})
+            print("cover", cov)
+          except SystemExit as e:
+            print("cover_fail", e)
+          out={"video_id":vid,"permalink_url":info.get("permalink_url"),"status":info.get("status"),"page":PAGE}
+          Path("run/fb_readback.json").write_text(json.dumps(out,ensure_ascii=False,indent=2),encoding="utf-8")
+          print("FB_DONE", json.dumps(out, ensure_ascii=False))
+          PY
+      - name: Upload readbacks
+        if: ${{ always() && inputs.release_authorized }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rbidmt-ig-fb-readback
+          path: run/*.json
+          if-no-files-found: warn
+
