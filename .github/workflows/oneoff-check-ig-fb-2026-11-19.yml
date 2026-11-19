@@ -1,0 +1,73 @@
+name: One-off IG/FB last-post check 2026-11-19 (check only, do not publish)
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: List last IG and FB Page posts
+        env:
+          IG_USER_ID: ${{ vars.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN || secrets.IG_ACCESS_TOKEN }}
+          FB_PAGE_ID: ${{ vars.FB_PAGE_ID }}
+        run: |
+          python - <<'PY'
+          import os, json, urllib.parse, urllib.request, urllib.error
+          from datetime import datetime, timezone, timedelta
+          from pathlib import Path
+          IST=timezone(timedelta(hours=5,minutes=30))
+          Path("run").mkdir(exist_ok=True)
+          def get(url):
+            try:
+              return json.loads(urllib.request.urlopen(url, timeout=60).read())
+            except urllib.error.HTTPError as e:
+              body=e.read().decode()[:800]
+              raise SystemExit(f"HTTP {e.code} {url.split('?')[0]}: {body}")
+          IG=os.environ["IG_USER_ID"]; T=os.environ["IG_ACCESS_TOKEN"]
+          PAGE=os.environ.get("FB_PAGE_ID","").strip(); FT=os.environ.get("FB_ACCESS_TOKEN") or T
+          # IG recent media
+          ig=get(f"https://graph.facebook.com/v23.0/{IG}/media?fields=id,caption,timestamp,permalink,media_type,media_product_type,thumbnail_url,username&limit=12&access_token={T}")
+          Path("run/ig_media.json").write_text(json.dumps(ig,ensure_ascii=False,indent=2),encoding="utf-8")
+          print("======= INSTAGRAM =======")
+          today=[]; last=None
+          for it in ig.get("data") or []:
+            ts=it.get("timestamp")
+            dt=datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S%z").astimezone(IST) if ts else None
+            cap=(it.get("caption") or "").splitlines()[0][:80] if it.get("caption") else ""
+            print(f"{dt:%Y-%m-%d %H:%M IST if dt else 'no-ts'}  {it.get('media_product_type')} {it.get('id')}  {it.get('permalink')}  {cap}")
+            if dt and last is None: last=dt
+            if dt and dt.date().isoformat()=="2026-11-19":
+              today.append(it)
+            blob=(it.get("caption") or "") + " " + (it.get("permalink") or "")
+            if any(s in blob for s in ["मारुति","13,345","13345","गोल्ड बॉन्ड आज"]):
+              print("POSSIBLE_DUP", it.get("id"), it.get("permalink"))
+          print("IG_TODAY_COUNT", len(today))
+          print("IG_LAST", last.strftime("%Y-%m-%d %H:%M IST") if last else "none")
+          # FB page videos / posts
+          print("======= FACEBOOK PAGE =======")
+          print("PAGE", PAGE)
+          fb=get(f"https://graph.facebook.com/v23.0/{PAGE}/videos?fields=id,created_time,description,permalink_url,title,length&limit=12&access_token={FT}")
+          Path("run/fb_videos.json").write_text(json.dumps(fb,ensure_ascii=False,indent=2),encoding="utf-8")
+          todayf=[]; lastf=None
+          for it in fb.get("data") or []:
+            ts=it.get("created_time")
+            dt=datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S%z").astimezone(IST) if ts else None
+            cap=(it.get("description") or it.get("title") or "").splitlines()[0][:80]
+            print(f"{dt:%Y-%m-%d %H:%M IST if dt else 'no-ts'}  {it.get('id')}  {it.get('permalink_url')}  {cap}")
+            if dt and lastf is None: lastf=dt
+            if dt and dt.date().isoformat()=="2026-11-19":
+              todayf.append(it)
+            blob=(it.get("description") or "") + " " + (it.get("title") or "")
+            if any(s in blob for s in ["मारुति","13,345","13345","गोल्ड बॉन्ड आज"]):
+              print("POSSIBLE_DUP_FB", it.get("id"), it.get("permalink_url"))
+          print("FB_TODAY_COUNT", len(todayf))
+          print("FB_LAST", lastf.strftime("%Y-%m-%d %H:%M IST") if lastf else "none")
+          PY
+      - name: Upload check artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ig-fb-lastpost-check-2026-11-19
+          path: run/*.json
+          if-no-files-found: warn
