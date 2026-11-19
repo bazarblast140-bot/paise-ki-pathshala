@@ -35,7 +35,7 @@ jobs:
             ts=it.get("timestamp")
             dt=datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S%z").astimezone(IST) if ts else None
             cap=(it.get("caption") or "").splitlines()[0][:80] if it.get("caption") else ""
-            print(f"{dt:%Y-%m-%d %H:%M IST if dt else 'no-ts'}  {it.get('media_product_type')} {it.get('id')}  {it.get('permalink')}  {cap}")
+            print(f"{dt.strftime('%Y-%m-%d %H:%M IST') if dt else 'no-ts'}  {it.get('media_product_type')} {it.get('id')}  {it.get('permalink')}  {cap}")
             if dt and last is None: last=dt
             if dt and dt.date().isoformat()=="2026-11-19":
               today.append(it)
@@ -54,7 +54,7 @@ jobs:
             ts=it.get("created_time")
             dt=datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S%z").astimezone(IST) if ts else None
             cap=(it.get("description") or it.get("title") or "").splitlines()[0][:80]
-            print(f"{dt:%Y-%m-%d %H:%M IST if dt else 'no-ts'}  {it.get('id')}  {it.get('permalink_url')}  {cap}")
+            print(f"{dt.strftime('%Y-%m-%d %H:%M IST') if dt else 'no-ts'}  {it.get('id')}  {it.get('permalink_url')}  {cap}")
             if dt and lastf is None: lastf=dt
             if dt and dt.date().isoformat()=="2026-11-19":
               todayf.append(it)
